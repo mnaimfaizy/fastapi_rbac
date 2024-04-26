@@ -1,0 +1,14 @@
+{
+	"Servers": {
+		"1": {
+			"Name": "fastapi-rbac",
+			"Group": "Servers",
+			"Host": "fastapi_rbac_db",
+			"Port": 5432,
+			"MaintenanceDB": "fastapi_rbac_db",
+			"Username": "postgres",
+			"SSLMode": "prefer",
+			"PassFile": "/tmp/pgpassfile"
+		}
+	}
+}

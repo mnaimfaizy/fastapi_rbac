@@ -1,0 +1,51 @@
+services:
+  fastapi_rbac:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    image: fastapi_rbac:latest
+    container_name: fastapi_rbac
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+
+#  fastapi_rbac_queue:
+#    build:
+#      context: ./
+#      dockerfile: queue.dockerfile
+#    image: fastapi_rbac_queue:latest
+#    container_name: fastapi_rbac_queue
+#    volumes:
+#      - .:/app
+#    depends_on:
+#      - fastapi_rbac
+
+  fastapi_rbac_db:
+    image: bitnami/postgresql
+    restart: always
+    container_name: fastapi_rbac_db
+    env_file: ".env"
+    user: root
+    volumes:
+        - .database:/bitnami/postgresql
+        - ./create-dbs.sql:/docker-entrypoint-initdb.d/create-dbs.sql
+    ports:
+      - "5453:5432"  # Remove this on production
+    expose:
+      - 5432
+    environment:
+      - POSTGRESQL_USERNAME=${DATABASE_USER}
+      - POSTGRESQL_PASSWORD=${DATABASE_PASSWORD}
+      - POSTGRESQL_DATABASE=${DATABASE_NAME}
+
+  fastapi_rbac_redis_server:
+    image: redis:alpine
+    container_name: fastapi_rbac_redis_server
+    restart: always
+    expose:
+      - 6379
+    env_file: ".env"
+
+volumes:
+  .database:

@@ -1,0 +1,15 @@
+.git
+.database
+.gitignore
+node_modules
+npm-debug.log
+Dockerfile*
+docker-compose*
+README.md
+LICENSE
+.vscode
+.venv
+.idea
+__pycache__
+logfile.log
+user_management.db
