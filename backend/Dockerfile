@@ -1,6 +1,6 @@
 FROM python:3.10.5-slim-buster
 
-WORKDIR /app
+WORKDIR /backend
 
 # https://docs.python.org/3/using/cmdline.html#envvar-PYTHONDONTWRITEBYTECODE
 # Prevents Python from writing .pyc files to disk
@@ -14,7 +14,6 @@ ENV ENVIRONMENT dev
 ENV TESTING 0
 ENV FASTAPI_ENV='development'
 ENV POETRY_VERSION=1.8.2
-ENV TZ="Australia/Sydney"
 
 # install FreeTDS and dependencies
 RUN apt-get update \
@@ -35,7 +34,7 @@ RUN curl -sSL https://install.python-poetry.org | POETRY_HOME=/opt/poetry python
     poetry config virtualenvs.create false
 
 # Copy poetry.lock* in case it doesn't exist in the repo
-COPY ./pyproject.toml ./poetry.lock* /app/
+COPY ./pyproject.toml ./poetry.lock* /backend/
 
 # Project initialization:
 # hadolint ignore=SC2046
@@ -50,14 +49,15 @@ RUN poetry install $(if [ "$FASTAPI_ENV" = 'production' ]; then echo '--no-dev';
 COPY ./.docker/openssl.cnf /etc/ssl/openssl.cnf
 
 # copy source code
-COPY ./ /app
+COPY . .
+
+ENV PYTHONPATH=/backend
 
 # Fix line endings && execute permissions
 RUN dos2unix *.sh app/*.*
 
-RUN chmod +x /app/run.sh
 
-ENV PYTHONPATH=/app
+RUN chmod +x ./run.sh
 
 # Create the log file to be able to run tail
 RUN touch /var/log/cron.log

@@ -62,7 +62,6 @@ asyncpg = "^0.29.0"
 cryptography = "^42.0.5"
 asyncer = "^0.0.5"
 httpx = "^0.27.0"
-fastapi-async-sqlalchemy = "^0.6.1"
 fastapi-pagination = {extras = ["sqlalchemy"], version = "^0.12.23"}
 redis = "^5.0.3"
 fastapi-cache2 = "^0.2.1"
@@ -70,6 +69,7 @@ fastapi-limiter = "^0.1.6"
 pyjwt = {extras = ["crypto"], version = "^2.8.0"}
 requests = "^2.31.0"
 setuptools = "^69.5.1"
+fastapi-async-sqlalchemy = "^0.6.1"
 
 
 [tool.poetry.group.dev.dependencies]

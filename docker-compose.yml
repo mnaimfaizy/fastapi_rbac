@@ -1,43 +1,84 @@
 services:
   fastapi_rbac:
     build:
-      context: ./
+      context: ./backend
       dockerfile: Dockerfile
     image: fastapi_rbac:latest
     container_name: fastapi_rbac
+    env_file:
+      - "./backend/backend.env"
     ports:
       - "8000:8000"
     volumes:
-      - .:/app
+      - ./backend:/app
+    networks:
+      - fastapi_rbac_network
 
-#  fastapi_rbac_queue:
-#    build:
-#      context: ./
-#      dockerfile: queue.dockerfile
-#    image: fastapi_rbac_queue:latest
-#    container_name: fastapi_rbac_queue
-#    volumes:
-#      - .:/app
-#    depends_on:
-#      - fastapi_rbac
+  fastapi_rbac_frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: fastapi_rbac_frontend:latest
+    container_name: fastapi_rbac_frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/frontend
+    networks:
+      - fastapi_rbac_network
+
+  #  fastapi_rbac_queue:
+  #    build:
+  #      context: ./
+  #      dockerfile: queue.dockerfile
+  #    image: fastapi_rbac_queue:latest
+  #    container_name: fastapi_rbac_queue
+  #    volumes:
+  #      - .:/app
+  #    depends_on:
+  #      - fastapi_rbac
+  #    networks:
+  #      - fastapi_rbac_network
 
   fastapi_rbac_db:
     image: bitnami/postgresql
     restart: always
     container_name: fastapi_rbac_db
-    env_file: ".env"
-    user: root
-    volumes:
-        - .database:/bitnami/postgresql
-        - ./create-dbs.sql:/docker-entrypoint-initdb.d/create-dbs.sql
     ports:
-      - "5453:5432"  # Remove this on production
-    expose:
-      - 5432
+      - "5453:5432" # Remove this on production
+    env_file:
+      - "./backend/backend.env"
     environment:
       - POSTGRESQL_USERNAME=${DATABASE_USER}
       - POSTGRESQL_PASSWORD=${DATABASE_PASSWORD}
       - POSTGRESQL_DATABASE=${DATABASE_NAME}
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD}
+      - ALLOW_EMPTY_PASSWORD=yes
+    user: root
+    volumes:
+      - .database:/bitnami/postgresql
+      - ./create-dbs.sql:/docker-entrypoint-initdb.d/create-dbs.sql
+    expose:
+      - 5432
+    networks:
+      - fastapi_rbac_network
+
+  fastapi_rbac_pgadmin:
+    image: dpage/pgadmin4
+    container_name: fastapi_rbac_pgadmin
+    restart: always
+    ports:
+      - "8888:80"
+    env_file:
+      - ./backend/backend.env
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD}
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    networks:
+      - fastapi_rbac_network
 
   fastapi_rbac_redis_server:
     image: redis:alpine
@@ -45,7 +86,15 @@ services:
     restart: always
     expose:
       - 6379
-    env_file: ".env"
+    env_file:
+      - "./backend/backend.env"
+    networks:
+      - fastapi_rbac_network
 
 volumes:
   .database:
+  pgadmin-data:
+
+networks:
+  fastapi_rbac_network:
+    driver: bridge

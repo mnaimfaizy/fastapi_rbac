@@ -27,7 +27,6 @@ class Settings(BaseSettings):
     PROJECT_NAME: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 1  # 1 hour
     REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 100  # 100 days
-    OPENAI_API_KEY: str
     DATABASE_USER: str
     DATABASE_PASSWORD: str
     DATABASE_HOST: str
@@ -43,6 +42,9 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     TOKEN_ISSUER: str
     TOKEN_AUDIENCE: str
+    # PgAdmin settings that are in the env file but not needed by the app
+    PGADMIN_DEFAULT_EMAIL: str = "admin@example.com"
+    PGADMIN_DEFAULT_PASSWORD: str = "admin"
 
     @field_validator("ASYNC_DATABASE_URI", mode="after")
     def assemble_db_connection(cls, v: str | None, info: FieldValidationInfo) -> Any:
@@ -117,13 +119,6 @@ class Settings(BaseSettings):
     USER_CHANGED_PASSWORD_DATE: str
     USERS_OPEN_REGISTRATION: bool
 
-    MINIO_ROOT_USER: str
-    MINIO_ROOT_PASSWORD: str
-    MINIO_URL: str
-    MINIO_BUCKET: str
-
-    WHEATER_URL: AnyHttpUrl
-
     JWT_REFRESH_SECRET_KEY: str = secrets.token_urlsafe(32)
     ENCRYPT_KEY: str = secrets.token_urlsafe(32)
     BACKEND_CORS_ORIGINS: list[str] | list[AnyHttpUrl]
@@ -137,7 +132,9 @@ class Settings(BaseSettings):
         raise ValueError(v)
 
     model_config = SettingsConfigDict(
-        case_sensitive=True, env_file=os.path.join(project_root, ".env")
+        case_sensitive=True,
+        env_file=os.path.join(project_root, "backend.env"),
+        extra="ignore",  # Allow and ignore extra fields from env file
     )
 
 
