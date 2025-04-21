@@ -14,18 +14,18 @@ services:
     networks:
       - fastapi_rbac_network
 
-  fastapi_rbac_frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    image: fastapi_rbac_frontend:latest
-    container_name: fastapi_rbac_frontend
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./frontend:/frontend
-    networks:
-      - fastapi_rbac_network
+  # fastapi_rbac_frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   image: fastapi_rbac_frontend:latest
+  #   container_name: fastapi_rbac_frontend
+  #   ports:
+  #     - "3000:3000"
+  #   volumes:
+  #     - ./frontend:/frontend
+  #   networks:
+  #     - fastapi_rbac_network
 
   #  fastapi_rbac_queue:
   #    build:
@@ -47,7 +47,7 @@ services:
     ports:
       - "5453:5432" # Remove this on production
     env_file:
-      - "./backend/backend.env"
+      - ./backend/backend.env
     environment:
       - POSTGRESQL_USERNAME=${DATABASE_USER}
       - POSTGRESQL_PASSWORD=${DATABASE_PASSWORD}
