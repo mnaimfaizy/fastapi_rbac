@@ -101,10 +101,10 @@ async def change_password(
     Change password
     """
 
-    if not verify_password(current_password, current_user.hashed_password):
+    if not verify_password(current_password, current_user.password):
         raise HTTPException(status_code=400, detail="Invalid Current Password")
 
-    if verify_password(new_password, current_user.hashed_password):
+    if verify_password(new_password, current_user.password):
         raise HTTPException(
             status_code=400,
             detail="New Password should be different that the current one",
@@ -112,7 +112,7 @@ async def change_password(
 
     new_hashed_password = get_password_hash(new_password)
     await crud.user.update(
-        obj_current=current_user, obj_new={"hashed_password": new_hashed_password}
+        obj_current=current_user, obj_new={"password": new_hashed_password}
     )
 
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)

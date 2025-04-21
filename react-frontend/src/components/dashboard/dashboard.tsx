@@ -1,71 +1,22 @@
-import { useState } from "react";
+import { useState, ReactNode } from "react";
 import { Sidebar } from "./sidebar";
-import { StatsCard } from "./stats-card";
-import { OverviewChart } from "./overview-chart";
-import { DataTable } from "./data-table";
 import { Button } from "@/components/ui/button";
-import { Users, ShieldCheck, UserCheck, BarChart, Menu } from "lucide-react";
+import { Menu, User } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { cn } from "@/lib/utils";
+import { Link } from "react-router-dom";
+import { useAppSelector } from "../../store/hooks";
 
-// Sample data
-const chartData = [
-  { name: "Jan", total: 1200 },
-  { name: "Feb", total: 2100 },
-  { name: "Mar", total: 1800 },
-  { name: "Apr", total: 2400 },
-  { name: "May", total: 2800 },
-  { name: "Jun", total: 2600 },
-  { name: "Jul", total: 3200 },
-];
+interface DashboardProps {
+  children: ReactNode;
+}
 
-const sampleUsers = [
-  {
-    id: "1",
-    name: "John Smith",
-    email: "john.smith@example.com",
-    role: "Admin",
-    status: "active" as const,
-    lastActive: "Just now",
-  },
-  {
-    id: "2",
-    name: "Alice Johnson",
-    email: "alice.johnson@example.com",
-    role: "Editor",
-    status: "active" as const,
-    lastActive: "2 hours ago",
-  },
-  {
-    id: "3",
-    name: "Robert Brown",
-    email: "robert.brown@example.com",
-    role: "Viewer",
-    status: "inactive" as const,
-    lastActive: "3 days ago",
-  },
-  {
-    id: "4",
-    name: "Emma Wilson",
-    email: "emma.wilson@example.com",
-    role: "Editor",
-    status: "pending" as const,
-    lastActive: "1 hour ago",
-  },
-  {
-    id: "5",
-    name: "Michael Davis",
-    email: "michael.davis@example.com",
-    role: "Viewer",
-    status: "active" as const,
-    lastActive: "5 hours ago",
-  },
-];
-
-export function Dashboard() {
+export function Dashboard({ children }: DashboardProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const isDesktop = useMediaQuery("(min-width: 1024px)");
+  const { user } = useAppSelector((state) => state.auth);
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   return (
     <div className="flex min-h-screen">
@@ -114,110 +65,61 @@ export function Dashboard() {
 
       <div className="flex-1 space-y-6 p-8 pt-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-          <div className="flex items-center gap-2">
+          <div className="flex-1">
+            {/* Page content will have its own heading */}
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              <Button
+                variant="ghost"
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="flex items-center gap-2"
+              >
+                <User className="h-4 w-4" />
+                {user?.first_name} {user?.last_name}
+                <svg
+                  className={`w-4 h-4 transition-transform ${
+                    showUserMenu ? "rotate-180" : ""
+                  }`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 9l-7 7-7-7"
+                  />
+                </svg>
+              </Button>
+
+              {showUserMenu && (
+                <div className="absolute right-0 mt-2 w-48 py-1 bg-white rounded-md shadow-lg z-10">
+                  <Link
+                    to="/dashboard/profile"
+                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    onClick={() => setShowUserMenu(false)}
+                  >
+                    Your Profile
+                  </Link>
+                  <Link
+                    to="/dashboard/change-password"
+                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    onClick={() => setShowUserMenu(false)}
+                  >
+                    Change Password
+                  </Link>
+                </div>
+              )}
+            </div>
             <Button>Download Report</Button>
           </div>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          <StatsCard
-            title="Total Users"
-            value="3,456"
-            description="Last 30 days"
-            trend={{ value: 12, isPositive: true }}
-            icon={Users}
-          />
-          <StatsCard
-            title="Roles"
-            value="12"
-            description="3 added this month"
-            trend={{ value: 5, isPositive: true }}
-            icon={UserCheck}
-          />
-          <StatsCard
-            title="Permissions"
-            value="54"
-            description="No change"
-            icon={ShieldCheck}
-          />
-          <StatsCard
-            title="Active Sessions"
-            value="213"
-            description="10% decrease"
-            trend={{ value: 10, isPositive: false }}
-            icon={BarChart}
-          />
-        </div>
-
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
-          <OverviewChart
-            title="User Activity"
-            description="Daily active users over time"
-            data={chartData}
-            className="col-span-4"
-          />
-          <Card className="col-span-3">
-            <CardHeader>
-              <CardTitle>Recent Logins</CardTitle>
-              <CardDescription>
-                The most recent user login activities
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {sampleUsers.slice(0, 3).map((user) => (
-                  <div key={user.id} className="flex items-center gap-4">
-                    <Avatar className="h-9 w-9">
-                      <AvatarFallback>
-                        {user.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 space-y-1">
-                      <p className="text-sm font-medium">{user.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {user.email}
-                      </p>
-                    </div>
-                    <div>
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          user.status === "active" &&
-                            "bg-green-100 text-green-800"
-                        )}
-                      >
-                        {user.lastActive}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div>
-          <h3 className="text-xl font-semibold tracking-tight mb-4">
-            System Users
-          </h3>
-          <DataTable data={sampleUsers} />
-        </div>
+        {/* Render the children components */}
+        {children}
       </div>
     </div>
   );
 }
-
-// Import these components here since we're using them inline only in this component
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";

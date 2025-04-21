@@ -8,8 +8,12 @@ import {
   ShieldCheck,
   UserCheck,
   LogOut,
+  User,
+  KeyRound,
 } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useAppDispatch } from "../../store/hooks";
+import { logout } from "../../store/slices/authSlice";
 
 interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
   isCollapsed?: boolean;
@@ -17,9 +21,23 @@ interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
 
 export function Sidebar({ className, isCollapsed = false }: SidebarProps) {
   const location = useLocation();
+  const dispatch = useAppDispatch();
+  const navigate = useNavigate();
 
+  const handleLogout = () => {
+    dispatch(logout());
+    navigate("/login");
+  };
+
+  // Check if current path is active, considering nested routes
   const isActive = (path: string) => {
-    return location.pathname === path;
+    if (path === "/dashboard" && location.pathname === "/dashboard") {
+      return true;
+    }
+    if (path !== "/dashboard" && location.pathname.startsWith(path)) {
+      return true;
+    }
+    return false;
   };
 
   return (
@@ -54,7 +72,7 @@ export function Sidebar({ className, isCollapsed = false }: SidebarProps) {
             </Button>
 
             <Button
-              variant={isActive("/users") ? "secondary" : "ghost"}
+              variant={isActive("/dashboard/users") ? "secondary" : "ghost"}
               size={isCollapsed ? "icon" : "default"}
               className={cn(
                 "w-full justify-start",
@@ -62,14 +80,14 @@ export function Sidebar({ className, isCollapsed = false }: SidebarProps) {
               )}
               asChild
             >
-              <Link to="/users">
+              <Link to="/dashboard/users">
                 <Users className={cn("h-5 w-5", !isCollapsed && "mr-2")} />
                 {!isCollapsed && "Users"}
               </Link>
             </Button>
 
             <Button
-              variant={isActive("/roles") ? "secondary" : "ghost"}
+              variant={isActive("/dashboard/roles") ? "secondary" : "ghost"}
               size={isCollapsed ? "icon" : "default"}
               className={cn(
                 "w-full justify-start",
@@ -77,14 +95,16 @@ export function Sidebar({ className, isCollapsed = false }: SidebarProps) {
               )}
               asChild
             >
-              <Link to="/roles">
+              <Link to="/dashboard/roles">
                 <UserCheck className={cn("h-5 w-5", !isCollapsed && "mr-2")} />
                 {!isCollapsed && "Roles"}
               </Link>
             </Button>
 
             <Button
-              variant={isActive("/permissions") ? "secondary" : "ghost"}
+              variant={
+                isActive("/dashboard/permissions") ? "secondary" : "ghost"
+              }
               size={isCollapsed ? "icon" : "default"}
               className={cn(
                 "w-full justify-start",
@@ -92,7 +112,7 @@ export function Sidebar({ className, isCollapsed = false }: SidebarProps) {
               )}
               asChild
             >
-              <Link to="/permissions">
+              <Link to="/dashboard/permissions">
                 <ShieldCheck
                   className={cn("h-5 w-5", !isCollapsed && "mr-2")}
                 />
@@ -109,11 +129,11 @@ export function Sidebar({ className, isCollapsed = false }: SidebarProps) {
               isCollapsed && "text-center"
             )}
           >
-            {!isCollapsed && "Settings"}
+            {!isCollapsed && "Account"}
           </h2>
           <div className="space-y-1 pt-2">
             <Button
-              variant={isActive("/settings") ? "secondary" : "ghost"}
+              variant={isActive("/dashboard/profile") ? "secondary" : "ghost"}
               size={isCollapsed ? "icon" : "default"}
               className={cn(
                 "w-full justify-start",
@@ -121,14 +141,58 @@ export function Sidebar({ className, isCollapsed = false }: SidebarProps) {
               )}
               asChild
             >
-              <Link to="/settings">
+              <Link to="/dashboard/profile">
+                <User className={cn("h-5 w-5", !isCollapsed && "mr-2")} />
+                {!isCollapsed && "Profile"}
+              </Link>
+            </Button>
+
+            <Button
+              variant={
+                isActive("/dashboard/change-password") ? "secondary" : "ghost"
+              }
+              size={isCollapsed ? "icon" : "default"}
+              className={cn(
+                "w-full justify-start",
+                isCollapsed && "justify-center"
+              )}
+              asChild
+            >
+              <Link to="/dashboard/change-password">
+                <KeyRound className={cn("h-5 w-5", !isCollapsed && "mr-2")} />
+                {!isCollapsed && "Change Password"}
+              </Link>
+            </Button>
+          </div>
+        </div>
+
+        <div className="px-4 py-2">
+          <h2
+            className={cn(
+              "text-lg font-semibold tracking-tight",
+              isCollapsed && "text-center"
+            )}
+          >
+            {!isCollapsed && "Settings"}
+          </h2>
+          <div className="space-y-1 pt-2">
+            <Button
+              variant={isActive("/dashboard/settings") ? "secondary" : "ghost"}
+              size={isCollapsed ? "icon" : "default"}
+              className={cn(
+                "w-full justify-start",
+                isCollapsed && "justify-center"
+              )}
+              asChild
+            >
+              <Link to="/dashboard/settings">
                 <Settings className={cn("h-5 w-5", !isCollapsed && "mr-2")} />
                 {!isCollapsed && "General"}
               </Link>
             </Button>
 
             <Button
-              variant={isActive("/security") ? "secondary" : "ghost"}
+              variant={isActive("/dashboard/security") ? "secondary" : "ghost"}
               size={isCollapsed ? "icon" : "default"}
               className={cn(
                 "w-full justify-start",
@@ -136,7 +200,7 @@ export function Sidebar({ className, isCollapsed = false }: SidebarProps) {
               )}
               asChild
             >
-              <Link to="/security">
+              <Link to="/dashboard/security">
                 <Lock className={cn("h-5 w-5", !isCollapsed && "mr-2")} />
                 {!isCollapsed && "Security"}
               </Link>
@@ -149,12 +213,10 @@ export function Sidebar({ className, isCollapsed = false }: SidebarProps) {
                 "w-full justify-start text-red-500 hover:text-red-600 hover:bg-red-100/20",
                 isCollapsed && "justify-center"
               )}
-              asChild
+              onClick={handleLogout}
             >
-              <Link to="/logout">
-                <LogOut className={cn("h-5 w-5", !isCollapsed && "mr-2")} />
-                {!isCollapsed && "Logout"}
-              </Link>
+              <LogOut className={cn("h-5 w-5", !isCollapsed && "mr-2")} />
+              {!isCollapsed && "Logout"}
             </Button>
           </div>
         </div>

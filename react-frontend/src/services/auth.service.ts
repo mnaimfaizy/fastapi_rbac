@@ -37,12 +37,15 @@ class AuthService {
   /**
    * Change password
    */
-  async changePassword(currentPassword: string, newPassword: string) {
-    const response = await api.post("/login/change_password", {
+  async changePassword(
+    currentPassword: string,
+    newPassword: string
+  ): Promise<Token> {
+    const response = await api.post<{ data: Token }>("/login/change_password", {
       current_password: currentPassword,
       new_password: newPassword,
     });
-    return response.data;
+    return response.data.data;
   }
 }
 

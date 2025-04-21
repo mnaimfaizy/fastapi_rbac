@@ -17,6 +17,7 @@ const initialState: AuthState = {
   isAuthenticated: false,
   isLoading: false,
   error: null,
+  passwordChangeSuccess: false,
 };
 
 // Async thunks for authentication actions
@@ -62,6 +63,29 @@ export const getCurrentUser = createAsyncThunk(
   }
 );
 
+export const changePassword = createAsyncThunk(
+  "auth/changePassword",
+  async (
+    {
+      currentPassword,
+      newPassword,
+    }: { currentPassword: string; newPassword: string },
+    { rejectWithValue }
+  ) => {
+    try {
+      const response = await authService.changePassword(
+        currentPassword,
+        newPassword
+      );
+      return response;
+    } catch (error: any) {
+      const errorMessage =
+        error.response?.data?.detail?.message || "Failed to change password";
+      return rejectWithValue(errorMessage);
+    }
+  }
+);
+
 // Create the auth slice
 const authSlice = createSlice({
   name: "auth",
@@ -77,6 +101,10 @@ const authSlice = createSlice({
     // Clear error state
     clearError: (state) => {
       state.error = null;
+    },
+    // Reset password change success state
+    resetPasswordChangeSuccess: (state) => {
+      state.passwordChangeSuccess = false;
     },
   },
   extraReducers: (builder) => {
@@ -139,10 +167,40 @@ const authSlice = createSlice({
       .addCase(getCurrentUser.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload as string;
+      })
+
+      // Handle password change
+      .addCase(changePassword.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+        state.passwordChangeSuccess = false;
+      })
+      .addCase(changePassword.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.passwordChangeSuccess = true;
+
+        // Update tokens from the response if they exist
+        if (action.payload.access_token && action.payload.refresh_token) {
+          state.accessToken = action.payload.access_token;
+          state.refreshToken = action.payload.refresh_token;
+
+          // Store tokens securely
+          setStoredAccessToken(action.payload.access_token);
+          setStoredRefreshToken(action.payload.refresh_token);
+
+          // Setup token expiry timer with new access token
+          authTokenManager.setupTokenExpiryTimer(action.payload.access_token);
+        }
+      })
+      .addCase(changePassword.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
+        state.passwordChangeSuccess = false;
       });
   },
 });
 
 // Export actions and reducer
-export const { logout, clearError } = authSlice.actions;
+export const { logout, clearError, resetPasswordChangeSuccess } =
+  authSlice.actions;
 export default authSlice.reducer;
