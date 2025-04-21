@@ -10,6 +10,7 @@ import {
   LogOut,
   User,
   KeyRound,
+  Folder,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAppDispatch } from "../../store/hooks";
@@ -117,6 +118,23 @@ export function Sidebar({ className, isCollapsed = false }: SidebarProps) {
                   className={cn("h-5 w-5", !isCollapsed && "mr-2")}
                 />
                 {!isCollapsed && "Permissions"}
+              </Link>
+            </Button>
+
+            <Button
+              variant={
+                isActive("/dashboard/permission-groups") ? "secondary" : "ghost"
+              }
+              size={isCollapsed ? "icon" : "default"}
+              className={cn(
+                "w-full justify-start",
+                isCollapsed && "justify-center"
+              )}
+              asChild
+            >
+              <Link to="/dashboard/permission-groups">
+                <Folder className={cn("h-5 w-5", !isCollapsed && "mr-2")} />
+                {!isCollapsed && "Permission Groups"}
               </Link>
             </Button>
           </div>

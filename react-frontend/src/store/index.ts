@@ -1,12 +1,16 @@
 import { configureStore } from "@reduxjs/toolkit";
 import authReducer from "./slices/authSlice";
 import userReducer from "./slices/userSlice";
+import permissionReducer from "./slices/permissionSlice";
+import permissionGroupReducer from "./slices/permissionGroupSlice";
 
 // Configure the Redux store
 export const store = configureStore({
   reducer: {
     auth: authReducer,
     user: userReducer,
+    permission: permissionReducer,
+    permissionGroup: permissionGroupReducer,
     // Add other reducers here as needed
   },
   middleware: (getDefaultMiddleware) =>
