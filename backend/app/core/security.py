@@ -14,7 +14,7 @@ JWT_ALGORITHM = settings.ALGORITHM
 
 def create_access_token(
     subject: Union[str, Any],
-    email: Union[str, Any],
+    email: Union[str, Any] = None,
     expires_delta: timedelta = None,
 ) -> str:
     if expires_delta:
@@ -27,11 +27,14 @@ def create_access_token(
     to_encode = {
         "exp": expire,
         "sub": str(subject),
-        "email": str(email),
         "iat": datetime.utcnow(),
         "iss": settings.TOKEN_ISSUER,
         "aud": settings.TOKEN_AUDIENCE,
     }
+
+    if email is not None:
+        to_encode["email"] = str(email)
+
     encoded_jwt = jwt.encode(to_encode, settings.ENCRYPT_KEY, algorithm=JWT_ALGORITHM)
     return encoded_jwt
 
@@ -52,6 +55,7 @@ def create_refresh_token(
         "iat": datetime.utcnow(),
         "iss": settings.TOKEN_ISSUER,
         "aud": settings.TOKEN_AUDIENCE,
+        "type": "refresh",
     }
     encoded_jwt = jwt.encode(
         to_encode, settings.JWT_REFRESH_SECRET_KEY, algorithm=JWT_ALGORITHM
@@ -59,10 +63,15 @@ def create_refresh_token(
     return encoded_jwt
 
 
-def decode_token(token: str) -> dict[str, Any]:
+def decode_token(token: str, token_type: str = "access") -> dict[str, Any]:
+    key = (
+        settings.JWT_REFRESH_SECRET_KEY
+        if token_type == "refresh"
+        else settings.ENCRYPT_KEY
+    )
     return jwt.decode(
         token=token,
-        key=settings.ENCRYPT_KEY,
+        key=key,
         algorithms=[JWT_ALGORITHM],
         audience=settings.TOKEN_AUDIENCE,
         issuer=settings.TOKEN_ISSUER,

@@ -42,6 +42,18 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         await db_session.refresh(db_obj)
         return db_obj
 
+    def has_verified(self, user: User) -> bool:
+        """
+        Check if the user's email is verified.
+        For now, assuming all users are verified unless there's a specific field for it.
+        If there is an is_verified field in your User model, modify this method accordingly.
+        """
+        # If there's a specific field for email verification, use that
+        if hasattr(user, "is_verified"):
+            return user.is_verified
+        # Otherwise assume all active users are verified
+        return True
+
     async def update_is_active(
         self, *, db_obj: list[User], obj_in: int | str | dict[str, Any]
     ) -> User | None:

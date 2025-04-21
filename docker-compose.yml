@@ -14,6 +14,19 @@ services:
     networks:
       - fastapi_rbac_network
 
+  react_frontend:
+    build:
+      context: ./react-frontend
+      dockerfile: Dockerfile
+    image: react_frontend:latest
+    container_name: react_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - fastapi_rbac
+    networks:
+      - fastapi_rbac_network
+
   # fastapi_rbac_frontend:
   #   build:
   #     context: ./frontend

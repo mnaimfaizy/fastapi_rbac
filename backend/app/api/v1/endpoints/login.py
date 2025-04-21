@@ -159,7 +159,7 @@ async def get_new_access_token(
     Gets a new access token using the refresh token for future requests
     """
     try:
-        payload = decode_token(body.refresh_token)
+        payload = decode_token(body.refresh_token, token_type="refresh")
     except ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -200,7 +200,7 @@ async def get_new_access_token(
         user = await crud.user.get(id=user_id)
         if user.is_active:
             access_token = security.create_access_token(
-                payload["sub"], expires_delta=access_token_expires
+                payload["sub"], user.email, expires_delta=access_token_expires
             )
             valid_access_get_valid_tokens = await get_valid_tokens(
                 redis_client, user.id, TokenType.ACCESS
