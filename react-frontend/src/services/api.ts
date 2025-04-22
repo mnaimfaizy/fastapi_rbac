@@ -7,6 +7,20 @@ import {
 import { store } from "../store";
 import { refreshAccessToken, logout } from "../store/slices/authSlice";
 
+// Define error response interface to match backend format
+interface ErrorDetail {
+  field?: string;
+  code?: string;
+  message: string;
+}
+
+interface ErrorResponse {
+  status: string;
+  message: string;
+  errors: ErrorDetail[];
+  meta?: Record<string, any>;
+}
+
 // Create axios instance with base configuration
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1",
@@ -32,6 +46,38 @@ api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const originalRequest: any = error.config;
+
+    // Transform error response to our standardized format
+    if (error.response?.data) {
+      // If the error response already follows our standardized format
+      if (
+        error.response.data.status === "error" &&
+        error.response.data.message
+      ) {
+        // Keep the error as is
+      }
+      // Handle legacy error format
+      else if (error.response.data.detail) {
+        // Format old-style detail field into our standardized format
+        const detail = error.response.data.detail;
+        let message = typeof detail === "string" ? detail : "An error occurred";
+        let errorDetails: ErrorDetail[] = [];
+
+        // Handle detailed field error format
+        if (typeof detail === "object" && detail.field_name && detail.message) {
+          errorDetails.push({
+            field: detail.field_name,
+            message: detail.message,
+          });
+        }
+
+        error.response.data = {
+          status: "error",
+          message,
+          errors: errorDetails,
+        };
+      }
+    }
 
     // If the error is 401 and we haven't attempted to refresh the token yet
     if (error.response?.status === 401 && !originalRequest._retry) {

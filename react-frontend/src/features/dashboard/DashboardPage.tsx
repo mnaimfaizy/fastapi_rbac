@@ -2,10 +2,9 @@ import { Route, Routes } from "react-router-dom";
 import DashboardOverview from "./DashboardOverview";
 import ProfileContent from "../../components/dashboard/ProfileContent";
 import ChangePasswordContent from "../../components/dashboard/ChangePasswordContent";
-import UserListContent from "../../components/dashboard/UserListContent";
+import UsersList from "../users/UsersList";
+import UserEditPage from "../users/UserEditPage";
 import UserDetailContent from "../../components/dashboard/UserDetailContent";
-import UserFormContent from "../../components/dashboard/UserFormContent";
-import { Dashboard } from "../../components/dashboard/dashboard";
 
 // Import Permission Components
 import PermissionsContent from "../../components/dashboard/permissions/PermissionsContent";
@@ -17,6 +16,8 @@ import PermissionGroupsContent from "../../components/dashboard/permission-group
 import PermissionGroupDetailContent from "../../components/dashboard/permission-groups/PermissionGroupDetailContent";
 import PermissionGroupFormContent from "../../components/dashboard/permission-groups/PermissionGroupFormContent";
 
+import { Dashboard } from "../../components/dashboard/dashboard";
+
 const DashboardPage = () => {
   return (
     <Dashboard>
@@ -25,10 +26,10 @@ const DashboardPage = () => {
         <Route path="/profile" element={<ProfileContent />} />
         <Route path="/change-password" element={<ChangePasswordContent />} />
 
-        {/* User management routes */}
-        <Route path="/users" element={<UserListContent />} />
-        <Route path="/users/create" element={<UserFormContent />} />
-        <Route path="/users/edit/:userId" element={<UserFormContent />} />
+        {/* User management routes - updated with new components */}
+        <Route path="/users" element={<UsersList />} />
+        <Route path="/users/new" element={<UserEditPage />} />
+        <Route path="/users/:userId/edit" element={<UserEditPage />} />
         <Route path="/users/:userId" element={<UserDetailContent />} />
 
         {/* Permission management routes - specific routes first, then dynamic routes */}

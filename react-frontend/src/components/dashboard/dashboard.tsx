@@ -6,7 +6,8 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router-dom";
-import { useAppSelector } from "../../store/hooks";
+import { useAppSelector, useAppDispatch } from "../../store/hooks";
+import { logoutUser } from "../../store/slices/authSlice";
 
 interface DashboardProps {
   children: ReactNode;
@@ -17,6 +18,12 @@ export function Dashboard({ children }: DashboardProps) {
   const isDesktop = useMediaQuery("(min-width: 1024px)");
   const { user } = useAppSelector((state) => state.auth);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const dispatch = useAppDispatch();
+
+  const handleLogout = async () => {
+    await dispatch(logoutUser());
+    // No need to navigate - the auth state change will trigger automatic redirection
+  };
 
   return (
     <div className="flex min-h-screen">
@@ -110,6 +117,15 @@ export function Dashboard({ children }: DashboardProps) {
                   >
                     Change Password
                   </Link>
+                  <button
+                    onClick={() => {
+                      setShowUserMenu(false);
+                      handleLogout();
+                    }}
+                    className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
+                  >
+                    Logout
+                  </button>
                 </div>
               )}
             </div>

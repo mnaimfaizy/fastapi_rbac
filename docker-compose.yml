@@ -6,7 +6,7 @@ services:
     image: fastapi_rbac:latest
     container_name: fastapi_rbac
     env_file:
-      - "./backend/backend.env"
+      - ./backend/backend.env
     ports:
       - "8000:8000"
     volumes:

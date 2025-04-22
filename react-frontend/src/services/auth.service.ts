@@ -4,6 +4,8 @@ import {
   Token,
   TokenRead,
   RefreshTokenRequest,
+  PasswordResetRequest,
+  PasswordResetConfirm,
 } from "../models/auth";
 
 class AuthService {
@@ -46,6 +48,35 @@ class AuthService {
       new_password: newPassword,
     });
     return response.data.data;
+  }
+
+  /**
+   * Logout user and invalidate tokens
+   */
+  async logout(): Promise<void> {
+    await api.post("/login/logout");
+  }
+
+  /**
+   * Request password reset for a given email
+   */
+  async requestPasswordReset(email: string): Promise<void> {
+    await api.post("/login/password-reset/request", {
+      email,
+    } as PasswordResetRequest);
+  }
+
+  /**
+   * Reset password using token and new password
+   */
+  async confirmPasswordReset(
+    token: string,
+    newPassword: string
+  ): Promise<void> {
+    await api.post("/login/password-reset/confirm", {
+      token,
+      new_password: newPassword,
+    } as PasswordResetConfirm);
   }
 }
 

@@ -73,6 +73,36 @@ class IDeleteResponseBase(IResponseBase[DataType], Generic[DataType]):
     message: str | None = "Data deleted correctly"
 
 
+class ErrorDetail(BaseModel):
+    """Detailed error information for frontend consumption"""
+
+    field: str | None = None  # Field that caused the error (if applicable)
+    code: str | None = None  # Error code for programmatic handling
+    message: str  # Human-readable error message
+
+
+class IErrorResponse(BaseModel):
+    """Standardized error response schema for frontend consumption"""
+
+    status: str = "error"
+    message: str  # General error message
+    errors: list[ErrorDetail] = []  # Detailed errors list
+    meta: dict | Any | None = {}
+
+
+def create_error_response(
+    message: str,
+    errors: list[ErrorDetail] | None = None,
+    meta: dict | Any | None = None,
+) -> IErrorResponse:
+    """Create a standardized error response"""
+    return IErrorResponse(
+        message=message,
+        errors=errors or [],
+        meta=meta or {},
+    )
+
+
 def create_response(
     data: DataType,
     message: str | None = None,

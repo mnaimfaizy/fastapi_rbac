@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     PROJECT_NAME: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 1  # 1 hour
     REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 100  # 100 days
+    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
+    PASSWORD_RESET_URL: str = (
+        "http://localhost:3000/reset-password"  # Frontend URL for password reset
+    )
     DATABASE_USER: str
     DATABASE_PASSWORD: str
     DATABASE_HOST: str
@@ -120,6 +124,9 @@ class Settings(BaseSettings):
     USERS_OPEN_REGISTRATION: bool
 
     JWT_REFRESH_SECRET_KEY: str = secrets.token_urlsafe(32)
+    JWT_RESET_SECRET_KEY: str = secrets.token_urlsafe(
+        32
+    )  # Secret key for password reset tokens
     ENCRYPT_KEY: str = secrets.token_urlsafe(32)
     BACKEND_CORS_ORIGINS: list[str] | list[AnyHttpUrl]
 

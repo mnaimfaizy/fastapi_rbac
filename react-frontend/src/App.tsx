@@ -13,6 +13,8 @@ import { useEffect } from "react";
 import { getStoredRefreshToken } from "./lib/tokenStorage";
 import { refreshAccessToken } from "./store/slices/authSlice";
 import { Button } from "@/components/ui/button";
+import PasswordResetRequestPage from "./features/auth/PasswordResetRequestPage";
+import PasswordResetConfirmPage from "./features/auth/PasswordResetConfirmPage";
 
 // Component to initialize auth state if refresh token exists
 const InitAuth = () => {
@@ -33,6 +35,14 @@ function App() {
         <InitAuth />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route
+            path="/password-reset"
+            element={<PasswordResetRequestPage />}
+          />
+          <Route
+            path="/password-reset/confirm"
+            element={<PasswordResetConfirmPage />}
+          />
           <Route
             path="/dashboard/*"
             element={

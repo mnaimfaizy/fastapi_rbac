@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 from app.models.user_model import User, UserBase
 from app.utils.partial import optional
@@ -20,7 +20,15 @@ class IUserCreate(UserBase):
 # Properties to receive via API on update
 @optional()
 class IUserUpdate(UserBase):
-    pass
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    is_active: Optional[bool] = None
+    is_superuser: Optional[bool] = None
+    role_id: Optional[List[UUID]] = None
+    contact_phone: Optional[str] = None
+    expiry_date: Optional[datetime] = None
+    password: Optional[str] = None  # For allowing password update via this endpoint
 
 
 class IUserRead(UserBase):
@@ -73,3 +81,19 @@ class IUserPasswordReset(BaseModel):
 class IUserStatus(str, Enum):
     active: "active"
     inactive: "inactive"
+
+
+# Schemas for password reset functionality
+class PasswordResetRequest(BaseModel):
+    """Schema for requesting a password reset"""
+
+    email: EmailStr = Field(
+        ..., description="Email address of the user requesting password reset"
+    )
+
+
+class PasswordResetConfirm(BaseModel):
+    """Schema for confirming a password reset with token"""
+
+    token: str = Field(..., description="Reset token received via email")
+    new_password: str = Field(..., min_length=8, description="New password to set")

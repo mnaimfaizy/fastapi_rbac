@@ -2,18 +2,23 @@ import gc
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 from fastapi_async_sqlalchemy import SQLAlchemyMiddleware
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
 from fastapi_limiter import FastAPILimiter
 from jwt import DecodeError, ExpiredSignatureError, MissingRequiredClaimError
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
 from starlette.middleware.cors import CORSMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.deps import get_redis_client
 from app.api.v1.api import api_router as api_router_v1
 from app.core.config import ModeEnum, settings
 from app.core.security import decode_token
+from app.schemas.response_schema import ErrorDetail, create_error_response
 from app.utils.fastapi_globals import GlobalsMiddleware, g
 
 
@@ -139,3 +144,103 @@ async def root():
 
 # Add Routers
 app.include_router(api_router_v1, prefix=settings.API_V1_STR)
+
+
+# Exception handlers for consistent error responses
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """
+    Handle validation errors with standardized format for frontend consumption
+    """
+    errors = []
+    for error in exc.errors():
+        field = ".".join([str(loc) for loc in error["loc"] if loc != "body"])
+        errors.append(
+            ErrorDetail(
+                field=field,
+                code="validation_error",
+                message=error["msg"],
+            )
+        )
+
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content=create_error_response(
+            message="Validation error",
+            errors=errors,
+        ).model_dump(),
+    )
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """
+    Handle HTTP exceptions with standardized format for frontend consumption
+    """
+    # Extract field-specific errors from detail if it's a dict
+    errors = []
+    if isinstance(exc.detail, dict) and "field_name" in exc.detail:
+        errors.append(
+            ErrorDetail(
+                field=exc.detail.get("field_name"),
+                message=exc.detail.get("message", "An error occurred"),
+                code=str(exc.status_code),
+            )
+        )
+        message = "Request error"
+    else:
+        message = exc.detail if isinstance(exc.detail, str) else "Request error"
+
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=create_error_response(
+            message=message,
+            errors=errors,
+        ).model_dump(),
+    )
+
+
+@app.exception_handler(CustomException)
+async def custom_exception_handler(request: Request, exc: CustomException):
+    """
+    Handle custom exceptions with standardized format for frontend consumption
+    """
+    return JSONResponse(
+        status_code=exc.http_code,
+        content=create_error_response(
+            message=exc.message,
+            errors=[ErrorDetail(code=exc.code, message=exc.message)],
+        ).model_dump(),
+    )
+
+
+@app.exception_handler(SQLAlchemyError)
+async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
+    """
+    Handle database errors with standardized format for frontend consumption
+    """
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content=create_error_response(
+            message="Database error",
+            errors=[ErrorDetail(code="database_error", message=str(exc))],
+        ).model_dump(),
+    )
+
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    """
+    Handle general exceptions with standardized format for frontend consumption
+    """
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content=create_error_response(
+            message="Internal server error",
+            errors=[
+                ErrorDetail(
+                    code="internal_error", message="An unexpected error occurred"
+                )
+            ],
+        ).model_dump(),
+    )

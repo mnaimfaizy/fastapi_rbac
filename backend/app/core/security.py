@@ -63,12 +63,41 @@ def create_refresh_token(
     return encoded_jwt
 
 
-def decode_token(token: str, token_type: str = "access") -> dict[str, Any]:
-    key = (
-        settings.JWT_REFRESH_SECRET_KEY
-        if token_type == "refresh"
-        else settings.ENCRYPT_KEY
+def create_reset_token(
+    subject: Union[str, Any], expires_delta: timedelta = None
+) -> str:
+    """
+    Creates a password reset token
+    """
+    if expires_delta is not None:
+        expires_delta = datetime.utcnow() + expires_delta
+    else:
+        expires_delta = datetime.utcnow() + timedelta(
+            minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
+        )
+
+    to_encode = {
+        "exp": expires_delta,
+        "sub": str(subject),
+        "iat": datetime.utcnow(),
+        "iss": settings.TOKEN_ISSUER,
+        "aud": settings.TOKEN_AUDIENCE,
+        "type": "reset",
+    }
+    encoded_jwt = jwt.encode(
+        to_encode, settings.JWT_RESET_SECRET_KEY, algorithm=JWT_ALGORITHM
     )
+    return encoded_jwt
+
+
+def decode_token(token: str, token_type: str = "access") -> dict[str, Any]:
+    if token_type == "refresh":
+        key = settings.JWT_REFRESH_SECRET_KEY
+    elif token_type == "reset":
+        key = settings.JWT_RESET_SECRET_KEY
+    else:
+        key = settings.ENCRYPT_KEY
+
     return jwt.decode(
         token=token,
         key=key,

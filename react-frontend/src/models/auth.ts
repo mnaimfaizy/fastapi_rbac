@@ -21,6 +21,15 @@ export interface RefreshTokenRequest {
   refresh_token: string;
 }
 
+export interface PasswordResetRequest {
+  email: string;
+}
+
+export interface PasswordResetConfirm {
+  token: string;
+  new_password: string;
+}
+
 export interface AuthState {
   user: User | null;
   accessToken: string | null;
@@ -29,4 +38,6 @@ export interface AuthState {
   isLoading: boolean;
   error: string | null;
   passwordChangeSuccess: boolean;
+  passwordResetRequested: boolean;
+  passwordResetSuccess: boolean;
 }

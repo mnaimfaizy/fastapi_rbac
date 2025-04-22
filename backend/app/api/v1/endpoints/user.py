@@ -8,11 +8,15 @@ from app import crud
 from app.api import deps
 from app.deps import user_deps
 from app.models import User
-from app.schemas.response_schema import (IDeleteResponseBase, IGetResponseBase,
-                                         IGetResponsePaginated,
-                                         IPostResponseBase, create_response)
+from app.schemas.response_schema import (
+    IDeleteResponseBase,
+    IGetResponseBase,
+    IGetResponsePaginated,
+    IPostResponseBase,
+    create_response,
+)
 from app.schemas.role_schema import IRoleEnum
-from app.schemas.user_schema import IUserCreate, IUserRead
+from app.schemas.user_schema import IUserCreate, IUserRead, IUserUpdate
 from app.utils.exceptions import UserSelfDeleteException
 
 router = APIRouter()
@@ -98,6 +102,30 @@ async def create_user(
     """
     user = await crud.user.create_with_role(obj_in=new_user)
     return create_response(data=user)
+
+
+@router.put("/{user_id}")
+async def update_user(
+    user_update: IUserUpdate,
+    user: User = Depends(user_deps.is_valid_user),
+    current_user: User = Depends(
+        deps.get_current_user(required_roles=[IRoleEnum.admin])
+    ),
+) -> IPostResponseBase[IUserRead]:
+    """
+    Updates a user by id
+
+    Required roles:
+    - admin
+    """
+    # Check if password is being updated and hash it if so
+    if user_update.password:
+        from app.core.security import get_password_hash
+
+        user_update.password = get_password_hash(user_update.password)
+
+    updated_user = await crud.user.update(obj_current=user, obj_new=user_update)
+    return create_response(data=updated_user, message="User updated successfully")
 
 
 @router.delete("/{user_id}")

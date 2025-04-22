@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAppDispatch } from "../../store/hooks";
-import { logout } from "../../store/slices/authSlice";
+import { logoutUser } from "../../store/slices/authSlice";
 
 interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
   isCollapsed?: boolean;
@@ -25,8 +25,11 @@ export function Sidebar({ className, isCollapsed = false }: SidebarProps) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    dispatch(logout());
+  const handleLogout = async () => {
+    // Use the updated logoutUser thunk that calls the backend API
+    await dispatch(logoutUser());
+    // Navigate will happen automatically after logout due to auth state change
+    // but we keep it here as a fallback
     navigate("/login");
   };
 

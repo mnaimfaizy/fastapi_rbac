@@ -16,6 +16,7 @@ from app.models.user_model import User
 from app.schemas.common_schema import TokenType
 from app.schemas.response_schema import IPostResponseBase, create_response
 from app.schemas.token_schema import RefreshToken, Token, TokenRead
+from app.schemas.user_schema import PasswordResetRequest, PasswordResetConfirm
 from app.utils.token import add_token_to_redis, delete_tokens, get_valid_tokens
 
 router = APIRouter()
@@ -264,3 +265,121 @@ async def login_access_token(
             settings.ACCESS_TOKEN_EXPIRE_MINUTES,
         )
     return TokenRead(access_token=access_token, token_type="bearer")
+
+
+@router.post("/logout")
+async def logout(
+    current_user: User = Depends(deps.get_current_user()),
+    redis_client: Redis = Depends(get_redis_client),
+) -> IPostResponseBase:
+    """
+    Logout endpoint that invalidates the current user's tokens
+    """
+    # Invalidate both access and refresh tokens for the user
+    await delete_tokens(redis_client, current_user, TokenType.ACCESS)
+    await delete_tokens(redis_client, current_user, TokenType.REFRESH)
+
+    return create_response(data={}, message="Successfully logged out")
+
+
+@router.post("/password-reset/request")
+async def request_password_reset(
+    reset_request: PasswordResetRequest = Body(...),
+    redis_client: Redis = Depends(get_redis_client),
+) -> IPostResponseBase:
+    """
+    Request a password reset for a given email address.
+    Sends a token that can be used to reset the password.
+    """
+    user = await crud.user.get_by_email(email=reset_request.email)
+    if not user:
+        # Don't reveal that the email doesn't exist, just return a success message
+        return create_response(
+            data={}, message="If the email exists, a password reset link has been sent"
+        )
+
+    if not user.is_active:
+        # Don't reveal that the user is inactive
+        return create_response(
+            data={}, message="If the email exists, a password reset link has been sent"
+        )
+
+    # Generate a password reset token
+    reset_token_expires = timedelta(
+        minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
+    )
+    reset_token = security.create_reset_token(
+        user.id, expires_delta=reset_token_expires
+    )
+
+    # Store the reset token in Redis
+    await add_token_to_redis(
+        redis_client,
+        user,
+        reset_token,
+        TokenType.RESET,
+        settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES,
+    )
+
+    # Construct reset password URL (would be used in email)
+    reset_url = f"{settings.PASSWORD_RESET_URL}?token={reset_token}"
+
+    # In a real application, send an email with the reset token/link
+    # For example: await send_reset_password_email(email=user.email, token=reset_token, reset_url=reset_url)
+
+    # For development, just return a success message with the reset URL
+    # In production, this would be handled by an email service
+    return create_response(
+        data={"reset_url": reset_url, "reset_token": reset_token},
+        message="Password reset link generated. In a production environment, this would be sent via email.",
+    )
+
+
+@router.post("/password-reset/confirm")
+async def confirm_password_reset(
+    reset_confirm: PasswordResetConfirm = Body(...),
+    redis_client: Redis = Depends(get_redis_client),
+) -> IPostResponseBase:
+    """
+    Reset a user's password using a valid reset token
+    """
+    try:
+        payload = decode_token(reset_confirm.token, token_type="reset")
+    except (ExpiredSignatureError, DecodeError, MissingRequiredClaimError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired token",
+        )
+
+    user_id = payload["sub"]
+    user = await crud.user.get(id=user_id)
+
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid token",
+        )
+
+    # Verify token in Redis
+    valid_reset_tokens = await get_valid_tokens(redis_client, user_id, TokenType.RESET)
+    if not valid_reset_tokens or reset_confirm.token not in valid_reset_tokens:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid token",
+        )
+
+    # Update user's password
+    new_hashed_password = get_password_hash(reset_confirm.new_password)
+    await crud.user.update(
+        obj_current=user,
+        obj_new={"password": new_hashed_password, "needs_to_change_password": False},
+    )
+
+    # Delete the used reset token
+    await delete_tokens(redis_client, user, TokenType.RESET)
+
+    # Invalidate all existing tokens for security
+    await delete_tokens(redis_client, user, TokenType.ACCESS)
+    await delete_tokens(redis_client, user, TokenType.REFRESH)
+
+    return create_response(data={}, message="Password has been reset successfully")
