@@ -1,8 +1,13 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import {
-  confirmPasswordReset,
+  resetPassword,
   clearError,
   resetPasswordResetSuccess,
 } from "../../store/slices/authSlice";
@@ -18,6 +23,7 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "../../components/ui/card";
@@ -43,28 +49,21 @@ const resetPasswordSchema = z
 
 type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>;
 
-const PasswordResetConfirmPage = () => {
+const PasswordResetPage = () => {
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get("token");
   const navigate = useNavigate();
-  const location = useLocation();
-  const [token, setToken] = useState<string | null>(null);
-
   const { isLoading, error, passwordResetSuccess } = useAppSelector(
     (state) => state.auth
   );
   const dispatch = useAppDispatch();
 
-  // Extract token from URL query parameters
+  // Redirect if no token is provided
   useEffect(() => {
-    const queryParams = new URLSearchParams(location.search);
-    const tokenFromQuery = queryParams.get("token");
-
-    if (tokenFromQuery) {
-      setToken(tokenFromQuery);
-    } else {
-      // Redirect if no token is provided
-      navigate("/password-reset", { replace: true });
+    if (!token) {
+      navigate("/password-reset-request", { replace: true });
     }
-  }, [location.search, navigate]);
+  }, [token, navigate]);
 
   // Initialize React Hook Form with Zod validation
   const {
@@ -95,7 +94,7 @@ const PasswordResetConfirmPage = () => {
     try {
       // Dispatch password reset action with token and new password
       await dispatch(
-        confirmPasswordReset({
+        resetPassword({
           token,
           newPassword: data.password,
         })
@@ -197,4 +196,4 @@ const PasswordResetConfirmPage = () => {
   );
 };
 
-export default PasswordResetConfirmPage;
+export default PasswordResetPage;

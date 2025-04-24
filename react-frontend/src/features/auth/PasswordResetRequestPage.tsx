@@ -37,7 +37,6 @@ const PasswordResetRequestPage = () => {
     (state) => state.auth
   );
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
 
   // Initialize React Hook Form with Zod validation
   const {

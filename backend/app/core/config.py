@@ -31,6 +31,17 @@ class Settings(BaseSettings):
     PASSWORD_RESET_URL: str = (
         "http://localhost:3000/reset-password"  # Frontend URL for password reset
     )
+    # Email configuration
+    EMAILS_ENABLED: bool = True
+    SMTP_TLS: bool = True
+    SMTP_HOST: str = "fastapi_mailhog" if ModeEnum.development else ""
+    SMTP_PORT: int = 1025 if ModeEnum.development else 587
+    SMTP_USER: str = "" if ModeEnum.development else ""
+    SMTP_PASSWORD: str = "" if ModeEnum.development else ""
+    EMAILS_FROM_EMAIL: str = "info@fastapi-rbac.com"
+    EMAILS_FROM_NAME: str = "FastAPI RBAC"
+    EMAIL_TEMPLATES_DIR: str = os.path.join(project_root, "app", "email-templates")
+
     DATABASE_USER: str
     DATABASE_PASSWORD: str
     DATABASE_HOST: str
@@ -123,11 +134,9 @@ class Settings(BaseSettings):
     USER_CHANGED_PASSWORD_DATE: str
     USERS_OPEN_REGISTRATION: bool
 
-    JWT_REFRESH_SECRET_KEY: str = secrets.token_urlsafe(32)
-    JWT_RESET_SECRET_KEY: str = secrets.token_urlsafe(
-        32
-    )  # Secret key for password reset tokens
-    ENCRYPT_KEY: str = secrets.token_urlsafe(32)
+    JWT_REFRESH_SECRET_KEY: str
+    JWT_RESET_SECRET_KEY: str  # Secret key for password reset tokens
+    ENCRYPT_KEY: str
     BACKEND_CORS_ORIGINS: list[str] | list[AnyHttpUrl]
 
     @field_validator("BACKEND_CORS_ORIGINS")

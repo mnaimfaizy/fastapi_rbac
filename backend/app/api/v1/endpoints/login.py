@@ -101,21 +101,16 @@ async def change_password(
     """
     Change password
     """
-
     if not verify_password(current_password, current_user.password):
         raise HTTPException(status_code=400, detail="Invalid Current Password")
 
-    if verify_password(new_password, current_user.password):
-        raise HTTPException(
-            status_code=400,
-            detail="New Password should be different that the current one",
-        )
+    try:
+        # This will check history, update password, and update last_changed_password_date
+        await crud.user.update_password(user=current_user, new_password=new_password)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
-    new_hashed_password = get_password_hash(new_password)
-    await crud.user.update(
-        obj_current=current_user, obj_new={"password": new_hashed_password}
-    )
-
+    # Generate new tokens after password change
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     refresh_token_expires = timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES)
     access_token = security.create_access_token(
@@ -131,8 +126,11 @@ async def change_password(
         user=current_user,
     )
 
+    # Invalidate old tokens
     await delete_tokens(redis_client, current_user, TokenType.ACCESS)
     await delete_tokens(redis_client, current_user, TokenType.REFRESH)
+
+    # Add new tokens
     await add_token_to_redis(
         redis_client,
         current_user,
@@ -148,7 +146,7 @@ async def change_password(
         settings.REFRESH_TOKEN_EXPIRE_MINUTES,
     )
 
-    return create_response(data=data, message="New password generated")
+    return create_response(data=data, message="Password changed successfully")
 
 
 @router.post("/new_access_token", status_code=201)
@@ -321,18 +319,28 @@ async def request_password_reset(
         settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES,
     )
 
-    # Construct reset password URL (would be used in email)
+    # Construct reset password URL
     reset_url = f"{settings.PASSWORD_RESET_URL}?token={reset_token}"
 
-    # In a real application, send an email with the reset token/link
-    # For example: await send_reset_password_email(email=user.email, token=reset_token, reset_url=reset_url)
+    # Send the password reset email
+    from app.utils.email.reset_password import send_reset_password_email
 
-    # For development, just return a success message with the reset URL
-    # In production, this would be handled by an email service
-    return create_response(
-        data={"reset_url": reset_url, "reset_token": reset_token},
-        message="Password reset link generated. In a production environment, this would be sent via email.",
+    await send_reset_password_email(
+        email=user.email, token=reset_token, reset_url=reset_url
     )
+
+    # In development mode, return the token for testing purposes
+    # In production, only return a success message
+    if settings.MODE == "development":
+        return create_response(
+            data={"reset_url": reset_url, "reset_token": reset_token},
+            message="Password reset email sent. Check the MailHog interface at http://localhost:8025",
+        )
+    else:
+        return create_response(
+            data={},
+            message="If the email exists, a password reset link has been sent",
+        )
 
 
 @router.post("/password-reset/confirm")
@@ -368,12 +376,13 @@ async def confirm_password_reset(
             detail="Invalid token",
         )
 
-    # Update user's password
-    new_hashed_password = get_password_hash(reset_confirm.new_password)
-    await crud.user.update(
-        obj_current=user,
-        obj_new={"password": new_hashed_password, "needs_to_change_password": False},
-    )
+    try:
+        # This will check history, update password, and update last_changed_password_date
+        await crud.user.update_password(
+            user=user, new_password=reset_confirm.new_password
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     # Delete the used reset token
     await delete_tokens(redis_client, user, TokenType.RESET)

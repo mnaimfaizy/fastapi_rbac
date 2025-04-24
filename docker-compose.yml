@@ -1,3 +1,5 @@
+version: "3.8"
+
 services:
   fastapi_rbac:
     build:
@@ -13,17 +15,32 @@ services:
       - ./backend:/app
     networks:
       - fastapi_rbac_network
-
-  react_frontend:
-    build:
-      context: ./react-frontend
-      dockerfile: Dockerfile
-    image: react_frontend:latest
-    container_name: react_frontend
-    ports:
-      - "80:80"
     depends_on:
-      - fastapi_rbac
+      - fastapi_rbac_db
+      - mailhog
+      - fastapi_rbac_redis_server
+
+  # react_frontend:
+  #   build:
+  #     context: ./react-frontend
+  #     dockerfile: Dockerfile
+  #   image: react_frontend:latest
+  #   container_name: react_frontend
+  #   ports:
+  #     - "80:80"
+  #   depends_on:
+  #     - fastapi_rbac
+  #   networks:
+  #     - fastapi_rbac_network
+
+  # Mail testing service for development
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025" # Web UI
+    restart: unless-stopped
     networks:
       - fastapi_rbac_network
 
@@ -83,8 +100,6 @@ services:
     restart: always
     ports:
       - "8888:80"
-    env_file:
-      - ./backend/backend.env
     environment:
       - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL}
       - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD}

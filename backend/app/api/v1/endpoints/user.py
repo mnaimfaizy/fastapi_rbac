@@ -1,7 +1,7 @@
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, HTTPException
 from fastapi_pagination import Params
 
 from app import crud
@@ -118,14 +118,23 @@ async def update_user(
     Required roles:
     - admin
     """
-    # Check if password is being updated and hash it if so
+    # If password is being updated, use password history management
     if user_update.password:
-        from app.core.security import get_password_hash
+        try:
+            await crud.user.update_password(
+                user=user, new_password=user_update.password
+            )
+            # Remove password from update data since it's already been handled
+            user_update.password = None
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
-        user_update.password = get_password_hash(user_update.password)
-
-    updated_user = await crud.user.update(obj_current=user, obj_new=user_update)
-    return create_response(data=updated_user, message="User updated successfully")
+    # Update other fields if any
+    if any(getattr(user_update, field) is not None for field in user_update.__fields__):
+        updated_user = await crud.user.update(obj_current=user, obj_new=user_update)
+        return create_response(data=updated_user, message="User updated successfully")
+    else:
+        return create_response(data=user, message="User updated successfully")
 
 
 @router.delete("/{user_id}")
