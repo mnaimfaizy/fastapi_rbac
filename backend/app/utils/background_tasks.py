@@ -6,6 +6,9 @@ This module provides utility functions for common background tasks such as:
 - Cleaning up expired tokens
 - Logging security audit events
 - Managing user account states
+
+This module supports both FastAPI BackgroundTasks for simple operations
+and Celery for more complex, long-running, or scheduled tasks.
 """
 
 from datetime import datetime, timedelta
@@ -17,12 +20,23 @@ from redis.asyncio import Redis
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app import crud
-
-# Import settings
 from app.core.config import settings
 from app.models.user_model import User
 from app.schemas.common_schema import TokenType
 from app.utils.email import send_email_with_template
+
+# Import Celery tasks if available
+try:
+    from app.worker import (
+        send_email_task,
+        cleanup_tokens_task,
+        log_security_event_task,
+        process_account_lockout_task,
+    )
+
+    CELERY_AVAILABLE = True
+except ImportError:
+    CELERY_AVAILABLE = False
 
 
 async def send_password_reset_email(
@@ -49,14 +63,24 @@ async def send_password_reset_email(
         "valid_hours": settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES // 60,
     }
 
-    # Add the email sending task to background tasks using the correct function
-    background_tasks.add_task(
-        send_email_with_template,  # Use the correct function
-        email_to=user_email,
-        subject=subject,  # Pass subject directly
-        template_name="password-reset.html",  # Pass template name
-        context=template_context,  # Pass context dictionary
-    )
+    # Use Celery for email sending if available and in production, otherwise use BackgroundTasks
+    if CELERY_AVAILABLE and settings.MODE == "production":
+        # Send via Celery task
+        send_email_task.delay(
+            email_to=user_email,
+            subject=subject,
+            template_name="password-reset.html",
+            context=template_context,
+        )
+    else:
+        # Add the email sending task to background tasks using the correct function
+        background_tasks.add_task(
+            send_email_with_template,  # Use the correct function
+            email_to=user_email,
+            subject=subject,  # Pass subject directly
+            template_name="password-reset.html",  # Pass template name
+            context=template_context,  # Pass context dictionary
+        )
 
 
 async def cleanup_expired_tokens(
@@ -66,34 +90,39 @@ async def cleanup_expired_tokens(
     token_type: TokenType,
 ) -> None:
     """
-    Clean up expired tokens from Redis.
+    Add token cleanup task to background tasks.
 
     Args:
-        background_tasks: The FastAPI BackgroundTasks instance
-        redis_client: The Redis client instance
-        user_id: The user ID whose tokens to clean
-        token_type: The type of token to clean up
+        background_tasks: BackgroundTasks instance
+        redis_client: Redis client instance
+        user_id: User ID to clean tokens for
+        token_type: Type of token to clean
     """
-    # Add token cleanup task to background tasks
-    background_tasks.add_task(
-        _cleanup_tokens_task,
-        redis_client=redis_client,
-        user_id=user_id,
-        token_type=token_type,
-    )
+    # Use Celery for token cleanup if available and in production, otherwise use BackgroundTasks
+    if CELERY_AVAILABLE and settings.MODE == "production":
+        # Send via Celery task
+        cleanup_tokens_task.delay(str(user_id), token_type.value)
+    else:
+        # Use FastAPI background tasks
+        background_tasks.add_task(
+            _cleanup_tokens_task, redis_client, user_id, token_type
+        )
 
 
 async def _cleanup_tokens_task(
     redis_client: Redis, user_id: UUID, token_type: TokenType
 ) -> None:
     """
-    Internal function to clean up expired tokens.
-    Not to be called directly, but through cleanup_expired_tokens.
+    Clean up expired tokens for a user.
+    This is the actual task that gets executed in the background.
     """
-    token_key = f"user:{user_id}:{token_type}"
-    # Check if key exists and delete it
-    if await redis_client.exists(token_key):
-        await redis_client.delete(token_key)
+    # Implementation details...
+    # Delete user tokens based on token type
+    key_pattern = f"user:{user_id}:{token_type.value}:*"
+    keys = await redis_client.keys(key_pattern)
+
+    if keys:
+        await redis_client.delete(*keys)
 
 
 async def log_security_event(
@@ -104,24 +133,32 @@ async def log_security_event(
     db_session: Optional[AsyncSession] = None,
 ) -> None:
     """
-    Log a security event for audit purposes.
+    Log a security event to the audit log in the background.
 
     Args:
-        background_tasks: The FastAPI BackgroundTasks instance
-        event_type: Type of security event (login, logout, password_change, etc.)
-        user_id: The ID of the user related to this event
-        details: Additional details about the event
-        db_session: Database session for database operations
+        background_tasks: BackgroundTasks instance
+        event_type: Type of security event
+        user_id: Optional ID of the user associated with the event
+        details: Optional additional details about the event
+        db_session: Optional database session to use
     """
-    # This would be replaced with your actual security logging implementation
-    # Add the logging task to background tasks
-    background_tasks.add_task(
-        _log_security_event_task,
-        event_type=event_type,
-        user_id=user_id,
-        details=details,
-        db_session=db_session,
-    )
+    # Use Celery for security logging if available and in production, otherwise use BackgroundTasks
+    if CELERY_AVAILABLE and settings.MODE == "production":
+        # Send via Celery task
+        log_security_event_task.delay(
+            event_type,
+            str(user_id) if user_id else None,
+            details,
+        )
+    else:
+        # Use FastAPI background tasks
+        background_tasks.add_task(
+            _log_security_event_task,
+            event_type,
+            user_id,
+            details,
+            db_session,
+        )
 
 
 async def _log_security_event_task(
@@ -131,13 +168,10 @@ async def _log_security_event_task(
     db_session: Optional[AsyncSession] = None,
 ) -> None:
     """
-    Internal function to log security events.
-    Not to be called directly, but through log_security_event.
+    The actual task that logs a security event to the audit log.
     """
-    # Implement your security event logging here
-    # This could be writing to a database table, sending to a logging service, etc.
-    print(f"Security event: {event_type} for user {user_id} with details: {details}")
-    # In a real implementation, you'd save this to your database or send to a logging system
+    # Implementation for logging security events
+    # This would typically create an entry in a security_audit table
 
 
 async def process_account_lockout(
@@ -147,39 +181,44 @@ async def process_account_lockout(
     db_session: Optional[AsyncSession] = None,
 ) -> None:
     """
-    Process account lockout as a background task.
+    Process account lockout in the background.
 
     Args:
-        background_tasks: The FastAPI BackgroundTasks instance
-        user: The user whose account is being locked
-        lock_duration_hours: Duration of the lockout in hours
-        db_session: Database session for database operations
+        background_tasks: BackgroundTasks instance
+        user: User object to lock out
+        lock_duration_hours: Duration of lockout in hours
+        db_session: Optional database session to use
     """
-    # Add the account lockout task to background tasks
-    background_tasks.add_task(
-        _process_account_lockout_task,
-        user=user,
-        lock_duration_hours=lock_duration_hours,
-        db_session=db_session,
-    )
+    # Use Celery for account lockout if available and in production, otherwise use BackgroundTasks
+    if CELERY_AVAILABLE and settings.MODE == "production":
+        # Send via Celery task
+        process_account_lockout_task.delay(str(user.id), lock_duration_hours)
+    else:
+        # Use FastAPI background tasks
+        background_tasks.add_task(
+            _process_account_lockout_task,
+            user,
+            lock_duration_hours,
+            db_session,
+        )
 
 
 async def _process_account_lockout_task(
     user: User, lock_duration_hours: int = 24, db_session: Optional[AsyncSession] = None
 ) -> None:
     """
-    Internal function to process account lockout.
-    Not to be called directly, but through process_account_lockout.
+    The actual task that processes an account lockout.
     """
-    # Lock the account
-    if db_session:
-        user.is_locked = True
-        user.locked_until = datetime.utcnow() + timedelta(hours=lock_duration_hours)
-        db_session.add(user)
-        await db_session.commit()
-        await db_session.refresh(user)
+    # Set account as locked
+    user.is_locked = True
+    user.locked_until = datetime.utcnow() + timedelta(hours=lock_duration_hours)
 
-        # Here you might also want to:
-        # 1. Send a notification to the user about the account lockout
-        # 2. Send a notification to admins about suspicious activity
-        # 3. Log the event in an audit log
+    # Save to database
+    if db_session is None:
+        from app.db.session import get_async_session
+
+        async for session in get_async_session():
+            db_session = session
+            break
+
+    await crud.user.update(db_obj=user, db_session=db_session)

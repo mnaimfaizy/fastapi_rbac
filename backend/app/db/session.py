@@ -3,6 +3,8 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
 from sqlmodel.ext.asyncio.session import AsyncSession
+import redis.asyncio as aioredis
+from typing import AsyncGenerator
 
 from app.core.config import ModeEnum, settings
 
@@ -47,3 +49,26 @@ SessionLocalCelery = sessionmaker(
     class_=AsyncSession,
     expire_on_commit=False,
 )
+
+
+# Add the missing async session provider function
+async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
+    """
+    Create and get async database session.
+    This function yields an AsyncSession for use in async context managers or dependency injection.
+    """
+    async with SessionLocal() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
+
+
+# Add the Redis client function that's also likely needed
+def get_redis_client():
+    """
+    Get Redis client instance.
+    Returns a Redis client configured to connect to the Redis server specified in settings.
+    """
+    redis_url = f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}"
+    return aioredis.from_url(redis_url, decode_responses=True)

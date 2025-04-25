@@ -57,16 +57,23 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
 
     async def update_is_active(
         self, *, db_obj: list[User], obj_in: int | str | dict[str, Any]
-    ) -> User | None:
-        response = None
+    ) -> list[User] | None:
+        """Update is_active status for multiple users in a batch operation"""
         db_session = super().get_db().session
+
+        # Add all objects to the session at once
         for x in db_obj:
             x.is_active = obj_in.is_active
             db_session.add(x)
-            await db_session.commit()
+
+        # Commit once for all objects
+        await db_session.commit()
+
+        # Refresh all objects
+        for x in db_obj:
             await db_session.refresh(x)
-            response.append(x)
-        return response
+
+        return db_obj
 
     async def authenticate(
         self, *, email: EmailStr, password: str, db_session: AsyncSession | None = None

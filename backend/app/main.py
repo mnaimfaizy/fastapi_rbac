@@ -21,6 +21,19 @@ from app.core.security import decode_token
 from app.schemas.response_schema import ErrorDetail, create_error_response
 from app.utils.fastapi_globals import GlobalsMiddleware, g
 
+# Import Celery app from centralized configuration
+from app.celery_app import celery_app
+
+# Import Celery beat schedule to ensure it's registered
+import app.celery_beat_schedule  # noqa
+
+# Flag to indicate whether Celery is available
+CELERY_AVAILABLE = True
+
+# Expose the Celery application instance
+# This allows CLI commands like 'celery -A app.main.celery worker' to work
+celery = celery_app
+
 
 async def user_id_identifier(request: Request):
     if request.scope["type"] == "http":

@@ -28,8 +28,8 @@ class UserBase(SQLModel):
 
 
 class User(BaseUUIDModel, UserBase, table=True):
-    first_name: Optional[str] | None = Field(index=True)
-    last_name: Optional[str] | None = Field(index=True)
+    first_name: str | None = Field(index=True)
+    last_name: str | None = Field(index=True)
     expiry_date: datetime | None = Field(default_factory=datetime.utcnow)
     last_changed_password_date: datetime | None = Field(default_factory=datetime.utcnow)
     roles: list["Role"] = Relationship(

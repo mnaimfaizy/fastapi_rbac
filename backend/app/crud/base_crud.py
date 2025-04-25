@@ -186,7 +186,8 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         if isinstance(obj_new, dict):
             update_data = obj_new
         else:
-            update_data = obj_new.dict(
+            # Use model_dump instead of dict for Pydantic v2 compatibility
+            update_data = obj_new.model_dump(
                 exclude_unset=True
             )  # This tells Pydantic to not include the values that were not sent
         for field in update_data:
