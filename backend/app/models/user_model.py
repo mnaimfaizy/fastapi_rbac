@@ -16,7 +16,7 @@ class UserBase(SQLModel):
     is_active: bool = True
     is_superuser: bool = False
     last_updated_by: int | None = None
-    needsToChangePassword: bool = True
+    needs_to_change_password: bool = True
     expiry_date: datetime | None
     contact_phone: str | None = None
     last_changed_password_date: datetime | None

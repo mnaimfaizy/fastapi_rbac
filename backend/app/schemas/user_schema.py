@@ -15,6 +15,7 @@ class IUserCreate(UserBase):
     password: Optional[str] = None
     last_changed_password_date: Optional[datetime] = None
     expiry_date: datetime | None = None
+    number_of_failed_attempts: int = 0  # Adding the missing field with default value
 
 
 # Properties to receive via API on update

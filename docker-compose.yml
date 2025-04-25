@@ -12,7 +12,8 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - backend:/app
+      # Use a bind mount to sync local backend directory with container's /app
+      - ./backend:/app
     networks:
       - fastapi_rbac_network
     depends_on:
@@ -124,7 +125,6 @@ services:
 volumes:
   .database:
   pgadmin-data:
-  backend:
 
 networks:
   fastapi_rbac_network:

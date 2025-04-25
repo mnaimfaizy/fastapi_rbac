@@ -95,7 +95,8 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             if v == "":
                 return PostgresDsn.build(
-                    scheme="db+postgresql",
+                    # Changed scheme to a valid one for synchronous connections
+                    scheme="postgresql+psycopg2",
                     username=info.data["DATABASE_USER"],
                     password=info.data["DATABASE_PASSWORD"],
                     host=info.data["DATABASE_HOST"],

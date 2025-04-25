@@ -45,15 +45,15 @@ COPY . .
 ENV PYTHONPATH=/app
 
 # Fix line endings & execute permissions
-RUN dos2unix *.sh app/*.* || true
-
-RUN chmod +x ./run.sh
+# Ensure dos2unix runs and handle potential errors
+RUN apt-get update && apt-get install -y dos2unix && \
+    find /app -name '*.sh' -exec dos2unix {} \; && \
+    find /app -name '*.sh' -exec chmod +x {} \;
 
 # Create the log file to be able to run tail
 RUN touch /var/log/cron.log
 
 EXPOSE 8000
 
-# Run the run script, it will check for an /app/prestart.sh script (e.g. for migrations)
-# And then will start Uvicorn
-CMD ["./run.sh"]
+# Use the new consolidated entrypoint script
+CMD ["bash", "/app/entrypoint.sh"]
