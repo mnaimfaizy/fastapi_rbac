@@ -112,6 +112,8 @@ services:
     image: redis:alpine
     container_name: fastapi_rbac_redis_server
     restart: always
+    ports:
+      - "6379:6379" # Publish Redis port to host machine
     expose:
       - 6379
     env_file:

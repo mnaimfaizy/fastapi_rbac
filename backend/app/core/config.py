@@ -13,6 +13,17 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 # Navigate two directories up to reach the project root directory
 project_root = os.path.dirname(os.path.dirname(current_dir))
 
+# Create the path to the local environment file
+local_env_file = os.path.join(project_root, ".env.local")
+env_file = os.path.join(project_root, "backend.env")
+
+# Check if the local environment file exists and use it, otherwise use the default
+env_files = [env_file]
+if os.path.isfile(local_env_file):
+    env_files.insert(
+        0, local_env_file
+    )  # Add local env file first so it takes precedence
+
 
 class ModeEnum(str, Enum):
     development = "development"
@@ -149,7 +160,7 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(
         case_sensitive=True,
-        env_file=os.path.join(project_root, "backend.env"),
+        env_file=env_files,
         extra="ignore",  # Allow and ignore extra fields from env file
     )
 

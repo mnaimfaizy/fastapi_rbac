@@ -87,6 +87,7 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.API_VERSION,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    description="FastAPI RBAC system with comprehensive authentication and authorization features",
     lifespan=lifespan,
 )
 
