@@ -1,6 +1,5 @@
-import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
+import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import { AuthState, LoginCredentials } from "../../models/auth";
-import { User } from "../../models/user";
 import authService from "../../services/auth.service";
 import authTokenManager from "../../services/authTokenManager";
 import {
@@ -29,13 +28,19 @@ export const loginUser = createAsyncThunk(
     try {
       const response = await authService.login(credentials);
       return response;
-    } catch (error: any) {
-      // Handle standardized error format from the backend
-      const errorMessage =
-        error.response?.data?.message ||
-        error.response?.data?.detail?.message ||
-        "Login failed";
-      return rejectWithValue(errorMessage);
+    } catch (error) {
+      if (error && typeof error === "object" && "response" in error) {
+        const err = error as {
+          response?: {
+            data?: { errors?: Array<{ message: string }>; message?: string };
+          };
+        };
+        if (err.response?.data?.errors?.[0]) {
+          return rejectWithValue(err.response.data.errors[0].message);
+        }
+        return rejectWithValue(err.response?.data?.message || "Login failed");
+      }
+      return rejectWithValue("Login failed");
     }
   }
 );
@@ -46,13 +51,21 @@ export const refreshAccessToken = createAsyncThunk(
     try {
       const response = await authService.refreshToken(refreshToken);
       return response;
-    } catch (error: any) {
-      // Handle standardized error format from the backend
-      const errorMessage =
-        error.response?.data?.message ||
-        error.response?.data?.detail?.message ||
-        "Failed to refresh token";
-      return rejectWithValue(errorMessage);
+    } catch (error) {
+      if (error && typeof error === "object" && "response" in error) {
+        const err = error as {
+          response?: {
+            data?: { errors?: Array<{ message: string }>; message?: string };
+          };
+        };
+        if (err.response?.data?.errors?.[0]) {
+          return rejectWithValue(err.response.data.errors[0].message);
+        }
+        return rejectWithValue(
+          err.response?.data?.message || "Failed to refresh token"
+        );
+      }
+      return rejectWithValue("Failed to refresh token");
     }
   }
 );
@@ -63,13 +76,21 @@ export const getCurrentUser = createAsyncThunk(
     try {
       const user = await authService.getCurrentUser();
       return user;
-    } catch (error: any) {
-      // Handle standardized error format from the backend
-      const errorMessage =
-        error.response?.data?.message ||
-        error.response?.data?.detail?.message ||
-        "Failed to fetch user data";
-      return rejectWithValue(errorMessage);
+    } catch (error) {
+      if (error && typeof error === "object" && "response" in error) {
+        const err = error as {
+          response?: {
+            data?: { errors?: Array<{ message: string }>; message?: string };
+          };
+        };
+        if (err.response?.data?.errors?.[0]) {
+          return rejectWithValue(err.response.data.errors[0].message);
+        }
+        return rejectWithValue(
+          err.response?.data?.message || "Failed to fetch user data"
+        );
+      }
+      return rejectWithValue("Failed to fetch user data");
     }
   }
 );
@@ -89,13 +110,21 @@ export const changePassword = createAsyncThunk(
         newPassword
       );
       return response;
-    } catch (error: any) {
-      // Handle standardized error format from the backend
-      const errorMessage =
-        error.response?.data?.message ||
-        error.response?.data?.detail?.message ||
-        "Failed to change password";
-      return rejectWithValue(errorMessage);
+    } catch (error) {
+      if (error && typeof error === "object" && "response" in error) {
+        const err = error as {
+          response?: {
+            data?: { errors?: Array<{ message: string }>; message?: string };
+          };
+        };
+        if (err.response?.data?.errors?.[0]) {
+          return rejectWithValue(err.response.data.errors[0].message);
+        }
+        return rejectWithValue(
+          err.response?.data?.message || "Failed to change password"
+        );
+      }
+      return rejectWithValue("Failed to change password");
     }
   }
 );
@@ -107,13 +136,21 @@ export const requestPasswordReset = createAsyncThunk(
     try {
       await authService.requestPasswordReset(email);
       return true;
-    } catch (error: any) {
-      // Handle standardized error format from the backend
-      const errorMessage =
-        error.response?.data?.message ||
-        error.response?.data?.detail?.message ||
-        "Failed to request password reset";
-      return rejectWithValue(errorMessage);
+    } catch (error) {
+      if (error && typeof error === "object" && "response" in error) {
+        const err = error as {
+          response?: {
+            data?: { errors?: Array<{ message: string }>; message?: string };
+          };
+        };
+        if (err.response?.data?.errors?.[0]) {
+          return rejectWithValue(err.response.data.errors[0].message);
+        }
+        return rejectWithValue(
+          err.response?.data?.message || "Failed to request password reset"
+        );
+      }
+      return rejectWithValue("Failed to request password reset");
     }
   }
 );
@@ -127,13 +164,21 @@ export const confirmPasswordReset = createAsyncThunk(
     try {
       await authService.confirmPasswordReset(token, newPassword);
       return true;
-    } catch (error: any) {
-      // Handle standardized error format from the backend
-      const errorMessage =
-        error.response?.data?.message ||
-        error.response?.data?.detail?.message ||
-        "Failed to reset password";
-      return rejectWithValue(errorMessage);
+    } catch (error) {
+      if (error && typeof error === "object" && "response" in error) {
+        const err = error as {
+          response?: {
+            data?: { errors?: Array<{ message: string }>; message?: string };
+          };
+        };
+        if (err.response?.data?.errors?.[0]) {
+          return rejectWithValue(err.response.data.errors[0].message);
+        }
+        return rejectWithValue(
+          err.response?.data?.message || "Failed to reset password"
+        );
+      }
+      return rejectWithValue("Failed to reset password");
     }
   }
 );
@@ -159,7 +204,7 @@ const authSlice = createSlice({
   initialState,
   reducers: {
     // Logout user by clearing state and tokens
-    logout: (state) => {
+    logout: () => {
       // Clear any token expiry timers
       authTokenManager.clearExpiryTimer();
       clearAuthTokens();

@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -31,8 +31,11 @@ async def login(
     """
     Login for all users
     """
-    user = await crud.user.authenticate(email=email, password=password)
-    if not user:
+    # Check if user exists and get their current status
+    user_record = await crud.user.get_by_email(email=email)
+
+    if not user_record:
+        # User doesn't exist, but don't reveal that information
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
@@ -40,6 +43,97 @@ async def login(
                 "message": "Username or password is incorrect",
             },
         )
+
+    # Check for locked account before attempting authentication
+    if (
+        user_record.is_locked
+        and user_record.locked_until
+        and user_record.locked_until > datetime.utcnow()
+    ):
+        # Calculate remaining lock time
+        remaining_time = user_record.locked_until - datetime.utcnow()
+        remaining_hours = remaining_time.total_seconds() // 3600
+        remaining_minutes = (remaining_time.total_seconds() % 3600) // 60
+
+        lock_message = f"Account is locked due to multiple failed login attempts. "
+        if remaining_hours > 0:
+            lock_message += f"Try again in {int(remaining_hours)} hours and {int(remaining_minutes)} minutes."
+        else:
+            lock_message += f"Try again in {int(remaining_minutes)} minutes."
+
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "field_name": "username",
+                "message": lock_message,
+            },
+        )
+
+    # Check if we need to show warning for last attempt (2 failed attempts already)
+    warning_message = None
+    attempts_count = (
+        0
+        if user_record.number_of_failed_attempts is None
+        else user_record.number_of_failed_attempts
+    )
+
+    print(f"Current failed attempts for user {user_record.email}: {attempts_count}")
+
+    if attempts_count == 2:
+        warning_message = "Warning: This is your last attempt. If you enter an incorrect password again, your account will be locked for 24 hours."
+
+    # Now attempt to authenticate
+    user = await crud.user.authenticate(email=email, password=password)
+
+    if not user:
+        # Failed authentication attempt
+        # Instead of just returning error, check if the account is now locked after this attempt
+        # Pull the user data again to get the latest status after increment_failed_attempts was called
+        updated_user = await crud.user.get_by_email(email=email)
+
+        if updated_user.is_locked and updated_user.locked_until:
+            # Account was just locked
+            remaining_time = updated_user.locked_until - datetime.utcnow()
+            remaining_hours = remaining_time.total_seconds() // 3600
+            remaining_minutes = (remaining_time.total_seconds() % 3600) // 60
+
+            lock_message = (
+                f"Your account has been locked due to too many failed login attempts. "
+            )
+            if remaining_hours > 0:
+                lock_message += f"Try again in {int(remaining_hours)} hours and {int(remaining_minutes)} minutes."
+            else:
+                lock_message += f"Try again in {int(remaining_minutes)} minutes."
+
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "field_name": "username",
+                    "message": lock_message,
+                },
+            )
+        else:
+            # Just a regular authentication failure
+            attempts_left = 3 - (
+                0
+                if updated_user.number_of_failed_attempts is None
+                else updated_user.number_of_failed_attempts
+            )
+            message = "Username or password is incorrect"
+            if attempts_left == 1:
+                message = f"{message}. Warning: This is your last attempt. Account will be locked after the next failed attempt."
+            elif attempts_left > 0:
+                message = f"{message}. {attempts_left} attempts remaining before account lockout."
+
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "field_name": "username",
+                    "message": message,
+                },
+            )
+
+    # Authentication succeeded
     if not crud.user.has_verified(user):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -50,6 +144,8 @@ async def login(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"field_name": "username", "message": "Inactive user"},
         )
+
+    # Generate tokens
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     refresh_token_expires = timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES)
     access_token = security.create_access_token(
@@ -64,6 +160,8 @@ async def login(
         refresh_token=refresh_token,
         user=user,
     )
+
+    # Handle token storage in Redis
     valid_access_tokens = await get_valid_tokens(
         redis_client, user.id, TokenType.ACCESS
     )
@@ -87,8 +185,12 @@ async def login(
             settings.REFRESH_TOKEN_EXPIRE_MINUTES,
         )
 
-    print("data", data)
-    return create_response(data=data, message="Login correctly")
+    # Create response with optional warning message
+    message = "Login correctly"
+    if warning_message:
+        message = warning_message
+
+    return create_response(data=data, message=message)
 
 
 @router.post("/change_password")
@@ -234,19 +336,105 @@ async def login_access_token(
     """
     OAuth2 compatible token login, get an access token for future requests
     """
-    user = await crud.user.authenticate(
-        email=form_data.username, password=form_data.password
-    )
-    if not user:
+    # Check if user exists and get their current status
+    user_record = await crud.user.get_by_email(email=form_data.username)
+
+    if not user_record:
+        # User doesn't exist, but don't reveal that information
         raise HTTPException(
             status_code=400,
             detail={"field_name": "username", "message": "Incorrect email or password"},
         )
-    elif not user.is_active:
+
+    # Check for locked account before attempting authentication
+    if (
+        user_record.is_locked
+        and user_record.locked_until
+        and user_record.locked_until > datetime.utcnow()
+    ):
+        # Calculate remaining lock time
+        remaining_time = user_record.locked_until - datetime.utcnow()
+        remaining_hours = remaining_time.total_seconds() // 3600
+        remaining_minutes = (remaining_time.total_seconds() % 3600) // 60
+
+        lock_message = f"Account is locked due to multiple failed login attempts. "
+        if remaining_hours > 0:
+            lock_message += f"Try again in {int(remaining_hours)} hours and {int(remaining_minutes)} minutes."
+        else:
+            lock_message += f"Try again in {int(remaining_minutes)} minutes."
+
+        raise HTTPException(
+            status_code=400,
+            detail={"field_name": "username", "message": lock_message},
+        )
+
+    # Check if this is the user's last attempt before locking
+    warning_message = None
+    attempts_count = (
+        0
+        if user_record.number_of_failed_attempts is None
+        else user_record.number_of_failed_attempts
+    )
+
+    print(
+        f"Current OAuth2 failed attempts for user {user_record.email}: {attempts_count}"
+    )
+
+    if attempts_count == 2:
+        warning_message = "Warning: This is your last attempt. If you enter an incorrect password again, your account will be locked for 24 hours."
+
+    # Now attempt to authenticate
+    user = await crud.user.authenticate(
+        email=form_data.username, password=form_data.password
+    )
+
+    if not user:
+        # Failed authentication attempt
+        # Pull the user data again to get the latest status after increment_failed_attempts was called
+        updated_user = await crud.user.get_by_email(email=form_data.username)
+
+        if updated_user.is_locked and updated_user.locked_until:
+            # Account was just locked
+            remaining_time = updated_user.locked_until - datetime.utcnow()
+            remaining_hours = remaining_time.total_seconds() // 3600
+            remaining_minutes = (remaining_time.total_seconds() % 3600) // 60
+
+            lock_message = (
+                f"Your account has been locked due to too many failed login attempts. "
+            )
+            if remaining_hours > 0:
+                lock_message += f"Try again in {int(remaining_hours)} hours and {int(remaining_minutes)} minutes."
+            else:
+                lock_message += f"Try again in {int(remaining_minutes)} minutes."
+
+            raise HTTPException(
+                status_code=400,
+                detail={"field_name": "username", "message": lock_message},
+            )
+        else:
+            # Just a regular authentication failure
+            attempts_left = 3 - (
+                0
+                if updated_user.number_of_failed_attempts is None
+                else updated_user.number_of_failed_attempts
+            )
+            message = "Incorrect email or password"
+            if attempts_left == 1:
+                message = f"{message}. Warning: This is your last attempt. Account will be locked after the next failed attempt."
+            elif attempts_left > 0:
+                message = f"{message}. {attempts_left} attempts remaining before account lockout."
+
+            raise HTTPException(
+                status_code=400,
+                detail={"field_name": "username", "message": message},
+            )
+
+    if not user.is_active:
         raise HTTPException(
             status_code=400,
             detail={"field_name": "username", "message": "Inactive user"},
         )
+
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = security.create_access_token(
         user.id, user.email, expires_delta=access_token_expires
@@ -262,7 +450,16 @@ async def login_access_token(
             TokenType.ACCESS,
             settings.ACCESS_TOKEN_EXPIRE_MINUTES,
         )
-    return TokenRead(access_token=access_token, token_type="bearer")
+
+    token_read = TokenRead(access_token=access_token, token_type="bearer")
+
+    # If there was a warning, we need to add it to the response
+    # Since TokenRead doesn't have a message field, we'll add it to the token type field as a workaround
+    # The client can parse this to extract both the token type and the warning message
+    if warning_message:
+        token_read.token_type = f"bearer|{warning_message}"
+
+    return token_read
 
 
 @router.post("/logout")

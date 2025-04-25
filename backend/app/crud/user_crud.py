@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -68,12 +68,41 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
             response.append(x)
         return response
 
-    async def authenticate(self, *, email: EmailStr, password: str) -> User | None:
+    async def authenticate(
+        self, *, email: EmailStr, password: str, db_session: AsyncSession | None = None
+    ) -> User | None:
+        db_session = db_session or super().get_db().session
         user = await self.get_by_email(email=email)
+
+        # If user doesn't exist, return None (don't reveal that the user doesn't exist)
         if not user:
             return None
-        if not verify_password(password, user.password):
+
+        # Check if the account is locked
+        if (
+            user.is_locked
+            and user.locked_until
+            and user.locked_until > datetime.utcnow()
+        ):
+            # Account is still locked
             return None
+
+        # If the account was locked but the lock period has expired, unlock it
+        if (
+            user.is_locked
+            and user.locked_until
+            and user.locked_until <= datetime.utcnow()
+        ):
+            await self.unlock_account(user=user, db_session=db_session)
+
+        # Verify password
+        if not verify_password(password, user.password):
+            # Increment failed attempts counter
+            await self.increment_failed_attempts(user=user, db_session=db_session)
+            return None
+
+        # Password is correct, reset failed attempts counter
+        await self.reset_failed_attempts(user=user, db_session=db_session)
         return user
 
     async def remove(
@@ -153,6 +182,78 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         await db_session.commit()
         await db_session.refresh(user)
 
+        return user
+
+    async def increment_failed_attempts(
+        self, *, user: User, db_session: AsyncSession | None = None
+    ) -> User:
+        """
+        Increment the number of failed login attempts and lock the account if it reaches the threshold.
+        """
+        db_session = db_session or super().get_db().session
+
+        # Initialize if None - this is critical since the field may be NULL in the database
+        if user.number_of_failed_attempts is None:
+            user.number_of_failed_attempts = 1
+        else:
+            # Increment the counter
+            user.number_of_failed_attempts += 1
+
+        print(
+            f"Incremented failed attempts for user {user.email} to {user.number_of_failed_attempts}"
+        )
+
+        # Check if we need to lock the account (3 failed attempts)
+        if user.number_of_failed_attempts >= 3:
+            # Lock the account for 24 hours
+            user.is_locked = True
+            user.locked_until = datetime.utcnow() + timedelta(hours=24)
+            print(f"Locking account for user {user.email} until {user.locked_until}")
+
+        # Save the changes - use explicit transaction to ensure changes are committed
+        try:
+            db_session.add(user)
+            await db_session.commit()
+            await db_session.refresh(user)
+            print(
+                f"After commit: User {user.email} - failed attempts: {user.number_of_failed_attempts}, locked: {user.is_locked}"
+            )
+        except Exception as e:
+            await db_session.rollback()
+            print(f"Error updating failed attempts: {str(e)}")
+            raise
+
+        return user
+
+    async def reset_failed_attempts(
+        self, *, user: User, db_session: AsyncSession | None = None
+    ) -> User:
+        """
+        Reset the number of failed login attempts to zero.
+        """
+        db_session = db_session or super().get_db().session
+
+        user.number_of_failed_attempts = 0
+        db_session.add(user)
+        await db_session.commit()
+        await db_session.refresh(user)
+        return user
+
+    async def unlock_account(
+        self, *, user: User, db_session: AsyncSession | None = None
+    ) -> User:
+        """
+        Unlock a user's account by resetting the lock status and counter.
+        """
+        db_session = db_session or super().get_db().session
+
+        user.is_locked = False
+        user.locked_until = None
+        user.number_of_failed_attempts = 0
+
+        db_session.add(user)
+        await db_session.commit()
+        await db_session.refresh(user)
         return user
 
 

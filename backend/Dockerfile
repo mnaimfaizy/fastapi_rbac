@@ -1,6 +1,6 @@
 FROM python:3.10.5-slim-buster
 
-WORKDIR /backend
+WORKDIR /app
 
 # https://docs.python.org/3/using/cmdline.html#envvar-PYTHONDONTWRITEBYTECODE
 # Prevents Python from writing .pyc files to disk
@@ -34,7 +34,7 @@ RUN curl -sSL https://install.python-poetry.org | POETRY_HOME=/opt/poetry python
     poetry config virtualenvs.create false
 
 # Copy poetry.lock* in case it doesn't exist in the repo
-COPY ./pyproject.toml ./poetry.lock* /backend/
+COPY ./pyproject.toml ./poetry.lock* /app/
 
 # Project initialization:
 # hadolint ignore=SC2046
@@ -51,7 +51,7 @@ COPY ./.docker/openssl.cnf /etc/ssl/openssl.cnf
 # copy source code
 COPY . .
 
-ENV PYTHONPATH=/backend
+ENV PYTHONPATH=/app
 
 # Fix line endings && execute permissions
 RUN dos2unix *.sh app/*.*

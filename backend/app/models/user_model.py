@@ -20,7 +20,9 @@ class UserBase(SQLModel):
     expiry_date: datetime | None
     contact_phone: str | None = None
     last_changed_password_date: datetime | None
-    number_of_failed_attempts: int | None = None
+    number_of_failed_attempts: int | None
+    is_locked: bool = False
+    locked_until: datetime | None = None
     verified: bool = False
     verification_code: str | None = None
 
