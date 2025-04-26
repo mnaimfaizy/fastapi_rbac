@@ -1,11 +1,12 @@
 from uuid import UUID
 
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
+
 from app.crud.base_crud import CRUDBase
 from app.models.role_group_map_model import RoleGroupMap
 from app.models.role_group_model import RoleGroup
 from app.schemas.role_group_schema import IRoleGroupCreate, IRoleGroupUpdate
-from sqlmodel import select
-from sqlmodel.ext.asyncio.session import AsyncSession
 
 
 class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):

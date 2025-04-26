@@ -2,18 +2,6 @@ import gc
 from contextlib import asynccontextmanager
 from typing import Any
 
-# Import Celery beat schedule to ensure it's registered
-import app.celery_beat_schedule as celery_beat_schedule  # noqa
-from app.api.deps import get_redis_client
-from app.api.v1.api import api_router as api_router_v1
-# Import Celery app from centralized configuration
-from app.celery_app import celery_app
-from app.core.config import ModeEnum, settings
-from app.core.security import decode_token
-# Import our environment-specific service settings
-from app.core.service_config import service_settings
-from app.schemas.response_schema import ErrorDetail, create_error_response
-from app.utils.fastapi_globals import GlobalsMiddleware, g
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -23,9 +11,24 @@ from fastapi_cache.backends.redis import RedisBackend
 from fastapi_limiter import FastAPILimiter
 from jwt import DecodeError, ExpiredSignatureError, MissingRequiredClaimError
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
+from sqlalchemy.pool import NullPool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
+
+# Import Celery beat schedule to ensure it's registered
+import app.celery_beat_schedule as celery_beat_schedule  # noqa
+from app.api.deps import get_redis_client
+from app.api.v1.api import api_router as api_router_v1
+
+# Import Celery app from centralized configuration
+from app.celery_app import celery_app
+from app.core.config import ModeEnum, settings
+from app.core.security import decode_token
+
+# Import our environment-specific service settings
+from app.core.service_config import service_settings
+from app.schemas.response_schema import ErrorDetail, create_error_response
+from app.utils.fastapi_globals import GlobalsMiddleware, g
 
 # Flag to indicate whether Celery is available based on environment
 CELERY_AVAILABLE = service_settings.use_celery
@@ -88,19 +91,26 @@ async def user_id_identifier(request: Request):
 @asynccontextmanager
 async def lifespan(fastapi_instance: FastAPI):
     # Startup
-    # Use the get_redis_client as an async context manager
-    async for redis_client in get_redis_client():
+    redis_client = None
+
+    # Get the Redis client using the async generator
+    async for client in get_redis_client():
+        redis_client = client
+        break  # Just get the first client from the generator
+
+    if redis_client:
         FastAPICache.init(RedisBackend(redis_client), prefix="fastapi-cache")
         await FastAPILimiter.init(redis_client, identifier=user_id_identifier)
 
-        print("startup fastapi")
-        yield
-        # shutdown
-        await FastAPICache.clear()
-        await FastAPILimiter.close()
-        g.cleanup()
-        gc.collect()
-        # Redis client will be closed automatically after exiting this context
+    print("startup fastapi")
+    yield
+    # shutdown
+    await FastAPICache.clear()
+    await FastAPILimiter.close()
+    if redis_client:
+        await redis_client.close()
+    g.cleanup()
+    gc.collect()
 
 
 # Core Application Instance
@@ -121,9 +131,7 @@ fastapi_app.add_middleware(
     db_url=str(settings.ASYNC_DATABASE_URI),
     engine_args={
         "echo": False,
-        "poolclass": (
-            NullPool if settings.MODE == ModeEnum.testing else AsyncAdaptedQueuePool
-        ),
+        "poolclass": NullPool if settings.MODE == ModeEnum.testing else None,
         # "pool_pre_ping": True,
         # "pool_size": settings.POOL_SIZE,
         # "max_overflow": 64,

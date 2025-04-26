@@ -1,9 +1,10 @@
 from typing import TYPE_CHECKING, List
 from uuid import UUID
 
-from app.models.base_uuid_model import BaseUUIDModel
 from sqlalchemy.orm import backref
 from sqlmodel import Field, Relationship, SQLModel, String
+
+from app.models.base_uuid_model import BaseUUIDModel
 
 if TYPE_CHECKING:
     from app.models.permission_model import Permission

@@ -1,9 +1,10 @@
 import datetime
 
+from sqlmodel.ext.asyncio.session import AsyncSession
+
 from app import crud
 from app.core.config import settings
 from app.schemas.user_schema import IUserCreate
-from sqlmodel.ext.asyncio.session import AsyncSession
 
 # roles: list[IRoleCreate] = [
 #     IRoleCreate(name="admin", description="This the Admin role"),

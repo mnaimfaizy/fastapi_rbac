@@ -67,11 +67,13 @@ def cleanup_old_security_logs(days_to_keep: int = 90) -> dict:
         deleted_count = 0
 
         async for db_session in get_async_session():
-            # This is a placeholder - implement based on your actual security audit log model
+            # This is a placeholder - implement based on your
+            # actual security audit log model
             # Example: Use SQLAlchemy to delete old records
             # cutoff_date = datetime.utcnow() - timedelta(days=days_to_keep)
             # result = await db_session.execute(
-            #     delete(SecurityAuditLog).where(SecurityAuditLog.created_at < cutoff_date)
+            #     delete(SecurityAuditLog)
+            #       .where(SecurityAuditLog.created_at < cutoff_date)
             # )
             # deleted_count = result.rowcount
             # await db_session.commit()

@@ -1,8 +1,9 @@
+from fastapi import APIRouter, BackgroundTasks, Depends
+from redis.asyncio import Redis
+
 from app.api.deps import get_redis_client
 from app.core.config import settings
 from app.worker import celery_app
-from fastapi import APIRouter, BackgroundTasks, Depends
-from redis.asyncio import Redis
 
 router = APIRouter()
 

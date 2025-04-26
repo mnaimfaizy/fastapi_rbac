@@ -1,6 +1,14 @@
-from app.api.v1.endpoints import (health, login, permission, permission_group,
-                                  role, role_group, user)
 from fastapi import APIRouter
+
+from app.api.v1.endpoints import (
+    health,
+    login,
+    permission,
+    permission_group,
+    role,
+    role_group,
+    user,
+)
 
 api_router = APIRouter()
 api_router.include_router(login.router, prefix="/login", tags=["login"])

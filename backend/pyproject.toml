@@ -1,0 +1,86 @@
+[tool.black]
+line-length = 88
+target-version = ['py310']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | alembic
+  | ../react-frontend
+)/
+'''
+
+[tool.isort]
+profile = 'black'
+multi_line_output = 3
+line_length = 88
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+skip = ["../react-frontend"]
+
+[tool.mypy]
+python_version = '3.10'
+warn_redundant_casts = true
+warn_unused_ignores = false
+warn_no_return = false
+warn_return_any = false
+warn_unreachable = true
+disallow_untyped_defs = false
+disallow_untyped_calls = false
+follow_imports = 'silent'
+ignore_missing_imports = true
+pretty = true
+show_error_codes = true
+exclude = '^../react-frontend/.*$'
+
+[[tool.mypy.overrides]]
+module = 'sqlmodel.*'
+ignore_missing_imports = true
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = 'sqlalchemy.*'
+ignore_missing_imports = true
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = 'pydantic.*'
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = 'app.models.*'
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = 'app.core.*'
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = 'app.api.*'
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = 'app.crud.*'
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = 'app.utils.*'
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = 'app.deps.*'
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = 'app.db.*'
+ignore_errors = true

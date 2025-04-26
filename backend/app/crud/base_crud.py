@@ -1,7 +1,6 @@
 from typing import Any, Generic, TypeVar
 from uuid import UUID
 
-from app.schemas.common_schema import IOrderEnum
 from fastapi import HTTPException
 from fastapi_async_sqlalchemy import db
 from fastapi_pagination import Page, Params
@@ -11,6 +10,8 @@ from sqlalchemy import exc
 from sqlmodel import SQLModel, func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel.sql.expression import Select
+
+from app.schemas.common_schema import IOrderEnum
 
 ModelType = TypeVar("ModelType", bound=SQLModel)
 CreateSchemaType = TypeVar("CreateSchemaType", bound=BaseModel)

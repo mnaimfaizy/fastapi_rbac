@@ -1,13 +1,14 @@
 from uuid import UUID
 
-from app.crud.base_crud import CRUDBase
-from app.models import RolePermission
-from app.models.permission_model import Permission
-from app.schemas.permission_schema import IPermissionCreate, IPermissionUpdate
 from fastapi import HTTPException
 from sqlalchemy import exc
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
+
+from app.crud.base_crud import CRUDBase
+from app.models import RolePermission
+from app.models.permission_model import Permission
+from app.schemas.permission_schema import IPermissionCreate, IPermissionUpdate
 
 
 class CRUDPermission(CRUDBase[Permission, IPermissionCreate, IPermissionUpdate]):

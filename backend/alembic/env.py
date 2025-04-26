@@ -3,10 +3,11 @@ import os
 import sys
 from logging.config import fileConfig
 
-from alembic import context
-from app.core.config import Settings
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlmodel import SQLModel
+
+from alembic import context
+from app.core.config import Settings
 
 # Add the project root directory (backend) to the Python path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))

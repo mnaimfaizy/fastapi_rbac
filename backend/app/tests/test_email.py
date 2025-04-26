@@ -1,6 +1,7 @@
 """
 Test script for sending password reset emails.
-This can be used to verify both development (MailHog) and production email configurations.
+This can be used to verify both development (MailHog)
+and production email configurations.
 """
 
 import asyncio
@@ -17,7 +18,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 async def test_send_reset_password_email():
     """Test sending a password reset email."""
     print(
-        f"Testing email sending with SMTP host: {settings.SMTP_HOST}, port: {settings.SMTP_PORT}"
+        f"Testing email sending with SMTP host: {settings.SMTP_HOST}, "
+        f"port: {settings.SMTP_PORT}"
     )
     print(f"Current environment mode: {settings.MODE}")
 
@@ -25,13 +27,15 @@ async def test_send_reset_password_email():
     email = "test@example.com"
     token = "test-token-12345"
     reset_url = f"{settings.PASSWORD_RESET_URL}?token={token}"
-
+    email_message = ""
+    if settings.MODE == "development":
+        email_message = f"Environment: {'Development (MailHog)' }"
+    else:
+        email_message = "Production"
     try:
         await send_reset_password_email(email=email, token=token, reset_url=reset_url)
         print("Email sent successfully!")
-        print(
-            f"Environment: {'Development (MailHog)' if settings.MODE == 'development' else 'Production'}"
-        )
+        print(email_message)
 
         if settings.MODE == "development":
             print("Check MailHog interface at http://localhost:8025 to see the email.")

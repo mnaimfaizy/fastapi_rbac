@@ -21,6 +21,37 @@ This project implements a comprehensive Role-Based Access Control (RBAC) system 
 - Background task processing with Celery
 - Redis-based caching and task queue
 
+## IDE Setup and Code Consistency
+
+This project includes workspace-specific VS Code settings to ensure consistent code formatting and style across the team. These settings are committed to the repository and will be automatically applied when opening the project in VS Code.
+
+### Required VS Code Extensions
+
+For the best development experience, install these VS Code extensions:
+
+1. **Python** - Microsoft's Python extension (ms-python.python)
+2. **Black Formatter** - Python code formatting (ms-python.black-formatter)
+3. **isort** - Python import sorting (ms-python.isort)
+4. **Flake8** - Python linting (ms-python.flake8)
+5. **Mypy Type Checker** - Python type checking (ms-python.mypy-type-checker)
+6. **ESLint** - JavaScript/TypeScript linting (dbaeumer.vscode-eslint)
+7. **Prettier** - JavaScript/TypeScript formatting (esbenp.prettier-vscode)
+
+### Automatic Configuration
+
+The project includes a `.vscode/settings.json` file with predefined settings for:
+
+- Python formatting with Black (line length: 88)
+- Automatic import sorting with isort (Black-compatible profile)
+- Flake8 linting
+- Mypy type checking
+- Automatic formatting on save
+- Environment file recognition
+
+### Customizing Settings
+
+While the project settings are designed to work for most team members, you can override them in your personal VS Code settings if needed. However, please ensure any code you contribute adheres to the project's style guide when committed.
+
 ## Development Environment Setup
 
 The project now supports two distinct development workflows:

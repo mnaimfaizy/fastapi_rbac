@@ -3,9 +3,10 @@ from pathlib import Path
 from typing import Any, Dict
 
 import emails
-from app.core.config import settings
 from emails.template import JinjaTemplate
 from jinja2 import Environment, FileSystemLoader
+
+from app.core.config import settings
 
 
 def send_email(
@@ -15,7 +16,8 @@ def send_email(
     environment: Dict[str, Any] = {},
 ) -> None:
     """
-    Send an email using the emails library, which supports both development and production environments.
+    Send an email using the emails library,
+    which supports both development and production environments.
     """
     if not settings.EMAILS_ENABLED:
         logging.info(f"Email sending disabled, would have sent to {email_to}")
@@ -43,7 +45,8 @@ def send_email(
 
     # Log connection attempt for debugging
     logging.info(
-        f"Attempting to connect to SMTP server at {settings.SMTP_HOST}:{settings.SMTP_PORT}"
+        f"Attempting to connect to SMTP server at {settings.SMTP_HOST}:"
+        f"{settings.SMTP_PORT}"
     )
 
     response = message.send(to=email_to, render=environment, smtp=smtp_options)

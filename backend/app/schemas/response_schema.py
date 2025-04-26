@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 from math import ceil
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, TypeVar, cast
 
 from fastapi_pagination import Page, Params
 from fastapi_pagination.bases import AbstractPage, AbstractParams
@@ -36,9 +36,13 @@ class IGetResponsePaginated(AbstractPage[T], Generic[T]):
     def create(
         cls,
         items: Sequence[T],
-        total: int,
         params: AbstractParams,
-    ) -> PageBase[T] | None:
+        **kwargs: Any,
+    ) -> "IGetResponsePaginated[T]":
+        # Ensure params is of type Params
+        params = cast(Params, params)
+        total = kwargs.get("total", 0)
+
         if params.size is not None and total is not None and params.size != 0:
             pages = ceil(total / params.size)
         else:
@@ -120,5 +124,5 @@ def create_response(
         data.meta = meta
         return data
     if message is None:
-        return {"data": data, "meta": meta}
-    return {"data": data, "message": message, "meta": meta}
+        return IGetResponseBase[DataType](data=data, meta=meta)
+    return IGetResponseBase[DataType](data=data, message=message, meta=meta)

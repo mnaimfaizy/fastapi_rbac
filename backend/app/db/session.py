@@ -2,11 +2,12 @@
 from typing import AsyncGenerator
 
 import redis.asyncio as aioredis
-from app.core.config import ModeEnum, settings
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
 from sqlmodel.ext.asyncio.session import AsyncSession
+
+from app.core.config import ModeEnum, settings
 
 DB_POOL_SIZE = 83
 WEB_CONCURRENCY = 9
@@ -55,7 +56,8 @@ SessionLocalCelery = sessionmaker(
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     """
     Create and get async database session.
-    This function yields an AsyncSession for use in async context managers or dependency injection.
+    This function yields an AsyncSession for
+    use in async context managers or dependency injection.
     """
     async with SessionLocal() as session:
         try:
@@ -64,11 +66,18 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
-# Add the Redis client function that's also likely needed
-def get_redis_client():
+# Update the Redis client function to support async iteration
+async def get_redis_client() -> AsyncGenerator[aioredis.Redis, None]:
     """
-    Get Redis client instance.
-    Returns a Redis client configured to connect to the Redis server specified in settings.
+    Get Redis client instance as an async generator.
+    Yields a Redis client configured to connect
+    to the Redis server specified in settings.
+    This function implements the async iterator pattern
+    to be compatible with 'async for' usage.
     """
     redis_url = f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}"
-    return aioredis.from_url(redis_url, decode_responses=True)
+    redis_client = aioredis.from_url(redis_url, decode_responses=True)
+    try:
+        yield redis_client
+    finally:
+        await redis_client.close()

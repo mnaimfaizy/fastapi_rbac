@@ -1,20 +1,27 @@
 from uuid import UUID
 
+from fastapi import APIRouter, Depends
+from fastapi_pagination import Params
+
 from app import crud
 from app.api import deps
 from app.deps import permission_deps
 from app.models.permission_model import Permission
 from app.models.user_model import User
-from app.schemas.permission_schema import (IPermissionCreate, IPermissionRead,
-                                           IPermissionUpdate)
-from app.schemas.response_schema import (IGetResponseBase,
-                                         IGetResponsePaginated,
-                                         IPostResponseBase, IPutResponseBase,
-                                         create_response)
+from app.schemas.permission_schema import (
+    IPermissionCreate,
+    IPermissionRead,
+    IPermissionUpdate,
+)
+from app.schemas.response_schema import (
+    IGetResponseBase,
+    IGetResponsePaginated,
+    IPostResponseBase,
+    IPutResponseBase,
+    create_response,
+)
 from app.schemas.role_schema import IRoleEnum
 from app.utils.exceptions import IdNotFoundException, NameExistException
-from fastapi import APIRouter, Depends
-from fastapi_pagination import Params
 
 router = APIRouter()
 

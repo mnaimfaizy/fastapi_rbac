@@ -1,0 +1,26 @@
+{
+  "editor.formatOnSave": true,
+  "editor.formatOnPaste": true,
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter",
+    "editor.formatOnSave": true,
+    "editor.formatOnPaste": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    }
+  },
+  "isort.args": ["--profile", "black"],
+
+  // Modern Python extension linting settings
+  "flake8.enabled": true,
+  "mypy-type-checker.args": ["--ignore-missing-imports"],
+  "mypy-type-checker.path": ["./backend/mypy.ini"],
+
+  // Black formatter settings
+  "black-formatter.args": ["--line-length", "88"],
+
+  // File associations
+  "files.associations": {
+    "*.env": "dotenv"
+  }
+}

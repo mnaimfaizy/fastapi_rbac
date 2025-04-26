@@ -15,19 +15,24 @@ from datetime import datetime, timedelta
 from typing import Optional
 from uuid import UUID
 
+from fastapi import BackgroundTasks
+from redis.asyncio import Redis
+from sqlmodel.ext.asyncio.session import AsyncSession
+
 from app import crud
 from app.core.config import settings
 from app.models.user_model import User
 from app.schemas.common_schema import TokenType
 from app.utils.email import send_email_with_template
-from fastapi import BackgroundTasks
-from redis.asyncio import Redis
-from sqlmodel.ext.asyncio.session import AsyncSession
 
 # Import Celery tasks if available
 try:
-    from app.worker import (cleanup_tokens_task, log_security_event_task,
-                            process_account_lockout_task, send_email_task)
+    from app.worker import (
+        cleanup_tokens_task,
+        log_security_event_task,
+        process_account_lockout_task,
+        send_email_task,
+    )
 
     CELERY_AVAILABLE = True
 except ImportError:
@@ -58,7 +63,8 @@ async def send_password_reset_email(
         "valid_hours": settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES // 60,
     }
 
-    # Use Celery for email sending if available and in production, otherwise use BackgroundTasks
+    # Use Celery for email sending if
+    # available and in production, otherwise use BackgroundTasks
     if CELERY_AVAILABLE and settings.MODE == "production":
         # Send via Celery task
         send_email_task.delay(
@@ -93,7 +99,8 @@ async def cleanup_expired_tokens(
         user_id: User ID to clean tokens for
         token_type: Type of token to clean
     """
-    # Use Celery for token cleanup if available and in production, otherwise use BackgroundTasks
+    # Use Celery for token cleanup if
+    # available and in production, otherwise use BackgroundTasks
     if CELERY_AVAILABLE and settings.MODE == "production":
         # Send via Celery task
         cleanup_tokens_task.delay(str(user_id), token_type.value)
@@ -137,7 +144,8 @@ async def log_security_event(
         details: Optional additional details about the event
         db_session: Optional database session to use
     """
-    # Use Celery for security logging if available and in production, otherwise use BackgroundTasks
+    # Use Celery for security logging if available
+    # and in production, otherwise use BackgroundTasks
     if CELERY_AVAILABLE and settings.MODE == "production":
         # Send via Celery task
         log_security_event_task.delay(
@@ -184,7 +192,8 @@ async def process_account_lockout(
         lock_duration_hours: Duration of lockout in hours
         db_session: Optional database session to use
     """
-    # Use Celery for account lockout if available and in production, otherwise use BackgroundTasks
+    # Use Celery for account lockout if available
+    # and in production, otherwise use BackgroundTasks
     if CELERY_AVAILABLE and settings.MODE == "production":
         # Send via Celery task
         process_account_lockout_task.delay(str(user.id), lock_duration_hours)

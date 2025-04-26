@@ -3,9 +3,10 @@ from enum import Enum
 from typing import Any
 from uuid import UUID
 
+from pydantic import BaseModel, EmailStr, Field
+
 from app.models.user_model import User, UserBase
 from app.utils.partial import optional
-from pydantic import BaseModel, EmailStr, Field
 
 
 # Properties to receive via API on creation

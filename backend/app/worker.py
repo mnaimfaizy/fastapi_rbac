@@ -36,18 +36,17 @@ def cleanup_tokens_task(user_id: str, token_type: str) -> None:
     async def async_cleanup_tokens(user_id_str: str, token_type_str: str):
         from app.db.session import get_redis_client
 
-        redis_client = await get_redis_client()
-        user_id = UUID(user_id_str)
-        token_type_enum = TokenType(token_type_str)
+        async for redis_client in get_redis_client():
+            user_id = UUID(user_id_str)
+            token_type_enum = TokenType(token_type_str)
 
-        # Delete user tokens based on token type
-        key_pattern = f"user:{user_id}:{token_type_enum.value}:*"
-        keys = await redis_client.keys(key_pattern)
+            # Delete user tokens based on token type
+            key_pattern = f"user:{user_id}:{token_type_enum.value}:*"
+            keys = await redis_client.keys(key_pattern)
 
-        if keys:
-            await redis_client.delete(*keys)
-
-        await redis_client.close()
+            if keys:
+                await redis_client.delete(*keys)
+            # Redis client is closed automatically after exiting the async for loop
 
     asyncio.run(async_cleanup_tokens(user_id, token_type))
 
@@ -91,12 +90,15 @@ def process_account_lockout_task(user_id: str, lock_duration_hours: int = 24) ->
         async for db_session in get_async_session():
             user = await crud.user.get(id=user_id_obj, db_session=db_session)
             if user:
-                # Set account as locked
-                user.is_locked = True
-                user.locked_until = datetime.utcnow() + timedelta(
-                    hours=lock_duration_hours
+                # Create a dict with the updates to use as obj_new
+                updates = {
+                    "is_locked": True,
+                    "locked_until": datetime.utcnow()
+                    + timedelta(hours=lock_duration_hours),
+                }
+                await crud.user.update(
+                    obj_current=user, obj_new=updates, db_session=db_session
                 )
-                await crud.user.update(db_obj=user, db_session=db_session)
             break
 
     asyncio.run(async_process_lockout(user_id, lock_duration_hours))

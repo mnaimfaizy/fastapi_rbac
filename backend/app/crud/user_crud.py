@@ -2,14 +2,15 @@ from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
+from pydantic import EmailStr
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
+
 from app.core.security import get_password_hash, verify_password
 from app.crud.base_crud import CRUDBase
 from app.models.password_history_model import UserPasswordHistory
 from app.models.user_model import User
 from app.schemas.user_schema import IUserCreate, IUserUpdate
-from pydantic import EmailStr
-from sqlmodel import select
-from sqlmodel.ext.asyncio.session import AsyncSession
 
 
 class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
@@ -194,11 +195,13 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         self, *, user: User, db_session: AsyncSession | None = None
     ) -> User:
         """
-        Increment the number of failed login attempts and lock the account if it reaches the threshold.
+        Increment the number of failed login attempts
+        and lock the account if it reaches the threshold.
         """
         db_session = db_session or super().get_db().session
 
-        # Initialize if None - this is critical since the field may be NULL in the database
+        # Initialize if None - this is critical since
+        # the field may be NULL in the database
         if user.number_of_failed_attempts is None:
             user.number_of_failed_attempts = 1
         else:
@@ -206,7 +209,8 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
             user.number_of_failed_attempts += 1
 
         print(
-            f"Incremented failed attempts for user {user.email} to {user.number_of_failed_attempts}"
+            f"Incremented failed attempts for user {user.email} to "
+            f"{user.number_of_failed_attempts}"
         )
 
         # Check if we need to lock the account (3 failed attempts)
@@ -222,7 +226,10 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
             await db_session.commit()
             await db_session.refresh(user)
             print(
-                f"After commit: User {user.email} - failed attempts: {user.number_of_failed_attempts}, locked: {user.is_locked}"
+                (
+                    f"After commit: User {user.email} - failed attempts: "
+                    f"{user.number_of_failed_attempts}, locked: {user.is_locked}"
+                )
             )
         except Exception as e:
             await db_session.rollback()

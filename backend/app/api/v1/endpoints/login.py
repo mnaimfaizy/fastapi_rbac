@@ -1,5 +1,11 @@
 from datetime import datetime, timedelta
 
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
+from jwt import DecodeError, ExpiredSignatureError, MissingRequiredClaimError
+from pydantic import EmailStr
+from redis.asyncio import Redis
+
 from app import crud
 from app.api import deps
 from app.api.deps import get_redis_client
@@ -11,17 +17,13 @@ from app.schemas.common_schema import TokenType
 from app.schemas.response_schema import IPostResponseBase, create_response
 from app.schemas.token_schema import RefreshToken, Token, TokenRead
 from app.schemas.user_schema import PasswordResetConfirm, PasswordResetRequest
-from app.utils.background_tasks import (cleanup_expired_tokens,
-                                        log_security_event,
-                                        process_account_lockout,
-                                        send_password_reset_email)
+from app.utils.background_tasks import (
+    cleanup_expired_tokens,
+    log_security_event,
+    process_account_lockout,
+    send_password_reset_email,
+)
 from app.utils.token import add_token_to_redis, get_valid_tokens
-from fastapi import (APIRouter, BackgroundTasks, Body, Depends, HTTPException,
-                     status)
-from fastapi.security import OAuth2PasswordRequestForm
-from jwt import DecodeError, ExpiredSignatureError, MissingRequiredClaimError
-from pydantic import EmailStr
-from redis.asyncio import Redis
 
 router = APIRouter()
 
@@ -82,7 +84,10 @@ async def login(
 
         lock_message = "Account is locked due to multiple failed login attempts. "
         if remaining_hours > 0:
-            lock_message += f"Try again in {int(remaining_hours)} hours and {int(remaining_minutes)} minutes."
+            lock_message += (
+                f"Try again in {int(remaining_hours)} hours and "
+                f"{int(remaining_minutes)} minutes."
+            )
         else:
             lock_message += f"Try again in {int(remaining_minutes)} minutes."
 
@@ -105,14 +110,18 @@ async def login(
     print(f"Current failed attempts for user {user_record.email}: {attempts_count}")
 
     if attempts_count == 2:
-        warning_message = "Warning: This is your last attempt. If you enter an incorrect password again, your account will be locked for 24 hours."
+        warning_message = (
+            "Warning: This is your last attempt. If you enter "
+            "an incorrect password again, your account will be locked for 24 hours."
+        )
 
     # Now attempt to authenticate
     user = await crud.user.authenticate(email=email, password=password)
 
     if not user:
         # Failed authentication attempt
-        # Pull the user data again to get the latest status after increment_failed_attempts was called
+        # Pull the user data again to get the latest status after
+        # increment_failed_attempts was called
         updated_user = await crud.user.get_by_email(email=email)
 
         # Log failed login attempt
@@ -141,10 +150,13 @@ async def login(
             remaining_minutes = (remaining_time.total_seconds() % 3600) // 60
 
             lock_message = (
-                f"Your account has been locked due to too many failed login attempts. "
+                "Your account has been locked due to too many failed login attempts. "
             )
             if remaining_hours > 0:
-                lock_message += f"Try again in {int(remaining_hours)} hours and {int(remaining_minutes)} minutes."
+                lock_message += (
+                    f"Try again in {int(remaining_hours)} hours and "
+                    f"{int(remaining_minutes)} minutes."
+                )
             else:
                 lock_message += f"Try again in {int(remaining_minutes)} minutes."
 
@@ -164,9 +176,15 @@ async def login(
             )
             message = "Username or password is incorrect"
             if attempts_left == 1:
-                message = f"{message}. Warning: This is your last attempt. Account will be locked after the next failed attempt."
+                message = (
+                    f"{message}. Warning: This is your last attempt. "
+                    "Account will be locked after the next failed attempt."
+                )
             elif attempts_left > 0:
-                message = f"{message}. {attempts_left} attempts remaining before account lockout."
+                message = (
+                    f"{message}. {attempts_left} attempts remaining before "
+                    "account lockout."
+                )
 
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -268,7 +286,8 @@ async def change_password(
         raise HTTPException(status_code=400, detail="Invalid Current Password")
 
     try:
-        # This will check history, update password, and update last_changed_password_date
+        # This will check history, update password,
+        # and update last_changed_password_date
         await crud.user.update_password(user=current_user, new_password=new_password)
     except ValueError as e:
         # Log password history violation as a background task
@@ -393,7 +412,8 @@ async def get_new_access_token(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "status": False,
-                "message": "There is no required field in your token. Please contact the administrator.",
+                "message": "There is no required field in your token. "
+                "Please contact the administrator.",
             },
         )
 
@@ -522,7 +542,10 @@ async def login_access_token(
 
         lock_message = "Account is locked due to multiple failed login attempts. "
         if remaining_hours > 0:
-            lock_message += f"Try again in {int(remaining_hours)} hours and {int(remaining_minutes)} minutes."
+            lock_message += (
+                f"Try again in {int(remaining_hours)} hours and "
+                f"{int(remaining_minutes)} minutes."
+            )
         else:
             lock_message += f"Try again in {int(remaining_minutes)} minutes."
 
@@ -544,7 +567,11 @@ async def login_access_token(
     )
 
     if attempts_count == 2:
-        warning_message = "Warning: This is your last attempt. If you enter an incorrect password again, your account will be locked for 24 hours."
+        warning_message = (
+            "Warning: This is your last attempt. "
+            "If you enter an incorrect password again, "
+            "your account will be locked for 24 hours."
+        )
 
     # Now attempt to authenticate
     user = await crud.user.authenticate(
@@ -553,7 +580,8 @@ async def login_access_token(
 
     if not user:
         # Failed authentication attempt
-        # Pull the user data again to get the latest status after increment_failed_attempts was called
+        # Pull the user data again to get the latest
+        # status after increment_failed_attempts was called
         updated_user = await crud.user.get_by_email(email=form_data.username)
 
         # Log failed login attempt as a background task
@@ -582,10 +610,13 @@ async def login_access_token(
             remaining_minutes = (remaining_time.total_seconds() % 3600) // 60
 
             lock_message = (
-                f"Your account has been locked due to too many failed login attempts. "
+                "Your account has been locked due to too many failed login attempts. "
             )
             if remaining_hours > 0:
-                lock_message += f"Try again in {int(remaining_hours)} hours and {int(remaining_minutes)} minutes."
+                lock_message += (
+                    f"Try again in {int(remaining_hours)} hours and "
+                    f"{int(remaining_minutes)} minutes."
+                )
             else:
                 lock_message += f"Try again in {int(remaining_minutes)} minutes."
 
@@ -602,9 +633,15 @@ async def login_access_token(
             )
             message = "Incorrect email or password"
             if attempts_left == 1:
-                message = f"{message}. Warning: This is your last attempt. Account will be locked after the next failed attempt."
+                message = (
+                    f"{message}. Warning: This is your last attempt."
+                    "Account will be locked after the next failed attempt."
+                )
             elif attempts_left > 0:
-                message = f"{message}. {attempts_left} attempts remaining before account lockout."
+                message = (
+                    f"{message}. {attempts_left} attempts remaining before "
+                    "account lockout."
+                )
 
             raise HTTPException(
                 status_code=400,
@@ -653,7 +690,8 @@ async def login_access_token(
     token_read = TokenRead(access_token=access_token, token_type="bearer")
 
     # If there was a warning, we need to add it to the response
-    # Since TokenRead doesn't have a message field, we'll add it to the token type field as a workaround
+    # Since TokenRead doesn't have a message field,
+    # we'll add it to the token type field as a workaround
     # The client can parse this to extract both the token type and the warning message
     if warning_message:
         token_read.token_type = f"bearer|{warning_message}"
@@ -709,7 +747,8 @@ async def request_password_reset(
     """
     user = await crud.user.get_by_email(email=reset_request.email)
     if not user:
-        # Don't reveal that the email doesn't exist, but log the attempt as a background task
+        # Don't reveal that the email doesn't exist,
+        # but log the attempt as a background task
         background_tasks.add_task(
             log_security_event,
             background_tasks=background_tasks,
@@ -721,7 +760,8 @@ async def request_password_reset(
         )
 
     if not user.is_active:
-        # Don't reveal that the user is inactive, but log the attempt as a background task
+        # Don't reveal that the user is inactive,
+        # but log the attempt as a background task
         background_tasks.add_task(
             log_security_event,
             background_tasks=background_tasks,
@@ -778,7 +818,8 @@ async def request_password_reset(
                 "reset_url": f"{reset_url}?token={reset_token}",
                 "reset_token": reset_token,
             },
-            message="Password reset email sent. Check the MailHog interface at http://localhost:8025",
+            message="Password reset email sent. "
+            "Check the MailHog interface at http://localhost:8025",
         )
     else:
         return create_response(
@@ -848,7 +889,8 @@ async def confirm_password_reset(
         )
 
     try:
-        # This will check history, update password, and update last_changed_password_date
+        # This will check history, update password,
+        # and update last_changed_password_date
         await crud.user.update_password(
             user=user, new_password=reset_confirm.new_password
         )

@@ -1,11 +1,14 @@
 from uuid import UUID
 
-from app import crud
-from app.models.role_group_model import RoleGroup
-from app.utils.exceptions.common_exception import (IdNotFoundException,
-                                                   NameNotFoundException)
 from fastapi import Path, Query
 from typing_extensions import Annotated
+
+from app import crud
+from app.models.role_group_model import RoleGroup
+from app.utils.exceptions.common_exception import (
+    IdNotFoundException,
+    NameNotFoundException,
+)
 
 
 async def get_group_by_name(

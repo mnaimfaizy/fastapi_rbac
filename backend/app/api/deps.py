@@ -1,11 +1,18 @@
 """
-This module contains the dependency injection utilities used across the FastAPI application.
+This module contains the dependency injection utilities
+used across the FastAPI application.
 """
 
 from collections.abc import AsyncGenerator
 from typing import Callable
 
 import redis.asyncio as aioredis
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from jwt import DecodeError, ExpiredSignatureError, MissingRequiredClaimError
+from redis.asyncio import Redis
+from sqlmodel.ext.asyncio.session import AsyncSession
+
 from app import crud
 from app.core.config import settings
 from app.core.security import decode_token
@@ -14,20 +21,16 @@ from app.db.session import SessionLocal
 from app.models.user_model import User
 from app.schemas.common_schema import TokenType
 from app.utils.token import get_valid_tokens
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
-from jwt import DecodeError, ExpiredSignatureError, MissingRequiredClaimError
-from redis.asyncio import Redis
-from sqlmodel.ext.asyncio.session import AsyncSession
 
 reusable_oauth2 = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/login/access-token"
 )
 
 
-async def get_redis_client() -> Redis:
+async def get_redis_client() -> AsyncGenerator[Redis, None]:
     """
     Get Redis client with environment-specific configuration.
+    This function returns an async generator that yields a Redis client.
     """
     redis_client = await aioredis.from_url(
         service_settings.redis_url, encoding="utf-8", decode_responses=True
@@ -63,7 +66,8 @@ def get_current_user(required_roles: list[str] = None) -> Callable[[], User]:
         except MissingRequiredClaimError:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="There is no required field in your token. Please contact the administrator.",
+                detail="There is no required field in your token. "
+                "Please contact the administrator.",
             )
 
         user_id = payload["sub"]

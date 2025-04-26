@@ -4,8 +4,7 @@ from enum import Enum
 from functools import lru_cache
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import (AnyHttpUrl, EmailStr, PostgresDsn, field_validator,
-                      model_validator)
+from pydantic import AnyHttpUrl, EmailStr, PostgresDsn, field_validator, model_validator
 from pydantic_core.core_schema import FieldValidationInfo
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -307,7 +306,6 @@ class Settings(BaseSettings):
                 "USERS_OPEN_REGISTRATION": False,
                 "DATABASE_TYPE": DatabaseTypeEnum.postgresql,
             }
-        return {}
 
     # This configuration uses the new SettingsConfigDict style in Pydantic v2
     model_config = SettingsConfigDict(

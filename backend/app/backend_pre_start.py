@@ -2,8 +2,9 @@ import logging
 import os
 
 import tenacity
-from app.core.config import ModeEnum, settings
 from sqlalchemy import create_engine, text
+
+from app.core.config import ModeEnum, settings
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

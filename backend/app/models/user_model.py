@@ -1,10 +1,11 @@
 from datetime import datetime
 from typing import TYPE_CHECKING, List
 
-from app.models.base_uuid_model import BaseUUIDModel
-from app.models.user_role_model import UserRole
 from pydantic import EmailStr
 from sqlmodel import Column, Field, Relationship, SQLModel, String
+
+from app.models.base_uuid_model import BaseUUIDModel
+from app.models.user_role_model import UserRole
 
 if TYPE_CHECKING:
     from app.models.role_model import Role

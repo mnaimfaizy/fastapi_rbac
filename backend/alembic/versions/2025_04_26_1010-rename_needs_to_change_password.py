@@ -9,8 +9,9 @@ Create Date: 2025-04-26 10:10:00.000000
 from typing import Sequence, Union
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.engine.reflection import Inspector
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "2025_04_26_1010"

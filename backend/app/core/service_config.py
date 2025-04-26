@@ -1,5 +1,6 @@
 """
-Configuration for external services like Celery and Redis with environment-specific settings.
+Configuration for external services like Celery and
+Redis with environment-specific settings.
 This module provides different configurations based on the current environment
 (development, testing, production).
 """
@@ -13,7 +14,8 @@ from app.core.config import ModeEnum, settings
 
 class ServiceSettings:
     """
-    Environment-specific service settings for Celery, Redis, and other external services.
+    Environment-specific service settings for Celery,
+    Redis, and other external services.
     """
 
     def __init__(self):
@@ -25,7 +27,8 @@ class ServiceSettings:
         Get the Redis URL based on current environment
         """
         if self.mode == ModeEnum.development:
-            # For local development, use localhost or a containerized Redis with port mapping
+            # For local development, use localhost or
+            # a containerized Redis with port mapping
             host = os.getenv("REDIS_HOST_DEV", "localhost")
             port = os.getenv("REDIS_PORT_DEV", "6379")
             return f"redis://{host}:{port}/0"

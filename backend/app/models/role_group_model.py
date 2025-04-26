@@ -1,9 +1,10 @@
 from typing import TYPE_CHECKING, List
 from uuid import UUID
 
+from sqlmodel import Field, Relationship, SQLModel, String
+
 from app.models.base_uuid_model import BaseUUIDModel
 from app.models.role_group_map_model import RoleGroupMap
-from sqlmodel import Field, Relationship, SQLModel, String
 
 if TYPE_CHECKING:
     from app.models.role_model import Role

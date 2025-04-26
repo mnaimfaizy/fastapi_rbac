@@ -5,9 +5,10 @@ This module defines recurring tasks that run automatically based on a schedule.
 
 from datetime import timedelta
 
+from celery.schedules import crontab
+
 # Import the celery app from centralized configuration
 from app.celery_app import celery_app
-from celery.schedules import crontab
 
 # Register scheduled tasks with Celery Beat
 # Make sure each task has been imported and registered with Celery
