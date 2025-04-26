@@ -1,40 +1,8 @@
+include:
+  - path: ./backend/docker-compose.yml
+  - path: ./react-frontend/docker-compose.yml
+
 services:
-  fastapi_rbac:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    image: fastapi_rbac:latest
-    container_name: fastapi_rbac
-    env_file:
-      - ./backend/backend.env
-    environment:
-      - FASTAPI_ENV=${FASTAPI_ENV}
-      - SQLALCHEMY_DATABASE_URI=postgresql+psycopg2://${DATABASE_USER}:${DATABASE_PASSWORD}@fastapi_rbac_db:5432/${DATABASE_NAME}
-    ports:
-      - "8000:8000"
-    volumes:
-      # Use a bind mount to sync local backend directory with container's /app
-      - ./backend:/app
-    networks:
-      - fastapi_rbac_network
-    depends_on:
-      - fastapi_rbac_db
-      - mailhog
-      - fastapi_rbac_redis_server
-
-  # react_frontend:
-  #   build:
-  #     context: ./react-frontend
-  #     dockerfile: Dockerfile
-  #   image: react_frontend:latest
-  #   container_name: react_frontend
-  #   ports:
-  #     - "80:80"
-  #   depends_on:
-  #     - fastapi_rbac
-  #   networks:
-  #     - fastapi_rbac_network
-
   # Mail testing service for development
   mailhog:
     image: mailhog/mailhog:latest
@@ -46,91 +14,7 @@ services:
     networks:
       - fastapi_rbac_network
 
-  # fastapi_rbac_frontend:
-  #   build:
-  #     context: ./frontend
-  #     dockerfile: Dockerfile
-  #   image: fastapi_rbac_frontend:latest
-  #   container_name: fastapi_rbac_frontend
-  #   ports:
-  #     - "3000:3000"
-  #   volumes:
-  #     - ./frontend:/frontend
-  #   networks:
-  #     - fastapi_rbac_network
-
-  # Celery worker for background tasks
-  fastapi_rbac_worker:
-    build:
-      context: ./backend
-      dockerfile: queue.dockerfile
-    image: fastapi_rbac_worker:latest
-    container_name: fastapi_rbac_worker
-    volumes:
-      - ./backend:/app
-    env_file:
-      - ./backend/backend.env
-    environment:
-      - FASTAPI_ENV=${FASTAPI_ENV}
-      - C_FORCE_ROOT=true
-      - SQLALCHEMY_DATABASE_URI=postgresql+psycopg2://${DATABASE_USER}:${DATABASE_PASSWORD}@fastapi_rbac_db:5432/${DATABASE_NAME}
-    command: ["/bin/bash", "/app/worker-start.sh"]
-    depends_on:
-      - fastapi_rbac_redis_server
-      - fastapi_rbac_db
-    restart: on-failure
-    networks:
-      - fastapi_rbac_network
-
-  # Celery beat scheduler for periodic tasks
-  fastapi_rbac_beat:
-    build:
-      context: ./backend
-      dockerfile: queue.dockerfile
-    image: fastapi_rbac_worker:latest
-    container_name: fastapi_rbac_beat
-    volumes:
-      - ./backend:/app
-      # Use a file-based volume for Celery beat
-      - celery-beat-schedule:/app/celerybeat-schedule
-    env_file:
-      - ./backend/backend.env
-    environment:
-      - FASTAPI_ENV=${FASTAPI_ENV}
-      - C_FORCE_ROOT=true
-      - SQLALCHEMY_DATABASE_URI=postgresql+psycopg2://${DATABASE_USER}:${DATABASE_PASSWORD}@fastapi_rbac_db:5432/${DATABASE_NAME}
-    command: ["/bin/bash", "/app/beat-start.sh"]
-    depends_on:
-      - fastapi_rbac_redis_server
-      - fastapi_rbac_worker
-    restart: on-failure
-    networks:
-      - fastapi_rbac_network
-
-  # Celery Flower monitoring dashboard
-  fastapi_rbac_flower:
-    build:
-      context: ./backend
-      dockerfile: queue.dockerfile
-    image: fastapi_rbac_worker:latest
-    container_name: fastapi_rbac_flower
-    volumes:
-      - ./backend:/app
-    env_file:
-      - ./backend/backend.env
-    environment:
-      - FASTAPI_ENV=${FASTAPI_ENV}
-      - SQLALCHEMY_DATABASE_URI=postgresql+psycopg2://${DATABASE_USER}:${DATABASE_PASSWORD}@fastapi_rbac_db:5432/${DATABASE_NAME}
-    ports:
-      - "5555:5555" # Flower web interface
-    command: ["/bin/bash", "/app/flower-start.sh"]
-    depends_on:
-      - fastapi_rbac_redis_server
-      - fastapi_rbac_worker
-    restart: on-failure
-    networks:
-      - fastapi_rbac_network
-
+  # PostgreSQL Database (only used for Docker environments)
   fastapi_rbac_db:
     image: bitnami/postgresql
     restart: always
@@ -138,13 +22,13 @@ services:
     ports:
       - "5453:5432" # Remove this on production
     env_file:
-      - ./backend/backend.env
+      - ./backend/.env.test
     environment:
-      - POSTGRESQL_USERNAME=${DATABASE_USER}
-      - POSTGRESQL_PASSWORD=${DATABASE_PASSWORD}
-      - POSTGRESQL_DATABASE=${DATABASE_NAME}
-      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL}
-      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD}
+      - POSTGRESQL_USERNAME=${DATABASE_USER:-postgres}
+      - POSTGRESQL_PASSWORD=${DATABASE_PASSWORD:-postgres}
+      - POSTGRESQL_DATABASE=${DATABASE_NAME:-fastapi_db}
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL:-admin@example.com}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD:-admin}
       - ALLOW_EMPTY_PASSWORD=yes
     user: root
     volumes:
@@ -162,8 +46,8 @@ services:
     ports:
       - "8888:80"
     environment:
-      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL}
-      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD}
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL:-admin@example.com}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD:-admin}
     volumes:
       - pgadmin-data:/var/lib/pgadmin
     networks:
@@ -177,16 +61,12 @@ services:
       - "6379:6379" # Publish Redis port to host machine
     expose:
       - 6379
-    env_file:
-      - "./backend/backend.env"
     networks:
       - fastapi_rbac_network
 
 volumes:
   .database:
   pgadmin-data:
-  celery-beat-schedule: # New named volume for Celery beat schedule file
-  celerybeat-data: # Keep this for backward compatibility
 
 networks:
   fastapi_rbac_network:

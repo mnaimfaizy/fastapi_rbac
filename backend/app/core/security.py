@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from typing import Any, Union
+import base64
 
 import bcrypt
 from cryptography.fernet import Fernet
@@ -7,7 +8,27 @@ from jose import jwt
 
 from app.core.config import settings
 
-fernet = Fernet(str.encode(settings.ENCRYPT_KEY))
+
+# Generate a valid Fernet key from the ENCRYPT_KEY
+def get_fernet_key(key_str):
+    # Ensure the key is valid for Fernet (32 url-safe base64-encoded bytes)
+    # If the key is not the right format, derive a proper key from it
+    try:
+        # Try to use the key directly if it's already valid
+        return Fernet(str.encode(key_str))
+    except ValueError:
+        # If not valid, derive a proper key using a hash function
+        import hashlib
+
+        # Generate a 32-byte key using SHA-256
+        hashed = hashlib.sha256(str.encode(key_str)).digest()
+        # Convert to url-safe base64 encoding
+        encoded_key = base64.urlsafe_b64encode(hashed)
+        return Fernet(encoded_key)
+
+
+# Initialize Fernet with a valid key
+fernet = get_fernet_key(settings.ENCRYPT_KEY)
 
 JWT_ALGORITHM = settings.ALGORITHM
 

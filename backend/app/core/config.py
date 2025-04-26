@@ -2,7 +2,7 @@ import os
 import secrets
 from enum import Enum
 from functools import lru_cache
-from typing import Any, Dict, Union, List
+from typing import Any, Dict, Union, List, Optional
 
 from pydantic import (
     AnyHttpUrl,
@@ -21,16 +21,22 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(os.path.dirname(current_dir))
 
 # Create paths to environment files
-local_env_file = os.path.join(project_root, ".env.local")
-env_file = os.path.join(project_root, "backend.env")
+env_development_file = os.path.join(project_root, ".env.development")
 env_test_file = os.path.join(project_root, ".env.test")
-env_prod_file = os.path.join(project_root, ".env.prod")
+env_production_file = os.path.join(project_root, ".env.production")
+env_local_file = os.path.join(project_root, ".env.local")
+env_file = os.path.join(project_root, "backend.env")  # Legacy env file
 
 
 class ModeEnum(str, Enum):
     development = "development"
     production = "production"
     testing = "testing"
+
+
+class DatabaseTypeEnum(str, Enum):
+    sqlite = "sqlite"
+    postgresql = "postgresql"
 
 
 class Settings(BaseSettings):
@@ -41,6 +47,9 @@ class Settings(BaseSettings):
     PROJECT_NAME: str
     SECRET_KEY: str = secrets.token_urlsafe(32)
     DEBUG: bool = False
+
+    # Database Type Setting
+    DATABASE_TYPE: DatabaseTypeEnum = DatabaseTypeEnum.postgresql
 
     # Token Settings
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 1  # 1 hour
@@ -63,12 +72,13 @@ class Settings(BaseSettings):
     EMAIL_TEMPLATES_DIR: str = os.path.join(project_root, "app", "email-templates")
 
     # Database Settings
-    DATABASE_USER: str
-    DATABASE_PASSWORD: str
-    DATABASE_HOST: str
-    DATABASE_PORT: int
-    DATABASE_NAME: str
+    DATABASE_USER: Optional[str] = None
+    DATABASE_PASSWORD: Optional[str] = None
+    DATABASE_HOST: Optional[str] = None
+    DATABASE_PORT: Optional[int] = None
+    DATABASE_NAME: str = "fastapi_db"
     DATABASE_CELERY_NAME: str = "celery_schedule_jobs"
+    SQLITE_DB_PATH: Optional[str] = None
     REDIS_HOST: str
     REDIS_PORT: str
     DB_POOL_SIZE: int = 83
@@ -135,15 +145,23 @@ class Settings(BaseSettings):
 
     @field_validator("ASYNC_DATABASE_URI", mode="after")
     def assemble_db_connection(cls, v: str | None, info: FieldValidationInfo) -> Any:
-        if isinstance(v, str):
-            if v == "":
+        if isinstance(v, str) and v == "":
+            db_type = info.data.get("DATABASE_TYPE", DatabaseTypeEnum.postgresql)
+
+            if db_type == DatabaseTypeEnum.sqlite:
+                sqlite_path = info.data.get("SQLITE_DB_PATH")
+                if not sqlite_path:
+                    sqlite_path = os.path.join(project_root, "app.db")
+                return f"sqlite+aiosqlite:///{sqlite_path}"
+            else:
+                # PostgreSQL connection
                 return PostgresDsn.build(
                     scheme="postgresql+asyncpg",
-                    username=info.data["DATABASE_USER"],
-                    password=info.data["DATABASE_PASSWORD"],
-                    host=info.data["DATABASE_HOST"],
-                    port=info.data["DATABASE_PORT"],
-                    path=info.data["DATABASE_NAME"],
+                    username=info.data.get("DATABASE_USER"),
+                    password=info.data.get("DATABASE_PASSWORD"),
+                    host=info.data.get("DATABASE_HOST"),
+                    port=info.data.get("DATABASE_PORT"),
+                    path=info.data.get("DATABASE_NAME"),
                 )
         return v
 
@@ -153,15 +171,26 @@ class Settings(BaseSettings):
     def assemble_celery_db_connection(
         cls, v: str | None, info: FieldValidationInfo
     ) -> Any:
-        if isinstance(v, str):
-            if v == "":
+        if isinstance(v, str) and v == "":
+            db_type = info.data.get("DATABASE_TYPE", DatabaseTypeEnum.postgresql)
+
+            if db_type == DatabaseTypeEnum.sqlite:
+                sqlite_path = info.data.get("SQLITE_DB_PATH")
+                if not sqlite_path:
+                    sqlite_path = os.path.join(
+                        project_root,
+                        f"{info.data.get('DATABASE_CELERY_NAME', 'celery')}.db",
+                    )
+                return f"sqlite:///{sqlite_path}"
+            else:
+                # PostgreSQL connection
                 return PostgresDsn.build(
                     scheme="postgresql+psycopg2",
-                    username=info.data["DATABASE_USER"],
-                    password=info.data["DATABASE_PASSWORD"],
-                    host=info.data["DATABASE_HOST"],
-                    port=info.data["DATABASE_PORT"],
-                    path=info.data["DATABASE_CELERY_NAME"],
+                    username=info.data.get("DATABASE_USER"),
+                    password=info.data.get("DATABASE_PASSWORD"),
+                    host=info.data.get("DATABASE_HOST"),
+                    port=info.data.get("DATABASE_PORT"),
+                    path=info.data.get("DATABASE_CELERY_NAME"),
                 )
         return v
 
@@ -171,15 +200,26 @@ class Settings(BaseSettings):
     def assemble_celery_beat_db_connection(
         cls, v: str | None, info: FieldValidationInfo
     ) -> Any:
-        if isinstance(v, str):
-            if v == "":
+        if isinstance(v, str) and v == "":
+            db_type = info.data.get("DATABASE_TYPE", DatabaseTypeEnum.postgresql)
+
+            if db_type == DatabaseTypeEnum.sqlite:
+                sqlite_path = info.data.get("SQLITE_DB_PATH")
+                if not sqlite_path:
+                    sqlite_path = os.path.join(
+                        project_root,
+                        f"{info.data.get('DATABASE_CELERY_NAME', 'celery')}.db",
+                    )
+                return f"sqlite:///{sqlite_path}"
+            else:
+                # PostgreSQL connection
                 return PostgresDsn.build(
                     scheme="postgresql+psycopg2",
-                    username=info.data["DATABASE_USER"],
-                    password=info.data["DATABASE_PASSWORD"],
-                    host=info.data["DATABASE_HOST"],
-                    port=info.data["DATABASE_PORT"],
-                    path=info.data["DATABASE_CELERY_NAME"],
+                    username=info.data.get("DATABASE_USER"),
+                    password=info.data.get("DATABASE_PASSWORD"),
+                    host=info.data.get("DATABASE_HOST"),
+                    port=info.data.get("DATABASE_PORT"),
+                    path=info.data.get("DATABASE_CELERY_NAME"),
                 )
         return v
 
@@ -189,15 +229,26 @@ class Settings(BaseSettings):
     def assemble_async_celery_beat_db_connection(
         cls, v: str | None, info: FieldValidationInfo
     ) -> Any:
-        if isinstance(v, str):
-            if v == "":
+        if isinstance(v, str) and v == "":
+            db_type = info.data.get("DATABASE_TYPE", DatabaseTypeEnum.postgresql)
+
+            if db_type == DatabaseTypeEnum.sqlite:
+                sqlite_path = info.data.get("SQLITE_DB_PATH")
+                if not sqlite_path:
+                    sqlite_path = os.path.join(
+                        project_root,
+                        f"{info.data.get('DATABASE_CELERY_NAME', 'celery')}.db",
+                    )
+                return f"sqlite+aiosqlite:///{sqlite_path}"
+            else:
+                # PostgreSQL connection
                 return PostgresDsn.build(
                     scheme="postgresql+asyncpg",
-                    username=info.data["DATABASE_USER"],
-                    password=info.data["DATABASE_PASSWORD"],
-                    host=info.data["DATABASE_HOST"],
-                    port=info.data["DATABASE_PORT"],
-                    path=info.data["DATABASE_CELERY_NAME"],
+                    username=info.data.get("DATABASE_USER"),
+                    password=info.data.get("DATABASE_PASSWORD"),
+                    host=info.data.get("DATABASE_HOST"),
+                    port=info.data.get("DATABASE_PORT"),
+                    path=info.data.get("DATABASE_CELERY_NAME"),
                 )
         return v
 
@@ -213,10 +264,11 @@ class Settings(BaseSettings):
                 len(self.SECRET_KEY) >= 32
             ), "SECRET_KEY should be at least 32 characters in production"
 
-            # Validate database configuration
-            assert (
-                self.DATABASE_HOST != "localhost"
-            ), "Use a proper DATABASE_HOST in production"
+            # Validate database configuration if using PostgreSQL
+            if self.DATABASE_TYPE == DatabaseTypeEnum.postgresql:
+                assert (
+                    self.DATABASE_HOST != "localhost"
+                ), "Use a proper DATABASE_HOST in production"
 
             # Validate security settings
             assert (
@@ -240,6 +292,7 @@ class Settings(BaseSettings):
                 "DEBUG": True,
                 "LOG_LEVEL": "DEBUG",
                 "PASSWORD_RESET_URL": "http://localhost:3000/reset-password",
+                "DATABASE_TYPE": DatabaseTypeEnum.sqlite,
             }
         elif mode == ModeEnum.testing:
             return {
@@ -257,6 +310,7 @@ class Settings(BaseSettings):
                 "LOG_LEVEL": "INFO",
                 "PASSWORD_RESET_URL": f"https://{self.TOKEN_AUDIENCE}/reset-password",
                 "USERS_OPEN_REGISTRATION": False,
+                "DATABASE_TYPE": DatabaseTypeEnum.postgresql,
             }
         return {}
 
@@ -281,17 +335,27 @@ class Settings(BaseSettings):
         mode = os.getenv("MODE", ModeEnum.development)
 
         # Select appropriate env files based on mode
-        env_files = [env_file]  # Default .env file
+        env_files = []
+
+        # Add default backend.env file if it exists (for backward compatibility)
+        if os.path.isfile(env_file):
+            env_files.append(env_file)
 
         # Add mode-specific env file if it exists
-        mode_env_file = f".env.{mode}"
-        mode_env_path = os.path.join(project_root, mode_env_file)
-        if os.path.isfile(mode_env_path):
-            env_files.insert(0, mode_env_path)
+        if mode == ModeEnum.development and os.path.isfile(env_development_file):
+            env_files.insert(0, env_development_file)
+        elif mode == ModeEnum.testing and os.path.isfile(env_test_file):
+            env_files.insert(0, env_test_file)
+        elif mode == ModeEnum.production and os.path.isfile(env_production_file):
+            env_files.insert(0, env_production_file)
 
         # Add local env file if it exists (highest priority)
-        if os.path.isfile(local_env_file):
-            env_files.insert(0, local_env_file)
+        if os.path.isfile(env_local_file):
+            env_files.insert(0, env_local_file)
+
+        # Ensure we have at least one env file
+        if not env_files:
+            env_files = [env_file]  # Use legacy file as fallback
 
         # In Pydantic v2, we need to create a new dotenv settings instance
         # Pass the settings_cls parameter which is required in Pydantic v2

@@ -6,33 +6,35 @@ This module contains the main Celery app instance used across the application.
 import os
 from celery import Celery
 
-# Use direct environment variables instead of settings
-# This avoids the 'dotenvsettingssource' object has no attribute 'with_prefix' error
-REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
-REDIS_PORT = os.getenv("REDIS_PORT", "6379")
+# Import environment-specific service settings
+from app.core.service_config import service_settings
 
-# Initialize the main Celery app instance
-celery_app = Celery(
-    "fastapi_rbac",
-    broker=f"redis://{REDIS_HOST}:{REDIS_PORT}/0",
-    backend=f"redis://{REDIS_HOST}:{REDIS_PORT}/0",
+# Initialize the main Celery app instance with dynamic configuration
+celery_app = Celery("fastapi_rbac")
+
+# Apply the environment-specific configuration
+celery_config = service_settings.get_celery_config()
+
+# Add task routes to the configuration
+celery_config.update(
+    {
+        "task_routes": {
+            "app.worker.send_email_task": {"queue": "emails"},
+            "app.worker.cleanup_tokens_task": {"queue": "maintenance"},
+            "app.worker.log_security_event_task": {"queue": "logging"},
+            "app.worker.process_account_lockout_task": {"queue": "user_management"},
+            "app.scheduled_tasks.*": {"queue": "periodic_tasks"},
+        },
+        "task_default_queue": "default",
+        "worker_prefetch_multiplier": 1,
+    }
 )
 
-# Configure Celery directly with a dictionary
-celery_app.conf.update(
-    task_serializer="json",
-    accept_content=["json"],
-    result_serializer="json",
-    enable_utc=True,
-    broker_connection_retry_on_startup=True,
-    task_routes={
-        "app.worker.send_email_task": {"queue": "emails"},
-        "app.worker.cleanup_tokens_task": {"queue": "maintenance"},
-        "app.worker.log_security_event_task": {"queue": "logging"},
-        "app.worker.process_account_lockout_task": {"queue": "user_management"},
-        "app.scheduled_tasks.*": {"queue": "periodic_tasks"},
-    },
-    task_default_queue="default",
-    worker_prefetch_multiplier=1,
-    worker_concurrency=2,
-)
+# Update the Celery configuration
+celery_app.conf.update(celery_config)
+
+# Conditional configuration for development mode
+if service_settings.mode == "development":
+    # Print debug information when running in development mode
+    print(f"Celery initialized with broker: {celery_config['broker_url']}")
+    print(f"Task always eager: {celery_config.get('task_always_eager', False)}")

@@ -21,14 +21,17 @@ from app.core.security import decode_token
 from app.schemas.response_schema import ErrorDetail, create_error_response
 from app.utils.fastapi_globals import GlobalsMiddleware, g
 
+# Import our environment-specific service settings
+from app.core.service_config import service_settings
+
 # Import Celery app from centralized configuration
 from app.celery_app import celery_app
 
 # Import Celery beat schedule to ensure it's registered
 import app.celery_beat_schedule  # noqa
 
-# Flag to indicate whether Celery is available
-CELERY_AVAILABLE = True
+# Flag to indicate whether Celery is available based on environment
+CELERY_AVAILABLE = service_settings.use_celery
 
 # Expose the Celery application instance
 # This allows CLI commands like 'celery -A app.main.celery worker' to work
@@ -82,17 +85,19 @@ async def user_id_identifier(request: Request):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    redis_client = await get_redis_client()
-    FastAPICache.init(RedisBackend(redis_client), prefix="fastapi-cache")
-    await FastAPILimiter.init(redis_client, identifier=user_id_identifier)
+    # Use the get_redis_client as an async context manager
+    async for redis_client in get_redis_client():
+        FastAPICache.init(RedisBackend(redis_client), prefix="fastapi-cache")
+        await FastAPILimiter.init(redis_client, identifier=user_id_identifier)
 
-    print("startup fastapi")
-    yield
-    # shutdown
-    await FastAPICache.clear()
-    await FastAPILimiter.close()
-    g.cleanup()
-    gc.collect()
+        print("startup fastapi")
+        yield
+        # shutdown
+        await FastAPICache.clear()
+        await FastAPILimiter.close()
+        g.cleanup()
+        gc.collect()
+        # Redis client will be closed automatically after exiting this context
 
 
 # Core Application Instance

@@ -1,3 +1,7 @@
+"""
+This module contains the dependency injection utilities used across the FastAPI application.
+"""
+
 from collections.abc import AsyncGenerator
 from typing import Callable
 
@@ -15,6 +19,7 @@ from app.db.session import SessionLocal
 from app.models.user_model import User
 from app.schemas.common_schema import TokenType
 from app.utils.token import get_valid_tokens
+from app.core.service_config import service_settings
 
 reusable_oauth2 = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/login/access-token"
@@ -22,13 +27,16 @@ reusable_oauth2 = OAuth2PasswordBearer(
 
 
 async def get_redis_client() -> Redis:
-    redis = await aioredis.from_url(
-        f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}",
-        max_connections=10,
-        encoding="utf8",
-        decode_responses=True,
+    """
+    Get Redis client with environment-specific configuration.
+    """
+    redis_client = await aioredis.from_url(
+        service_settings.redis_url, encoding="utf-8", decode_responses=True
     )
-    return redis
+    try:
+        yield redis_client
+    finally:
+        await redis_client.close()
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
