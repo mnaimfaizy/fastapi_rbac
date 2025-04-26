@@ -1,20 +1,20 @@
 import asyncio
 import os
-import pathlib
 import sys
 from logging.config import fileConfig
+
+from alembic import context
+from app.core.config import Settings
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlmodel import SQLModel
 
 # Add the project root directory (backend) to the Python path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from sqlalchemy.ext.asyncio import create_async_engine
-from sqlmodel import SQLModel
-
-from alembic import context
-from app.core.config import Settings
-from app.models import *  # necessarily to import something from file where your models are stored
+# Import models for Alembic to detect
+from app.models import *  # noqa
 
 settings = Settings()
 # this is the Alembic Config object, which provides

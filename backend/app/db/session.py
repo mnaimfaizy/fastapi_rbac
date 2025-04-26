@@ -2,12 +2,11 @@
 from typing import AsyncGenerator
 
 import redis.asyncio as aioredis
+from app.core.config import ModeEnum, settings
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
 from sqlmodel.ext.asyncio.session import AsyncSession
-
-from app.core.config import ModeEnum, settings
 
 DB_POOL_SIZE = 83
 WEB_CONCURRENCY = 9

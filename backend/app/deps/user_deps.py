@@ -1,13 +1,12 @@
 from uuid import UUID
 
-from fastapi import HTTPException, Path, status
-from typing_extensions import Annotated
-
 from app import crud
 from app.models.role_model import Role
 from app.models.user_model import User
 from app.schemas.user_schema import IUserCreate, IUserRead
 from app.utils.exceptions.common_exception import IdNotFoundException
+from fastapi import HTTPException, Path, status
+from typing_extensions import Annotated
 
 
 async def user_exists(new_user: IUserCreate) -> IUserCreate:

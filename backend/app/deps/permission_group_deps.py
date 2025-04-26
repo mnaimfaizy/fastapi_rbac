@@ -1,12 +1,11 @@
 from uuid import UUID
 
-from fastapi import Path, Query
-from typing_extensions import Annotated
-
 from app import crud
 from app.models.permission_group_model import PermissionGroup
 from app.utils.exceptions.common_exception import (IdNotFoundException,
                                                    NameNotFoundException)
+from fastapi import Path, Query
+from typing_extensions import Annotated
 
 
 async def get_permission_group_by_name(

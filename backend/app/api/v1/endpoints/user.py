@@ -1,9 +1,6 @@
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi_pagination import Params
-
 from app import crud
 from app.api import deps
 from app.deps import user_deps
@@ -14,6 +11,8 @@ from app.schemas.response_schema import (IDeleteResponseBase, IGetResponseBase,
 from app.schemas.role_schema import IRoleEnum
 from app.schemas.user_schema import IUserCreate, IUserRead, IUserUpdate
 from app.utils.exceptions import UserSelfDeleteException
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi_pagination import Params
 
 router = APIRouter()
 

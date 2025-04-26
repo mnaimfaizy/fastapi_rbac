@@ -11,7 +11,6 @@ import logging
 from datetime import datetime
 
 from app import crud
-# Import the Celery app instance from centralized config
 from app.celery_app import celery_app
 from app.core.config import settings
 from app.db.session import get_async_session, get_redis_client

@@ -1,4 +1,3 @@
-\
 #Requires -Version 5.1
 # PowerShell equivalent for run.sh
 
@@ -11,9 +10,13 @@ $env:PORT = if ($env:PORT) { $env:PORT } else { "8000" }
 
 Write-Host "Running pre-start tasks..."
 # Execute the Python pre-start script (assuming path relative to container root /app)
-python /app/app/backend_pre_start.py
+python -m app.backend_pre_start
+
+Write-Host ""
+# Execute the Python initial data script (assuming path relative to container root /app)
+python -m app.initial_data
 
 Write-Host "Starting FastAPI Server..."
 # Start the FastAPI server using configured host, port, and logging config
 # Assuming logging.ini is at /app/logging.ini in the container
-Invoke-Expression "fastapi run app/main.py --host $env:HOST --port $env:PORT --log-config /app/logging.ini"
+Invoke-Expression "uvicorn $env:APP_MODULE --host $env:HOST --port $env:PORT --log-config logging.ini"

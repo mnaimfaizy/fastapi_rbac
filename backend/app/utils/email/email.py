@@ -3,10 +3,9 @@ from pathlib import Path
 from typing import Any, Dict
 
 import emails
+from app.core.config import settings
 from emails.template import JinjaTemplate
 from jinja2 import Environment, FileSystemLoader
-
-from app.core.config import settings
 
 
 def send_email(

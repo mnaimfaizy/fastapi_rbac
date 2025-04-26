@@ -3,10 +3,9 @@ from datetime import datetime, timedelta
 from typing import Any, Union
 
 import bcrypt
+from app.core.config import settings
 from cryptography.fernet import Fernet
 from jose import jwt
-
-from app.core.config import settings
 
 
 # Generate a valid Fernet key from the ENCRYPT_KEY

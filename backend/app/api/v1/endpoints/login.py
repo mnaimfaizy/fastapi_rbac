@@ -1,12 +1,5 @@
 from datetime import datetime, timedelta
 
-from fastapi import (APIRouter, BackgroundTasks, Body, Depends, HTTPException,
-                     status)
-from fastapi.security import OAuth2PasswordRequestForm
-from jwt import DecodeError, ExpiredSignatureError, MissingRequiredClaimError
-from pydantic import EmailStr
-from redis.asyncio import Redis
-
 from app import crud
 from app.api import deps
 from app.api.deps import get_redis_client
@@ -23,6 +16,12 @@ from app.utils.background_tasks import (cleanup_expired_tokens,
                                         process_account_lockout,
                                         send_password_reset_email)
 from app.utils.token import add_token_to_redis, get_valid_tokens
+from fastapi import (APIRouter, BackgroundTasks, Body, Depends, HTTPException,
+                     status)
+from fastapi.security import OAuth2PasswordRequestForm
+from jwt import DecodeError, ExpiredSignatureError, MissingRequiredClaimError
+from pydantic import EmailStr
+from redis.asyncio import Redis
 
 router = APIRouter()
 
@@ -81,7 +80,7 @@ async def login(
             },
         )
 
-        lock_message = f"Account is locked due to multiple failed login attempts. "
+        lock_message = "Account is locked due to multiple failed login attempts. "
         if remaining_hours > 0:
             lock_message += f"Try again in {int(remaining_hours)} hours and {int(remaining_minutes)} minutes."
         else:
@@ -521,7 +520,7 @@ async def login_access_token(
             },
         )
 
-        lock_message = f"Account is locked due to multiple failed login attempts. "
+        lock_message = "Account is locked due to multiple failed login attempts. "
         if remaining_hours > 0:
             lock_message += f"Try again in {int(remaining_hours)} hours and {int(remaining_minutes)} minutes."
         else:

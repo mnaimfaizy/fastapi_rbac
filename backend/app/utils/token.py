@@ -1,10 +1,9 @@
 from datetime import timedelta
 from uuid import UUID
 
-from redis.asyncio import Redis
-
 from app.models.user_model import User
 from app.schemas.common_schema import TokenType
+from redis.asyncio import Redis
 
 
 async def add_token_to_redis(

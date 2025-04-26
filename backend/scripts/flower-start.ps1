@@ -1,4 +1,3 @@
-\
 #Requires -Version 5.1
 # PowerShell equivalent for flower-start.sh
 
@@ -7,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 Write-Host "Running pre-start tasks..."
 # Execute the Python pre-start script
 # Assuming path relative to container root /app
-python /app/app/backend_pre_start.py
+python -m app.backend_pre_start
 
 Write-Host "Starting Celery Flower monitoring dashboard..."
 # Retrieve Redis connection details from environment variables

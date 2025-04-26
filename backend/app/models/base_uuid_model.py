@@ -1,11 +1,10 @@
 from datetime import datetime
 from uuid import UUID
 
+from app.utils.uuid6 import uuid7
 from sqlalchemy.orm import declared_attr
 from sqlmodel import Field
 from sqlmodel import SQLModel as _SQLModel
-
-from app.utils.uuid6 import uuid7
 
 
 # id: implements proposal uuid7 draft4

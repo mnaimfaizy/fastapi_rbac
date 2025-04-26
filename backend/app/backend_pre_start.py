@@ -2,9 +2,8 @@ import logging
 import os
 
 import tenacity
+from app.core.config import ModeEnum, settings
 from sqlalchemy import create_engine, text
-
-from app.core.config import settings
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -22,37 +21,50 @@ wait_seconds = 1
 def wait_for_database() -> None:
     """Check if the database is ready for connections."""
     try:
-        # First try to use the explicit SQLALCHEMY_DATABASE_URI if available (from Docker Compose)
+        # Try explicit SQLALCHEMY_DATABASE_URI first (e.g., from Docker Compose)
         database_uri = os.getenv("SQLALCHEMY_DATABASE_URI")
 
-        # If that's not available, try different driver options
+        # If not available, try different drivers
         if not database_uri:
-            # Try using different database connection drivers based on what's available
+            db_user = settings.DATABASE_USER
+            db_pass = settings.DATABASE_PASSWORD
+            db_host = settings.DATABASE_HOST
+            db_port = settings.DATABASE_PORT
+            db_name = settings.DATABASE_NAME
+            # Try psycopg2 driver
             try:
-                pass
-
+                pass  # Assuming psycopg2 is installed or handled elsewhere
                 logger.info("Using psycopg2 driver for database connection")
                 if hasattr(settings, "SYNC_CELERY_DATABASE_URI"):
                     database_uri = str(settings.SYNC_CELERY_DATABASE_URI)
                 else:
-                    # Build a connection string manually if needed
-                    database_uri = f"postgresql+psycopg2://{settings.DATABASE_USER}:{settings.DATABASE_PASSWORD}@{settings.DATABASE_HOST}:{settings.DATABASE_PORT}/{settings.DATABASE_NAME}"
+                    # Build connection string manually
+                    database_uri = (
+                        f"postgresql+psycopg2://{db_user}:{db_pass}"
+                        f"@{db_host}:{db_port}/{db_name}"
+                    )
             except ImportError:
+                # Try asyncpg driver if psycopg2 fails
                 try:
-                    pass
-
+                    pass  # Assuming asyncpg is installed or handled elsewhere
                     logger.info("Using asyncpg driver for database connection")
                     if hasattr(settings, "ASYNC_DATABASE_URI"):
                         database_uri = str(settings.ASYNC_DATABASE_URI)
                     else:
-                        # Fall back to a direct PostgreSQL connection without ORM
-                        database_uri = f"postgresql://{settings.DATABASE_USER}:{settings.DATABASE_PASSWORD}@{settings.DATABASE_HOST}:{settings.DATABASE_PORT}/{settings.DATABASE_NAME}"
+                        # Fall back to direct PostgreSQL connection
+                        database_uri = (
+                            f"postgresql://{db_user}:{db_pass}"
+                            f"@{db_host}:{db_port}/{db_name}"
+                        )
                 except ImportError:
                     logger.warning(
                         "Neither psycopg2 nor asyncpg found, using default URI"
                     )
-                    # Try a generic connection string as last resort
-                    database_uri = f"postgresql://{settings.DATABASE_USER}:{settings.DATABASE_PASSWORD}@{settings.DATABASE_HOST}:{settings.DATABASE_PORT}/{settings.DATABASE_NAME}"
+                    # Generic connection string as last resort
+                    database_uri = (
+                        f"postgresql://{db_user}:{db_pass}"
+                        f"@{db_host}:{db_port}/{db_name}"
+                    )
 
         # Mask password for logging
         masked_uri = (
@@ -83,9 +95,21 @@ def wait_for_redis() -> None:
     try:
         import redis
 
-        # Get Redis connection details from environment or settings
-        redis_host = os.getenv("REDIS_HOST", settings.REDIS_HOST)
-        redis_port = int(os.getenv("REDIS_PORT", settings.REDIS_PORT))
+        # Get Redis connection details based on environment mode
+        if settings.MODE == ModeEnum.development:
+            redis_host = "localhost"  # Use local Redis for development
+            redis_port = 6379
+            logger.info("Development mode: Using local Redis.")
+        elif settings.MODE == ModeEnum.testing:
+            # Use configured Redis for testing (likely Docker)
+            redis_host = os.getenv("REDIS_HOST", settings.REDIS_HOST)
+            redis_port = int(os.getenv("REDIS_PORT", settings.REDIS_PORT))
+            logger.info("Testing mode: Using configured Redis (Docker/settings).")
+        else:  # Production or other modes
+            # Default to environment variables or settings
+            redis_host = os.getenv("REDIS_HOST", settings.REDIS_HOST)
+            redis_port = int(os.getenv("REDIS_PORT", settings.REDIS_PORT))
+            logger.info(f"{settings.MODE.value} mode: Using configured Redis.")
 
         logger.info(f"Connecting to Redis at {redis_host}:{redis_port}")
         redis_client = redis.Redis(

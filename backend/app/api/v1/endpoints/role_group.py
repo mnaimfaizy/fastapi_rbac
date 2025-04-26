@@ -1,8 +1,5 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
-from fastapi_pagination import Params
-
 from app import crud
 from app.api import deps
 from app.deps import role_group_deps
@@ -17,6 +14,8 @@ from app.schemas.role_group_schema import (IRoleGroupCreate, IRoleGroupRead,
                                            IRoleGroupWithRoles)
 from app.schemas.role_schema import IRoleEnum
 from app.utils.exceptions import IdNotFoundException, NameExistException
+from fastapi import APIRouter, Depends
+from fastapi_pagination import Params
 
 router = APIRouter()
 

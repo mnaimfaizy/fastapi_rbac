@@ -1,14 +1,13 @@
 from typing import Any, TypedDict
 from uuid import UUID
 
-from sqlalchemy import literal
-from sqlmodel import or_, select
-from sqlmodel.ext.asyncio.session import AsyncSession
-
 from app.crud.base_crud import CRUDBase
 from app.models.permission_group_model import PermissionGroup
 from app.schemas.permission_group_schema import (IPermissionGroupCreate,
                                                  IPermissionGroupUpdate)
+from sqlalchemy import literal
+from sqlmodel import or_, select
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 
 # Type definition for get method return value
@@ -45,14 +44,14 @@ class CRUDPermissionGroup(
             ].__dict__.copy()  # Create a copy to avoid modifying the SQLModel instance
 
             # Query for parent group using proper comparison
-            parent_group_query = select(PermissionGroup).where(
+            parent_group_query: Any = select(PermissionGroup).where(
                 PermissionGroup.id == group.get("permission_group_id")
             )
             parent_group_result = await db_session.execute(parent_group_query)
             group["parent_group"] = parent_group_result.scalar_one_or_none()
 
             # Query for top-level groups using proper comparison
-            groups_query = select(PermissionGroup).where(
+            groups_query: Any = select(PermissionGroup).where(
                 or_(
                     PermissionGroup.permission_group_id.is_(None),
                     PermissionGroup.permission_group_id == "",

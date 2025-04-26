@@ -2,10 +2,9 @@ from enum import Enum
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
-
 from app.models.role_model import RoleBase
 from app.utils.partial import optional
+from pydantic import BaseModel, Field
 
 
 # Properties to receive via API on Creation

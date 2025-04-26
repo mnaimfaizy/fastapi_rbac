@@ -1,10 +1,13 @@
 from datetime import datetime
-
-from pydantic import EmailStr
-from sqlmodel import Column, Field, Relationship, SQLModel, String
+from typing import TYPE_CHECKING, List
 
 from app.models.base_uuid_model import BaseUUIDModel
 from app.models.user_role_model import UserRole
+from pydantic import EmailStr
+from sqlmodel import Column, Field, Relationship, SQLModel, String
+
+if TYPE_CHECKING:
+    from app.models.role_model import Role
 
 
 class UserBase(SQLModel):
@@ -31,7 +34,7 @@ class User(BaseUUIDModel, UserBase, table=True):
     last_name: str | None = Field(index=True)
     expiry_date: datetime | None = Field(default_factory=datetime.utcnow)
     last_changed_password_date: datetime | None = Field(default_factory=datetime.utcnow)
-    roles: list["Role"] = Relationship(
+    roles: List["Role"] = Relationship(
         back_populates="users",
         link_model=UserRole,
         sa_relationship_kwargs={"lazy": "joined"},

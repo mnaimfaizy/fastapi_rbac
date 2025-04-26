@@ -1,6 +1,7 @@
 from typing import Any, Generic, TypeVar
 from uuid import UUID
 
+from app.schemas.common_schema import IOrderEnum
 from fastapi import HTTPException
 from fastapi_async_sqlalchemy import db
 from fastapi_pagination import Page, Params
@@ -10,8 +11,6 @@ from sqlalchemy import exc
 from sqlmodel import SQLModel, func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel.sql.expression import Select
-
-from app.schemas.common_schema import IOrderEnum
 
 ModelType = TypeVar("ModelType", bound=SQLModel)
 CreateSchemaType = TypeVar("CreateSchemaType", bound=BaseModel)
@@ -38,7 +37,7 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         self, *, id: UUID | str, db_session: AsyncSession | None = None
     ) -> ModelType | None:
         db_session = db_session or self.db.session
-        query = select(self.model).where(self.model.id == id)
+        query: Select[ModelType] = select(self.model).where(self.model.id == id)
         result = await db_session.execute(query)
         response = result.unique()
         return response.scalar_one_or_none()
@@ -74,8 +73,12 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     ) -> list[ModelType]:
         db_session = db_session or self.db.session
         if query is None:
-            query = select(self.model).offset(skip).limit(limit).order_by(self.model.id)
-        response = await db_session.execute(query)
+            query_obj: Select[ModelType] = (
+                select(self.model).offset(skip).limit(limit).order_by(self.model.id)
+            )
+        else:
+            query_obj = query
+        response = await db_session.execute(query_obj)
         return response.scalars().all()
 
     async def get_multi_paginated(
@@ -108,12 +111,15 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             order_by = "id"
 
         if query is None:
+            query_obj: Select[ModelType]
             if order == IOrderEnum.ascendent:
-                query = select(self.model).order_by(columns[order_by].asc())
+                query_obj = select(self.model).order_by(columns[order_by].asc())
             else:
-                query = select(self.model).order_by(columns[order_by].desc())
+                query_obj = select(self.model).order_by(columns[order_by].desc())
+        else:
+            query_obj = query
 
-        return await paginate(db_session, query, params, unique=True)
+        return await paginate(db_session, query_obj, params, unique=True)
 
     async def get_multi_ordered(
         self,
@@ -131,22 +137,23 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         if order_by is None or order_by not in columns:
             order_by = "id"
 
+        query_obj: Select[ModelType]
         if order == IOrderEnum.ascendent:
-            query = (
+            query_obj = (
                 select(self.model)
                 .offset(skip)
                 .limit(limit)
                 .order_by(columns[order_by].asc())
             )
         else:
-            query = (
+            query_obj = (
                 select(self.model)
                 .offset(skip)
                 .limit(limit)
                 .order_by(columns[order_by].desc())
             )
 
-        response = await db_session.execute(query)
+        response = await db_session.execute(query_obj)
         return response.scalars().all()
 
     async def create(

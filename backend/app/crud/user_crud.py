@@ -2,15 +2,14 @@ from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from pydantic import EmailStr
-from sqlmodel import select
-from sqlmodel.ext.asyncio.session import AsyncSession
-
 from app.core.security import get_password_hash, verify_password
 from app.crud.base_crud import CRUDBase
 from app.models.password_history_model import UserPasswordHistory
 from app.models.user_model import User
 from app.schemas.user_schema import IUserCreate, IUserUpdate
+from pydantic import EmailStr
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 
 class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):

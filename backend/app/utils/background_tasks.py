@@ -15,15 +15,14 @@ from datetime import datetime, timedelta
 from typing import Optional
 from uuid import UUID
 
-from fastapi import BackgroundTasks
-from redis.asyncio import Redis
-from sqlmodel.ext.asyncio.session import AsyncSession
-
 from app import crud
 from app.core.config import settings
 from app.models.user_model import User
 from app.schemas.common_schema import TokenType
 from app.utils.email import send_email_with_template
+from fastapi import BackgroundTasks
+from redis.asyncio import Redis
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 # Import Celery tasks if available
 try:

@@ -1,6 +1,19 @@
 import gc
 from contextlib import asynccontextmanager
+from typing import Any
 
+# Import Celery beat schedule to ensure it's registered
+import app.celery_beat_schedule as celery_beat_schedule  # noqa
+from app.api.deps import get_redis_client
+from app.api.v1.api import api_router as api_router_v1
+# Import Celery app from centralized configuration
+from app.celery_app import celery_app
+from app.core.config import ModeEnum, settings
+from app.core.security import decode_token
+# Import our environment-specific service settings
+from app.core.service_config import service_settings
+from app.schemas.response_schema import ErrorDetail, create_error_response
+from app.utils.fastapi_globals import GlobalsMiddleware, g
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -13,19 +26,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
-
-# Import Celery beat schedule to ensure it's registered
-import app.celery_beat_schedule  # noqa
-from app.api.deps import get_redis_client
-from app.api.v1.api import api_router as api_router_v1
-# Import Celery app from centralized configuration
-from app.celery_app import celery_app
-from app.core.config import ModeEnum, settings
-from app.core.security import decode_token
-# Import our environment-specific service settings
-from app.core.service_config import service_settings
-from app.schemas.response_schema import ErrorDetail, create_error_response
-from app.utils.fastapi_globals import GlobalsMiddleware, g
 
 # Flag to indicate whether Celery is available based on environment
 CELERY_AVAILABLE = service_settings.use_celery
@@ -55,12 +55,18 @@ async def user_id_identifier(request: Request):
                 except DecodeError:
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Error when decoding the token. Please check your request.",
+                        detail=(
+                            "Error when decoding the token. "
+                            "Please check your request."
+                        ),
                     )
                 except MissingRequiredClaimError:
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
-                        detail="There is no required field in your token. Please contact the administrator.",
+                        detail=(
+                            "There is no required field in your token. "
+                            "Please contact the administrator."
+                        ),
                     )
 
                 user_id = payload["sub"]
@@ -80,7 +86,7 @@ async def user_id_identifier(request: Request):
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(fastapi_instance: FastAPI):
     # Startup
     # Use the get_redis_client as an async context manager
     async for redis_client in get_redis_client():
@@ -98,16 +104,19 @@ async def lifespan(app: FastAPI):
 
 
 # Core Application Instance
-app = FastAPI(
+fastapi_app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.API_VERSION,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
-    description="FastAPI RBAC system with comprehensive authentication and authorization features",
+    description=(
+        "FastAPI RBAC system with comprehensive "
+        "authentication and authorization features"
+    ),
     lifespan=lifespan,
 )
 
 
-app.add_middleware(
+fastapi_app.add_middleware(
     SQLAlchemyMiddleware,
     db_url=str(settings.ASYNC_DATABASE_URI),
     engine_args={
@@ -120,11 +129,11 @@ app.add_middleware(
         # "max_overflow": 64,
     },
 )
-app.add_middleware(GlobalsMiddleware)
+fastapi_app.add_middleware(GlobalsMiddleware)
 
 # Set all CORS origins enabled
 if settings.BACKEND_CORS_ORIGINS:
-    app.add_middleware(
+    fastapi_app.add_middleware(
         CORSMiddleware,
         allow_origins=[str(origin) for origin in settings.BACKEND_CORS_ORIGINS],
         allow_credentials=True,
@@ -149,7 +158,7 @@ class CustomException(Exception):
         self.message = message
 
 
-@app.get("/")
+@fastapi_app.get("/")
 async def root():
     """
     An example "Hello world" FastAPI route.
@@ -159,11 +168,11 @@ async def root():
 
 
 # Add Routers
-app.include_router(api_router_v1, prefix=settings.API_V1_STR)
+fastapi_app.include_router(api_router_v1, prefix=settings.API_V1_STR)
 
 
 # Exception handlers for consistent error responses
-@app.exception_handler(RequestValidationError)
+@fastapi_app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """
     Handle validation errors with standardized format for frontend consumption
@@ -188,24 +197,27 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 
-@app.exception_handler(StarletteHTTPException)
+@fastapi_app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     """
     Handle HTTP exceptions with standardized format for frontend consumption
     """
     # Extract field-specific errors from detail if it's a dict
-    errors = []
-    if isinstance(exc.detail, dict) and "field_name" in exc.detail:
+    errors: list[ErrorDetail] = []
+
+    detail: Any = exc.detail
+
+    if isinstance(detail, dict) and "field_name" in detail:
         errors.append(
             ErrorDetail(
-                field=exc.detail.get("field_name"),
-                message=exc.detail.get("message", "An error occurred"),
+                field=detail.get("field_name"),
+                message=detail.get("message", "An error occurred"),
                 code=str(exc.status_code),
             )
         )
         message = "Request error"
     else:
-        message = exc.detail if isinstance(exc.detail, str) else "Request error"
+        message = detail if isinstance(detail, str) else "Request error"
 
     return JSONResponse(
         status_code=exc.status_code,
@@ -216,7 +228,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     )
 
 
-@app.exception_handler(CustomException)
+@fastapi_app.exception_handler(CustomException)
 async def custom_exception_handler(request: Request, exc: CustomException):
     """
     Handle custom exceptions with standardized format for frontend consumption
@@ -230,7 +242,7 @@ async def custom_exception_handler(request: Request, exc: CustomException):
     )
 
 
-@app.exception_handler(SQLAlchemyError)
+@fastapi_app.exception_handler(SQLAlchemyError)
 async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
     """
     Handle database errors with standardized format for frontend consumption
@@ -244,7 +256,7 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
     )
 
 
-@app.exception_handler(Exception)
+@fastapi_app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
     """
     Handle general exceptions with standardized format for frontend consumption

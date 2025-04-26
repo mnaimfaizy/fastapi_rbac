@@ -1,9 +1,8 @@
 from typing import Optional
 from uuid import UUID
 
-from sqlmodel import Field, SQLModel
-
 from app.models.base_uuid_model import BaseUUIDModel
+from sqlmodel import Field, SQLModel
 
 
 class UserPasswordHistoryBase(SQLModel):

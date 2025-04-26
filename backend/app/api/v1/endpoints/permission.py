@@ -1,8 +1,5 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
-from fastapi_pagination import Params
-
 from app import crud
 from app.api import deps
 from app.deps import permission_deps
@@ -16,6 +13,8 @@ from app.schemas.response_schema import (IGetResponseBase,
                                          create_response)
 from app.schemas.role_schema import IRoleEnum
 from app.utils.exceptions import IdNotFoundException, NameExistException
+from fastapi import APIRouter, Depends
+from fastapi_pagination import Params
 
 router = APIRouter()
 

@@ -1,4 +1,3 @@
-\
 #Requires -Version 5.1
 # PowerShell equivalent for entrypoint.sh
 

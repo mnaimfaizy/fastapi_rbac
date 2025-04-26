@@ -1,8 +1,7 @@
 from uuid import UUID
 
-from sqlmodel import Field
-
 from app.models.base_uuid_model import BaseUUIDModel
+from sqlmodel import Field
 
 
 class RolePermission(BaseUUIDModel, table=True):
