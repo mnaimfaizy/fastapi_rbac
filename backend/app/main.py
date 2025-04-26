@@ -2,8 +2,8 @@ import gc
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, status
-from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi_async_sqlalchemy import SQLAlchemyMiddleware
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
@@ -11,24 +11,21 @@ from fastapi_limiter import FastAPILimiter
 from jwt import DecodeError, ExpiredSignatureError, MissingRequiredClaimError
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
-from starlette.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
-
-from app.api.deps import get_redis_client
-from app.api.v1.api import api_router as api_router_v1
-from app.core.config import ModeEnum, settings
-from app.core.security import decode_token
-from app.schemas.response_schema import ErrorDetail, create_error_response
-from app.utils.fastapi_globals import GlobalsMiddleware, g
-
-# Import our environment-specific service settings
-from app.core.service_config import service_settings
-
-# Import Celery app from centralized configuration
-from app.celery_app import celery_app
+from starlette.middleware.cors import CORSMiddleware
 
 # Import Celery beat schedule to ensure it's registered
 import app.celery_beat_schedule  # noqa
+from app.api.deps import get_redis_client
+from app.api.v1.api import api_router as api_router_v1
+# Import Celery app from centralized configuration
+from app.celery_app import celery_app
+from app.core.config import ModeEnum, settings
+from app.core.security import decode_token
+# Import our environment-specific service settings
+from app.core.service_config import service_settings
+from app.schemas.response_schema import ErrorDetail, create_error_response
+from app.utils.fastapi_globals import GlobalsMiddleware, g
 
 # Flag to indicate whether Celery is available based on environment
 CELERY_AVAILABLE = service_settings.use_celery

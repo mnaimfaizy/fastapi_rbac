@@ -1,12 +1,8 @@
 import logging
 import os
-import time
-from pathlib import Path
-from typing import Any, Dict, List
 
 import tenacity
 from sqlalchemy import create_engine, text
-from sqlalchemy.exc import OperationalError
 
 from app.core.config import settings
 
@@ -33,7 +29,7 @@ def wait_for_database() -> None:
         if not database_uri:
             # Try using different database connection drivers based on what's available
             try:
-                import psycopg2
+                pass
 
                 logger.info("Using psycopg2 driver for database connection")
                 if hasattr(settings, "SYNC_CELERY_DATABASE_URI"):
@@ -43,7 +39,7 @@ def wait_for_database() -> None:
                     database_uri = f"postgresql+psycopg2://{settings.DATABASE_USER}:{settings.DATABASE_PASSWORD}@{settings.DATABASE_HOST}:{settings.DATABASE_PORT}/{settings.DATABASE_NAME}"
             except ImportError:
                 try:
-                    import asyncpg
+                    pass
 
                     logger.info("Using asyncpg driver for database connection")
                     if hasattr(settings, "ASYNC_DATABASE_URI"):

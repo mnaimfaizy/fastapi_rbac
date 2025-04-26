@@ -27,12 +27,8 @@ from app.utils.email import send_email_with_template
 
 # Import Celery tasks if available
 try:
-    from app.worker import (
-        send_email_task,
-        cleanup_tokens_task,
-        log_security_event_task,
-        process_account_lockout_task,
-    )
+    from app.worker import (cleanup_tokens_task, log_security_event_task,
+                            process_account_lockout_task, send_email_task)
 
     CELERY_AVAILABLE = True
 except ImportError:

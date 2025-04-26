@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Optional
 
 from pydantic import EmailStr
 from sqlmodel import Column, Field, Relationship, SQLModel, String

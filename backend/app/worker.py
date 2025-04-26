@@ -30,6 +30,7 @@ def cleanup_tokens_task(user_id: str, token_type: str) -> None:
     """Celery task for cleaning up expired tokens"""
     import asyncio
     from uuid import UUID
+
     from app.schemas.common_schema import TokenType
 
     async def async_cleanup_tokens(user_id_str: str, token_type_str: str):
@@ -63,7 +64,7 @@ def log_security_event_task(
         from app.db.session import get_async_session
 
         async for db_session in get_async_session():
-            user_id_obj = UUID(user_id_str) if user_id_str else None
+            UUID(user_id_str) if user_id_str else None
 
             # TODO: Implement logging to security audit log table
             # This is a placeholder for actual implementation
@@ -78,12 +79,12 @@ def log_security_event_task(
 def process_account_lockout_task(user_id: str, lock_duration_hours: int = 24) -> None:
     """Celery task for processing account lockouts"""
     import asyncio
-    from uuid import UUID
     from datetime import datetime, timedelta
+    from uuid import UUID
 
     async def async_process_lockout(user_id_str: str, lock_duration_hours: int):
-        from app.db.session import get_async_session
         from app import crud
+        from app.db.session import get_async_session
 
         user_id_obj = UUID(user_id_str)
 

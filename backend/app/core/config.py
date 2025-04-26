@@ -2,15 +2,10 @@ import os
 import secrets
 from enum import Enum
 from functools import lru_cache
-from typing import Any, Dict, Union, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
-from pydantic import (
-    AnyHttpUrl,
-    EmailStr,
-    PostgresDsn,
-    field_validator,
-    model_validator,
-)
+from pydantic import (AnyHttpUrl, EmailStr, PostgresDsn, field_validator,
+                      model_validator)
 from pydantic_core.core_schema import FieldValidationInfo
 from pydantic_settings import BaseSettings, SettingsConfigDict
 

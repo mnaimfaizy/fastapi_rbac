@@ -4,6 +4,7 @@ This module defines recurring tasks that run automatically based on a schedule.
 """
 
 from datetime import timedelta
+
 from celery.schedules import crontab
 
 # Import the celery app from centralized configuration
@@ -40,4 +41,3 @@ celery_app.conf.beat_schedule = {
 
 # Import the scheduled tasks to ensure they're registered with Celery
 # This is needed to avoid the "Unable to load celery application" error
-import app.scheduled_tasks

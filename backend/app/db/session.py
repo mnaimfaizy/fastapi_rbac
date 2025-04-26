@@ -1,10 +1,11 @@
 # https://stackoverflow.com/questions/75252097/fastapi-testing-runtimeerror-task-attached-to-a-different-loop/75444607#75444607
+from typing import AsyncGenerator
+
+import redis.asyncio as aioredis
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
 from sqlmodel.ext.asyncio.session import AsyncSession
-import redis.asyncio as aioredis
-from typing import AsyncGenerator
 
 from app.core.config import ModeEnum, settings
 

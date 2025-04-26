@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends
 from redis.asyncio import Redis
 
 from app.api.deps import get_redis_client

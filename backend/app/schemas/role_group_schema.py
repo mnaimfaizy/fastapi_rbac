@@ -1,6 +1,5 @@
 from uuid import UUID
 
-from app.models import Role
 from app.models.role_group_model import RoleGroupBase
 from app.schemas.role_schema import IRoleRead
 from app.utils.partial import optional

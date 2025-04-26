@@ -4,8 +4,8 @@ This can be used to verify both development (MailHog) and production email confi
 """
 
 import asyncio
-import sys
 import os
+import sys
 
 from app.core.config import settings
 from app.utils.email.reset_password import send_reset_password_email

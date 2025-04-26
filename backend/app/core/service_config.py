@@ -4,9 +4,9 @@ This module provides different configurations based on the current environment
 (development, testing, production).
 """
 
-from typing import Dict, Any
 import os
 from functools import lru_cache
+from typing import Any, Dict
 
 from app.core.config import ModeEnum, settings
 

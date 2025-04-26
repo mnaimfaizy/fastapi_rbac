@@ -12,7 +12,7 @@ from app.utils.exceptions.common_exception import (IdNotFoundException,
 async def get_permission_group_by_name(
     group_name: Annotated[
         str, Query(description="String compare with role group name")
-    ] = ""
+    ] = "",
 ) -> str:
     group = await crud.permission_group.get_group_by_name(name=group_name)
     if not group:
@@ -21,7 +21,7 @@ async def get_permission_group_by_name(
 
 
 async def get_permission_group_by_id(
-    group_id: Annotated[UUID, Path(description="The UUID id of the group")]
+    group_id: Annotated[UUID, Path(description="The UUID id of the group")],
 ) -> PermissionGroup:
     group = await crud.permission_group.get(id=group_id)
     if not group:

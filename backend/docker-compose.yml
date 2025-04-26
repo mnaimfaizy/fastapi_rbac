@@ -30,7 +30,7 @@ services:
       - C_FORCE_ROOT=true
     env_file:
       - .env.test
-    command: ["/bin/bash", "/app/worker-start.sh"]
+    command: ["/bin/bash", "/app/scripts/worker-start.sh"]
     depends_on:
       - fastapi_rbac_redis_server
     restart: on-failure
@@ -53,7 +53,7 @@ services:
       - C_FORCE_ROOT=true
     env_file:
       - .env.test
-    command: ["/bin/bash", "/app/beat-start.sh"]
+    command: ["/bin/bash", "/app/scripts/beat-start.sh"]
     depends_on:
       - fastapi_rbac_redis_server
       - fastapi_rbac_worker
@@ -76,7 +76,7 @@ services:
       - .env.test
     ports:
       - "5555:5555" # Flower web interface
-    command: ["/bin/bash", "/app/flower-start.sh"]
+    command: ["/bin/bash", "/app/scripts/flower-start.sh"]
     depends_on:
       - fastapi_rbac_redis_server
       - fastapi_rbac_worker

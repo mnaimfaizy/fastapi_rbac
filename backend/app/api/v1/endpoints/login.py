@@ -1,6 +1,7 @@
-from datetime import timedelta, datetime
+from datetime import datetime, timedelta
 
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, status
+from fastapi import (APIRouter, BackgroundTasks, Body, Depends, HTTPException,
+                     status)
 from fastapi.security import OAuth2PasswordRequestForm
 from jwt import DecodeError, ExpiredSignatureError, MissingRequiredClaimError
 from pydantic import EmailStr
@@ -11,19 +12,17 @@ from app.api import deps
 from app.api.deps import get_redis_client
 from app.core import security
 from app.core.config import settings
-from app.core.security import decode_token, get_password_hash, verify_password
+from app.core.security import decode_token, verify_password
 from app.models.user_model import User
 from app.schemas.common_schema import TokenType
 from app.schemas.response_schema import IPostResponseBase, create_response
 from app.schemas.token_schema import RefreshToken, Token, TokenRead
-from app.schemas.user_schema import PasswordResetRequest, PasswordResetConfirm
-from app.utils.token import add_token_to_redis, delete_tokens, get_valid_tokens
-from app.utils.background_tasks import (
-    cleanup_expired_tokens,
-    log_security_event,
-    process_account_lockout,
-    send_password_reset_email,
-)
+from app.schemas.user_schema import PasswordResetConfirm, PasswordResetRequest
+from app.utils.background_tasks import (cleanup_expired_tokens,
+                                        log_security_event,
+                                        process_account_lockout,
+                                        send_password_reset_email)
+from app.utils.token import add_token_to_redis, get_valid_tokens
 
 router = APIRouter()
 

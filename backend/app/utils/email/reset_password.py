@@ -1,5 +1,3 @@
-from typing import Any, Dict, Optional
-
 from app.core.config import settings
 from app.utils.email.email import send_email_with_template
 

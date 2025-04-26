@@ -1,6 +1,6 @@
+import base64
 from datetime import datetime, timedelta
 from typing import Any, Union
-import base64
 
 import bcrypt
 from cryptography.fernet import Fernet

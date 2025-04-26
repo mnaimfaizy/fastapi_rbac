@@ -3,7 +3,6 @@ Centralized Celery configuration for the FastAPI RBAC system.
 This module contains the main Celery app instance used across the application.
 """
 
-import os
 from celery import Celery
 
 # Import environment-specific service settings

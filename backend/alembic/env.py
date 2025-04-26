@@ -1,7 +1,7 @@
-import os
-import sys
-import pathlib
 import asyncio
+import os
+import pathlib
+import sys
 from logging.config import fileConfig
 
 # Add the project root directory (backend) to the Python path
@@ -14,7 +14,6 @@ from sqlmodel import SQLModel
 
 from alembic import context
 from app.core.config import Settings
-
 from app.models import *  # necessarily to import something from file where your models are stored
 
 settings = Settings()
