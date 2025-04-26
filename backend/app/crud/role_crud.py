@@ -11,9 +11,7 @@ from app.schemas.role_schema import IRoleCreate, IRoleUpdate
 
 
 class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
-    async def get_role_by_name(
-        self, *, name: str, db_session: AsyncSession | None = None
-    ) -> Role | None:
+    async def get_role_by_name(self, *, name: str, db_session: AsyncSession | None = None) -> Role | None:
         db_session = db_session or super().get_db().session
         role = await db_session.execute(select(Role).where(Role.name == name))
         return role.scalar_one_or_none()
@@ -36,9 +34,7 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
         self, *, role_id: UUID, db_session: AsyncSession | None = None
     ) -> bool:
         db_session = db_session or super().get_db().session
-        result = await db_session.execute(
-            select(RolePermission).where(RolePermission.role_id == role_id)
-        )
+        result = await db_session.execute(select(RolePermission).where(RolePermission.role_id == role_id))
         permissions = result.scalars().all()
         return len(permissions) > 0
 

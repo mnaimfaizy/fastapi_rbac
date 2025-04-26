@@ -22,9 +22,7 @@ from app.models.user_model import User
 from app.schemas.common_schema import TokenType
 from app.utils.token import get_valid_tokens
 
-reusable_oauth2 = OAuth2PasswordBearer(
-    tokenUrl=f"{settings.API_V1_STR}/login/access-token"
-)
+reusable_oauth2 = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/login/access-token")
 
 
 async def get_redis_client() -> AsyncGenerator[Redis, None]:
@@ -66,14 +64,11 @@ def get_current_user(required_roles: list[str] = None) -> Callable[[], User]:
         except MissingRequiredClaimError:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="There is no required field in your token. "
-                "Please contact the administrator.",
+                detail="There is no required field in your token. " "Please contact the administrator.",
             )
 
         user_id = payload["sub"]
-        valid_access_tokens = await get_valid_tokens(
-            redis_client, user_id, TokenType.ACCESS
-        )
+        valid_access_tokens = await get_valid_tokens(redis_client, user_id, TokenType.ACCESS)
         if valid_access_tokens and access_token not in valid_access_tokens:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

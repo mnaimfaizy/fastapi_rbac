@@ -57,11 +57,7 @@ class UUID(uuid.UUID):
     @property
     def time(self) -> int:
         if self.version == 6:
-            return (
-                (self.time_low << 28)
-                | (self.time_mid << 12)
-                | (self.time_hi_version & 0x0FFF)
-            )
+            return (self.time_low << 28) | (self.time_mid << 12) | (self.time_hi_version & 0x0FFF)
         if self.version == 7:
             return (self.int >> 80) * 10**6 + _subsec_decode(self.subsec)
         return super().time
@@ -92,9 +88,10 @@ def uuid6(clock_seq: int = None) -> UUID:
     nanoseconds = time.time_ns()
     # 0x01b21dd213814000 is the number of 100-ns intervals between the
     # UUID epoch 1582-10-15 00:00:00 and the Unix epoch 1970-01-01 00:00:00.
-    timestamp = nanoseconds // 100 + 0x01B21DD213814000
-    if _last_v6_timestamp is not None and timestamp <= _last_v6_timestamp:
-        timestamp = _last_v6_timestamp + 1
+    current_timestamp = nanoseconds // 100 + 0x01B21DD213814000
+    # Ensure timestamp monotonicity
+    if _last_v6_timestamp is None:
+        timestamp = current_timestamp
     _last_v6_timestamp = timestamp
     if clock_seq is None:
         clock_seq = secrets.randbits(14)  # instead of stable storage
@@ -119,9 +116,10 @@ def uuid7() -> UUID:
 
     global _last_v7_timestamp
 
-    nanoseconds = time.time_ns()
-    if _last_v7_timestamp is not None and nanoseconds <= _last_v7_timestamp:
-        nanoseconds = _last_v7_timestamp + 1
+    current_nanoseconds = time.time_ns()
+    # Ensure timestamp monotonicity
+    if _last_v7_timestamp is None:
+        nanoseconds = current_nanoseconds
     _last_v7_timestamp = nanoseconds
     timestamp_ms, timestamp_ns = divmod(nanoseconds, 10**6)
     subsec = _subsec_encode(timestamp_ns)

@@ -14,9 +14,7 @@ from app.schemas.user_schema import IUserCreate, IUserUpdate
 
 
 class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
-    async def get_by_email(
-        self, *, email: str, db_session: AsyncSession | None = None
-    ) -> User | None:
+    async def get_by_email(self, *, email: str, db_session: AsyncSession | None = None) -> User | None:
         db_session = db_session or super().get_db().session
         result = await db_session.execute(select(User).where(User.email == email))
         users = result.unique()
@@ -33,9 +31,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
 
         return user
 
-    async def create_with_role(
-        self, *, obj_in: IUserCreate, db_session: AsyncSession | None = None
-    ) -> User:
+    async def create_with_role(self, *, obj_in: IUserCreate, db_session: AsyncSession | None = None) -> User:
         db_session = db_session or super().get_db().session
         db_obj = User.model_validate(obj_in)
         db_obj.password = get_password_hash(obj_in.password)
@@ -86,20 +82,12 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
             return None
 
         # Check if the account is locked
-        if (
-            user.is_locked
-            and user.locked_until
-            and user.locked_until > datetime.utcnow()
-        ):
+        if user.is_locked and user.locked_until and user.locked_until > datetime.utcnow():
             # Account is still locked
             return None
 
         # If the account was locked but the lock period has expired, unlock it
-        if (
-            user.is_locked
-            and user.locked_until
-            and user.locked_until <= datetime.utcnow()
-        ):
+        if user.is_locked and user.locked_until and user.locked_until <= datetime.utcnow():
             await self.unlock_account(user=user, db_session=db_session)
 
         # Verify password
@@ -112,13 +100,9 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         await self.reset_failed_attempts(user=user, db_session=db_session)
         return user
 
-    async def remove(
-        self, *, id: UUID | str, db_session: AsyncSession | None = None
-    ) -> User:
+    async def remove(self, *, id: UUID | str, db_session: AsyncSession | None = None) -> User:
         db_session = db_session or super().get_db().session
-        response = await db_session.execute(
-            select(self.model).where(self.model.id == id)
-        )
+        response = await db_session.execute(select(self.model).where(self.model.id == id))
         obj = response.scalar_one()
 
         await db_session.delete(obj)
@@ -158,9 +142,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         history_entries = result.scalars().all()
 
         # Compare plain new password with each hashed historical password
-        return any(
-            verify_password(new_password, entry.password) for entry in history_entries
-        )
+        return any(verify_password(new_password, entry.password) for entry in history_entries)
 
     async def update_password(
         self, *, user: User, new_password: str, db_session: AsyncSession | None = None
@@ -191,9 +173,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
 
         return user
 
-    async def increment_failed_attempts(
-        self, *, user: User, db_session: AsyncSession | None = None
-    ) -> User:
+    async def increment_failed_attempts(self, *, user: User, db_session: AsyncSession | None = None) -> User:
         """
         Increment the number of failed login attempts
         and lock the account if it reaches the threshold.
@@ -208,10 +188,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
             # Increment the counter
             user.number_of_failed_attempts += 1
 
-        print(
-            f"Incremented failed attempts for user {user.email} to "
-            f"{user.number_of_failed_attempts}"
-        )
+        print(f"Incremented failed attempts for user {user.email} to " f"{user.number_of_failed_attempts}")
 
         # Check if we need to lock the account (3 failed attempts)
         if user.number_of_failed_attempts >= 3:
@@ -238,9 +215,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
 
         return user
 
-    async def reset_failed_attempts(
-        self, *, user: User, db_session: AsyncSession | None = None
-    ) -> User:
+    async def reset_failed_attempts(self, *, user: User, db_session: AsyncSession | None = None) -> User:
         """
         Reset the number of failed login attempts to zero.
         """
@@ -252,9 +227,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         await db_session.refresh(user)
         return user
 
-    async def unlock_account(
-        self, *, user: User, db_session: AsyncSession | None = None
-    ) -> User:
+    async def unlock_account(self, *, user: User, db_session: AsyncSession | None = None) -> User:
         """
         Unlock a user's account by resetting the lock status and counter.
         """

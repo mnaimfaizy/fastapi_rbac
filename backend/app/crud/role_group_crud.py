@@ -14,18 +14,14 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
         self, *, name: str, db_session: AsyncSession | None = None
     ) -> RoleGroup | None:
         db_session = db_session or super().get_db().session
-        result = await db_session.execute(
-            select(RoleGroup).where(RoleGroup.name == name)
-        )
+        result = await db_session.execute(select(RoleGroup).where(RoleGroup.name == name))
         return result.scalar_one_or_none()
 
     async def check_role_exists_in_group(
         self, *, group_id: UUID, db_session: AsyncSession | None = None
     ) -> bool:
         db_session = db_session or super().get_db().session
-        result = await db_session.execute(
-            select(RoleGroupMap).where(RoleGroupMap.role_group_id == group_id)
-        )
+        result = await db_session.execute(select(RoleGroupMap).where(RoleGroupMap.role_group_id == group_id))
         return result.scalar_one_or_none() is not None
 
     async def add_roles_to_group(

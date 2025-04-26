@@ -19,9 +19,7 @@ class PermissionGroupData(TypedDict):
     groups: list[PermissionGroup]
 
 
-class CRUDPermissionGroup(
-    CRUDBase[PermissionGroup, IPermissionGroupCreate, IPermissionGroupUpdate]
-):
+class CRUDPermissionGroup(CRUDBase[PermissionGroup, IPermissionGroupCreate, IPermissionGroupUpdate]):
     async def get_group_by_name(
         self, *, name: str, db_session: AsyncSession | None = None
     ) -> PermissionGroup | None:
@@ -35,16 +33,12 @@ class CRUDPermissionGroup(
         self, *, id: UUID | str, db_session: AsyncSession | None = None
     ) -> PermissionGroupData | None:
         db_session = db_session or super().get_db().session
-        query = select(PermissionGroup, literal(0).label("parent_group")).where(
-            PermissionGroup.id == id
-        )
+        query = select(PermissionGroup, literal(0).label("parent_group")).where(PermissionGroup.id == id)
         result = await db_session.execute(query)
         group_result = result.first()
 
         if group_result:
-            group = group_result[
-                0
-            ].__dict__.copy()  # Create a copy to avoid modifying the SQLModel instance
+            group = group_result[0].__dict__.copy()  # Create a copy to avoid modifying the SQLModel instance
 
             # Query for parent group using proper comparison
             parent_group_query: Any = select(PermissionGroup).where(
@@ -76,9 +70,7 @@ class CRUDPermissionGroup(
     ) -> bool:
         db_session = db_session or super().get_db().session
         result = await db_session.execute(
-            select(PermissionGroup).where(
-                PermissionGroup.permission_group_id == group_id
-            )
+            select(PermissionGroup).where(PermissionGroup.permission_group_id == group_id)
         )
         return result.scalar_one_or_none() is not None
 

@@ -41,9 +41,7 @@ def create_access_token(
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(
-            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
-        )
+        expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
 
     to_encode = {
         "exp": expire,
@@ -60,15 +58,11 @@ def create_access_token(
     return encoded_jwt
 
 
-def create_refresh_token(
-    subject: Union[str, Any], expires_delta: timedelta = None
-) -> str:
+def create_refresh_token(subject: Union[str, Any], expires_delta: timedelta = None) -> str:
     if expires_delta is not None:
         expires_delta = datetime.utcnow() + expires_delta
     else:
-        expires_delta = datetime.utcnow() + timedelta(
-            minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES
-        )
+        expires_delta = datetime.utcnow() + timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES)
 
     to_encode = {
         "exp": expires_delta,
@@ -78,24 +72,18 @@ def create_refresh_token(
         "aud": settings.TOKEN_AUDIENCE,
         "type": "refresh",
     }
-    encoded_jwt = jwt.encode(
-        to_encode, settings.JWT_REFRESH_SECRET_KEY, algorithm=JWT_ALGORITHM
-    )
+    encoded_jwt = jwt.encode(to_encode, settings.JWT_REFRESH_SECRET_KEY, algorithm=JWT_ALGORITHM)
     return encoded_jwt
 
 
-def create_reset_token(
-    subject: Union[str, Any], expires_delta: timedelta = None
-) -> str:
+def create_reset_token(subject: Union[str, Any], expires_delta: timedelta = None) -> str:
     """
     Creates a password reset token
     """
     if expires_delta is not None:
         expires_delta = datetime.utcnow() + expires_delta
     else:
-        expires_delta = datetime.utcnow() + timedelta(
-            minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
-        )
+        expires_delta = datetime.utcnow() + timedelta(minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
 
     to_encode = {
         "exp": expires_delta,
@@ -105,9 +93,7 @@ def create_reset_token(
         "aud": settings.TOKEN_AUDIENCE,
         "type": "reset",
     }
-    encoded_jwt = jwt.encode(
-        to_encode, settings.JWT_RESET_SECRET_KEY, algorithm=JWT_ALGORITHM
-    )
+    encoded_jwt = jwt.encode(to_encode, settings.JWT_RESET_SECRET_KEY, algorithm=JWT_ALGORITHM)
     return encoded_jwt
 
 

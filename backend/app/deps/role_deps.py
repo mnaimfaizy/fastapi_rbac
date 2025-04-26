@@ -12,9 +12,7 @@ from app.utils.exceptions.common_exception import (
 
 
 async def get_user_role_by_name(
-    role_name: Annotated[
-        str, Query(title="String compare with name or last name")
-    ] = "",
+    role_name: Annotated[str, Query(title="String compare with name or last name")] = "",
 ) -> str:
     role = await crud.role.get_role_by_name(name=role_name)
     if not role:

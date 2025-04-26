@@ -22,7 +22,7 @@ from app.schemas.role_group_schema import (
     IRoleGroupWithRoles,
 )
 from app.schemas.role_schema import IRoleEnum
-from app.utils.exceptions import IdNotFoundException, NameExistException
+from app.utils.exceptions.common_exception import IdNotFoundException, NameExistException
 
 router = APIRouter()
 
@@ -56,9 +56,7 @@ async def get_role_group_by_id(
 @router.post("")
 async def create_role_group(
     group: IRoleGroupCreate,
-    current_user: User = Depends(
-        deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])
-    ),
+    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
 ) -> IPostResponseBase[IRoleGroupRead]:
     """
     Creates a new role group
@@ -70,9 +68,7 @@ async def create_role_group(
     role_group_current = await crud.role_group.get_group_by_name(name=group.name)
     if role_group_current:
         raise NameExistException(RoleGroup, name=group.name)
-    new_group = await crud.role_group.create(
-        obj_in=group, created_by_id=current_user.id
-    )
+    new_group = await crud.role_group.create(obj_in=group, created_by_id=current_user.id)
     return create_response(data=new_group)
 
 
@@ -80,9 +76,7 @@ async def create_role_group(
 async def update_role_group(
     group: IRoleGroupUpdate,
     current_group: RoleGroup = Depends(role_group_deps.get_group_by_id),
-    current_user: User = Depends(
-        deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])
-    ),
+    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
 ) -> IPutResponseBase[IRoleGroupRead]:
     """
     Updates a group by its id
@@ -91,7 +85,5 @@ async def update_role_group(
     - admin
     - manager
     """
-    group_updated = await crud.role_group.update(
-        obj_current=current_group, obj_new=group
-    )
+    group_updated = await crud.role_group.update(obj_current=current_group, obj_new=group)
     return create_response(data=group_updated)

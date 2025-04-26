@@ -12,9 +12,10 @@ import ProtectedRoute from "./components/layout/ProtectedRoute";
 import { useEffect } from "react";
 import { getStoredRefreshToken } from "./lib/tokenStorage";
 import { refreshAccessToken } from "./store/slices/authSlice";
-import { Button } from "@/components/ui/button";
 import PasswordResetRequestPage from "./features/auth/PasswordResetRequestPage";
 import PasswordResetConfirmPage from "./features/auth/PasswordResetConfirmPage";
+import RolesPage from "./features/roles/RolesPage"; // Import RolesPage
+import { Toaster } from "@/components/ui/sonner";
 
 // Component to initialize auth state if refresh token exists
 const InitAuth = () => {
@@ -54,6 +55,7 @@ function App() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
+        <Toaster />
       </Router>
     </Provider>
   );

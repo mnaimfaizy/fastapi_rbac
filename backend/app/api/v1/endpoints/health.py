@@ -42,9 +42,7 @@ async def health_check(
         inspection = celery_app.control.inspect().ping()
         if not inspection:
             health_status["background_tasks"]["status"] = "unhealthy"
-            health_status["background_tasks"][
-                "error"
-            ] = "No active Celery workers found"
+            health_status["background_tasks"]["error"] = "No active Celery workers found"
             health_status["status"] = "unhealthy"
         else:
             health_status["background_tasks"]["workers"] = list(inspection.keys())

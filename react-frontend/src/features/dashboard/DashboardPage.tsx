@@ -16,6 +16,10 @@ import PermissionGroupsContent from "../../components/dashboard/permission-group
 import PermissionGroupDetailContent from "../../components/dashboard/permission-groups/PermissionGroupDetailContent";
 import PermissionGroupFormContent from "../../components/dashboard/permission-groups/PermissionGroupFormContent";
 
+// Import Role Components
+import RolesContent from "../roles/RolesContent";
+import RoleFormContent from "../roles/RoleFormContent";
+
 import { Dashboard } from "../../components/dashboard/dashboard";
 
 const DashboardPage = () => {
@@ -58,6 +62,11 @@ const DashboardPage = () => {
           path="/permission-groups/:id"
           element={<PermissionGroupDetailContent />}
         />
+
+        {/* Role management routes */}
+        <Route path="/roles" element={<RolesContent />} />
+        <Route path="/roles/new" element={<RoleFormContent />} />
+        <Route path="/roles/edit/:roleId" element={<RoleFormContent />} />
 
         {/* Add more routes for other dashboard features as needed */}
       </Routes>

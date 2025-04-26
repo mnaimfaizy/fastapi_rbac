@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi_pagination import Params
 
 from app import crud
@@ -14,7 +14,7 @@ from app.schemas.response_schema import (
     create_response,
 )
 from app.schemas.role_schema import IRoleCreate, IRoleEnum, IRoleRead, IRoleUpdate
-from app.utils.exceptions import ContentNoChangeException, NameExistException
+from app.utils.exceptions.common_exception import ContentNoChangeException, NameExistException
 
 router = APIRouter()
 
@@ -45,9 +45,7 @@ async def get_role_by_id(
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_role(
     role: IRoleCreate,
-    current_user: User = Depends(
-        deps.get_current_user(required_roles=[IRoleEnum.admin])
-    ),
+    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin])),
 ) -> IPostResponseBase[IRoleRead]:
     """
     Create a new role
@@ -67,9 +65,7 @@ async def create_role(
 async def update_role(
     role: IRoleUpdate,
     current_role: Role = Depends(role_deps.get_user_role_by_id),
-    current_user: User = Depends(
-        deps.get_current_user(required_roles=[IRoleEnum.admin])
-    ),
+    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin])),
 ) -> IPutResponseBase[IRoleRead]:
     """
     Updates a role by its id
@@ -86,3 +82,36 @@ async def update_role(
 
     updated_role = await crud.role.update(obj_current=current_role, obj_new=role)
     return create_response(data=updated_role)
+
+
+@router.delete("/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_role(
+    role: Role = Depends(role_deps.get_user_role_by_id),
+    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin])),
+):
+    """
+    Deletes a role by its id
+
+    Required roles:
+    - admin
+    """
+    # Optional: Add checks here if a role cannot be deleted under certain conditions
+    # (e.g., if it's assigned to users or has specific permissions)
+    # Example check (if permissions are linked):
+    # permission_exists = await crud.role.permission_exist_in_role(role_id=role.id)
+    # if permission_exists:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_409_CONFLICT,
+    #         detail="Cannot delete role with assigned permissions.",
+    #     )
+
+    try:
+        await crud.role.remove(id=role.id)
+    except Exception as e:
+        # Catch potential DB errors or other issues during deletion
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error deleting role: {e}",
+        )
+
+    # No content is returned on successful deletion (204)

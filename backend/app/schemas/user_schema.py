@@ -87,9 +87,7 @@ class IUserStatus(str, Enum):
 class PasswordResetRequest(BaseModel):
     """Schema for requesting a password reset"""
 
-    email: EmailStr = Field(
-        ..., description="Email address of the user requesting password reset"
-    )
+    email: EmailStr = Field(..., description="Email address of the user requesting password reset")
 
 
 class PasswordResetConfirm(BaseModel):

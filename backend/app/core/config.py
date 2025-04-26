@@ -128,11 +128,7 @@ class Settings(BaseSettings):
                 return ""
 
         # For production, these fields should be provided
-        if (
-            mode == ModeEnum.production
-            and not v
-            and field_name in ["SMTP_HOST", "SMTP_PORT"]
-        ):
+        if mode == ModeEnum.production and not v and field_name in ["SMTP_HOST", "SMTP_PORT"]:
             raise ValueError(f"{field_name} must be set in production mode")
 
         return v
@@ -162,9 +158,7 @@ class Settings(BaseSettings):
     SYNC_CELERY_DATABASE_URI: PostgresDsn | str = ""
 
     @field_validator("SYNC_CELERY_DATABASE_URI", mode="after")
-    def assemble_celery_db_connection(
-        cls, v: str | None, info: FieldValidationInfo
-    ) -> Any:
+    def assemble_celery_db_connection(cls, v: str | None, info: FieldValidationInfo) -> Any:
         if isinstance(v, str) and v == "":
             db_type = info.data.get("DATABASE_TYPE", DatabaseTypeEnum.postgresql)
 
@@ -191,9 +185,7 @@ class Settings(BaseSettings):
     SYNC_CELERY_BEAT_DATABASE_URI: PostgresDsn | str = ""
 
     @field_validator("SYNC_CELERY_BEAT_DATABASE_URI", mode="after")
-    def assemble_celery_beat_db_connection(
-        cls, v: str | None, info: FieldValidationInfo
-    ) -> Any:
+    def assemble_celery_beat_db_connection(cls, v: str | None, info: FieldValidationInfo) -> Any:
         if isinstance(v, str) and v == "":
             db_type = info.data.get("DATABASE_TYPE", DatabaseTypeEnum.postgresql)
 
@@ -220,9 +212,7 @@ class Settings(BaseSettings):
     ASYNC_CELERY_BEAT_DATABASE_URI: PostgresDsn | str = ""
 
     @field_validator("ASYNC_CELERY_BEAT_DATABASE_URI", mode="after")
-    def assemble_async_celery_beat_db_connection(
-        cls, v: str | None, info: FieldValidationInfo
-    ) -> Any:
+    def assemble_async_celery_beat_db_connection(cls, v: str | None, info: FieldValidationInfo) -> Any:
         if isinstance(v, str) and v == "":
             db_type = info.data.get("DATABASE_TYPE", DatabaseTypeEnum.postgresql)
 
@@ -251,29 +241,19 @@ class Settings(BaseSettings):
         """Validate that critical settings are properly set in production mode"""
         if self.MODE == ModeEnum.production:
             # Ensure critical settings are set for production
-            assert (
-                self.SECRET_KEY != "development_secret"
-            ), "Change the SECRET_KEY for production"
-            assert (
-                len(self.SECRET_KEY) >= 32
-            ), "SECRET_KEY should be at least 32 characters in production"
+            assert self.SECRET_KEY != "development_secret", "Change the SECRET_KEY for production"
+            assert len(self.SECRET_KEY) >= 32, "SECRET_KEY should be at least 32 characters in production"
 
             # Validate database configuration if using PostgreSQL
             if self.DATABASE_TYPE == DatabaseTypeEnum.postgresql:
-                assert (
-                    self.DATABASE_HOST != "localhost"
-                ), "Use a proper DATABASE_HOST in production"
+                assert self.DATABASE_HOST != "localhost", "Use a proper DATABASE_HOST in production"
 
             # Validate security settings
             assert (
                 len(self.JWT_REFRESH_SECRET_KEY) >= 32
             ), "JWT_REFRESH_SECRET_KEY should be longer in production"
-            assert (
-                len(self.JWT_RESET_SECRET_KEY) >= 32
-            ), "JWT_RESET_SECRET_KEY should be longer in production"
-            assert (
-                len(self.ENCRYPT_KEY) >= 32
-            ), "ENCRYPT_KEY should be longer in production"
+            assert len(self.JWT_RESET_SECRET_KEY) >= 32, "JWT_RESET_SECRET_KEY should be longer in production"
+            assert len(self.ENCRYPT_KEY) >= 32, "ENCRYPT_KEY should be longer in production"
         return self
 
     def get_environment_specific_settings(self) -> Dict[str, Any]:

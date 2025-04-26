@@ -87,10 +87,7 @@ class ServiceSettings:
             # Development-specific settings
             dev_config = {
                 "worker_concurrency": 1,
-                "task_always_eager": os.getenv(
-                    "CELERY_TASK_ALWAYS_EAGER", "false"
-                ).lower()
-                == "true",
+                "task_always_eager": os.getenv("CELERY_TASK_ALWAYS_EAGER", "false").lower() == "true",
                 "task_eager_propagates": True,
             }
             common_config.update(dev_config)

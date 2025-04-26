@@ -106,14 +106,10 @@ async def cleanup_expired_tokens(
         cleanup_tokens_task.delay(str(user_id), token_type.value)
     else:
         # Use FastAPI background tasks
-        background_tasks.add_task(
-            _cleanup_tokens_task, redis_client, user_id, token_type
-        )
+        background_tasks.add_task(_cleanup_tokens_task, redis_client, user_id, token_type)
 
 
-async def _cleanup_tokens_task(
-    redis_client: Redis, user_id: UUID, token_type: TokenType
-) -> None:
+async def _cleanup_tokens_task(redis_client: Redis, user_id: UUID, token_type: TokenType) -> None:
     """
     Clean up expired tokens for a user.
     This is the actual task that gets executed in the background.

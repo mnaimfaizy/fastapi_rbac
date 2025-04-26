@@ -15,8 +15,6 @@ api_router.include_router(login.router, prefix="/login", tags=["login"])
 api_router.include_router(role.router, prefix="/role", tags=["role"])
 api_router.include_router(user.router, prefix="/user", tags=["user"])
 api_router.include_router(role_group.router, prefix="/role_group", tags=["role_group"])
-api_router.include_router(
-    permission_group.router, prefix="/permission_group", tags=["permission_group"]
-)
+api_router.include_router(permission_group.router, prefix="/permission_group", tags=["permission_group"])
 api_router.include_router(permission.router, prefix="/permission", tags=["permission"])
 api_router.include_router(health.router, tags=["system"])

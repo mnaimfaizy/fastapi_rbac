@@ -12,9 +12,7 @@ from app.utils.exceptions.common_exception import (
 
 
 async def get_group_by_name(
-    group_name: Annotated[
-        str, Query(description="String compare with role group name")
-    ] = "",
+    group_name: Annotated[str, Query(description="String compare with role group name")] = "",
 ) -> str:
     group = await crud.role_group.get_group_by_name(name=group_name)
     if not group:

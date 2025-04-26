@@ -41,8 +41,7 @@ def wait_for_database() -> None:
                 else:
                     # Build connection string manually
                     database_uri = (
-                        f"postgresql+psycopg2://{db_user}:{db_pass}"
-                        f"@{db_host}:{db_port}/{db_name}"
+                        f"postgresql+psycopg2://{db_user}:{db_pass}" f"@{db_host}:{db_port}/{db_name}"
                     )
             except ImportError:
                 # Try asyncpg driver if psycopg2 fails
@@ -53,26 +52,14 @@ def wait_for_database() -> None:
                         database_uri = str(settings.ASYNC_DATABASE_URI)
                     else:
                         # Fall back to direct PostgreSQL connection
-                        database_uri = (
-                            f"postgresql://{db_user}:{db_pass}"
-                            f"@{db_host}:{db_port}/{db_name}"
-                        )
+                        database_uri = f"postgresql://{db_user}:{db_pass}" f"@{db_host}:{db_port}/{db_name}"
                 except ImportError:
-                    logger.warning(
-                        "Neither psycopg2 nor asyncpg found, using default URI"
-                    )
+                    logger.warning("Neither psycopg2 nor asyncpg found, using default URI")
                     # Generic connection string as last resort
-                    database_uri = (
-                        f"postgresql://{db_user}:{db_pass}"
-                        f"@{db_host}:{db_port}/{db_name}"
-                    )
+                    database_uri = f"postgresql://{db_user}:{db_pass}" f"@{db_host}:{db_port}/{db_name}"
 
         # Mask password for logging
-        masked_uri = (
-            database_uri.replace(settings.DATABASE_PASSWORD, "****")
-            if database_uri
-            else "None"
-        )
+        masked_uri = database_uri.replace(settings.DATABASE_PASSWORD, "****") if database_uri else "None"
         logger.info(f"Connecting to database using URI: {masked_uri}")
 
         # Create engine and test connection

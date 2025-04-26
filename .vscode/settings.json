@@ -9,15 +9,22 @@
       "source.organizeImports": "explicit"
     }
   },
-  "isort.args": ["--profile", "black"],
+  "isort.args": [
+    "--profile",
+    "black",
+    "--settings-path",
+    "./backend/isort.cfg"
+  ],
+  "isort.path": ["./backend/isort.cfg"],
 
   // Modern Python extension linting settings
   "flake8.enabled": true,
+  "flake8.args": ["--max-line-length=110"],
   "mypy-type-checker.args": ["--ignore-missing-imports"],
   "mypy-type-checker.path": ["./backend/mypy.ini"],
 
   // Black formatter settings
-  "black-formatter.args": ["--line-length", "88"],
+  "black-formatter.args": ["--line-length", "110"],
 
   // File associations
   "files.associations": {

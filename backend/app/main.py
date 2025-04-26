@@ -58,17 +58,13 @@ async def user_id_identifier(request: Request):
                 except DecodeError:
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
-                        detail=(
-                            "Error when decoding the token. "
-                            "Please check your request."
-                        ),
+                        detail=("Error when decoding the token. " "Please check your request."),
                     )
                 except MissingRequiredClaimError:
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail=(
-                            "There is no required field in your token. "
-                            "Please contact the administrator."
+                            "There is no required field in your token. " "Please contact the administrator."
                         ),
                     )
 
@@ -118,10 +114,7 @@ fastapi_app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.API_VERSION,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
-    description=(
-        "FastAPI RBAC system with comprehensive "
-        "authentication and authorization features"
-    ),
+    description=("FastAPI RBAC system with comprehensive " "authentication and authorization features"),
     lifespan=lifespan,
 )
 
@@ -273,10 +266,6 @@ async def general_exception_handler(request: Request, exc: Exception):
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content=create_error_response(
             message="Internal server error",
-            errors=[
-                ErrorDetail(
-                    code="internal_error", message="An unexpected error occurred"
-                )
-            ],
+            errors=[ErrorDetail(code="internal_error", message="An unexpected error occurred")],
         ).model_dump(),
     )

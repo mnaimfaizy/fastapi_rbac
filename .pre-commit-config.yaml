@@ -49,7 +49,6 @@ repos:
           [
             "--config=backend/.flake8",
             "--extend-ignore=F403,F405,E402,F541",
-            "--max-line-length=88",
             "--per-file-ignores=backend/app/models/__init__.py:F401,F403 backend/alembic/env.py:F401,E402,F403 backend/app/api/v1/endpoints/login.py:E501 backend/app/crud/user_crud.py:E501 backend/app/db/session.py:E501 backend/app/main.py:E501 backend/app/utils/background_tasks.py:E501 backend/app/utils/email/email.py:E501 backend/app/core/service_config.py:E501 backend/app/scheduled_tasks.py:E501 backend/app/api/deps.py:E501 backend/app/tests/test_email.py:E501",
           ]
         exclude: >

@@ -34,9 +34,7 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     def get_db(self) -> type(db):
         return self.db
 
-    async def get(
-        self, *, id: UUID | str, db_session: AsyncSession | None = None
-    ) -> ModelType | None:
+    async def get(self, *, id: UUID | str, db_session: AsyncSession | None = None) -> ModelType | None:
         db_session = db_session or self.db.session
         query: Select[ModelType] = select(self.model).where(self.model.id == id)
         result = await db_session.execute(query)
@@ -50,18 +48,12 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         db_session: AsyncSession | None = None,
     ) -> list[ModelType] | None:
         db_session = db_session or self.db.session
-        response = await db_session.execute(
-            select(self.model).where(self.model.id.in_(list_ids))
-        )
+        response = await db_session.execute(select(self.model).where(self.model.id.in_(list_ids)))
         return response.scalars().all()
 
-    async def get_count(
-        self, db_session: AsyncSession | None = None
-    ) -> ModelType | None:
+    async def get_count(self, db_session: AsyncSession | None = None) -> ModelType | None:
         db_session = db_session or self.db.session
-        response = await db_session.execute(
-            select(func.count()).select_from(select(self.model).subquery())
-        )
+        response = await db_session.execute(select(func.count()).select_from(select(self.model).subquery()))
         return response.scalar_one()
 
     async def get_multi(
@@ -140,19 +132,9 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
         query_obj: Select[ModelType]
         if order == IOrderEnum.ascendent:
-            query_obj = (
-                select(self.model)
-                .offset(skip)
-                .limit(limit)
-                .order_by(columns[order_by].asc())
-            )
+            query_obj = select(self.model).offset(skip).limit(limit).order_by(columns[order_by].asc())
         else:
-            query_obj = (
-                select(self.model)
-                .offset(skip)
-                .limit(limit)
-                .order_by(columns[order_by].desc())
-            )
+            query_obj = select(self.model).offset(skip).limit(limit).order_by(columns[order_by].desc())
 
         response = await db_session.execute(query_obj)
         return response.scalars().all()
@@ -206,13 +188,9 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         await db_session.refresh(obj_current)
         return obj_current
 
-    async def remove(
-        self, *, id: UUID | str, db_session: AsyncSession | None = None
-    ) -> ModelType:
+    async def remove(self, *, id: UUID | str, db_session: AsyncSession | None = None) -> ModelType:
         db_session = db_session or self.db.session
-        response = await db_session.execute(
-            select(self.model).where(self.model.id == id)
-        )
+        response = await db_session.execute(select(self.model).where(self.model.id == id))
         obj = response.scalar_one()
         await db_session.delete(obj)
         await db_session.commit()
