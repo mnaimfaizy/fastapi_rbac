@@ -26,9 +26,7 @@ def optional(without_fields: list[str] | None = None) -> Callable[[Model], Model
     def wrapper(model: Type[Model]) -> Type[Model]:
         base_model: Type[Model] = model
 
-        def make_field_optional(
-            field: FieldInfo, default: Any = None
-        ) -> tuple[Any, FieldInfo]:
+        def make_field_optional(field: FieldInfo, default: Any = None) -> tuple[Any, FieldInfo]:
             new = deepcopy(field)
             new.default = default
             new.annotation = Optional[field.annotation]

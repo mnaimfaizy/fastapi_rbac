@@ -11,7 +11,6 @@ The backend API is developed using the FastAPI framework.
 Below softwares are required to start:
 
 - Python > 3.x
-- Poetry `For package management`
 - Uvicorn `ASGI Server for running the application`
 
 ### Installation:
@@ -26,22 +25,72 @@ Once, you have created the virtual environment you can activate it using this:
 
 #### Linux Activation:
 
-`. .venv/Scripts/activate.bat` This is for Linux/MacOs.
+`. .venv/bin/activate` This is for Linux/MacOs.
 
-After activation of the virtual environment you need to install the poetry by using the bellow command:
+#### Installing dependencies using pip:
 
-`pip install poetry`
+After activating the virtual environment, install the dependencies using pip:
 
-You can check if the poetry is install by checking using : `poetry --version` which will give you something like this:
+```bash
+pip install -r requirements.txt
+```
 
-`Poetry (version 1.8.5)`
+### Development Environment Setup
 
-#### Installing dependencies using Poetry:
+The backend supports two database configurations:
 
-Now when the poetry is install you need to install the dependencies using `poetry install`.
+1. **Local Development**: Uses SQLite database for faster development
+2. **Docker/Testing Environment**: Uses PostgreSQL database for testing and production-like environments
+
+#### Environment Files
+
+The backend uses different environment files depending on the runtime mode:
+
+- `.env.development`: For local development with SQLite
+- `.env.test`: For testing environment with PostgreSQL
+- `.env.production`: For production environment with PostgreSQL
+
+You can create these files from the provided `.env.example` template.
 
 ### Starting Application
 
-After installing the dependencies you can run the service by issuing the command `uvicorn app.main:app --port 8001 --reload`
+For local development with SQLite:
+
+```bash
+# Set the environment mode to development to use SQLite
+export MODE=development  # On Windows: $env:MODE="development"
+
+# Start the application
+uvicorn app.main:app --port 8001 --reload
+```
+
+For Docker-based development with PostgreSQL:
+
+```bash
+# Start the services using Docker Compose
+docker-compose up -d
+```
 
 Once the server is running navigate to `http://localhost:8001` and check the service is running. FastAPI also has a documentation system which can be accessed via `http://localhost:8001/docs`
+
+## Docker Compose Structure
+
+The project uses a modular Docker Compose structure:
+
+1. **Root `docker-compose.yml`**: Contains shared services (PostgreSQL, Redis, Mailhog)
+2. **`backend/docker-compose.yml`**: Contains backend-specific services
+3. **`react-frontend/docker-compose.yml`**: Contains frontend-specific services
+
+To run only the backend services:
+
+```bash
+cd backend
+docker-compose up -d
+```
+
+To run the entire stack:
+
+```bash
+# From project root
+docker-compose up -d
+```

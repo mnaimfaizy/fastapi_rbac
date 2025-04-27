@@ -1,20 +1,41 @@
 import gc
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi_async_sqlalchemy import SQLAlchemyMiddleware
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
 from fastapi_limiter import FastAPILimiter
 from jwt import DecodeError, ExpiredSignatureError, MissingRequiredClaimError
-from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.pool import NullPool
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
 
+# Import Celery beat schedule to ensure it's registered
+import app.celery_beat_schedule as celery_beat_schedule  # noqa
 from app.api.deps import get_redis_client
 from app.api.v1.api import api_router as api_router_v1
+
+# Import Celery app from centralized configuration
+from app.celery_app import celery_app
 from app.core.config import ModeEnum, settings
 from app.core.security import decode_token
+
+# Import our environment-specific service settings
+from app.core.service_config import service_settings
+from app.schemas.response_schema import ErrorDetail, create_error_response
 from app.utils.fastapi_globals import GlobalsMiddleware, g
+
+# Flag to indicate whether Celery is available based on environment
+CELERY_AVAILABLE = service_settings.use_celery
+
+# Expose the Celery application instance
+# This allows CLI commands like 'celery -A app.main.celery worker' to work
+celery = celery_app
 
 
 async def user_id_identifier(request: Request):
@@ -37,12 +58,14 @@ async def user_id_identifier(request: Request):
                 except DecodeError:
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Error when decoding the token. Please check your request.",
+                        detail=("Error when decoding the token. " "Please check your request."),
                     )
                 except MissingRequiredClaimError:
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
-                        detail="There is no required field in your token. Please contact the administrator.",
+                        detail=(
+                            "There is no required field in your token. " "Please contact the administrator."
+                        ),
                     )
 
                 user_id = payload["sub"]
@@ -62,48 +85,56 @@ async def user_id_identifier(request: Request):
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(fastapi_instance: FastAPI):
     # Startup
-    redis_client = await get_redis_client()
-    FastAPICache.init(RedisBackend(redis_client), prefix="fastapi-cache")
-    await FastAPILimiter.init(redis_client, identifier=user_id_identifier)
+    redis_client = None
+
+    # Get the Redis client using the async generator
+    async for client in get_redis_client():
+        redis_client = client
+        break  # Just get the first client from the generator
+
+    if redis_client:
+        FastAPICache.init(RedisBackend(redis_client), prefix="fastapi-cache")
+        await FastAPILimiter.init(redis_client, identifier=user_id_identifier)
 
     print("startup fastapi")
     yield
     # shutdown
     await FastAPICache.clear()
     await FastAPILimiter.close()
+    if redis_client:
+        await redis_client.close()
     g.cleanup()
     gc.collect()
 
 
 # Core Application Instance
-app = FastAPI(
+fastapi_app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.API_VERSION,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    description=("FastAPI RBAC system with comprehensive " "authentication and authorization features"),
     lifespan=lifespan,
 )
 
 
-app.add_middleware(
+fastapi_app.add_middleware(
     SQLAlchemyMiddleware,
     db_url=str(settings.ASYNC_DATABASE_URI),
     engine_args={
         "echo": False,
-        "poolclass": (
-            NullPool if settings.MODE == ModeEnum.testing else AsyncAdaptedQueuePool
-        ),
+        "poolclass": NullPool if settings.MODE == ModeEnum.testing else None,
         # "pool_pre_ping": True,
         # "pool_size": settings.POOL_SIZE,
         # "max_overflow": 64,
     },
 )
-app.add_middleware(GlobalsMiddleware)
+fastapi_app.add_middleware(GlobalsMiddleware)
 
 # Set all CORS origins enabled
 if settings.BACKEND_CORS_ORIGINS:
-    app.add_middleware(
+    fastapi_app.add_middleware(
         CORSMiddleware,
         allow_origins=[str(origin) for origin in settings.BACKEND_CORS_ORIGINS],
         allow_credentials=True,
@@ -128,7 +159,7 @@ class CustomException(Exception):
         self.message = message
 
 
-@app.get("/")
+@fastapi_app.get("/")
 async def root():
     """
     An example "Hello world" FastAPI route.
@@ -138,4 +169,103 @@ async def root():
 
 
 # Add Routers
-app.include_router(api_router_v1, prefix=settings.API_V1_STR)
+fastapi_app.include_router(api_router_v1, prefix=settings.API_V1_STR)
+
+
+# Exception handlers for consistent error responses
+@fastapi_app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """
+    Handle validation errors with standardized format for frontend consumption
+    """
+    errors = []
+    for error in exc.errors():
+        field = ".".join([str(loc) for loc in error["loc"] if loc != "body"])
+        errors.append(
+            ErrorDetail(
+                field=field,
+                code="validation_error",
+                message=error["msg"],
+            )
+        )
+
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content=create_error_response(
+            message="Validation error",
+            errors=errors,
+        ).model_dump(),
+    )
+
+
+@fastapi_app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """
+    Handle HTTP exceptions with standardized format for frontend consumption
+    """
+    # Extract field-specific errors from detail if it's a dict
+    errors: list[ErrorDetail] = []
+
+    detail: Any = exc.detail
+
+    if isinstance(detail, dict) and "field_name" in detail:
+        errors.append(
+            ErrorDetail(
+                field=detail.get("field_name"),
+                message=detail.get("message", "An error occurred"),
+                code=str(exc.status_code),
+            )
+        )
+        message = "Request error"
+    else:
+        message = detail if isinstance(detail, str) else "Request error"
+
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=create_error_response(
+            message=message,
+            errors=errors,
+        ).model_dump(),
+    )
+
+
+@fastapi_app.exception_handler(CustomException)
+async def custom_exception_handler(request: Request, exc: CustomException):
+    """
+    Handle custom exceptions with standardized format for frontend consumption
+    """
+    return JSONResponse(
+        status_code=exc.http_code,
+        content=create_error_response(
+            message=exc.message,
+            errors=[ErrorDetail(code=exc.code, message=exc.message)],
+        ).model_dump(),
+    )
+
+
+@fastapi_app.exception_handler(SQLAlchemyError)
+async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
+    """
+    Handle database errors with standardized format for frontend consumption
+    """
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content=create_error_response(
+            message="Database error",
+            errors=[ErrorDetail(code="database_error", message=str(exc))],
+        ).model_dump(),
+    )
+
+
+@fastapi_app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    """
+    Handle general exceptions with standardized format for frontend consumption
+    """
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content=create_error_response(
+            message="Internal server error",
+            errors=[ErrorDetail(code="internal_error", message="An unexpected error occurred")],
+        ).model_dump(),
+    )

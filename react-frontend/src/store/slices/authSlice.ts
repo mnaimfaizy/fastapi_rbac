@@ -1,6 +1,5 @@
-import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
+import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import { AuthState, LoginCredentials } from "../../models/auth";
-import { User } from "../../models/user";
 import authService from "../../services/auth.service";
 import authTokenManager from "../../services/authTokenManager";
 import {
@@ -18,6 +17,8 @@ const initialState: AuthState = {
   isLoading: false,
   error: null,
   passwordChangeSuccess: false,
+  passwordResetRequested: false,
+  passwordResetSuccess: false,
 };
 
 // Async thunks for authentication actions
@@ -27,10 +28,19 @@ export const loginUser = createAsyncThunk(
     try {
       const response = await authService.login(credentials);
       return response;
-    } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.detail?.message || "Login failed";
-      return rejectWithValue(errorMessage);
+    } catch (error) {
+      if (error && typeof error === "object" && "response" in error) {
+        const err = error as {
+          response?: {
+            data?: { errors?: Array<{ message: string }>; message?: string };
+          };
+        };
+        if (err.response?.data?.errors?.[0]) {
+          return rejectWithValue(err.response.data.errors[0].message);
+        }
+        return rejectWithValue(err.response?.data?.message || "Login failed");
+      }
+      return rejectWithValue("Login failed");
     }
   }
 );
@@ -41,10 +51,21 @@ export const refreshAccessToken = createAsyncThunk(
     try {
       const response = await authService.refreshToken(refreshToken);
       return response;
-    } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.detail?.message || "Failed to refresh token";
-      return rejectWithValue(errorMessage);
+    } catch (error) {
+      if (error && typeof error === "object" && "response" in error) {
+        const err = error as {
+          response?: {
+            data?: { errors?: Array<{ message: string }>; message?: string };
+          };
+        };
+        if (err.response?.data?.errors?.[0]) {
+          return rejectWithValue(err.response.data.errors[0].message);
+        }
+        return rejectWithValue(
+          err.response?.data?.message || "Failed to refresh token"
+        );
+      }
+      return rejectWithValue("Failed to refresh token");
     }
   }
 );
@@ -55,10 +76,21 @@ export const getCurrentUser = createAsyncThunk(
     try {
       const user = await authService.getCurrentUser();
       return user;
-    } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.detail?.message || "Failed to fetch user data";
-      return rejectWithValue(errorMessage);
+    } catch (error) {
+      if (error && typeof error === "object" && "response" in error) {
+        const err = error as {
+          response?: {
+            data?: { errors?: Array<{ message: string }>; message?: string };
+          };
+        };
+        if (err.response?.data?.errors?.[0]) {
+          return rejectWithValue(err.response.data.errors[0].message);
+        }
+        return rejectWithValue(
+          err.response?.data?.message || "Failed to fetch user data"
+        );
+      }
+      return rejectWithValue("Failed to fetch user data");
     }
   }
 );
@@ -78,10 +110,90 @@ export const changePassword = createAsyncThunk(
         newPassword
       );
       return response;
-    } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.detail?.message || "Failed to change password";
-      return rejectWithValue(errorMessage);
+    } catch (error) {
+      if (error && typeof error === "object" && "response" in error) {
+        const err = error as {
+          response?: {
+            data?: { errors?: Array<{ message: string }>; message?: string };
+          };
+        };
+        if (err.response?.data?.errors?.[0]) {
+          return rejectWithValue(err.response.data.errors[0].message);
+        }
+        return rejectWithValue(
+          err.response?.data?.message || "Failed to change password"
+        );
+      }
+      return rejectWithValue("Failed to change password");
+    }
+  }
+);
+
+// New thunks for password reset functionality
+export const requestPasswordReset = createAsyncThunk(
+  "auth/requestPasswordReset",
+  async (email: string, { rejectWithValue }) => {
+    try {
+      await authService.requestPasswordReset(email);
+      return true;
+    } catch (error) {
+      if (error && typeof error === "object" && "response" in error) {
+        const err = error as {
+          response?: {
+            data?: { errors?: Array<{ message: string }>; message?: string };
+          };
+        };
+        if (err.response?.data?.errors?.[0]) {
+          return rejectWithValue(err.response.data.errors[0].message);
+        }
+        return rejectWithValue(
+          err.response?.data?.message || "Failed to request password reset"
+        );
+      }
+      return rejectWithValue("Failed to request password reset");
+    }
+  }
+);
+
+export const confirmPasswordReset = createAsyncThunk(
+  "auth/confirmPasswordReset",
+  async (
+    { token, newPassword }: { token: string; newPassword: string },
+    { rejectWithValue }
+  ) => {
+    try {
+      await authService.confirmPasswordReset(token, newPassword);
+      return true;
+    } catch (error) {
+      if (error && typeof error === "object" && "response" in error) {
+        const err = error as {
+          response?: {
+            data?: { errors?: Array<{ message: string }>; message?: string };
+          };
+        };
+        if (err.response?.data?.errors?.[0]) {
+          return rejectWithValue(err.response.data.errors[0].message);
+        }
+        return rejectWithValue(
+          err.response?.data?.message || "Failed to reset password"
+        );
+      }
+      return rejectWithValue("Failed to reset password");
+    }
+  }
+);
+
+// Updated logout thunk to call the backend logout endpoint
+export const logoutUser = createAsyncThunk(
+  "auth/logout",
+  async (_, { dispatch }) => {
+    try {
+      await authService.logout();
+    } catch (error) {
+      console.error("Error during logout:", error);
+    } finally {
+      // Even if the API call fails, we still want to clear local state
+      dispatch(logout());
     }
   }
 );
@@ -92,7 +204,7 @@ const authSlice = createSlice({
   initialState,
   reducers: {
     // Logout user by clearing state and tokens
-    logout: (state) => {
+    logout: () => {
       // Clear any token expiry timers
       authTokenManager.clearExpiryTimer();
       clearAuthTokens();
@@ -105,6 +217,14 @@ const authSlice = createSlice({
     // Reset password change success state
     resetPasswordChangeSuccess: (state) => {
       state.passwordChangeSuccess = false;
+    },
+    // Reset password reset request state
+    resetPasswordResetRequested: (state) => {
+      state.passwordResetRequested = false;
+    },
+    // Reset password reset success state
+    resetPasswordResetSuccess: (state) => {
+      state.passwordResetSuccess = false;
     },
   },
   extraReducers: (builder) => {
@@ -196,11 +316,48 @@ const authSlice = createSlice({
         state.isLoading = false;
         state.error = action.payload as string;
         state.passwordChangeSuccess = false;
+      })
+
+      // Handle password reset request
+      .addCase(requestPasswordReset.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+        state.passwordResetRequested = false;
+      })
+      .addCase(requestPasswordReset.fulfilled, (state) => {
+        state.isLoading = false;
+        state.passwordResetRequested = true;
+      })
+      .addCase(requestPasswordReset.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
+        state.passwordResetRequested = false;
+      })
+
+      // Handle password reset confirmation
+      .addCase(confirmPasswordReset.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+        state.passwordResetSuccess = false;
+      })
+      .addCase(confirmPasswordReset.fulfilled, (state) => {
+        state.isLoading = false;
+        state.passwordResetSuccess = true;
+      })
+      .addCase(confirmPasswordReset.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
+        state.passwordResetSuccess = false;
       });
   },
 });
 
 // Export actions and reducer
-export const { logout, clearError, resetPasswordChangeSuccess } =
-  authSlice.actions;
+export const {
+  logout,
+  clearError,
+  resetPasswordChangeSuccess,
+  resetPasswordResetRequested,
+  resetPasswordResetSuccess,
+} = authSlice.actions;
 export default authSlice.reducer;

@@ -1,64 +1,77 @@
-FROM python:3.10.5-slim-buster
+FROM python:3.10-slim-buster
 
 WORKDIR /app
 
-# https://docs.python.org/3/using/cmdline.html#envvar-PYTHONDONTWRITEBYTECODE
-# Prevents Python from writing .pyc files to disk
-ENV PYTHONDONTWRITEBYTECODE 1
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV ENVIRONMENT=dev
+ENV TESTING=0
+ENV FASTAPI_ENV=development
+ENV TZ=UTC
 
-# ensures that the python output is sent straight to terminal (e.g. your container log)
-# without being first buffered and that you can see the output of your application (e.g. django logs)
-# in real time. Equivalent to python -u: https://docs.python.org/3/using/cmdline.html#cmdoption-u
-ENV PYTHONUNBUFFERED 1
-ENV ENVIRONMENT dev
-ENV TESTING 0
-ENV FASTAPI_ENV='development'
-ENV POETRY_VERSION=1.8.2
-ENV TZ="Australia/Sydney"
-
-# install FreeTDS and dependencies
+# Install system dependencies
 RUN apt-get update \
-    && apt-get install curl -y \
-    && apt-get install bash -y \
-    && apt-get install vim -y \
-    && apt-get install dos2unix -y \
-    && apt-get install tzdata -y \
-    && apt-get install cron -y \
-    && apt-get install time -y \
-    && apt-get install bc -y \
-    && apt-get install --reinstall build-essential -y
+    && apt-get install -y --no-install-recommends \
+        curl \
+        bash \
+        vim \
+        dos2unix \
+        tzdata \
+        cron \
+        time \
+        bc \
+        build-essential \
+        libpq-dev \
+        gcc \
+        python3-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install Poetry
-RUN curl -sSL https://install.python-poetry.org | POETRY_HOME=/opt/poetry python3 && \
-    cd /usr/local/bin && \
-    ln -s /opt/poetry/bin/poetry && \
-    poetry config virtualenvs.create false
+# Create working directories first
+RUN mkdir -p /app/logs
 
-# Copy poetry.lock* in case it doesn't exist in the repo
-COPY ./pyproject.toml ./poetry.lock* /app/
+# Copy requirements file
+COPY requirements.txt /app/requirements.txt
 
-# Project initialization:
-# hadolint ignore=SC2046
-RUN echo "$FASTAPI_ENV" && poetry version
-    # Install deps:
-RUN poetry run pip install -U pip
-RUN poetry install $(if [ "$FASTAPI_ENV" = 'production' ]; then echo '--no-dev'; fi) --no-interaction --no-ansi \
-    # Cleaning poetry installation's cache for production:
-    && if [ "$FASTAPI_ENV" = 'production' ]; then rm -rf "$POETRY_CACHE_DIR"; fi
+# Install Python dependencies
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir "celery[redis]>=5.3.1" \
+    && pip install --no-cache-dir flower \
+    && pip install --no-cache-dir psycopg2-binary
 
-# copy the openssl confiG to Docker Container
+# Copy scripts first but don't copy the rest of the app yet
+COPY worker-start.sh beat-start.sh flower-start.sh /app/
+
+# Fix line endings for all shell scripts
+# Use dos2unix with -f to force conversion and overwrite original files
+RUN dos2unix -f /app/worker-start.sh /app/beat-start.sh /app/flower-start.sh \
+    && chmod +x /app/worker-start.sh /app/beat-start.sh /app/flower-start.sh
+
+# Copy openssl config
 COPY ./.docker/openssl.cnf /etc/ssl/openssl.cnf
 
-# copy source code
-COPY ./ /app
+# Copy the rest of the application code
+COPY . /app/
 
-# Fix line endings && execute permissions
-RUN dos2unix *.sh app/*.*
+# Fix line endings for all shell scripts again after copying all files
+RUN find /app -name "*.sh" -type f -exec dos2unix -f {} \; \
+    && find /app -name "*.sh" -type f -exec chmod +x {} \; \
+    && find /app -name "*.py" -type f -exec dos2unix -f {} \;
 
-RUN chmod +x worker-start.sh
+# Create a symlink to ensure the pre_start script is found without \r character
+RUN ln -sf /app/app/backend_pre_start.py /app/backend_pre_start.py
+
+# Update the worker, beat, and flower start scripts to use the correct path
+RUN sed -i 's|/app/app/backend_pre_start.py|/app/backend_pre_start.py|g' /app/worker-start.sh \
+    && sed -i 's|/app/app/backend_pre_start.py|/app/backend_pre_start.py|g' /app/beat-start.sh \
+    && sed -i 's|/app/app/backend_pre_start.py|/app/backend_pre_start.py|g' /app/flower-start.sh
+
+# Remove any existing celerybeat-schedule directory that might conflict with the DB file
+RUN rm -rf /app/celerybeat-schedule
 
 ENV PYTHONPATH=/app
 
-# Run the run script, it will check for an /app/prestart.sh script (e.g. for migrations)
-# And then will start Uvicorn
-CMD ["./worker-start.sh"]
+# Default command can be overridden by docker-compose
+CMD ["/bin/bash", "/app/worker-start.sh"]

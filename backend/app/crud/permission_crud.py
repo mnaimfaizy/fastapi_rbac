@@ -14,11 +14,9 @@ from app.schemas.permission_schema import IPermissionCreate, IPermissionUpdate
 class CRUDPermission(CRUDBase[Permission, IPermissionCreate, IPermissionUpdate]):
     async def get_group_by_name(
         self, *, name: str, db_session: AsyncSession | None = None
-    ) -> Permission:
+    ) -> Permission | None:
         db_session = db_session or super().get_db().session
-        permission = await db_session.execute(
-            select(Permission).where(Permission.name == name)
-        )
+        permission = await db_session.execute(select(Permission).where(Permission.name == name))
         return permission.scalar_one_or_none()
 
     async def assign_permissions_to_role(
@@ -28,17 +26,31 @@ class CRUDPermission(CRUDBase[Permission, IPermissionCreate, IPermissionUpdate])
         permissions: list[UUID],
         db_session: AsyncSession | None = None,
     ) -> None:
+        """
+        Assign multiple permissions to a role in a batch operation
+        for improved performance
+        """
         db_session = db_session or super().get_db().session
-        for permission_id in permissions:
-            role_permission = RolePermission(
-                role_id=role_id, permission_id=permission_id
-            )
-            try:
+
+        # Create all role_permission objects
+        role_permissions = [
+            RolePermission(role_id=role_id, permission_id=permission_id) for permission_id in permissions
+        ]
+
+        try:
+            # Add all objects to the session at once
+            for role_permission in role_permissions:
                 db_session.add(role_permission)
-                await db_session.commit()
-            except exc.IntegrityError:
-                db_session.rollback()
-                raise HTTPException(status_code=500, detail="Internal server error")
+
+            # Commit once for all objects
+            await db_session.commit()
+        except exc.IntegrityError:
+            await db_session.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail="One or more permissions are already assigned to this role",
+            )
+
         return None
 
 

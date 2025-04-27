@@ -8,14 +8,16 @@ from app.api import deps
 from app.deps import permission_deps
 from app.models.permission_model import Permission
 from app.models.user_model import User
-from app.schemas.permission_schema import (IPermissionCreate, IPermissionRead,
-                                           IPermissionUpdate)
-from app.schemas.response_schema import (IGetResponseBase,
-                                         IGetResponsePaginated,
-                                         IPostResponseBase, IPutResponseBase,
-                                         create_response)
+from app.schemas.permission_schema import IPermissionCreate, IPermissionRead, IPermissionUpdate
+from app.schemas.response_schema import (
+    IGetResponseBase,
+    IGetResponsePaginated,
+    IPostResponseBase,
+    IPutResponseBase,
+    create_response,
+)
 from app.schemas.role_schema import IRoleEnum
-from app.utils.exceptions import IdNotFoundException, NameExistException
+from app.utils.exceptions.common_exception import IdNotFoundException, NameExistException
 
 router = APIRouter()
 
@@ -48,9 +50,7 @@ async def get_permission_by_id(
 @router.post("")
 async def create_permission(
     permission: IPermissionCreate,
-    current_user: User = Depends(
-        deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])
-    ),
+    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
 ) -> IPostResponseBase[IPermissionRead]:
     """
     Creates a new role permission
@@ -59,14 +59,10 @@ async def create_permission(
     - admin
     - manager
     """
-    permission_current = await crud.permission.get_permission_by_name(
-        name=permission.name
-    )
+    permission_current = await crud.permission.get_permission_by_name(name=permission.name)
     if permission_current:
         raise NameExistException(Permission, name=permission.name)
-    new_permission = await crud.permission.create(
-        obj_in=permission, created_by_id=current_user.id
-    )
+    new_permission = await crud.permission.create(obj_in=permission, created_by_id=current_user.id)
     return create_response(data=new_permission)
 
 
@@ -74,9 +70,7 @@ async def create_permission(
 async def update_permission(
     group: IPermissionUpdate,
     current_group: Permission = Depends(permission_deps.get_permission_by_id),
-    current_user: User = Depends(
-        deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])
-    ),
+    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
 ) -> IPutResponseBase[IPermissionRead]:
     """
     Updates a permission by its id
@@ -85,7 +79,5 @@ async def update_permission(
     - admin
     - manager
     """
-    permission_updated = await crud.permission.update(
-        obj_current=current_group, obj_new=group
-    )
+    permission_updated = await crud.permission.update(obj_current=current_group, obj_new=group)
     return create_response(data=permission_updated)

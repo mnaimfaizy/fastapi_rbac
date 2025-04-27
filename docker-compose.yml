@@ -1,58 +1,20 @@
+include:
+  - path: ./backend/docker-compose.yml
+  - path: ./react-frontend/docker-compose.yml
+
 services:
-  fastapi_rbac:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    image: fastapi_rbac:latest
-    container_name: fastapi_rbac
-    env_file:
-      - "./backend/backend.env"
+  # Mail testing service for development
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: mailhog
     ports:
-      - "8000:8000"
-    volumes:
-      - ./backend:/app
+      - "1025:1025"
+      - "8025:8025" # Web UI
+    restart: unless-stopped
     networks:
       - fastapi_rbac_network
 
-  react_frontend:
-    build:
-      context: ./react-frontend
-      dockerfile: Dockerfile
-    image: react_frontend:latest
-    container_name: react_frontend
-    ports:
-      - "80:80"
-    depends_on:
-      - fastapi_rbac
-    networks:
-      - fastapi_rbac_network
-
-  # fastapi_rbac_frontend:
-  #   build:
-  #     context: ./frontend
-  #     dockerfile: Dockerfile
-  #   image: fastapi_rbac_frontend:latest
-  #   container_name: fastapi_rbac_frontend
-  #   ports:
-  #     - "3000:3000"
-  #   volumes:
-  #     - ./frontend:/frontend
-  #   networks:
-  #     - fastapi_rbac_network
-
-  #  fastapi_rbac_queue:
-  #    build:
-  #      context: ./
-  #      dockerfile: queue.dockerfile
-  #    image: fastapi_rbac_queue:latest
-  #    container_name: fastapi_rbac_queue
-  #    volumes:
-  #      - .:/app
-  #    depends_on:
-  #      - fastapi_rbac
-  #    networks:
-  #      - fastapi_rbac_network
-
+  # PostgreSQL Database (only used for Docker environments)
   fastapi_rbac_db:
     image: bitnami/postgresql
     restart: always
@@ -60,13 +22,13 @@ services:
     ports:
       - "5453:5432" # Remove this on production
     env_file:
-      - ./backend/backend.env
+      - ./backend/.env.test
     environment:
-      - POSTGRESQL_USERNAME=${DATABASE_USER}
-      - POSTGRESQL_PASSWORD=${DATABASE_PASSWORD}
-      - POSTGRESQL_DATABASE=${DATABASE_NAME}
-      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL}
-      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD}
+      - POSTGRESQL_USERNAME=${DATABASE_USER:-postgres}
+      - POSTGRESQL_PASSWORD=${DATABASE_PASSWORD:-postgres}
+      - POSTGRESQL_DATABASE=${DATABASE_NAME:-fastapi_db}
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL:-admin@example.com}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD:-admin}
       - ALLOW_EMPTY_PASSWORD=yes
     user: root
     volumes:
@@ -83,11 +45,9 @@ services:
     restart: always
     ports:
       - "8888:80"
-    env_file:
-      - ./backend/backend.env
     environment:
-      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL}
-      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD}
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL:-admin@example.com}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD:-admin}
     volumes:
       - pgadmin-data:/var/lib/pgadmin
     networks:
@@ -97,10 +57,10 @@ services:
     image: redis:alpine
     container_name: fastapi_rbac_redis_server
     restart: always
+    ports:
+      - "6379:6379" # Publish Redis port to host machine
     expose:
       - 6379
-    env_file:
-      - "./backend/backend.env"
     networks:
       - fastapi_rbac_network
 

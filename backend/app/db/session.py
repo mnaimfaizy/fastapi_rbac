@@ -1,4 +1,7 @@
 # https://stackoverflow.com/questions/75252097/fastapi-testing-runtimeerror-task-attached-to-a-different-loop/75444607#75444607
+from typing import AsyncGenerator
+
+import redis.asyncio as aioredis
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
@@ -47,3 +50,34 @@ SessionLocalCelery = sessionmaker(
     class_=AsyncSession,
     expire_on_commit=False,
 )
+
+
+# Add the missing async session provider function
+async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
+    """
+    Create and get async database session.
+    This function yields an AsyncSession for
+    use in async context managers or dependency injection.
+    """
+    async with SessionLocal() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
+
+
+# Update the Redis client function to support async iteration
+async def get_redis_client() -> AsyncGenerator[aioredis.Redis, None]:
+    """
+    Get Redis client instance as an async generator.
+    Yields a Redis client configured to connect
+    to the Redis server specified in settings.
+    This function implements the async iterator pattern
+    to be compatible with 'async for' usage.
+    """
+    redis_url = f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}"
+    redis_client = aioredis.from_url(redis_url, decode_responses=True)
+    try:
+        yield redis_client
+    finally:
+        await redis_client.close()

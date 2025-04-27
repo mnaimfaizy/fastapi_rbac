@@ -18,6 +18,7 @@ class IOrderEnum(str, Enum):
 class TokenType(str, Enum):
     ACCESS = "access_token"
     REFRESH = "refresh_token"
+    RESET = "reset_token"
 
 
 class IUserMessage(BaseModel):

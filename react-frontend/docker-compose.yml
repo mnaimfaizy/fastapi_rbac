@@ -1,0 +1,20 @@
+services:
+  react_frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - NODE_ENV=test
+    image: react_frontend:latest
+    container_name: react_frontend
+    env_file:
+      - .env.test
+    ports:
+      - "80:80"
+    networks:
+      - fastapi_rbac_network
+
+networks:
+  fastapi_rbac_network:
+    name: fastapi_rbac_network
+    external: true

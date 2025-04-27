@@ -1,6 +1,6 @@
-FROM python:3.10.5-slim-buster
+FROM python:3.10-slim-buster
 
-WORKDIR /backend
+WORKDIR /app
 
 # https://docs.python.org/3/using/cmdline.html#envvar-PYTHONDONTWRITEBYTECODE
 # Prevents Python from writing .pyc files to disk
@@ -13,56 +13,47 @@ ENV PYTHONUNBUFFERED 1
 ENV ENVIRONMENT dev
 ENV TESTING 0
 ENV FASTAPI_ENV='development'
-ENV POETRY_VERSION=1.8.2
 
-# install FreeTDS and dependencies
+# Install system dependencies
 RUN apt-get update \
-    && apt-get install curl -y \
-    && apt-get install bash -y \
-    && apt-get install vim -y \
-    && apt-get install dos2unix -y \
-    && apt-get install tzdata -y \
-    && apt-get install cron -y \
-    && apt-get install time -y \
-    && apt-get install bc -y \
-    && apt-get install --reinstall build-essential -y
+    && apt-get install -y --no-install-recommends \
+    curl \
+    bash \
+    vim \
+    dos2unix \
+    tzdata \
+    cron \
+    time \
+    bc \
+    build-essential \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install Poetry
-RUN curl -sSL https://install.python-poetry.org | POETRY_HOME=/opt/poetry python3 && \
-    cd /usr/local/bin && \
-    ln -s /opt/poetry/bin/poetry && \
-    poetry config virtualenvs.create false
+# Copy requirements file
+COPY ./requirements.txt /app/requirements.txt
 
-# Copy poetry.lock* in case it doesn't exist in the repo
-COPY ./pyproject.toml ./poetry.lock* /backend/
+# Install Python dependencies
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
 
-# Project initialization:
-# hadolint ignore=SC2046
-RUN echo "$FASTAPI_ENV" && poetry version
-    # Install deps:
-RUN poetry run pip install -U pip
-RUN poetry install $(if [ "$FASTAPI_ENV" = 'production' ]; then echo '--no-dev'; fi) --no-interaction --no-ansi \
-    # Cleaning poetry installation's cache for production:
-    && if [ "$FASTAPI_ENV" = 'production' ]; then rm -rf "$POETRY_CACHE_DIR"; fi
-
-# copy the openssl confiG to Docker Container
+# Copy openssl config to Docker Container
 COPY ./.docker/openssl.cnf /etc/ssl/openssl.cnf
 
-# copy source code
+# Copy source code
 COPY . .
 
-ENV PYTHONPATH=/backend
+ENV PYTHONPATH=/app
 
-# Fix line endings && execute permissions
-RUN dos2unix *.sh app/*.*
-
-
-RUN chmod +x ./run.sh
+# Fix line endings & execute permissions
+# Ensure dos2unix runs and handle potential errors
+RUN apt-get update && apt-get install -y dos2unix && \
+    find /app -name '*.sh' -exec dos2unix {} \; && \
+    find /app -name '*.sh' -exec chmod +x {} \;
 
 # Create the log file to be able to run tail
 RUN touch /var/log/cron.log
 
 EXPOSE 8000
-# Run the run script, it will check for an /app/prestart.sh script (e.g. for migrations)
-# And then will start Uvicorn
-CMD ["./run.sh"]
+
+# Use the new consolidated entrypoint script
+CMD ["bash", "/app/entrypoint.sh"]

@@ -1,19 +1,23 @@
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi_pagination import Params
 
 from app import crud
 from app.api import deps
 from app.deps import user_deps
 from app.models import User
-from app.schemas.response_schema import (IDeleteResponseBase, IGetResponseBase,
-                                         IGetResponsePaginated,
-                                         IPostResponseBase, create_response)
+from app.schemas.response_schema import (
+    IDeleteResponseBase,
+    IGetResponseBase,
+    IGetResponsePaginated,
+    IPostResponseBase,
+    create_response,
+)
 from app.schemas.role_schema import IRoleEnum
-from app.schemas.user_schema import IUserCreate, IUserRead
-from app.utils.exceptions import UserSelfDeleteException
+from app.schemas.user_schema import IUserCreate, IUserRead, IUserUpdate
+from app.utils.exceptions.user_exceptions import UserSelfDeleteException
 
 router = APIRouter()
 
@@ -21,9 +25,7 @@ router = APIRouter()
 @router.get("/list")
 async def read_users_list(
     params: Params = Depends(),
-    current_user: User = Depends(
-        deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])
-    ),
+    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
 ) -> IGetResponsePaginated[Any]:
     """
     Retrieve users. Requires admin or manager role
@@ -39,9 +41,7 @@ async def read_users_list(
 @router.get("/order_by_created_at")
 async def get_user_list_order_by_created_at(
     params: Params = Depends(),
-    current_user: User = Depends(
-        deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])
-    ),
+    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
 ) -> IGetResponsePaginated[Any]:
     """
     Gets a paginated list of users ordered by created datetime
@@ -50,18 +50,14 @@ async def get_user_list_order_by_created_at(
     - admin
     - manager
     """
-    users = await crud.user.get_multi_paginated_ordered(
-        params=params, order_by="created_at"
-    )
+    users = await crud.user.get_multi_paginated_ordered(params=params, order_by="created_at")
     return create_response(data=users)
 
 
 @router.get("/{user_id}")
 async def get_user_by_id(
     user: User = Depends(user_deps.is_valid_user),
-    current_user: User = Depends(
-        deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])
-    ),
+    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
 ) -> IGetResponseBase[IUserRead]:
     """
     Gets a user by his/her id
@@ -86,9 +82,7 @@ async def get_my_data(
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_user(
     new_user: IUserCreate = Depends(user_deps.user_exists),
-    current_user: User = Depends(
-        deps.get_current_user(required_roles=[IRoleEnum.admin])
-    ),
+    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin])),
 ) -> IPostResponseBase[IUserRead]:
     """
     Creates a new user
@@ -100,12 +94,39 @@ async def create_user(
     return create_response(data=user)
 
 
+@router.put("/{user_id}")
+async def update_user(
+    user_update: IUserUpdate,
+    user: User = Depends(user_deps.is_valid_user),
+    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin])),
+) -> IPostResponseBase[IUserRead]:
+    """
+    Updates a user by id
+
+    Required roles:
+    - admin
+    """
+    # If password is being updated, use password history management
+    if user_update.password:
+        try:
+            await crud.user.update_password(user=user, new_password=user_update.password)
+            # Remove password from update data since it's already been handled
+            user_update.password = None
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    # Update other fields if any
+    if any(getattr(user_update, field) is not None for field in user_update.__fields__):
+        updated_user = await crud.user.update(obj_current=user, obj_new=user_update)
+        return create_response(data=updated_user, message="User updated successfully")
+    else:
+        return create_response(data=user, message="User updated successfully")
+
+
 @router.delete("/{user_id}")
 async def remove_user(
     user_id: UUID = Depends(user_deps.is_valid_user_id),
-    current_user: User = Depends(
-        deps.get_current_user(required_roles=[IRoleEnum.admin])
-    ),
+    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin])),
 ) -> IDeleteResponseBase[IUserRead]:
     """
     Deletes a user by his/her id

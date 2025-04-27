@@ -1,5 +1,11 @@
+"""
+This module contains the dependency injection utilities
+used across the FastAPI application.
+"""
+
 from collections.abc import AsyncGenerator
 from typing import Callable
+from uuid import UUID  # Import UUID
 
 import redis.asyncio as aioredis
 from fastapi import Depends, HTTPException, status
@@ -11,24 +17,27 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app import crud
 from app.core.config import settings
 from app.core.security import decode_token
+from app.core.service_config import service_settings
 from app.db.session import SessionLocal
 from app.models.user_model import User
 from app.schemas.common_schema import TokenType
 from app.utils.token import get_valid_tokens
 
-reusable_oauth2 = OAuth2PasswordBearer(
-    tokenUrl=f"{settings.API_V1_STR}/login/access-token"
-)
+reusable_oauth2 = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/login/access-token")
 
 
-async def get_redis_client() -> Redis:
-    redis = await aioredis.from_url(
-        f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}",
-        max_connections=10,
-        encoding="utf8",
-        decode_responses=True,
+async def get_redis_client() -> AsyncGenerator[Redis, None]:
+    """
+    Get Redis client with environment-specific configuration.
+    This function returns an async generator that yields a Redis client.
+    """
+    redis_client = await aioredis.from_url(
+        service_settings.redis_url, encoding="utf-8", decode_responses=True
     )
-    return redis
+    try:
+        yield redis_client
+    finally:
+        await redis_client.close()
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -56,13 +65,20 @@ def get_current_user(required_roles: list[str] = None) -> Callable[[], User]:
         except MissingRequiredClaimError:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="There is no required field in your token. Please contact the administrator.",
+                detail="There is no required field in your token. " "Please contact the administrator.",
             )
 
-        user_id = payload["sub"]
-        valid_access_tokens = await get_valid_tokens(
-            redis_client, user_id, TokenType.ACCESS
-        )
+        user_id_str = payload["sub"]
+        try:
+            user_id = UUID(user_id_str)  # Convert string to UUID
+        except ValueError:
+            # Handle cases where the 'sub' claim is not a valid UUID string
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid user identifier in token.",
+            )
+
+        valid_access_tokens = await get_valid_tokens(redis_client, user_id_str, TokenType.ACCESS)
         if valid_access_tokens and access_token not in valid_access_tokens:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

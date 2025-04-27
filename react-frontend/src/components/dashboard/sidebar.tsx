@@ -11,10 +11,11 @@ import {
   User,
   KeyRound,
   Folder,
+  FolderHeart,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAppDispatch } from "../../store/hooks";
-import { logout } from "../../store/slices/authSlice";
+import { logoutUser } from "../../store/slices/authSlice";
 
 interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
   isCollapsed?: boolean;
@@ -25,8 +26,11 @@ export function Sidebar({ className, isCollapsed = false }: SidebarProps) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    dispatch(logout());
+  const handleLogout = async () => {
+    // Use the updated logoutUser thunk that calls the backend API
+    await dispatch(logoutUser());
+    // Navigate will happen automatically after logout due to auth state change
+    // but we keep it here as a fallback
     navigate("/login");
   };
 
@@ -99,6 +103,25 @@ export function Sidebar({ className, isCollapsed = false }: SidebarProps) {
               <Link to="/dashboard/roles">
                 <UserCheck className={cn("h-5 w-5", !isCollapsed && "mr-2")} />
                 {!isCollapsed && "Roles"}
+              </Link>
+            </Button>
+
+            <Button
+              variant={
+                isActive("/dashboard/role-groups") ? "secondary" : "ghost"
+              }
+              size={isCollapsed ? "icon" : "default"}
+              className={cn(
+                "w-full justify-start",
+                isCollapsed && "justify-center"
+              )}
+              asChild
+            >
+              <Link to="/dashboard/role-groups">
+                <FolderHeart
+                  className={cn("h-5 w-5", !isCollapsed && "mr-2")}
+                />
+                {!isCollapsed && "Role Groups"}
               </Link>
             </Button>
 

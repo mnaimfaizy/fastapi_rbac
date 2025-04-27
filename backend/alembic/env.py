@@ -1,7 +1,5 @@
-from __future__ import with_statement
-
 import asyncio
-import pathlib
+import os
 import sys
 from logging.config import fileConfig
 
@@ -11,9 +9,13 @@ from sqlmodel import SQLModel
 from alembic import context
 from app.core.config import Settings
 
-sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
+# Add the project root directory (backend) to the Python path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
-from app.models import *  # necessarily to import something from file where your models are stored
+# Import models for Alembic to detect
+from app.models import *  # noqa
 
 settings = Settings()
 # this is the Alembic Config object, which provides
@@ -44,7 +46,11 @@ def run_migrations_offline():
     script output.
     """
     context.configure(
-        url=db_url, target_metadata=target_metadata, literal_binds=True, compare_type=True, dialect_opts={"paramstyle": "named"}
+        url=db_url,
+        target_metadata=target_metadata,
+        literal_binds=True,
+        compare_type=True,
+        dialect_opts={"paramstyle": "named"},
     )
 
     with context.begin_transaction():
@@ -56,6 +62,7 @@ def do_run_migrations(connection):
 
     with context.begin_transaction():
         context.run_migrations()
+
 
 async def run_migrations_online():
     """Run migrations in 'online' mode.

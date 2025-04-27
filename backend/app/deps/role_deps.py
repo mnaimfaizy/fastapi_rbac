@@ -5,12 +5,11 @@ from typing_extensions import Annotated
 
 from app import crud
 from app.models.role_model import Role
-from app.utils.exceptions.common_exception import (IdNotFoundException,
-                                                   NameNotFoundException)
+from app.utils.exceptions.common_exception import IdNotFoundException, NameNotFoundException
 
 
 async def get_user_role_by_name(
-    role_name: Annotated[str, Query(title="String compare with name or last name")] = ""
+    role_name: Annotated[str, Query(title="String compare with name or last name")] = "",
 ) -> str:
     role = await crud.role.get_role_by_name(name=role_name)
     if not role:
@@ -19,7 +18,7 @@ async def get_user_role_by_name(
 
 
 async def get_user_role_by_id(
-    role_id: Annotated[UUID, Path(title="The UUID id of the role")]
+    role_id: Annotated[UUID, Path(title="The UUID id of the role")],
 ) -> Role:
     role = await crud.role.get(id=role_id)
     if not role:

@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 from math import ceil
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, TypeVar, cast
 
 from fastapi_pagination import Page, Params
 from fastapi_pagination.bases import AbstractPage, AbstractParams
@@ -11,12 +11,8 @@ T = TypeVar("T")
 
 
 class PageBase(Page[T], Generic[T]):
-    previous_page: int | None = Field(
-        default=None, description="Page number of the previous page"
-    )
-    next_page: int | None = Field(
-        default=None, description="Page number of the next page"
-    )
+    previous_page: int | None = Field(default=None, description="Page number of the previous page")
+    next_page: int | None = Field(default=None, description="Page number of the next page")
 
 
 class IResponseBase(BaseModel, Generic[T]):
@@ -36,9 +32,13 @@ class IGetResponsePaginated(AbstractPage[T], Generic[T]):
     def create(
         cls,
         items: Sequence[T],
-        total: int,
         params: AbstractParams,
-    ) -> PageBase[T] | None:
+        **kwargs: Any,
+    ) -> "IGetResponsePaginated[T]":
+        # Ensure params is of type Params
+        params = cast(Params, params)
+        total = kwargs.get("total", 0)
+
         if params.size is not None and total is not None and params.size != 0:
             pages = ceil(total / params.size)
         else:
@@ -73,6 +73,36 @@ class IDeleteResponseBase(IResponseBase[DataType], Generic[DataType]):
     message: str | None = "Data deleted correctly"
 
 
+class ErrorDetail(BaseModel):
+    """Detailed error information for frontend consumption"""
+
+    field: str | None = None  # Field that caused the error (if applicable)
+    code: str | None = None  # Error code for programmatic handling
+    message: str  # Human-readable error message
+
+
+class IErrorResponse(BaseModel):
+    """Standardized error response schema for frontend consumption"""
+
+    status: str = "error"
+    message: str  # General error message
+    errors: list[ErrorDetail] = []  # Detailed errors list
+    meta: dict | Any | None = {}
+
+
+def create_error_response(
+    message: str,
+    errors: list[ErrorDetail] | None = None,
+    meta: dict | Any | None = None,
+) -> IErrorResponse:
+    """Create a standardized error response"""
+    return IErrorResponse(
+        message=message,
+        errors=errors or [],
+        meta=meta or {},
+    )
+
+
 def create_response(
     data: DataType,
     message: str | None = None,
@@ -90,5 +120,5 @@ def create_response(
         data.meta = meta
         return data
     if message is None:
-        return {"data": data, "meta": meta}
-    return {"data": data, "message": message, "meta": meta}
+        return IGetResponseBase[DataType](data=data, meta=meta)
+    return IGetResponseBase[DataType](data=data, message=message, meta=meta)

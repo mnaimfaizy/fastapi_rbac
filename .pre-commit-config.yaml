@@ -1,0 +1,104 @@
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+  - repo: https://github.com/psf/black
+    rev: 24.4.2 # Use a version consistent with requirements.txt if possible
+    hooks:
+      - id: black
+        args: ["backend/"]
+        exclude: >
+          (?x)(
+            ^.venv/|
+            ^venv/|
+            ^.env/|
+            ^__pycache__/|
+            ^.git/|
+            ^alembic/|
+            ^.pytest_cache/|
+            ^.mypy_cache/
+          )
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2 # Use a version consistent with requirements.txt if possible
+    hooks:
+      - id: isort
+        args: ["--settings-path=backend/pyproject.toml"] # Use pyproject.toml for settings
+        exclude: >
+          (?x)(
+            ^.venv/|
+            ^venv/|
+            ^.env/|
+            ^__pycache__/|
+            ^.git/|
+            ^alembic/|
+            ^.pytest_cache/|
+            ^.mypy_cache/
+          )
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.1.0 # Use a version consistent with requirements.txt if possible
+    hooks:
+      - id: flake8
+        files: ^backend/
+        args:
+          [
+            "--config=backend/.flake8",
+            "--extend-ignore=F403,F405,E402,F541",
+            "--per-file-ignores=backend/app/models/__init__.py:F401,F403 backend/alembic/env.py:F401,E402,F403 backend/app/api/v1/endpoints/login.py:E501 backend/app/crud/user_crud.py:E501 backend/app/db/session.py:E501 backend/app/main.py:E501 backend/app/utils/background_tasks.py:E501 backend/app/utils/email/email.py:E501 backend/app/core/service_config.py:E501 backend/app/scheduled_tasks.py:E501 backend/app/api/deps.py:E501 backend/app/tests/test_email.py:E501",
+          ]
+        exclude: >
+          (?x)(
+            ^.venv/|
+            ^venv/|
+            ^.env/|
+            ^__pycache__/|
+            ^.git/|
+            ^backend/alembic/versions/|
+            ^.pytest_cache/|
+            ^.mypy_cache/
+          )
+  - repo: local
+    hooks:
+      - id: mypy-custom
+        name: mypy
+        entry: mypy
+        language: python
+        types: [python]
+        files: ^backend/
+        exclude: >
+          (?x)(
+            ^.venv/|
+            ^venv/|
+            ^.env/|
+            ^__pycache__/|
+            ^.git/|
+            ^backend/alembic/|
+            ^.pytest_cache/|
+            ^.mypy_cache/
+          )
+        args:
+          [
+            "--ignore-missing-imports",
+            "--disable-error-code=import-not-found",
+            "--disable-error-code=name-defined",
+            "--disable-error-code=attr-defined",
+            "--disable-error-code=assignment",
+            "--disable-error-code=valid-type",
+            "--disable-error-code=union-attr",
+            "--disable-error-code=arg-type",
+            "--disable-error-code=index",
+            "--disable-error-code=return-value",
+            "--disable-error-code=misc",
+            "--disable-error-code=call-arg",
+            "--disable-error-code=override",
+            "--disable-error-code=call-overload",
+            "--no-warn-no-return",
+            "--no-warn-return-any",
+            "--no-strict-optional",
+            "--config-file=backend/mypy.ini",
+          ]

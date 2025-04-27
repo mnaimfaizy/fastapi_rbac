@@ -67,9 +67,7 @@ async def init_db(db_session: AsyncSession) -> None:
     #         await crud.role.create(obj_in=role, db_session=db_session)
 
     for user in users:
-        current_user = await crud.user.get_by_email(
-            email=user["data"].email, db_session=db_session
-        )
+        current_user = await crud.user.get_by_email(email=user["data"].email, db_session=db_session)
         # role = await crud.role.get_role_by_name(
         #     name=user["role"], db_session=db_session
         # )

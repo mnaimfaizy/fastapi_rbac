@@ -33,11 +33,21 @@ react-frontend/
 │   │   └── hooks.ts    # Custom Redux hooks
 │   ├── App.tsx         # Main application component
 │   └── main.tsx        # Entry point
-├── .env                # Environment variables
+├── docker-compose.yml  # Docker configuration for frontend services
 ├── Dockerfile          # Docker configuration
 ├── nginx.conf          # Nginx configuration for Docker
 └── vite.config.ts      # Vite configuration
 ```
+
+## Environment Files
+
+The application uses different environment files for different deployment contexts:
+
+- `.env.development`: Local development configuration
+- `.env.test`: Testing environment configuration
+- `.env.production`: Production environment configuration
+
+These files can be created from the provided `.env.example` template.
 
 ## Getting Started
 
@@ -48,14 +58,35 @@ react-frontend/
    ```
    npm install
    ```
-3. Start the development server:
+3. Create appropriate environment files
+
+   ```bash
+   # Copy the example environment file
+   cp .env.example .env.development
+
+   # Edit as needed
+   ```
+
+4. Start the development server:
    ```
    npm run dev
    ```
 
 ### Docker Deployment
 
-Run the entire stack with Docker Compose:
+The project uses a modular Docker Compose structure:
+
+1. Root docker-compose.yml: Contains shared services
+2. react-frontend/docker-compose.yml: Contains frontend-specific services
+
+Run just the frontend with:
+
+```
+cd react-frontend
+docker-compose up -d
+```
+
+Run the entire stack from the project root:
 
 ```
 docker-compose up -d

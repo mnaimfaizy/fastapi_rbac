@@ -1,9 +1,13 @@
+from typing import TYPE_CHECKING, List
 from uuid import UUID
 
 from sqlalchemy.orm import backref
 from sqlmodel import Field, Relationship, SQLModel, String
 
 from app.models.base_uuid_model import BaseUUIDModel
+
+if TYPE_CHECKING:
+    from app.models.permission_model import Permission
 
 
 class PermissionGroupBase(SQLModel):
@@ -17,13 +21,13 @@ class PermissionGroup(BaseUUIDModel, PermissionGroupBase, table=True):
     permission_group_id: UUID | None = Field(
         UUID, foreign_key="PermissionGroup.id", nullable=True, index=True
     )
-    groups: list["PermissionGroup"] = Relationship(
+    groups: List["PermissionGroup"] = Relationship(
         sa_relationship_kwargs=dict(
             lazy="joined",
             cascade="all",
             backref=backref("parent", remote_side="PermissionGroup.id"),
         )
     )
-    permissions: list["Permission"] = Relationship(
+    permissions: List["Permission"] = Relationship(
         sa_relationship_kwargs={"lazy": "joined"}, back_populates="groups"
     )

@@ -1,0 +1,93 @@
+services:
+  fastapi_rbac:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fastapi_rbac:latest
+    container_name: fastapi_rbac
+    environment:
+      - MODE=testing
+    env_file:
+      - .env.test
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    networks:
+      - fastapi_rbac_network
+
+  # Celery worker for background tasks
+  fastapi_rbac_worker:
+    build:
+      context: .
+      dockerfile: queue.dockerfile
+    image: fastapi_rbac_worker:latest
+    container_name: fastapi_rbac_worker
+    volumes:
+      - .:/app
+    environment:
+      - MODE=testing
+      - C_FORCE_ROOT=true
+    env_file:
+      - .env.test
+    command: ["/bin/bash", "/app/scripts/worker-start.sh"]
+    depends_on:
+      - fastapi_rbac_redis_server
+    restart: on-failure
+    networks:
+      - fastapi_rbac_network
+
+  # Celery beat scheduler for periodic tasks
+  fastapi_rbac_beat:
+    build:
+      context: .
+      dockerfile: queue.dockerfile
+    image: fastapi_rbac_worker:latest
+    container_name: fastapi_rbac_beat
+    volumes:
+      - .:/app
+      # Use a file-based volume for Celery beat
+      - celery-beat-schedule:/app/celerybeat-schedule
+    environment:
+      - MODE=testing
+      - C_FORCE_ROOT=true
+    env_file:
+      - .env.test
+    command: ["/bin/bash", "/app/scripts/beat-start.sh"]
+    depends_on:
+      - fastapi_rbac_redis_server
+      - fastapi_rbac_worker
+    restart: on-failure
+    networks:
+      - fastapi_rbac_network
+
+  # Celery Flower monitoring dashboard
+  fastapi_rbac_flower:
+    build:
+      context: .
+      dockerfile: queue.dockerfile
+    image: fastapi_rbac_worker:latest
+    container_name: fastapi_rbac_flower
+    volumes:
+      - .:/app
+    environment:
+      - MODE=testing
+    env_file:
+      - .env.test
+    ports:
+      - "5555:5555" # Flower web interface
+    command: ["/bin/bash", "/app/scripts/flower-start.sh"]
+    depends_on:
+      - fastapi_rbac_redis_server
+      - fastapi_rbac_worker
+    restart: on-failure
+    networks:
+      - fastapi_rbac_network
+
+networks:
+  fastapi_rbac_network:
+    name: fastapi_rbac_network
+    external: true
+
+volumes:
+  celery-beat-schedule:

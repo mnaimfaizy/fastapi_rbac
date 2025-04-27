@@ -25,7 +25,7 @@ async def user_exists(new_user: IUserCreate) -> IUserCreate:
 
 
 async def is_valid_user(
-    user_id: Annotated[UUID, Path(title="The UUID id of the user")]
+    user_id: Annotated[UUID, Path(title="The UUID id of the user")],
 ) -> IUserRead:
     user = await crud.user.get(id=user_id)
     if not user:
@@ -35,7 +35,7 @@ async def is_valid_user(
 
 
 async def is_valid_user_id(
-    user_id: Annotated[UUID, Path(title="The UUID id of the user")]
+    user_id: Annotated[UUID, Path(title="The UUID id of the user")],
 ) -> IUserRead:
     user = await crud.user.get(id=user_id)
     if not user:

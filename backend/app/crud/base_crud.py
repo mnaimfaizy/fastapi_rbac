@@ -34,11 +34,9 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     def get_db(self) -> type(db):
         return self.db
 
-    async def get(
-        self, *, id: UUID | str, db_session: AsyncSession | None = None
-    ) -> ModelType | None:
+    async def get(self, *, id: UUID | str, db_session: AsyncSession | None = None) -> ModelType | None:
         db_session = db_session or self.db.session
-        query = select(self.model).where(self.model.id == id)
+        query: Select[ModelType] = select(self.model).where(self.model.id == id)
         result = await db_session.execute(query)
         response = result.unique()
         return response.scalar_one_or_none()
@@ -50,18 +48,12 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         db_session: AsyncSession | None = None,
     ) -> list[ModelType] | None:
         db_session = db_session or self.db.session
-        response = await db_session.execute(
-            select(self.model).where(self.model.id.in_(list_ids))
-        )
+        response = await db_session.execute(select(self.model).where(self.model.id.in_(list_ids)))
         return response.scalars().all()
 
-    async def get_count(
-        self, db_session: AsyncSession | None = None
-    ) -> ModelType | None:
+    async def get_count(self, db_session: AsyncSession | None = None) -> ModelType | None:
         db_session = db_session or self.db.session
-        response = await db_session.execute(
-            select(func.count()).select_from(select(self.model).subquery())
-        )
+        response = await db_session.execute(select(func.count()).select_from(select(self.model).subquery()))
         return response.scalar_one()
 
     async def get_multi(
@@ -74,8 +66,12 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     ) -> list[ModelType]:
         db_session = db_session or self.db.session
         if query is None:
-            query = select(self.model).offset(skip).limit(limit).order_by(self.model.id)
-        response = await db_session.execute(query)
+            query_obj: Select[ModelType] = (
+                select(self.model).offset(skip).limit(limit).order_by(self.model.id)
+            )
+        else:
+            query_obj = query
+        response = await db_session.execute(query_obj)
         return response.scalars().all()
 
     async def get_multi_paginated(
@@ -108,12 +104,15 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             order_by = "id"
 
         if query is None:
+            query_obj: Select[ModelType]
             if order == IOrderEnum.ascendent:
-                query = select(self.model).order_by(columns[order_by].asc())
+                query_obj = select(self.model).order_by(columns[order_by].asc())
             else:
-                query = select(self.model).order_by(columns[order_by].desc())
+                query_obj = select(self.model).order_by(columns[order_by].desc())
+        else:
+            query_obj = query
 
-        return await paginate(db_session, query, params, unique=True)
+        return await paginate(db_session, query_obj, params, unique=True)
 
     async def get_multi_ordered(
         self,
@@ -131,22 +130,13 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         if order_by is None or order_by not in columns:
             order_by = "id"
 
+        query_obj: Select[ModelType]
         if order == IOrderEnum.ascendent:
-            query = (
-                select(self.model)
-                .offset(skip)
-                .limit(limit)
-                .order_by(columns[order_by].asc())
-            )
+            query_obj = select(self.model).offset(skip).limit(limit).order_by(columns[order_by].asc())
         else:
-            query = (
-                select(self.model)
-                .offset(skip)
-                .limit(limit)
-                .order_by(columns[order_by].desc())
-            )
+            query_obj = select(self.model).offset(skip).limit(limit).order_by(columns[order_by].desc())
 
-        response = await db_session.execute(query)
+        response = await db_session.execute(query_obj)
         return response.scalars().all()
 
     async def create(
@@ -186,7 +176,8 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         if isinstance(obj_new, dict):
             update_data = obj_new
         else:
-            update_data = obj_new.dict(
+            # Use model_dump instead of dict for Pydantic v2 compatibility
+            update_data = obj_new.model_dump(
                 exclude_unset=True
             )  # This tells Pydantic to not include the values that were not sent
         for field in update_data:
@@ -197,13 +188,9 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         await db_session.refresh(obj_current)
         return obj_current
 
-    async def remove(
-        self, *, id: UUID | str, db_session: AsyncSession | None = None
-    ) -> ModelType:
+    async def remove(self, *, id: UUID | str, db_session: AsyncSession | None = None) -> ModelType:
         db_session = db_session or self.db.session
-        response = await db_session.execute(
-            select(self.model).where(self.model.id == id)
-        )
+        response = await db_session.execute(select(self.model).where(self.model.id == id))
         obj = response.scalar_one()
         await db_session.delete(obj)
         await db_session.commit()
