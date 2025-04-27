@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Dict
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field
@@ -36,11 +36,35 @@ class IUserRead(UserBase):
     id: UUID
     roles: list[str] | None = None
 
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "id": "a3a3a3a3-a3a3-a3a3-a3a3-a3a3a3a3a3a3",
+                "first_name": "John",
+                "last_name": "Doe",
+                "email": "john.doe@example.com",
+                "is_active": True,
+                "is_superuser": False,
+                "needs_to_change_password": False,
+                "expiry_date": "2025-12-31T23:59:59",
+                "contact_phone": "+1234567890",
+                "last_changed_password_date": "2025-04-27T10:00:00",
+                "number_of_failed_attempts": 0,
+                "is_locked": False,
+                "locked_until": None,
+                "verified": True,
+                "roles": ["user"],
+            }
+        },
+        # Exclude password field from responses
+        "exclude": {"password"},
+    }
+
 
 @optional()
 class IUserOutput(BaseModel):
 
-    model_config = {}
+    model_config: Dict[str, Any] = {}
 
 
 class IUserOutputPaginated(BaseModel):

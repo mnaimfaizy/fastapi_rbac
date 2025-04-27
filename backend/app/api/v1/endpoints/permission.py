@@ -17,7 +17,11 @@ from app.schemas.response_schema import (
     create_response,
 )
 from app.schemas.role_schema import IRoleEnum
-from app.utils.exceptions.common_exception import IdNotFoundException, NameExistException
+from app.utils.exceptions.common_exception import (
+    ContentNoChangeException,
+    IdNotFoundException,
+    NameExistException,
+)
 
 router = APIRouter()
 
@@ -68,8 +72,8 @@ async def create_permission(
 
 @router.put("/{permission_id}")
 async def update_permission(
-    group: IPermissionUpdate,
-    current_group: Permission = Depends(permission_deps.get_permission_by_id),
+    permission_update: IPermissionUpdate,
+    current_permission: Permission = Depends(permission_deps.get_permission_by_id),
     current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
 ) -> IPutResponseBase[IPermissionRead]:
     """
@@ -79,5 +83,20 @@ async def update_permission(
     - admin
     - manager
     """
-    permission_updated = await crud.permission.update(obj_current=current_group, obj_new=group)
+    # Check if there are any actual changes
+    if (
+        current_permission.name == permission_update.name
+        and current_permission.description == permission_update.description
+    ):
+        raise ContentNoChangeException()
+
+    # Check if the new name conflicts with an existing permission (excluding itself)
+    if permission_update.name and permission_update.name != current_permission.name:
+        existing_permission = await crud.permission.get_permission_by_name(name=permission_update.name)
+        if existing_permission:
+            raise NameExistException(Permission, name=permission_update.name)
+
+    permission_updated = await crud.permission.update(
+        obj_current=current_permission, obj_new=permission_update
+    )
     return create_response(data=permission_updated)

@@ -1,4 +1,5 @@
 import gc
+import logging
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -28,7 +29,16 @@ from app.core.security import decode_token
 # Import our environment-specific service settings
 from app.core.service_config import service_settings
 from app.schemas.response_schema import ErrorDetail, create_error_response
+from app.utils.exceptions.user_exceptions import UserSelfDeleteException
 from app.utils.fastapi_globals import GlobalsMiddleware, g
+
+# Configure logger
+logger = logging.getLogger("fastapi_rbac")
+logger.setLevel(logging.DEBUG)
+handler = logging.StreamHandler()
+handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+logger.addHandler(handler)
+
 
 # Flag to indicate whether Celery is available based on environment
 CELERY_AVAILABLE = service_settings.use_celery
@@ -243,16 +253,42 @@ async def custom_exception_handler(request: Request, exc: CustomException):
     )
 
 
+@fastapi_app.exception_handler(UserSelfDeleteException)
+async def user_self_delete_exception_handler(request: Request, exc: UserSelfDeleteException):
+    """
+    Handle attempts by users to delete their own account.
+    """
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content=create_error_response(
+            message="Bad Request",
+            errors=[ErrorDetail(code="user_self_delete", message=str(exc))],
+        ).model_dump(),
+    )
+
+
 @fastapi_app.exception_handler(SQLAlchemyError)
 async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
     """
-    Handle database errors with standardized format for frontend consumption
+    Handle database errors with standardized format for frontend consumption.
+    Logs the full error internally but returns a generic message to the client.
     """
+    # Log the full exception for internal debugging
+    logger.error(f"Database error occurred: {exc}", exc_info=True)
+
+    # Determine the message to send to the client
+    if settings.MODE == ModeEnum.development:
+        # In development, include the specific error string for easier debugging
+        error_message = f"Database operation failed: {str(exc)}"
+    else:
+        # In production or other modes, use a generic message
+        error_message = "A database error occurred. Please try again later or contact support."
+
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content=create_error_response(
             message="Database error",
-            errors=[ErrorDetail(code="database_error", message=str(exc))],
+            errors=[ErrorDetail(code="database_error", message=error_message)],
         ).model_dump(),
     )
 
