@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlmodel import select
+from sqlmodel import delete, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.crud.base_crud import CRUDBase
@@ -52,6 +52,29 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
             await db_session.refresh(map_obj)
 
         return role_group_maps
+
+    async def remove_roles_from_group(
+        self,
+        *,
+        group_id: UUID,
+        role_ids: list[UUID],
+        db_session: AsyncSession | None = None,
+    ) -> None:
+        """
+        Remove multiple roles from a group in a batch operation
+        for improved performance
+        """
+        db_session = db_session or super().get_db().session
+
+        for role_id in role_ids:
+            # Delete the mapping between role and group
+            statement = delete(RoleGroupMap).where(
+                RoleGroupMap.role_group_id == group_id, RoleGroupMap.role_id == role_id
+            )
+            await db_session.execute(statement)
+
+        # Commit once for all deletions
+        await db_session.commit()
 
 
 role_group = CRUDRoleGroup(RoleGroup)

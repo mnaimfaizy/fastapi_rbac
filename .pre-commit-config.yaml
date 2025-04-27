@@ -28,7 +28,7 @@ repos:
     rev: 5.13.2 # Use a version consistent with requirements.txt if possible
     hooks:
       - id: isort
-        args: ["backend/", "--settings-path=backend/.isort.cfg"]
+        args: ["--settings-path=backend/pyproject.toml"] # Use pyproject.toml for settings
         exclude: >
           (?x)(
             ^.venv/|

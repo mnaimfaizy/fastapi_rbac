@@ -5,6 +5,7 @@ used across the FastAPI application.
 
 from collections.abc import AsyncGenerator
 from typing import Callable
+from uuid import UUID  # Import UUID
 
 import redis.asyncio as aioredis
 from fastapi import Depends, HTTPException, status
@@ -67,8 +68,17 @@ def get_current_user(required_roles: list[str] = None) -> Callable[[], User]:
                 detail="There is no required field in your token. " "Please contact the administrator.",
             )
 
-        user_id = payload["sub"]
-        valid_access_tokens = await get_valid_tokens(redis_client, user_id, TokenType.ACCESS)
+        user_id_str = payload["sub"]
+        try:
+            user_id = UUID(user_id_str)  # Convert string to UUID
+        except ValueError:
+            # Handle cases where the 'sub' claim is not a valid UUID string
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid user identifier in token.",
+            )
+
+        valid_access_tokens = await get_valid_tokens(redis_client, user_id_str, TokenType.ACCESS)
         if valid_access_tokens and access_token not in valid_access_tokens:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

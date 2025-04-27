@@ -5,10 +5,7 @@ from typing_extensions import Annotated
 
 from app import crud
 from app.models.role_model import Role
-from app.utils.exceptions.common_exception import (
-    IdNotFoundException,
-    NameNotFoundException,
-)
+from app.utils.exceptions.common_exception import IdNotFoundException, NameNotFoundException
 
 
 async def get_user_role_by_name(

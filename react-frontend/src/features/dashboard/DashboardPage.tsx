@@ -20,6 +20,11 @@ import PermissionGroupFormContent from "../../components/dashboard/permission-gr
 import RolesContent from "../roles/RolesContent";
 import RoleFormContent from "../roles/RoleFormContent";
 
+// Import Role Group Components
+import RoleGroupContent from "../role-groups/RoleGroupContent";
+import RoleGroupDetail from "../role-groups/RoleGroupDetail";
+import RoleGroupFormContent from "../role-groups/RoleGroupFormContent";
+
 import { Dashboard } from "../../components/dashboard/dashboard";
 
 const DashboardPage = () => {
@@ -33,19 +38,19 @@ const DashboardPage = () => {
         {/* User management routes - updated with new components */}
         <Route path="/users" element={<UsersList />} />
         <Route path="/users/new" element={<UserEditPage />} />
-        <Route path="/users/:userId/edit" element={<UserEditPage />} />
         <Route path="/users/:userId" element={<UserDetailContent />} />
+        <Route path="/users/edit/:userId" element={<UserEditPage />} />
 
-        {/* Permission management routes - specific routes first, then dynamic routes */}
+        {/* Permission management routes */}
         <Route path="/permissions" element={<PermissionsContent />} />
         <Route path="/permissions/new" element={<PermissionFormContent />} />
+        <Route path="/permissions/:id" element={<PermissionDetailContent />} />
         <Route
           path="/permissions/edit/:id"
           element={<PermissionFormContent />}
         />
-        <Route path="/permissions/:id" element={<PermissionDetailContent />} />
 
-        {/* Permission Group management routes - specific routes first, then dynamic routes */}
+        {/* Permission Group routes */}
         <Route
           path="/permission-groups"
           element={<PermissionGroupsContent />}
@@ -55,12 +60,12 @@ const DashboardPage = () => {
           element={<PermissionGroupFormContent />}
         />
         <Route
-          path="/permission-groups/edit/:id"
-          element={<PermissionGroupFormContent />}
+          path="/permission-groups/:groupId"
+          element={<PermissionGroupDetailContent />}
         />
         <Route
-          path="/permission-groups/:id"
-          element={<PermissionGroupDetailContent />}
+          path="/permission-groups/edit/:groupId"
+          element={<PermissionGroupFormContent />}
         />
 
         {/* Role management routes */}
@@ -68,7 +73,14 @@ const DashboardPage = () => {
         <Route path="/roles/new" element={<RoleFormContent />} />
         <Route path="/roles/edit/:roleId" element={<RoleFormContent />} />
 
-        {/* Add more routes for other dashboard features as needed */}
+        {/* Role Groups routes */}
+        <Route path="/role-groups" element={<RoleGroupContent />} />
+        <Route path="/role-groups/new" element={<RoleGroupFormContent />} />
+        <Route path="/role-groups/:groupId" element={<RoleGroupDetail />} />
+        <Route
+          path="/role-groups/edit/:groupId"
+          element={<RoleGroupFormContent />}
+        />
       </Routes>
     </Dashboard>
   );

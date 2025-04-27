@@ -5,10 +5,7 @@ from typing_extensions import Annotated
 
 from app import crud
 from app.models.permission_group_model import PermissionGroup
-from app.utils.exceptions.common_exception import (
-    IdNotFoundException,
-    NameNotFoundException,
-)
+from app.utils.exceptions.common_exception import IdNotFoundException, NameNotFoundException
 
 
 async def get_permission_group_by_name(

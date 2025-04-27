@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -410,8 +411,24 @@ async def get_new_access_token(
             )
 
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-        user = await crud.user.get(id=user_id)
-        if user.is_active:
+        try:
+            # Convert string user_id to UUID
+            user_uuid = UUID(user_id)
+            user = await crud.user.get(id=user_uuid)
+        except ValueError:
+            # Log UUID conversion error as a background task
+            background_tasks.add_task(
+                log_security_event,
+                background_tasks=background_tasks,
+                event_type="refresh_token_invalid_uuid",
+                details={"user_id": user_id},
+            )
+            raise HTTPException(
+                status_code=403,
+                detail={"status": False, "message": "Invalid user identifier"},
+            )
+
+        if user and user.is_active:
             access_token = security.create_access_token(
                 payload["sub"], user.email, expires_delta=access_token_expires
             )
@@ -444,7 +461,7 @@ async def get_new_access_token(
                 log_security_event,
                 background_tasks=background_tasks,
                 event_type="refresh_token_inactive_user",
-                user_id=user.id,
+                user_id=user_id if user else None,
                 details={"email": user.email if user else None},
             )
             raise HTTPException(status_code=404, detail={"status": False, "message": "User inactive"})

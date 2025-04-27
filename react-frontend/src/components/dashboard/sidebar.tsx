@@ -11,6 +11,7 @@ import {
   User,
   KeyRound,
   Folder,
+  FolderHeart,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAppDispatch } from "../../store/hooks";
@@ -102,6 +103,25 @@ export function Sidebar({ className, isCollapsed = false }: SidebarProps) {
               <Link to="/dashboard/roles">
                 <UserCheck className={cn("h-5 w-5", !isCollapsed && "mr-2")} />
                 {!isCollapsed && "Roles"}
+              </Link>
+            </Button>
+
+            <Button
+              variant={
+                isActive("/dashboard/role-groups") ? "secondary" : "ghost"
+              }
+              size={isCollapsed ? "icon" : "default"}
+              className={cn(
+                "w-full justify-start",
+                isCollapsed && "justify-center"
+              )}
+              asChild
+            >
+              <Link to="/dashboard/role-groups">
+                <FolderHeart
+                  className={cn("h-5 w-5", !isCollapsed && "mr-2")}
+                />
+                {!isCollapsed && "Role Groups"}
               </Link>
             </Button>
 
