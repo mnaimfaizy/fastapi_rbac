@@ -7,18 +7,20 @@ Set-PSDebug -Trace 1
 $ErrorActionPreference = 'Stop'
 
 Write-Host "Running mypy..."
-# Exclude the alembic directory as in the original script
-mypy app --exclude=alembic
+# Use current directory to pick up pyproject.toml config, exclude alembic
+mypy . --exclude alembic
 
 Write-Host "Checking code formatting with black..."
-black app --check
+# Use current directory, rely on pyproject.toml for excludes
+black . --check
 
 Write-Host "Checking import sorting with isort..."
-# Note: isort behavior might differ slightly, ensure configuration (e.g., in pyproject.toml) is consistent
-isort app --check-only # Use --check-only to mimic linting behavior without changing files
+# Use current directory, skip alembic
+isort . --check-only
 
 Write-Host "Running flake8..."
-flake8
+# Exclude alembic
+flake8 .
 
 Write-Host "Linting checks complete."
 # Disable command tracing

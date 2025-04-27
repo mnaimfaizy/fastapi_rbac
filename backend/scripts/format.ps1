@@ -11,7 +11,7 @@ Write-Host "Running autoflake..."
 autoflake --remove-all-unused-imports --recursive --remove-unused-variables --in-place app --exclude=__init__.py
 
 Write-Host "Formatting code with black..."
-black app
+black . # Use current directory to pick up pyproject.toml config
 
 Write-Host "Sorting imports with isort..."
 # Assuming isort configuration is in pyproject.toml or setup.cfg
