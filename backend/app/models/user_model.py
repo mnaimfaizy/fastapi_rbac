@@ -15,7 +15,6 @@ class UserBase(SQLModel):
     first_name: str | None = None
     last_name: str | None = None
     email: EmailStr = Field(sa_column=Column(String, unique=True, index=True))
-    password: str
     is_active: bool = True
     is_superuser: bool = False
     last_updated_by: int | None = None
@@ -33,6 +32,7 @@ class UserBase(SQLModel):
 class User(BaseUUIDModel, UserBase, table=True):
     first_name: str | None = Field(index=True)
     last_name: str | None = Field(index=True)
+    password: str | None = Field(default=None)  # Store the hashed password
     expiry_date: datetime | None = Field(default_factory=datetime.utcnow)
     last_changed_password_date: datetime | None = Field(default_factory=datetime.utcnow)
     roles: List["Role"] = Relationship(

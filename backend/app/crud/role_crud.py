@@ -124,4 +124,6 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
         return role.name.lower() in system_roles
 
 
-role = CRUDRole(Role)
+role_crud = CRUDRole(Role)
+# Keep the original name for backward compatibility
+role = role_crud

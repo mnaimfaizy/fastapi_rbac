@@ -2,7 +2,9 @@ from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
+from fastapi import HTTPException
 from pydantic import EmailStr
+from sqlalchemy import exc
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -17,10 +19,9 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
     async def get_by_email(self, *, email: str, db_session: AsyncSession | None = None) -> User | None:
         db_session = db_session or super().get_db().session
         result = await db_session.execute(select(User).where(User.email == email))
-        users = result.unique()
-        user = users.scalar_one_or_none()
-        print(user)
-        return user
+        # Apply unique() before calling scalar_one_or_none() to handle joined eager loads
+        unique_result = result.unique()
+        return unique_result.scalar_one_or_none()
 
     async def get_by_id_active(self, *, id: UUID) -> User | None:
         user = await super().get(id=id)
@@ -39,6 +40,69 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         await db_session.commit()
         await db_session.refresh(db_obj)
         return db_obj
+
+    async def create(
+        self,
+        *,
+        obj_in: IUserCreate | User,
+        created_by_id: UUID | str | None = None,
+        db_session: AsyncSession | None = None,
+    ) -> User:
+        """Override the create method to hash the password before storing it"""
+        db_session = db_session or self.db.session
+
+        if isinstance(obj_in, User):
+            db_obj = obj_in
+        else:
+            # Create a dict without the password to avoid storing it in plaintext
+            obj_in_data = obj_in.model_dump(exclude={"password"})
+            db_obj = User(**obj_in_data)
+            # Hash the password
+            db_obj.password = get_password_hash(obj_in.password)
+
+        if created_by_id:
+            db_obj.created_by_id = created_by_id
+
+        try:
+            db_session.add(db_obj)
+            await db_session.commit()
+        except exc.IntegrityError:
+            await db_session.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail="Resource already exists",
+            )
+        await db_session.refresh(db_obj)
+        return db_obj
+
+    async def update(
+        self,
+        *,
+        obj_current: User,
+        obj_new: IUserUpdate | dict[str, Any] | User,
+        db_session: AsyncSession | None = None,
+    ) -> User:
+        """Override base update method to handle password hashing during updates"""
+        db_session = db_session or self.db.session
+
+        # Convert to dict if needed
+        if isinstance(obj_new, dict):
+            update_data = obj_new
+        else:
+            update_data = obj_new.model_dump(exclude_unset=True)
+
+        # Handle password hashing if password is being updated
+        if "password" in update_data:
+            update_data["password"] = get_password_hash(update_data["password"])
+
+        # Update fields in the current object
+        for field in update_data:
+            setattr(obj_current, field, update_data[field])
+
+        db_session.add(obj_current)
+        await db_session.commit()
+        await db_session.refresh(obj_current)
+        return obj_current
 
     def has_verified(self, user: User) -> bool:
         """
@@ -75,7 +139,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         self, *, email: EmailStr, password: str, db_session: AsyncSession | None = None
     ) -> User | None:
         db_session = db_session or super().get_db().session
-        user = await self.get_by_email(email=email)
+        user = await self.get_by_email(email=email, db_session=db_session)
 
         # If user doesn't exist, return None (don't reveal that the user doesn't exist)
         if not user:
@@ -103,7 +167,9 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
     async def remove(self, *, id: UUID | str, db_session: AsyncSession | None = None) -> User:
         db_session = db_session or super().get_db().session
         response = await db_session.execute(select(self.model).where(self.model.id == id))
-        obj = response.scalar_one()
+        # Apply unique() before accessing the result
+        unique_response = response.unique()
+        obj = unique_response.scalar_one()
 
         await db_session.delete(obj)
         await db_session.commit()
@@ -243,4 +309,6 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         return user
 
 
-user = CRUDUser(User)
+user_crud = CRUDUser(User)
+# Keep the original name for backward compatibility
+user = user_crud

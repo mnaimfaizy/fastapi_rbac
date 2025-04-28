@@ -80,7 +80,9 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         else:
             query_obj = query
         response = await db_session.execute(query_obj)
-        return response.scalars().all()
+        # Apply unique() to handle joined eager loads
+        unique_response = response.unique()
+        return unique_response.scalars().all()
 
     async def get_multi_paginated(
         self,
@@ -206,7 +208,9 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     async def remove(self, *, id: UUID | str, db_session: AsyncSession | None = None) -> ModelType:
         db_session = db_session or self.db.session
         response = await db_session.execute(select(self.model).where(self.model.id == id))
-        obj = response.scalar_one()
+        # Apply unique() to handle joined eager loads
+        unique_response = response.unique()
+        obj = unique_response.scalar_one()
         await db_session.delete(obj)
         await db_session.commit()
         return obj

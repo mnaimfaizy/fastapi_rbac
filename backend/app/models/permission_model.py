@@ -14,13 +14,13 @@ if TYPE_CHECKING:
 class PermissionBase(SQLModel):
     name: str | None = None
     description: str | None = None
-    group_id: int
+    group_id: Optional[UUID] = None
 
 
 class Permission(BaseUUIDModel, PermissionBase, table=True):
     name: str | None = Field(String(250), nullable=True, index=True)
     description: str | None = Field(String(250), nullable=True, index=True)
-    group_id: UUID = Field(foreign_key="PermissionGroup.id")
+    group_id: Optional[UUID] = Field(default=None, foreign_key="PermissionGroup.id", nullable=True)
     created_by_id: UUID | None = Field(default=None, foreign_key="User.id")
     roles: Optional[List["Role"]] = Relationship(
         back_populates="permissions",
