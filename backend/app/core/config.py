@@ -4,7 +4,7 @@ from enum import Enum
 from functools import lru_cache
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import AnyHttpUrl, EmailStr, PostgresDsn, field_validator, model_validator
+from pydantic import AnyHttpUrl, EmailStr, PostgresDsn, field_validator, model_validator, ValidationInfo
 from pydantic_core.core_schema import FieldValidationInfo
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -114,7 +114,7 @@ class Settings(BaseSettings):
         raise ValueError(v)
 
     @field_validator("SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD")
-    def set_email_values_based_on_mode(cls, v: Any, info: FieldValidationInfo) -> Any:
+    def set_email_values_based_on_mode(cls, v: Any, info: ValidationInfo) -> Any:
         mode = info.data.get("MODE", ModeEnum.development)
         field_name = info.field_name
 
@@ -134,7 +134,7 @@ class Settings(BaseSettings):
         return v
 
     @field_validator("ASYNC_DATABASE_URI", mode="after")
-    def assemble_db_connection(cls, v: str | None, info: FieldValidationInfo) -> Any:
+    def assemble_db_connection(cls, v: str | None, info: ValidationInfo) -> Any:
         if isinstance(v, str) and v == "":
             db_type = info.data.get("DATABASE_TYPE", DatabaseTypeEnum.postgresql)
 
@@ -158,7 +158,7 @@ class Settings(BaseSettings):
     SYNC_CELERY_DATABASE_URI: PostgresDsn | str = ""
 
     @field_validator("SYNC_CELERY_DATABASE_URI", mode="after")
-    def assemble_celery_db_connection(cls, v: str | None, info: FieldValidationInfo) -> Any:
+    def assemble_celery_db_connection(cls, v: str | None, info: ValidationInfo) -> Any:
         if isinstance(v, str) and v == "":
             db_type = info.data.get("DATABASE_TYPE", DatabaseTypeEnum.postgresql)
 
@@ -185,7 +185,7 @@ class Settings(BaseSettings):
     SYNC_CELERY_BEAT_DATABASE_URI: PostgresDsn | str = ""
 
     @field_validator("SYNC_CELERY_BEAT_DATABASE_URI", mode="after")
-    def assemble_celery_beat_db_connection(cls, v: str | None, info: FieldValidationInfo) -> Any:
+    def assemble_celery_beat_db_connection(cls, v: str | None, info: ValidationInfo) -> Any:
         if isinstance(v, str) and v == "":
             db_type = info.data.get("DATABASE_TYPE", DatabaseTypeEnum.postgresql)
 
@@ -212,7 +212,7 @@ class Settings(BaseSettings):
     ASYNC_CELERY_BEAT_DATABASE_URI: PostgresDsn | str = ""
 
     @field_validator("ASYNC_CELERY_BEAT_DATABASE_URI", mode="after")
-    def assemble_async_celery_beat_db_connection(cls, v: str | None, info: FieldValidationInfo) -> Any:
+    def assemble_async_celery_beat_db_connection(cls, v: str | None, info: ValidationInfo) -> Any:
         if isinstance(v, str) and v == "":
             db_type = info.data.get("DATABASE_TYPE", DatabaseTypeEnum.postgresql)
 

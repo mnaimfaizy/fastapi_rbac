@@ -37,7 +37,7 @@ async def get_redis_client() -> AsyncGenerator[Redis, None]:
     try:
         yield redis_client
     finally:
-        await redis_client.close()
+        await redis_client.aclose()  # Changed close() to aclose()
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
