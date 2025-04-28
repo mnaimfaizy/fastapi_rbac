@@ -1,10 +1,12 @@
+from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import UUID4, BaseModel, Field
 
 from app.models.role_model import RoleBase
+from app.schemas.base_schema import IBaseSchema
 from app.utils.partial import optional
 
 
@@ -12,7 +14,7 @@ from app.utils.partial import optional
 class IRoleCreate(RoleBase):
     name: str = Field(..., min_length=1)
     description: Optional[str] = Field(None)
-    role_group_id: UUID = Field(...)
+    role_group_id: Optional[UUID] = None
 
 
 @optional()
@@ -27,6 +29,9 @@ class RoleOutput(BaseModel):
 
 class IRoleRead(RoleBase):
     id: UUID
+    created_at: datetime
+    updated_at: datetime | None = None
+    created_by_id: UUID | None = None
 
 
 class IRoleOutput(RoleBase):
@@ -37,3 +42,15 @@ class IRoleEnum(str, Enum):
     admin = "admin"
     manager = "manager"
     user = "user"
+
+
+class IRolePermissionAssign(IBaseSchema):
+    """Schema for assigning permissions to a role"""
+
+    permission_ids: List[UUID4]
+
+
+class IRolePermissionUnassign(IBaseSchema):
+    """Schema for unassigning permissions from a role"""
+
+    permission_ids: List[UUID4]

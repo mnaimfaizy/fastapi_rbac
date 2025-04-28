@@ -1,7 +1,7 @@
 import gc
 import logging
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, AsyncGenerator, Dict, Optional
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -48,7 +48,7 @@ CELERY_AVAILABLE = service_settings.use_celery
 celery = celery_app
 
 
-async def user_id_identifier(request: Request):
+async def user_id_identifier(request: Request) -> Optional[str]:
     if request.scope["type"] == "http":
         # Retrieve the Authorization header from the request
         auth_header = request.headers.get("Authorization")
@@ -80,22 +80,22 @@ async def user_id_identifier(request: Request):
 
                 user_id = payload["sub"]
 
-                return user_id
+                return str(user_id)
 
     if request.scope["type"] == "websocket":
-        return request.scope["path"]
+        return str(request.scope["path"])
 
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:
-        return forwarded.split(",")[0]
+        return str(forwarded.split(",")[0])
 
     client = request.client
     ip = getattr(client, "host", "0.0.0.0")
-    return ip + ":" + request.scope["path"]
+    return str(ip) + ":" + str(request.scope["path"])
 
 
 @asynccontextmanager
-async def lifespan(fastapi_instance: FastAPI):
+async def lifespan(fastapi_instance: FastAPI) -> AsyncGenerator[None, None]:
     # Startup
     redis_client = None
 
@@ -170,7 +170,7 @@ class CustomException(Exception):
 
 
 @fastapi_app.get("/")
-async def root():
+async def root() -> Dict[str, str]:
     """
     An example "Hello world" FastAPI route.
     """
@@ -184,7 +184,7 @@ fastapi_app.include_router(api_router_v1, prefix=settings.API_V1_STR)
 
 # Exception handlers for consistent error responses
 @fastapi_app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
+async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     """
     Handle validation errors with standardized format for frontend consumption
     """
@@ -209,7 +209,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 
 @fastapi_app.exception_handler(StarletteHTTPException)
-async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
     """
     Handle HTTP exceptions with standardized format for frontend consumption
     """
@@ -240,7 +240,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 
 
 @fastapi_app.exception_handler(CustomException)
-async def custom_exception_handler(request: Request, exc: CustomException):
+async def custom_exception_handler(request: Request, exc: CustomException) -> JSONResponse:
     """
     Handle custom exceptions with standardized format for frontend consumption
     """
@@ -254,7 +254,7 @@ async def custom_exception_handler(request: Request, exc: CustomException):
 
 
 @fastapi_app.exception_handler(UserSelfDeleteException)
-async def user_self_delete_exception_handler(request: Request, exc: UserSelfDeleteException):
+async def user_self_delete_exception_handler(request: Request, exc: UserSelfDeleteException) -> JSONResponse:
     """
     Handle attempts by users to delete their own account.
     """
@@ -268,7 +268,7 @@ async def user_self_delete_exception_handler(request: Request, exc: UserSelfDele
 
 
 @fastapi_app.exception_handler(SQLAlchemyError)
-async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
+async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError) -> JSONResponse:
     """
     Handle database errors with standardized format for frontend consumption.
     Logs the full error internally but returns a generic message to the client.
@@ -294,7 +294,7 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
 
 
 @fastapi_app.exception_handler(Exception)
-async def general_exception_handler(request: Request, exc: Exception):
+async def general_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """
     Handle general exceptions with standardized format for frontend consumption
     """

@@ -1,10 +1,16 @@
+from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi_cache.decorator import cache
 from fastapi_pagination import Params
+from redis.asyncio import Redis
+from sqlalchemy import select
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app import crud
 from app.api import deps
+from app.api.deps import get_redis_client
 from app.deps import role_group_deps
 from app.models.role_group_model import RoleGroup
 from app.models.user_model import User
@@ -22,34 +28,247 @@ from app.schemas.role_group_schema import (
     IRoleGroupWithRoles,
 )
 from app.schemas.role_schema import IRoleEnum
-from app.utils.exceptions.common_exception import IdNotFoundException, NameExistException
+from app.utils.exceptions.common_exception import (
+    CircularDependencyException,
+    NameExistException,
+    ResourceNotFoundException,
+)
 
 router = APIRouter()
 
 
 @router.get("")
 async def get_role_groups(
-    params: Params = Depends(), current_user: User = Depends(deps.get_current_user())
+    params: Params = Depends(),
+    current_user: User = Depends(deps.get_current_user()),
+    db_session: AsyncSession = Depends(deps.get_async_db),
 ) -> IGetResponsePaginated[IRoleGroupRead]:
     """
-    Gets a paginated list of role groups
+    Gets a paginated list of role groups with hierarchical structure.
+    Only root groups (those without parents) are returned at the top level,
+    with children accessible through the children property.
     """
-    role_groups = await crud.role_group.get_multi_paginated(params=params)
-    return create_response(data=role_groups)
+
+    try:
+        # Get all role groups using standard pagination
+        paginated_result = await crud.role_group.get_multi_paginated_hierarchical(
+            params=params, db_session=db_session
+        )
+
+        return create_response(data=paginated_result)
+    except Exception as e:
+        import logging
+
+        logging.error(f"Error in get_role_groups: {str(e)}")
+
+        # Return a helpful error message
+        error_message = str(e)
+        if "greenlet_spawn" in error_message:
+            error_message = "Database async context error. Please check the server logs for details."
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=error_message,
+        )
 
 
 @router.get("/{group_id}")
+@cache(expire=300)  # Cache for 5 minutes
 async def get_role_group_by_id(
-    group_id: UUID, current_user: User = Depends(deps.get_current_user())
+    group_id: UUID,
+    include_nested_roles: bool = False,
+    current_user: User = Depends(deps.get_current_user()),
+    db_session: AsyncSession = Depends(deps.get_async_db),
 ) -> IGetResponseBase[IRoleGroupWithRoles]:
     """
-    Gets a role group by its ID
+    Gets a role group by its ID with caching
+
+    Parameters:
+    - include_nested_roles: When true, includes roles for child groups as well
     """
-    role_group = await role_group_deps.get_group_by_id(group_id=group_id)
-    if role_group:
-        return create_response(data=role_group)
-    else:
-        raise IdNotFoundException(RoleGroup, id=group_id)
+    try:
+        # Get the role group with all hierarchical relationships and roles
+        # We handle include_nested_roles via the dependency injection
+        role_group = await role_group_deps.get_group_by_id(
+            group_id=group_id, db_session=db_session, include_roles_recursive=include_nested_roles
+        )
+
+        if not role_group:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Role group with id {group_id} not found",
+            )
+
+        # Convert the SQLModel object to a dictionary to avoid any potential issues with lazy loading
+        # or relationship attributes that might not be fully loaded
+        response_data = {
+            "id": role_group.id,
+            "name": role_group.name,
+            "parent_id": role_group.parent_id,
+            "created_at": getattr(role_group, "created_at", None),
+            "updated_at": getattr(role_group, "updated_at", None),
+            "created_by_id": getattr(role_group, "created_by_id", None),
+            "children": [],
+            "roles": [],
+        }
+
+        # Add creator information if available
+        if hasattr(role_group, "creator") and role_group.creator:
+            response_data["creator"] = {
+                "id": role_group.creator.id,
+                "email": role_group.creator.email,
+                "first_name": getattr(role_group.creator, "first_name", None),
+                "last_name": getattr(role_group.creator, "last_name", None),
+            }
+
+        # Add roles if they exist
+        if hasattr(role_group, "roles") and role_group.roles:
+            response_data["roles"] = [
+                {
+                    "id": role.id,
+                    "name": role.name,
+                    "description": getattr(role, "description", None),
+                    "is_default": getattr(role, "is_default", False),
+                }
+                for role in role_group.roles
+            ]
+
+        # Add children if they exist
+        if hasattr(role_group, "children") and role_group.children:
+            for child in role_group.children:
+                child_data = {
+                    "id": child.id,
+                    "name": child.name,
+                    "parent_id": child.parent_id,
+                    "created_at": getattr(child, "created_at", None),
+                    "updated_at": getattr(child, "updated_at", None),
+                    "created_by_id": getattr(child, "created_by_id", None),
+                    "children": [],
+                    "roles": [],
+                }
+
+                # Add creator information for the child if available
+                if hasattr(child, "creator") and child.creator:
+                    child_data["creator"] = {
+                        "id": child.creator.id,
+                        "email": child.creator.email,
+                        "first_name": getattr(child.creator, "first_name", None),
+                        "last_name": getattr(child.creator, "last_name", None),
+                    }
+
+                # Add roles for child if they exist
+                if include_nested_roles and hasattr(child, "roles") and child.roles:
+                    child_data["roles"] = [
+                        {
+                            "id": role.id,
+                            "name": role.name,
+                            "description": getattr(role, "description", None),
+                            "is_default": getattr(role, "is_default", False),
+                        }
+                        for role in child.roles
+                    ]
+
+                # Add grandchildren if they exist
+                if hasattr(child, "children") and child.children:
+                    for grandchild in child.children:
+                        grandchild_data = {
+                            "id": grandchild.id,
+                            "name": grandchild.name,
+                            "parent_id": grandchild.parent_id,
+                            "created_at": getattr(grandchild, "created_at", None),
+                            "updated_at": getattr(grandchild, "updated_at", None),
+                            "created_by_id": getattr(grandchild, "created_by_id", None),
+                            "children": [],
+                            "roles": [],
+                        }
+
+                        # Add creator information for grandchild if available
+                        if hasattr(grandchild, "creator") and grandchild.creator:
+                            grandchild_data["creator"] = {
+                                "id": grandchild.creator.id,
+                                "email": grandchild.creator.email,
+                                "first_name": getattr(grandchild.creator, "first_name", None),
+                                "last_name": getattr(grandchild.creator, "last_name", None),
+                            }
+
+                        # Add roles for grandchild if they exist
+                        if include_nested_roles and hasattr(grandchild, "roles") and grandchild.roles:
+                            grandchild_data["roles"] = [
+                                {
+                                    "id": role.id,
+                                    "name": role.name,
+                                    "description": getattr(role, "description", None),
+                                    "is_default": getattr(role, "is_default", False),
+                                }
+                                for role in grandchild.roles
+                            ]
+
+                        child_data["children"].append(grandchild_data)
+
+                response_data["children"].append(child_data)
+
+        # If there's a parent_id, add parent info without relying on relationship
+        if role_group.parent_id:
+            try:
+                # Get parent directly with a separate query to avoid relationship issues
+                parent_query = select(RoleGroup).where(RoleGroup.id == role_group.parent_id)
+                parent_result = await db_session.execute(parent_query)
+                parent = parent_result.scalar_one_or_none()
+
+                if parent:
+                    parent_data = {
+                        "id": parent.id,
+                        "name": parent.name,
+                        "parent_id": getattr(parent, "parent_id", None),
+                        "created_at": getattr(parent, "created_at", None),
+                        "updated_at": getattr(parent, "updated_at", None),
+                        "created_by_id": getattr(parent, "created_by_id", None),
+                    }
+
+                    # Add creator information for parent if available
+                    if hasattr(parent, "creator") and parent.creator:
+                        parent_data["creator"] = {
+                            "id": parent.creator.id,
+                            "email": parent.creator.email,
+                            "first_name": getattr(parent.creator, "first_name", None),
+                            "last_name": getattr(parent.creator, "last_name", None),
+                        }
+
+                    # We specifically don't include children for parent to avoid cyclic references
+                    # We don't include roles unless specifically requested
+                    if include_nested_roles and hasattr(parent, "roles") and parent.roles:
+                        parent_data["roles"] = [
+                            {
+                                "id": role.id,
+                                "name": role.name,
+                                "description": getattr(role, "description", None),
+                                "is_default": getattr(role, "is_default", False),
+                            }
+                            for role in parent.roles
+                        ]
+
+                    response_data["parent"] = parent_data
+            except Exception as e:
+                # Log error but continue - parent info is optional
+                import logging
+
+                logging.warning(f"Error loading parent for role group {group_id}: {str(e)}")
+                # No need to re-raise, we can continue without parent info
+
+        return create_response(data=response_data)
+    except Exception as e:
+        import logging
+
+        logging.error(f"Error in get_role_group_by_id: {str(e)}")
+        if "not found" in str(e).lower():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(e),
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database operation failed: {str(e)}",
+        )
 
 
 @router.post("")
@@ -92,7 +311,7 @@ async def update_role_group(
 async def delete_role_group(
     group: RoleGroup = Depends(role_group_deps.get_group_by_id),
     current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
-):
+) -> None:
     """
     Deletes a role group by its id
 
@@ -115,14 +334,81 @@ async def delete_role_group(
     # No content is returned on successful deletion (204)
 
 
+@router.post("/bulk")
+async def bulk_create_role_groups(
+    groups: List[IRoleGroupCreate],
+    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
+    redis_client: Redis = Depends(get_redis_client),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+) -> IPostResponseBase[List[IRoleGroupRead]]:
+    """
+    Create multiple role groups in bulk
+
+    Required roles:
+    - admin
+    - manager
+    """
+    try:
+        new_groups = await crud.role_group.bulk_create(groups=groups, current_user=current_user)
+
+        # Invalidate role groups list cache
+        background_tasks.add_task(redis_client.delete, "role_groups:list")
+
+        return create_response(data=new_groups, message=f"Successfully created {len(new_groups)} role groups")
+    except NameExistException as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error creating role groups: {str(e)}",
+        )
+
+
+@router.delete("/bulk")
+async def bulk_delete_role_groups(
+    group_ids: List[UUID],
+    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
+    redis_client: Redis = Depends(get_redis_client),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+) -> IPostResponseBase:
+    """
+    Delete multiple role groups in bulk
+
+    Required roles:
+    - admin
+    - manager
+    """
+    try:
+        await crud.role_group.bulk_delete(group_ids=group_ids, current_user=current_user)
+
+        # Invalidate role groups list cache and individual group caches
+        background_tasks.add_task(redis_client.delete, "role_groups:list")
+        for group_id in group_ids:
+            background_tasks.add_task(redis_client.delete, f"role_group:{group_id}")
+
+        return create_response(message=f"Successfully deleted {len(group_ids)} role groups")
+    except ResourceNotFoundException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error deleting role groups: {str(e)}",
+        )
+
+
+# Update the existing add_roles_to_group endpoint to check for circular dependencies
 @router.post("/{group_id}/roles")
 async def add_roles_to_group(
     group_id: UUID,
     role_ids: dict,
     current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
+    redis_client: Redis = Depends(get_redis_client),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
 ) -> IPostResponseBase[IRoleGroupWithRoles]:
     """
-    Adds roles to a role group
+    Adds roles to a role group with circular dependency check
 
     Required roles:
     - admin
@@ -144,21 +430,33 @@ async def add_roles_to_group(
             else:
                 raise ValueError(f"Invalid role_id format: {role_id}")
 
+        # Check for circular dependencies
+        has_circular = await crud.role_group.validate_circular_dependency(
+            group_id=group_id, role_ids=uuid_role_ids
+        )
+
+        if has_circular:
+            raise CircularDependencyException("Adding these roles would create a circular dependency")
+
         # Add roles to the group with converted UUIDs
         await crud.role_group.add_roles_to_group(group_id=group_id, role_ids=uuid_role_ids)
+
+        # Invalidate cache for this role group
+        background_tasks.add_task(redis_client.delete, f"role_group:{group_id}")
 
         # Get updated group
         updated_group = await role_group_deps.get_group_by_id(group_id=group_id)
         return create_response(data=updated_group)
     except ValueError as e:
-        # Handle invalid UUID format
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid UUID format in role_ids: {str(e)}"
         )
+    except CircularDependencyException as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except Exception as e:
-        # Handle other exceptions
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error adding roles to group: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error adding roles to group: {str(e)}",
         )
 
 
@@ -207,4 +505,90 @@ async def remove_roles_from_group(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error removing roles from group: {str(e)}",
+        )
+
+
+@router.post("/{group_id}/clone")
+async def clone_role_group(
+    group_id: UUID,
+    new_name: str,
+    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
+    redis_client: Redis = Depends(get_redis_client),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+) -> IPostResponseBase[IRoleGroupWithRoles]:
+    """
+    Clone a role group with all its role assignments
+
+    Required roles:
+    - admin
+    - manager
+    """
+    # Get source group
+    source_group = await role_group_deps.get_group_by_id(group_id=group_id)
+
+    # Check if new name already exists
+    existing = await crud.role_group.get_group_by_name(name=new_name)
+    if existing:
+        raise NameExistException(RoleGroup, name=new_name)
+
+    try:
+        # Create new group
+        new_group = await crud.role_group.create(
+            obj_in=IRoleGroupCreate(name=new_name), created_by_id=current_user.id
+        )
+
+        # Get all roles from source group and assign to new group
+        if source_group.roles:
+            role_ids = [role.id for role in source_group.roles]
+            await crud.role_group.add_roles_to_group(group_id=new_group.id, role_ids=role_ids)
+
+        # Invalidate caches
+        background_tasks.add_task(redis_client.delete, "role_groups:list")
+        background_tasks.add_task(redis_client.delete, f"role_group:{new_group.id}")
+
+        # Get updated group with roles
+        updated_group = await role_group_deps.get_group_by_id(group_id=new_group.id)
+        return create_response(
+            data=updated_group,
+            message=f"Successfully cloned role group '{source_group.name}' to '{new_name}'",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error cloning role group: {str(e)}",
+        )
+
+
+@router.post("/sync-roles")
+async def sync_role_group_mappings(
+    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin])),
+    redis_client: Redis = Depends(get_redis_client),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+) -> IPostResponseBase:
+    """
+    Synchronize roles with role groups based on the role_group_id field.
+    This endpoint populates the RoleGroupMap table for any existing relationships
+    where a role has a role_group_id but no corresponding entry in the RoleGroupMap table.
+
+    Required roles:
+    - admin
+    """
+
+    try:
+        result = await crud.role_group.sync_roles_with_role_groups(current_user=current_user)
+
+        # Invalidate role groups cache
+        background_tasks.add_task(redis_client.delete, "role_groups:list")
+
+        return create_response(
+            message=(
+                f"Successfully synchronized role-group mappings. "
+                f"Created: {result['created']}, Skipped: {result['skipped']}"
+            ),
+            data=result,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error synchronizing role-group mappings: {str(e)}",
         )

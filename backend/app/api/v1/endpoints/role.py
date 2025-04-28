@@ -1,8 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from uuid import UUID
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi_cache.decorator import cache
 from fastapi_pagination import Params
+from redis.asyncio import Redis
 
 from app import crud
 from app.api import deps
+from app.api.deps import get_redis_client
 from app.deps import role_deps
 from app.models.role_model import Role
 from app.models.user_model import User
@@ -13,8 +18,19 @@ from app.schemas.response_schema import (
     IPutResponseBase,
     create_response,
 )
-from app.schemas.role_schema import IRoleCreate, IRoleEnum, IRoleRead, IRoleUpdate
-from app.utils.exceptions.common_exception import ContentNoChangeException, NameExistException
+from app.schemas.role_schema import (
+    IRoleCreate,
+    IRoleEnum,
+    IRolePermissionAssign,
+    IRolePermissionUnassign,
+    IRoleRead,
+    IRoleUpdate,
+)
+from app.utils.exceptions.common_exception import (
+    ContentNoChangeException,
+    NameExistException,
+    ResourceNotFoundException,
+)
 
 router = APIRouter()
 
@@ -32,12 +48,13 @@ async def get_roles(
 
 
 @router.get("/{role_id}")
+@cache(expire=300)  # Cache for 5 minutes
 async def get_role_by_id(
     role: Role = Depends(role_deps.get_user_role_by_id),
     current_user: User = Depends(deps.get_current_user()),
 ) -> IGetResponseBase[IRoleRead]:
     """
-    Gets a role by its id
+    Gets a role by its id with caching enabled
     """
     return create_response(data=role)
 
@@ -57,7 +74,7 @@ async def create_role(
     if role_current:
         raise NameExistException(Role, name=role_current.name)
 
-    new_role = await crud.role.create(obj_in=role)
+    new_role = await crud.role.create(obj_in=role, created_by_id=current_user.id)
     return create_response(data=new_role)
 
 
@@ -76,9 +93,11 @@ async def update_role(
     if current_role.name == role.name and current_role.description == role.description:
         raise ContentNoChangeException()
 
-    exist_role = await crud.role.get_role_by_name(name=role.name)
-    if exist_role:
-        raise NameExistException(Role, name=role.name)
+    # Only check for name conflicts if the name is being changed
+    if role.name != current_role.name:
+        exist_role = await crud.role.get_role_by_name(name=role.name)
+        if exist_role:
+            raise NameExistException(Role, name=role.name)
 
     updated_role = await crud.role.update(obj_current=current_role, obj_new=role)
     return create_response(data=updated_role)
@@ -88,7 +107,7 @@ async def update_role(
 async def delete_role(
     role: Role = Depends(role_deps.get_user_role_by_id),
     current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin])),
-):
+) -> None:
     """
     Deletes a role by its id
 
@@ -115,3 +134,87 @@ async def delete_role(
         )
 
     # No content is returned on successful deletion (204)
+
+
+@router.post("/{role_id}/permissions")
+async def assign_permissions_to_role(
+    role_id: UUID,
+    permissions: IRolePermissionAssign,
+    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin])),
+    redis_client: Redis = Depends(get_redis_client),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+) -> IPostResponseBase[IRoleRead]:
+    """
+    Assign permissions to a role
+
+    Required roles:
+    - admin
+    """
+    # Check if it's a system role
+    is_system_role = await crud.role.validate_system_role(role_id=role_id)
+    if is_system_role:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot modify system role permissions",
+        )
+
+    try:
+        role = await crud.role.assign_permissions(
+            role_id=role_id,
+            permission_ids=permissions.permission_ids,
+            current_user=current_user,
+        )
+
+        # Invalidate role cache in background
+        background_tasks.add_task(redis_client.delete, f"role:{role_id}")
+
+        return create_response(data=role, message="Permissions assigned successfully")
+    except ResourceNotFoundException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error assigning permissions: {str(e)}",
+        )
+
+
+@router.delete("/{role_id}/permissions")
+async def remove_permissions_from_role(
+    role_id: UUID,
+    permissions: IRolePermissionUnassign,
+    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin])),
+    redis_client: Redis = Depends(get_redis_client),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+) -> IPostResponseBase[IRoleRead]:
+    """
+    Remove permissions from a role
+
+    Required roles:
+    - admin
+    """
+    # Check if it's a system role
+    is_system_role = await crud.role.validate_system_role(role_id=role_id)
+    if is_system_role:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot modify system role permissions",
+        )
+
+    try:
+        role = await crud.role.remove_permissions(
+            role_id=role_id,
+            permission_ids=permissions.permission_ids,
+            current_user=current_user,
+        )
+
+        # Invalidate role cache in background
+        background_tasks.add_task(redis_client.delete, f"role:{role_id}")
+
+        return create_response(data=role, message="Permissions removed successfully")
+    except ResourceNotFoundException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error removing permissions: {str(e)}",
+        )

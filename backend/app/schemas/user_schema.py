@@ -1,9 +1,9 @@
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict
+from typing import Any  # Removed Dict, List imports
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field  # Added ConfigDict import
 
 from app.models.user_model import User, UserBase
 from app.utils.partial import optional
@@ -12,7 +12,8 @@ from app.utils.partial import optional
 # Properties to receive via API on creation
 class IUserCreate(UserBase):
     role_id: list[UUID] | None = None
-    password: str | None = None
+    # Password is required on creation as per UserBase
+    password: str
     last_changed_password_date: datetime | None = None
     expiry_date: datetime | None = None
     number_of_failed_attempts: int = 0  # Adding the missing field with default value
@@ -21,23 +22,26 @@ class IUserCreate(UserBase):
 # Properties to receive via API on update
 @optional()
 class IUserUpdate(UserBase):
-    first_name: str | None = None
-    last_name: str | None = None
-    email: EmailStr | None = None
-    is_active: bool | None = None
-    is_superuser: bool | None = None
+    # Let @optional handle making fields optional, remove conflicting '| None'
+    first_name: str
+    last_name: str
+    email: EmailStr
+    is_active: bool
+    is_superuser: bool
     role_id: list[UUID] | None = None
     contact_phone: str | None = None
     expiry_date: datetime | None = None
-    password: str | None = None  # For allowing password update via this endpoint
+    # Password update is optional - handled by @optional
+    password: str
 
 
 class IUserRead(UserBase):
     id: UUID
     roles: list[str] | None = None
 
-    model_config = {
-        "json_schema_extra": {
+    # This usage is standard for Pydantic v2/SQLModel
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "id": "a3a3a3a3-a3a3-a3a3-a3a3-a3a3a3a3a3a3",
                 "first_name": "John",
@@ -56,15 +60,12 @@ class IUserRead(UserBase):
                 "roles": ["user"],
             }
         },
-        # Exclude password field from responses
-        "exclude": {"password"},
-    }
+    )
 
 
 @optional()
 class IUserOutput(BaseModel):
-
-    model_config: Dict[str, Any] = {}
+    model_config = ConfigDict({})
 
 
 class IUserOutputPaginated(BaseModel):

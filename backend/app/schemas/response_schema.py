@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 from math import ceil
-from typing import Any, Generic, TypeVar, cast
+from typing import Any, Dict, Generic, TypeVar, cast  # Added Dict import
 
 from fastapi_pagination import Page, Params
 from fastapi_pagination.bases import AbstractPage, AbstractParams
@@ -58,19 +58,19 @@ class IGetResponsePaginated(AbstractPage[T], Generic[T]):
 
 
 class IGetResponseBase(IResponseBase[DataType], Generic[DataType]):
-    message: str | None = "Data got correctly"
+    message: str = "Data got correctly"  # Changed from str | None to str
 
 
 class IPostResponseBase(IResponseBase[DataType], Generic[DataType]):
-    message: str | None = "Data created correctly"
+    message: str = "Data created correctly"  # Changed from str | None to str
 
 
 class IPutResponseBase(IResponseBase[DataType], Generic[DataType]):
-    message: str | None = "Data updated correctly"
+    message: str = "Data updated correctly"  # Changed from str | None to str
 
 
 class IDeleteResponseBase(IResponseBase[DataType], Generic[DataType]):
-    message: str | None = "Data deleted correctly"
+    message: str = "Data deleted correctly"  # Changed from str | None to str
 
 
 class ErrorDetail(BaseModel):
@@ -106,7 +106,7 @@ def create_error_response(
 def create_response(
     data: DataType,
     message: str | None = None,
-    meta: dict | Any | None = {},
+    meta: Dict[str, Any] | None = None,  # Refined meta type hint
 ) -> (
     IResponseBase[DataType]
     | IGetResponsePaginated[DataType]
@@ -117,8 +117,11 @@ def create_response(
 ):
     if isinstance(data, IGetResponsePaginated):
         data.message = "Data paginated correctly" if message is None else message
-        data.meta = meta
+        # Ensure meta is a dict before assignment
+        data.meta = meta if meta is not None else {}
         return data
+    # Ensure meta is a dict for other response types as well
+    meta_dict = meta if meta is not None else {}
     if message is None:
-        return IGetResponseBase[DataType](data=data, meta=meta)
-    return IGetResponseBase[DataType](data=data, message=message, meta=meta)
+        return IGetResponseBase[DataType](data=data, meta=meta_dict)
+    return IGetResponseBase[DataType](data=data, message=message, meta=meta_dict)

@@ -9,12 +9,14 @@ export interface Role {
   updated_at: string;
   created_by_id?: string;
   created_by?: User; // Optional: if backend populates this
+  role_group_id?: string;
   permissions?: Permission[]; // Optional: if backend populates this
 }
 
 export interface RoleCreate {
   name: string;
   description?: string;
+  role_group_id?: string;
 }
 
 export interface RoleUpdate {

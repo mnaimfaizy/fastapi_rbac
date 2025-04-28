@@ -2,7 +2,7 @@ import api from "./api";
 import { Role, RoleCreate, RoleResponse, RoleUpdate } from "../models/role";
 import { PaginatedDataResponse, PaginationParams } from "../models/pagination";
 
-const API_URL = "/roles";
+const API_URL = "/role";
 
 export const roleService = {
   // Fetch paginated roles

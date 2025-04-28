@@ -9,35 +9,34 @@ import {
   clearRoleError,
   setCurrentRole,
 } from "../../store/slices/roleSlice";
+import { fetchRoleGroups } from "../../store/slices/roleGroupSlice";
 import RoleForm, { RoleFormData } from "./RoleForm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 
-// Combined component for Create and Edit
 const RoleFormContent: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
-  const { roleId } = useParams<{ roleId?: string }>(); // roleId is optional
+  const { roleId } = useParams<{ roleId?: string }>();
   const { currentRole, loading, error } = useSelector(
     (state: RootState) => state.role
   );
+  const { roleGroups } = useSelector((state: RootState) => state.roleGroup);
   const isEditMode = Boolean(roleId);
 
   useEffect(() => {
+    // Fetch role groups for the dropdown
+    dispatch(fetchRoleGroups({ page: 1, size: 100 }));
+
     if (isEditMode && roleId) {
       dispatch(fetchRoleById(roleId));
     } else {
-      // Clear any existing role data if in create mode
       dispatch(setCurrentRole(null));
     }
 
-    // Cleanup on unmount or when switching between create/edit
     return () => {
       dispatch(clearRoleError());
-      // Don't clear currentRole here if navigating away from edit,
-      // but maybe clear if navigating *between* create/edit?
-      // Let's clear it for simplicity for now.
       dispatch(setCurrentRole(null));
     };
   }, [dispatch, roleId, isEditMode]);
@@ -45,23 +44,20 @@ const RoleFormContent: React.FC = () => {
   const handleSubmit = async (data: RoleFormData) => {
     try {
       if (isEditMode && roleId) {
-        // Update existing role
         await dispatch(updateRole({ roleId, roleData: data })).unwrap();
         toast("Role updated successfully.");
       } else {
-        // Create new role
         await dispatch(createRole(data)).unwrap();
         toast("Role created successfully.");
       }
-      navigate("/dashboard/roles"); // Navigate back to the list
+      navigate("/dashboard/roles");
     } catch (err: any) {
       const actionType = isEditMode ? "update" : "create";
-      toast(err || `Failed to ${actionType} role.`);
+      toast.error(err || `Failed to ${actionType} role.`);
       console.error(`Failed to ${actionType} role:`, err);
     }
   };
 
-  // Loading state specifically for fetching in edit mode
   if (isEditMode && loading && !currentRole) {
     return (
       <Card>
@@ -79,12 +75,10 @@ const RoleFormContent: React.FC = () => {
     );
   }
 
-  // Error state specifically for fetching in edit mode
   if (isEditMode && error && !currentRole) {
     return <div className="text-red-500">Error loading role: {error}</div>;
   }
 
-  // If in edit mode but role not found after loading/error checks
   if (isEditMode && !currentRole) {
     return <div>Role not found.</div>;
   }
@@ -100,9 +94,9 @@ const RoleFormContent: React.FC = () => {
         <RoleForm
           onSubmit={handleSubmit}
           initialData={isEditMode ? currentRole : null}
-          isLoading={loading} // Use general loading state for form submission
+          isLoading={loading}
+          roleGroups={roleGroups || []}
         />
-        {/* Display general error (e.g., from submission) */}
         {error && <p className="text-red-500 mt-4">Error: {error}</p>}
       </CardContent>
     </Card>

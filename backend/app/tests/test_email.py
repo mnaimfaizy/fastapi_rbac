@@ -15,7 +15,7 @@ from app.utils.email.reset_password import send_reset_password_email
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 
-async def test_send_reset_password_email():
+async def test_send_reset_password_email() -> None:
     """Test sending a password reset email."""
     print(f"Testing email sending with SMTP host: {settings.SMTP_HOST}, " f"port: {settings.SMTP_PORT}")
     print(f"Current environment mode: {settings.MODE}")

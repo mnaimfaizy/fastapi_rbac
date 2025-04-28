@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "../../store";
 import { fetchRoles, deleteRole } from "../../store/slices/roleSlice"; // Import deleteRole
+import { fetchRoleGroups } from "../../store/slices/roleGroupSlice";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -32,11 +33,14 @@ const RoleList: React.FC = () => {
   const { roles, pagination, loading, error } = useSelector(
     (state: RootState) => state.role
   );
+  const { roleGroups } = useSelector((state: RootState) => state.roleGroup);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(10); // Or get from config/state
 
   useEffect(() => {
     dispatch(fetchRoles({ page: currentPage, size: pageSize }));
+    // Fetch all role groups to display group names
+    dispatch(fetchRoleGroups({ page: 1, size: 100 }));
   }, [dispatch, currentPage, pageSize]);
 
   const handlePageChange = (page: number) => {
@@ -50,13 +54,36 @@ const RoleList: React.FC = () => {
   const handleDelete = async (roleId: string) => {
     try {
       await dispatch(deleteRole(roleId)).unwrap();
-      toast("Role deleted successfully.");
-      // Optional: Refetch roles if pagination/total count needs precise update
-      // dispatch(fetchRoles({ page: currentPage, size: pageSize }));
-    } catch (err: any) {
-      toast("Failed to delete role.");
-      console.error("Failed to delete role:", err);
+      toast.success("Role deleted successfully");
+      dispatch(fetchRoles({ page: currentPage, size: pageSize }));
+    } catch (error: unknown) {
+      toast.error("Failed to delete role");
+      console.error("Failed to delete role:", error);
     }
+  };
+
+  const navigateToRoleGroup = (roleGroupId: string) => {
+    navigate(`/dashboard/role-groups/${roleGroupId}`);
+  };
+
+  const getRoleGroupName = (groupId: string | undefined) => {
+    if (!groupId) return null;
+    const group = roleGroups.find((g) => g.id === groupId);
+    return group?.name;
+  };
+
+  const formatDate = (dateString: string | undefined) => {
+    if (!dateString) return "-";
+    const date = new Date(dateString);
+    return !isNaN(date.getTime())
+      ? date.toLocaleDateString(undefined, {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : "-";
   };
 
   if (loading && !roles.length) {
@@ -74,6 +101,7 @@ const RoleList: React.FC = () => {
           <TableRow>
             <TableHead>Name</TableHead>
             <TableHead>Description</TableHead>
+            <TableHead>Role Group</TableHead>
             <TableHead>Created At</TableHead>
             <TableHead>Actions</TableHead>
           </TableRow>
@@ -82,11 +110,21 @@ const RoleList: React.FC = () => {
           {roles.length > 0 ? (
             roles.map((role: Role) => (
               <TableRow key={role.id}>
-                <TableCell>{role.name}</TableCell>
+                <TableCell className="font-medium">{role.name}</TableCell>
                 <TableCell>{role.description || "-"}</TableCell>
                 <TableCell>
-                  {new Date(role.created_at).toLocaleDateString()}
+                  {role.role_group_id ? (
+                    <button
+                      onClick={() => navigateToRoleGroup(role.role_group_id!)}
+                      className="text-primary hover:underline focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-sm"
+                    >
+                      {getRoleGroupName(role.role_group_id) || "View Group"}
+                    </button>
+                  ) : (
+                    <span className="text-muted-foreground">No group</span>
+                  )}
                 </TableCell>
+                <TableCell>{formatDate(role.created_at)}</TableCell>
                 <TableCell className="space-x-2">
                   <Button
                     variant="outline"
@@ -126,7 +164,7 @@ const RoleList: React.FC = () => {
             ))
           ) : (
             <TableRow>
-              <TableCell colSpan={4} className="text-center">
+              <TableCell colSpan={5} className="text-center">
                 No roles found.
               </TableCell>
             </TableRow>
@@ -135,18 +173,16 @@ const RoleList: React.FC = () => {
       </Table>
 
       {pagination && pagination.pages > 1 && (
-        <div>
-          {/* Basic Pagination Example - Replace with actual ShadCN/UI component */}
-          <span>
-            Page {pagination.page} of {pagination.pages}
-          </span>
+        <div className="flex justify-center gap-2 mt-4">
           <Button
+            variant="outline"
             onClick={() => handlePageChange(currentPage - 1)}
             disabled={currentPage <= 1}
           >
             Previous
           </Button>
           <Button
+            variant="outline"
             onClick={() => handlePageChange(currentPage + 1)}
             disabled={currentPage >= pagination.pages}
           >

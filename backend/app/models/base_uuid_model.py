@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy.orm import declared_attr
@@ -10,7 +10,7 @@ from app.utils.uuid6 import uuid7
 
 # id: implements proposal uuid7 draft4
 class SQLModel(_SQLModel):
-    @declared_attr  # type: ignore
+    @declared_attr
     def __tablename__(cls) -> str:
         return cls.__name__
 
@@ -23,6 +23,7 @@ class BaseUUIDModel(SQLModel):
         nullable=False,
     )
     updated_at: datetime | None = Field(
-        default_factory=datetime.utcnow, sa_column_kwargs={"onupdate": datetime.utcnow}
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column_kwargs={"onupdate": lambda: datetime.now(timezone.utc)},
     )
-    created_at: datetime | None = Field(default_factory=datetime.utcnow)
+    created_at: datetime | None = Field(default_factory=lambda: datetime.now(timezone.utc))
