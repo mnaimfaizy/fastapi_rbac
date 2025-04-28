@@ -4,8 +4,7 @@ from enum import Enum
 from functools import lru_cache
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import AnyHttpUrl, EmailStr, PostgresDsn, field_validator, model_validator, ValidationInfo
-from pydantic_core.core_schema import FieldValidationInfo
+from pydantic import AnyHttpUrl, EmailStr, PostgresDsn, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Get the path of the directory containing the current script (config.py)

@@ -1,17 +1,15 @@
-import pytest
-from datetime import datetime, timedelta
-from typing import Dict
+from datetime import timedelta
 
+import pytest
 from jose import jwt
-from pydantic import ValidationError
 
 from app.core.config import settings
 from app.core.security import (
     create_access_token,
     create_refresh_token,
+    decode_token,
     get_password_hash,
     verify_password,
-    decode_token,
 )
 
 

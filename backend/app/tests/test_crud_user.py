@@ -1,10 +1,10 @@
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.security import verify_password
 from app.crud.user_crud import user_crud
 from app.schemas.user_schema import IUserCreate, IUserUpdate
 from app.tests.utils import random_email, random_lower_string
-from app.core.security import verify_password
 
 
 @pytest.mark.asyncio

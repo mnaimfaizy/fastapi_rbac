@@ -3,9 +3,9 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.tests.utils import random_lower_string
 from app.crud.role_crud import role_crud
 from app.schemas.role_schema import IRoleCreate as RoleCreate
+from app.tests.utils import random_lower_string
 
 
 @pytest.mark.asyncio

@@ -39,6 +39,7 @@ fastapi-limiter==0.1.6
 fastapi-pagination==0.13.1
 filelock==3.18.0
 flake8==7.2.0
+flake8-pytest-style==2.1.0 # Corrected version for pytest style checks
 flower==2.0.1
 greenlet==3.2.1
 h11==0.16.0

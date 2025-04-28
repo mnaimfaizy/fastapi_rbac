@@ -1,11 +1,12 @@
-import pytest
-import pytest_asyncio
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
 from uuid import UUID
 
-from app.models.user_model import User
+import pytest
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models.role_model import Role
+from app.models.user_model import User
 from app.models.user_role_model import UserRole
 from app.tests.utils import random_email, random_lower_string
 
@@ -100,7 +101,7 @@ async def test_user_unique_email_constraint(db: AsyncSession):
     db.add(user2)
 
     # This should raise an exception due to unique constraint on email
-    with pytest.raises(Exception):  # Could be more specific with the exact SQLAlchemy exception
+    with pytest.raises(IntegrityError):  # Could be more specific with the exact SQLAlchemy exception
         await db.commit()
 
     # Rollback to clean the session

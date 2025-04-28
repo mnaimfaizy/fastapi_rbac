@@ -8,11 +8,12 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
+from app.api.deps import get_db
+from app.core.config import settings
+from app.db.init_db import init_db
+
 # Import our app code
 from app.main import fastapi_app as main_app
-from app.api.deps import get_db
-from app.db.init_db import init_db
-from app.core.config import settings
 from app.tests.utils import random_email, random_lower_string
 
 # Set the mode to testing to ensure we use test settings
@@ -40,18 +41,6 @@ async def db_engine():
     engine = create_async_engine(TEST_SQLALCHEMY_DATABASE_URI, echo=False)
 
     # Import all models to ensure they are registered with SQLAlchemy
-    from app.models import (
-        user_model,
-        role_model,
-        permission_model,
-        role_permission_model,
-        user_role_model,
-        role_group_model,
-        role_group_map_model,
-        permission_group_model,
-        password_history_model,
-        audit_log_model,
-    )
 
     # Create all tables
     async with engine.begin() as conn:
@@ -149,7 +138,7 @@ async def normal_user_token_headers(client, db) -> Dict[str, str]:
         password=password,
         is_active=True,
     )
-    user = await user_crud.create(obj_in=user_in, db_session=db)
+    await user_crud.create(obj_in=user_in, db_session=db)
 
     # Login as the user
     login_data = {

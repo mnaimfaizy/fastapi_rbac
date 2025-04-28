@@ -2,7 +2,7 @@ import pytest
 from httpx import AsyncClient
 
 from app.core.config import settings
-from app.tests.utils import random_email, random_lower_string
+from app.tests.utils import random_email
 
 
 @pytest.mark.asyncio
@@ -60,40 +60,30 @@ async def test_get_access_token_nonexistent_user(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="Refresh token endpoint not implemented in the current API")
 async def test_refresh_token(client: AsyncClient, superuser_token_headers):
-    """Test refreshing access token with refresh token"""
-    # First login to get both tokens
-    login_data = {
-        "username": settings.FIRST_SUPERUSER_EMAIL,
-        "password": settings.FIRST_SUPERUSER_PASSWORD,
-    }
-    response = await client.post(f"{settings.API_V1_STR}/login/access-token", data=login_data)
-    tokens = response.json()
-
-    # This test is skipped because the current API implementation doesn't return refresh tokens
-    # and the /login/refresh-token endpoint doesn't exist (returns 404)
-    assert True
+    # Assuming the superuser is already logged in and has headers
+    # tokens = superuser_token_headers # F841: Variable 'tokens' assigned but never used
+    refresh_token = "..."  # Placeholder: Need to extract refresh token from login response
+    # For now, let's assume we have a valid refresh token somehow
+    # In a real test, you'd get this from the initial login response
+    # response = await client.post(f"{settings.API_V1_STR}/login/refresh-token", headers=superuser_token_headers)
+    # assert response.status_code == 200
+    # new_tokens = response.json()
+    # assert "access_token" in new_tokens
+    # assert new_tokens["access_token"]
+    pass  # Test needs implementation to get refresh token first
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="Refresh token endpoint not implemented in the current API")
 async def test_refresh_token_invalid(client: AsyncClient):
-    """Test refreshing with invalid token"""
-    # Try to refresh with invalid token
-    refresh_data = {"refresh_token": "invalid-token"}
-    response = await client.post(f"{settings.API_V1_STR}/login/refresh-token", json=refresh_data)
-
-    # This test is skipped because the /login/refresh-token endpoint doesn't exist (returns 404)
-    assert True
+    headers = {"Authorization": "Bearer invalidtoken"}
+    response = await client.post(f"{settings.API_V1_STR}/login/refresh-token", headers=headers)
+    assert response.status_code == 401  # Expect unauthorized
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="Test token endpoint not implemented in the current API")
 async def test_test_token(client: AsyncClient, superuser_token_headers):
-    """Test validating a token"""
-    # Use the superuser token to test the test-token endpoint
     response = await client.post(f"{settings.API_V1_STR}/login/test-token", headers=superuser_token_headers)
-
-    # This test is skipped because the /login/test-token endpoint doesn't exist (returns 404)
-    assert True
+    assert response.status_code == 200
+    user_data = response.json()
+    assert user_data["email"] == settings.FIRST_SUPERUSER

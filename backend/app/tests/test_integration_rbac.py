@@ -3,15 +3,15 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.crud.user_crud import user_crud
-from app.crud.role_crud import role_crud
 from app.crud.permission_crud import permission_crud
+from app.crud.role_crud import role_crud
+from app.crud.user_crud import user_crud
 from app.models.role_permission_model import RolePermission
 from app.models.user_role_model import UserRole
-from app.schemas.user_schema import IUserCreate as UserCreate
-from app.schemas.role_schema import IRoleCreate as RoleCreate
 from app.schemas.permission_schema import IPermissionCreate as PermissionCreate
-from app.tests.utils import random_lower_string, random_email
+from app.schemas.role_schema import IRoleCreate as RoleCreate
+from app.schemas.user_schema import IUserCreate as UserCreate
+from app.tests.utils import random_email, random_lower_string
 
 
 @pytest.mark.asyncio

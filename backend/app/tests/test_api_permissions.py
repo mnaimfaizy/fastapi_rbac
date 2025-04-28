@@ -3,9 +3,9 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.tests.utils import random_lower_string
 from app.crud.permission_crud import permission_crud
 from app.schemas.permission_schema import IPermissionCreate as PermissionCreate
+from app.tests.utils import random_lower_string
 
 
 @pytest.mark.asyncio

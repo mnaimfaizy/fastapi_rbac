@@ -1,11 +1,12 @@
-import pytest
-import pytest_asyncio
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
 from uuid import UUID
 
-from app.models.role_model import Role
+import pytest
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models.permission_model import Permission
+from app.models.role_model import Role
 from app.models.role_permission_model import RolePermission
 from app.tests.utils import random_lower_string
 
@@ -120,7 +121,7 @@ async def test_role_unique_name_constraint(db: AsyncSession):
     db.add(role2)
 
     # This should raise an exception due to unique constraint on name
-    with pytest.raises(Exception):  # Could be more specific with the exact SQLAlchemy exception
+    with pytest.raises(IntegrityError):
         await db.commit()
 
     # Rollback to clean the session
@@ -141,7 +142,7 @@ async def test_permission_unique_name_constraint(db: AsyncSession):
     db.add(perm2)
 
     # This should raise an exception due to unique constraint on name
-    with pytest.raises(Exception):  # Could be more specific with the exact SQLAlchemy exception
+    with pytest.raises(IntegrityError):
         await db.commit()
 
     # Rollback to clean the session

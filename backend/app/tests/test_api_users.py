@@ -3,9 +3,9 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.tests.utils import random_email, random_lower_string
 from app.crud.user_crud import user_crud
 from app.schemas.user_schema import IUserCreate as UserCreate
+from app.tests.utils import random_email, random_lower_string
 
 
 @pytest.mark.asyncio
