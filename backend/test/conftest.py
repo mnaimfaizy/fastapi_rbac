@@ -14,7 +14,7 @@ from app.db.init_db import init_db
 
 # Import our app code
 from app.main import fastapi_app as main_app
-from app.tests.utils import random_email, random_lower_string
+from test.utils import random_email, random_lower_string  # Fixed import path
 
 # Set the mode to testing to ensure we use test settings
 os.environ["MODE"] = "testing"
