@@ -108,7 +108,6 @@ const DashboardOverview = () => {
             title="User Activity"
             description="Daily active users over time"
             data={chartData}
-            className="col-span-4"
           />
           <Card className="col-span-3">
             <CardHeader>

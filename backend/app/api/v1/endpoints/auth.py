@@ -6,6 +6,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from jwt import DecodeError, ExpiredSignatureError, MissingRequiredClaimError
 from pydantic import EmailStr
 from redis.asyncio import Redis
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app import crud
 from app.api import deps
@@ -451,6 +452,7 @@ async def change_password(
     background_tasks: BackgroundTasks = BackgroundTasks(),
     current_user: User = Depends(deps.get_current_user()),
     redis_client: Redis = Depends(get_redis_client),
+    db_session: AsyncSession = Depends(deps.get_db),
 ) -> IPostResponseBase[Token]:
     """
     Change password
@@ -467,9 +469,8 @@ async def change_password(
         raise HTTPException(status_code=400, detail="Invalid Current Password")
 
     try:
-        # This will check history, update password,
-        # and update last_changed_password_date
-        await crud.user.update_password(user=current_user, new_password=new_password)
+        # Pass the db_session explicitly to the CRUD method
+        await crud.user.update_password(user=current_user, new_password=new_password, db_session=db_session)
     except ValueError as e:
         # Log password history violation as a background task
         background_tasks.add_task(

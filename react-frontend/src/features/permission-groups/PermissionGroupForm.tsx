@@ -3,13 +3,13 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useAppDispatch, useAppSelector } from "../../../hooks/redux";
+import { useAppDispatch, useAppSelector } from "../../hooks/redux";
 import {
-  fetchPermissionById,
-  createPermission,
-  updatePermission,
-} from "../../../store/slices/permissionSlice";
-import { fetchPermissionGroups } from "../../../store/slices/permissionGroupSlice";
+  fetchPermissionGroupById,
+  createPermissionGroup,
+  updatePermissionGroup,
+  fetchPermissionGroups,
+} from "../../store/slices/permissionGroupSlice";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -20,7 +20,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -36,87 +35,91 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { ArrowLeft } from "lucide-react";
-import { RootState } from "../../../store";
-import { PermissionGroup } from "../../../models/permission";
+import { RootState } from "../../store";
+import { PermissionGroup } from "../../models/permission";
 
 // Form validation schema
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  description: z.string().optional(),
-  group_id: z.string().min(1, "Permission Group is required"),
+  permission_group_id: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
-export default function PermissionForm() {
+export default function PermissionGroupForm() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const isEdit = !!id;
 
-  const { currentPermission, isLoading: permissionLoading } = useAppSelector(
-    (state: RootState) => state.permission
-  );
-  const { permissionGroups, isLoading: groupsLoading } = useAppSelector(
-    (state: RootState) => state.permissionGroup
+  const { currentPermissionGroup, permissionGroups, isLoading } =
+    useAppSelector((state: RootState) => state.permissionGroup);
+
+  // Filter out the current group if editing (can't be its own parent)
+  const parentGroupOptions = permissionGroups.filter(
+    (group: PermissionGroup) => !isEdit || group.id !== id
   );
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
-      description: "",
-      group_id: "",
+      permission_group_id: "",
     },
   });
 
-  // Load permission data for editing
+  // Load permission group data for editing and parent groups for dropdown
   useEffect(() => {
+    dispatch(fetchPermissionGroups({})); // Fetch all groups for parent dropdown
+
     if (isEdit && id) {
-      dispatch(fetchPermissionById(id));
+      dispatch(fetchPermissionGroupById(id));
     }
-    // Always fetch permission groups for the dropdown
-    dispatch(fetchPermissionGroups({}));
   }, [dispatch, isEdit, id]);
 
-  // Fill form with current permission data when editing
+  // Fill form with current permission group data when editing
   useEffect(() => {
-    if (isEdit && currentPermission) {
+    if (isEdit && currentPermissionGroup) {
       form.reset({
-        name: currentPermission.name,
-        description: currentPermission.description || "",
-        group_id: currentPermission.group_id,
+        name: currentPermissionGroup.name,
+        permission_group_id: currentPermissionGroup.permission_group_id || "",
       });
     }
-  }, [currentPermission, form, isEdit]);
+  }, [currentPermissionGroup, form, isEdit]);
 
   const onSubmit = async (data: FormValues) => {
     try {
+      // If permission_group_id is "none", set it to an empty string for the API
+      const submissionData = {
+        ...data,
+        permission_group_id:
+          data.permission_group_id === "none" ? "" : data.permission_group_id,
+      };
+
       if (isEdit && id) {
         await dispatch(
-          updatePermission({
+          updatePermissionGroup({
             id,
-            permissionData: data,
+            groupData: submissionData,
           })
         ).unwrap();
       } else {
-        await dispatch(createPermission(data)).unwrap();
+        await dispatch(createPermissionGroup(submissionData)).unwrap();
       }
-      navigate("/dashboard/permissions");
+      navigate("/dashboard/permission-groups");
     } catch (error) {
-      console.error("Error saving permission:", error);
+      console.error("Error saving permission group:", error);
     }
   };
 
   const handleCancel = () => {
-    navigate("/dashboard/permissions");
+    navigate("/dashboard/permission-groups");
   };
 
-  const isLoading = permissionLoading || (isEdit && !currentPermission);
-  const isLoadingGroups = groupsLoading;
-
-  if (isEdit && isLoading) {
-    return <div className="text-center p-4">Loading permission data...</div>;
+  if (isEdit && isLoading && !currentPermissionGroup) {
+    return (
+      <div className="text-center p-4">Loading permission group data...</div>
+    );
   }
 
   return (
@@ -130,7 +133,7 @@ export default function PermissionForm() {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <CardTitle>
-          {isEdit ? "Edit Permission" : "Create Permission"}
+          {isEdit ? "Edit Permission Group" : "Create Permission Group"}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -143,22 +146,8 @@ export default function PermissionForm() {
                 <FormItem>
                   <FormLabel>Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="Enter permission name" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Enter description (optional)"
+                    <Input
+                      placeholder="Enter permission group name"
                       {...field}
                     />
                   </FormControl>
@@ -169,34 +158,37 @@ export default function PermissionForm() {
 
             <FormField
               control={form.control}
-              name="group_id"
+              name="permission_group_id"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Permission Group</FormLabel>
+                  <FormLabel>Parent Group (Optional)</FormLabel>
                   <Select
                     onValueChange={field.onChange}
-                    defaultValue={field.value}
-                    value={field.value}
+                    defaultValue={field.value || "none"}
+                    value={field.value || "none"}
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select a permission group" />
+                        <SelectValue placeholder="Select a parent group (optional)" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {isLoadingGroups ? (
-                        <SelectItem value="loading_groups" disabled>
+                      <SelectItem value="none">
+                        None (Top-level group)
+                      </SelectItem>
+                      {isLoading ? (
+                        <SelectItem value="loading" disabled>
                           Loading groups...
                         </SelectItem>
-                      ) : permissionGroups.length > 0 ? (
-                        permissionGroups.map((group: PermissionGroup) => (
+                      ) : parentGroupOptions.length > 0 ? (
+                        parentGroupOptions.map((group: PermissionGroup) => (
                           <SelectItem key={group.id} value={group.id}>
                             {group.name}
                           </SelectItem>
                         ))
                       ) : (
-                        <SelectItem value="no_groups_available" disabled>
-                          No groups available
+                        <SelectItem value="no_groups" disabled>
+                          No other groups available
                         </SelectItem>
                       )}
                     </SelectContent>
@@ -210,7 +202,7 @@ export default function PermissionForm() {
               <Button variant="outline" type="button" onClick={handleCancel}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isLoading}>
+              <Button type="submit" disabled={isLoading && isEdit}>
                 {isEdit ? "Update" : "Create"}
               </Button>
             </div>

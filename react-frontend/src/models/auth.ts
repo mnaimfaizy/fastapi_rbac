@@ -30,6 +30,18 @@ export interface PasswordResetConfirm {
   new_password: string;
 }
 
+// Add UserRegister interface based on backend UserRegister schema
+export interface UserRegister {
+  email: string;
+  password: string;
+  full_name?: string | null;
+}
+
+// Add VerifyEmail interface based on backend VerifyEmail schema
+export interface VerifyEmail {
+  token: string;
+}
+
 export interface AuthState {
   user: User | null;
   accessToken: string | null;

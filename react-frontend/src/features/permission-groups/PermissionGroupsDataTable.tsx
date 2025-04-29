@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAppDispatch, useAppSelector } from "../../../hooks/redux";
+import { useAppDispatch, useAppSelector } from "../../hooks/redux";
 import {
   fetchPermissionGroups,
   deletePermissionGroup,
   setPage,
   setPageSize,
-} from "../../../store/slices/permissionGroupSlice";
+} from "../../store/slices/permissionGroupSlice";
 import {
   Table,
   TableBody,
@@ -26,8 +26,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MoreHorizontal, ChevronDown, Plus } from "lucide-react";
-import { PermissionGroup } from "../../../models/permission";
-import { RootState } from "../../../store";
+import { PermissionGroup } from "../../models/permission";
+import { RootState } from "../../store";
 
 interface SortState {
   column: string | null;

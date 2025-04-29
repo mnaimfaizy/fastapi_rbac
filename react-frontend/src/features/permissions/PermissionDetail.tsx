@@ -1,11 +1,11 @@
 import { useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useAppDispatch, useAppSelector } from "../../../hooks/redux";
+import { useAppDispatch, useAppSelector } from "../../hooks/redux";
 import {
   fetchPermissionById,
   deletePermission,
-} from "../../../store/slices/permissionSlice";
-import { fetchPermissionGroups } from "../../../store/slices/permissionGroupSlice";
+} from "../../store/slices/permissionSlice";
+import { fetchPermissionGroups } from "../../store/slices/permissionGroupSlice";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -16,8 +16,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Pencil, Trash2, ArrowLeft } from "lucide-react";
-import { RootState } from "../../../store";
-import { PermissionGroup } from "../../../models/permission";
+import { RootState } from "../../store";
+import { PermissionGroup } from "../../models/permission";
 
 export default function PermissionDetail() {
   const { id } = useParams<{ id: string }>();
