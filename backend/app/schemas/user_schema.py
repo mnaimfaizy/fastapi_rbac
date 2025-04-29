@@ -17,6 +17,20 @@ class IUserCreate(UserBase):
     last_changed_password_date: datetime | None = None
     expiry_date: datetime | None = None
     number_of_failed_attempts: int = 0  # Adding the missing field with default value
+    verified: bool = False  # Add verified field, default to False
+
+
+# Properties for user registration
+class UserRegister(BaseModel):
+    email: EmailStr
+    password: str = Field(..., min_length=8)
+    first_name: str | None = None
+    last_name: str | None = None
+
+
+# Properties for email verification
+class VerifyEmail(BaseModel):
+    token: str
 
 
 # Properties to receive via API on update

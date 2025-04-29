@@ -84,6 +84,50 @@ async def send_password_reset_email(
         )
 
 
+async def send_verification_email(
+    background_tasks: BackgroundTasks, user_email: str, verification_token: str, verification_url: str
+) -> None:
+    """
+    Send an email verification email as a background task.
+
+    Args:
+        background_tasks: The FastAPI BackgroundTasks instance
+        user_email: The recipient's email address
+        verification_token: The email verification token
+        verification_url: The base URL for email verification
+    """
+    verification_link = f"{verification_url}?token={verification_token}"
+    project_name = settings.PROJECT_NAME
+    subject = f"{project_name} - Verify Your Email Address"
+    template_context = {
+        "project_name": project_name,
+        "username": user_email,  # Assuming email is used as username here
+        "email": user_email,
+        "verification_url": verification_link,
+        "token": verification_token,
+        "valid_hours": settings.EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES // 60,
+    }
+
+    # Use Celery for email sending if available and in production, otherwise use BackgroundTasks
+    if CELERY_AVAILABLE and settings.MODE == "production":
+        # Send via Celery task
+        send_email_task.delay(
+            email_to=user_email,
+            subject=subject,
+            template_name="email-verification.html",  # Use the new template
+            context=template_context,
+        )
+    else:
+        # Add the email sending task to background tasks
+        background_tasks.add_task(
+            send_email_with_template,
+            email_to=user_email,
+            subject=subject,
+            template_name="email-verification.html",  # Use the new template
+            context=template_context,
+        )
+
+
 async def cleanup_expired_tokens(
     background_tasks: BackgroundTasks,
     redis_client: Redis,

@@ -92,8 +92,13 @@ class Settings(BaseSettings):
     # Security Settings
     JWT_REFRESH_SECRET_KEY: str
     JWT_RESET_SECRET_KEY: str  # Secret key for password reset tokens
+    JWT_VERIFICATION_SECRET_KEY: str = secrets.token_urlsafe(32)  # Secret key for email verification tokens
     ENCRYPT_KEY: str
     BACKEND_CORS_ORIGINS: List[Union[str, AnyHttpUrl]] = ["http://localhost:3000"]
+
+    # Email Verification Settings
+    EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
+    EMAIL_VERIFICATION_URL: str = "http://localhost:3000/verify-email"
 
     # Logging settings
     LOG_LEVEL: str = "INFO"

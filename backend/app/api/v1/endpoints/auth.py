@@ -17,19 +17,26 @@ from app.models.user_model import User
 from app.schemas.common_schema import TokenType
 from app.schemas.response_schema import IPostResponseBase, create_response
 from app.schemas.token_schema import RefreshToken, Token, TokenRead
-from app.schemas.user_schema import PasswordResetConfirm, PasswordResetRequest
+from app.schemas.user_schema import (
+    IUserCreate,  # Added IUserCreate import
+    PasswordResetConfirm,
+    PasswordResetRequest,
+    UserRegister,
+    VerifyEmail,
+)
 from app.utils.background_tasks import (
     cleanup_expired_tokens,
     log_security_event,
     process_account_lockout,
     send_password_reset_email,
+    send_verification_email,
 )
 from app.utils.token import add_token_to_redis, get_valid_tokens
 
 router = APIRouter()
 
 
-@router.post("")
+@router.post("/login")
 async def login(
     email: EmailStr = Body(...),
     password: str = Body(...),
@@ -241,6 +248,200 @@ async def login(
         message = warning_message
 
     return create_response(data=data, message=message)
+
+
+@router.post("/register", status_code=status.HTTP_201_CREATED)
+async def register(
+    user_in: UserRegister,
+    background_tasks: BackgroundTasks,
+    redis_client: Redis = Depends(get_redis_client),
+) -> IPostResponseBase[Token]:
+    """
+    Register a new user.
+    """
+    user = await crud.user.get_by_email(email=user_in.email)
+    if user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The user with this email already exists in the system.",
+        )
+
+    # Create user with verified=False and generate verification token
+    verification_token = security.create_verification_token(user_in.email)
+    user_create = IUserCreate(
+        **user_in.model_dump(),
+        verified=False,
+        verification_code=verification_token,  # Store token temporarily
+    )
+    user = await crud.user.create(obj_in=user_create)
+
+    # Send verification email
+    await send_verification_email(
+        background_tasks=background_tasks,
+        user_email=user.email,
+        verification_token=verification_token,
+        verification_url=settings.EMAIL_VERIFICATION_URL,
+    )
+
+    # Log registration event
+    background_tasks.add_task(
+        log_security_event,
+        background_tasks=background_tasks,
+        event_type="user_registered",
+        user_id=user.id,
+        details={"email": user.email},
+    )
+
+    # Optionally log the user in immediately after registration
+    # Generate tokens
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    refresh_token_expires = timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES)
+    access_token = security.create_access_token(user.id, user.email, expires_delta=access_token_expires)
+    refresh_token = security.create_refresh_token(user.id, expires_delta=refresh_token_expires)
+    data = Token(
+        access_token=access_token,
+        token_type="bearer",
+        refresh_token=refresh_token,
+        user=user,  # Include user details in response
+    )
+
+    # Add tokens to Redis
+    await add_token_to_redis(
+        redis_client,
+        user,
+        access_token,
+        TokenType.ACCESS,
+        settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+    )
+    await add_token_to_redis(
+        redis_client,
+        user,
+        refresh_token,
+        TokenType.REFRESH,
+        settings.REFRESH_TOKEN_EXPIRE_MINUTES,
+    )
+
+    return create_response(
+        data=data,
+        message="User registered successfully. Please check your email to verify your account.",
+    )
+
+
+@router.post("/verify-email")
+async def verify_email(
+    body: VerifyEmail,
+    background_tasks: BackgroundTasks,
+) -> IPostResponseBase:
+    """
+    Verify user's email address using the provided token.
+    """
+    try:
+        payload = security.decode_token(body.token, token_type="verification")
+        email = payload.get("sub")  # Email is stored in 'sub' for verification token
+        if not email:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token payload")
+
+    except (ExpiredSignatureError, DecodeError, MissingRequiredClaimError):
+        background_tasks.add_task(
+            log_security_event,
+            background_tasks=background_tasks,
+            event_type="email_verification_invalid_token",
+            details={"token_error": "Invalid or expired token"},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired verification token.",
+        )
+
+    user = await crud.user.get_by_email(email=email)
+
+    if not user:
+        background_tasks.add_task(
+            log_security_event,
+            background_tasks=background_tasks,
+            event_type="email_verification_user_not_found",
+            details={"email": email},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found.",
+        )
+
+    if user.verified:
+        return create_response(data={}, message="Email is already verified.")
+
+    # Check if the token matches the stored verification code (optional, depends on flow)
+    # if user.verification_code != body.token:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_400_BAD_REQUEST,
+    #         detail="Invalid verification token.",
+    #     )
+
+    # Mark user as verified and clear verification code
+    user.verified = True
+    user.verification_code = None
+    await crud.user.update(obj_current=user, obj_new={})  # Save changes
+
+    background_tasks.add_task(
+        log_security_event,
+        background_tasks=background_tasks,
+        event_type="email_verified",
+        user_id=user.id,
+        details={"email": user.email},
+    )
+
+    return create_response(data={}, message="Email verified successfully.")
+
+
+@router.post("/resend-verification-email")
+async def resend_verification_email(
+    email_in: EmailStr = Body(..., embed=True),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+) -> IPostResponseBase:
+    """
+    Resend the verification email for a given email address.
+    """
+    user = await crud.user.get_by_email(email=email_in)
+
+    resend_message = (
+        "If an account with that email exists and is not verified, " "a new verification email has been sent."
+    )
+
+    if not user:
+        # Don't reveal if the user exists or not for security reasons
+        background_tasks.add_task(
+            log_security_event,
+            background_tasks=background_tasks,
+            event_type="resend_verification_email_user_not_found",
+            details={"email": email_in},
+        )
+        return create_response(data={}, message=resend_message)
+
+    if user.verified:
+        return create_response(data={}, message="This email address is already verified.")
+
+    # Generate a new verification token
+    verification_token = security.create_verification_token(user.email)
+    user.verification_code = verification_token  # Update the stored code
+    await crud.user.update(obj_current=user, obj_new={})  # Save changes
+
+    # Send the new verification email
+    await send_verification_email(
+        background_tasks=background_tasks,
+        user_email=user.email,
+        verification_token=verification_token,
+        verification_url=settings.EMAIL_VERIFICATION_URL,
+    )
+
+    background_tasks.add_task(
+        log_security_event,
+        background_tasks=background_tasks,
+        event_type="verification_email_resent",
+        user_id=user.id,
+        details={"email": user.email},
+    )
+
+    return create_response(data={}, message=resend_message)
 
 
 @router.post("/change_password")
