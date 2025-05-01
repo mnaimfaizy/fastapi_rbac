@@ -9,6 +9,8 @@ from app.models.user_role_model import UserRole
 
 if TYPE_CHECKING:
     from app.models.role_model import Role
+    from app.models.permission_model import Permission
+    from app.models.permission_group_model import PermissionGroup
 
 
 class UserBase(SQLModel):
@@ -39,4 +41,22 @@ class User(BaseUUIDModel, UserBase, table=True):
         back_populates="users",
         link_model=UserRole,
         sa_relationship_kwargs={"lazy": "joined"},
+    )
+
+    created_permissions: List["Permission"] = Relationship(
+        back_populates="created_by",
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "primaryjoin": "User.id == Permission.created_by_id",
+            "foreign_keys": "[Permission.created_by_id]",
+        },
+    )
+
+    created_permission_groups: List["PermissionGroup"] = Relationship(
+        back_populates="creator",
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "primaryjoin": "User.id == PermissionGroup.created_by_id",
+            "foreign_keys": "[PermissionGroup.created_by_id]",
+        },
     )

@@ -31,6 +31,9 @@ import {
   ChevronRight,
   List,
   Users,
+  Pencil, // Added
+  Eye, // Added
+  Trash2, // Added
 } from "lucide-react";
 import { PermissionGroup } from "../../models/permission";
 import { RootState } from "../../store";
@@ -204,13 +207,19 @@ const PermissionGroupRow: React.FC<PermissionGroupRowProps> = ({
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => onEdit(group.id)}>
-                Edit
+                <Pencil className="mr-2 h-4 w-4" /> {/* Added icon */}
+                <span>Edit</span>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onView(group.id)}>
-                View details
+                <Eye className="mr-2 h-4 w-4" /> {/* Added icon */}
+                <span>View details</span>
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onDelete(group.id)}>
-                Delete
+              <DropdownMenuItem
+                onClick={() => onDelete(group.id)}
+                className="text-red-600 focus:text-red-600 focus:bg-red-100" // Added danger styling
+              >
+                <Trash2 className="mr-2 h-4 w-4" /> {/* Added icon */}
+                <span>Delete</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -288,9 +297,15 @@ export default function PermissionGroupsDataTable() {
         await dispatch(deletePermissionGroup(id)).unwrap();
         dispatch(fetchPermissionGroups({ page, pageSize }));
         toast.success("Permission group deleted successfully");
-      } catch (error: any) {
+      } catch (error: unknown) {
+        // Changed 'any' to 'unknown'
         // The error message is now properly propagated from the service through the Redux slice
-        const errorMessage = error.toString();
+        let errorMessage = "An unknown error occurred";
+        if (error instanceof Error) {
+          errorMessage = error.message;
+        } else if (typeof error === "string") {
+          errorMessage = error;
+        }
         toast.error(errorMessage, {
           duration: 5000,
         });

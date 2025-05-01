@@ -18,23 +18,37 @@ class PermissionGroupBase(SQLModel):
 
 class PermissionGroup(BaseUUIDModel, PermissionGroupBase, table=True):
     name: str | None = Field(String(250), nullable=True, index=True)
-    created_by_id: UUID | None = Field(default=None, foreign_key="User.id")
+    created_by_id: UUID | None = Field(
+        default=None, foreign_key="User.id"
+    )  # Fixed case: User instead of user
     permission_group_id: UUID | None = Field(
         default=None, foreign_key="PermissionGroup.id", nullable=True, index=True
     )
 
+    # Fix the self-referential relationship with explicit primaryjoin
     groups: List["PermissionGroup"] = Relationship(
         sa_relationship_kwargs=dict(
             lazy="selectin",
             cascade="all,delete",
+            primaryjoin="PermissionGroup.id == foreign(PermissionGroup.permission_group_id)",
             backref=backref("parent", remote_side="PermissionGroup.id", lazy="joined"),
         )
     )
 
+    # Update the relationship to match the database schema
     permissions: List["Permission"] = Relationship(
-        sa_relationship_kwargs={"lazy": "selectin"}, back_populates="groups"
+        back_populates="group",
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "primaryjoin": "foreign(Permission.group_id) == PermissionGroup.id",
+        },
     )
 
     creator: "User" = Relationship(
-        sa_relationship_kwargs={"lazy": "selectin", "foreign_keys": "PermissionGroup.created_by_id"}
+        back_populates="created_permission_groups",
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "primaryjoin": "PermissionGroup.created_by_id == User.id",
+            "foreign_keys": "[PermissionGroup.created_by_id]",
+        },
     )

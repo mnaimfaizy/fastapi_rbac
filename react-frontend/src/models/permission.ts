@@ -4,7 +4,7 @@ export interface Permission {
   id: string;
   name: string;
   description?: string;
-  group_id: string;
+  group?: PermissionGroup;
   created_at: string;
   updated_at: string;
   created_by_id?: string;

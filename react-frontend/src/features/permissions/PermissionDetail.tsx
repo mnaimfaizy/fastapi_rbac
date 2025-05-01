@@ -5,7 +5,6 @@ import {
   fetchPermissionById,
   deletePermission,
 } from "../../store/slices/permissionSlice";
-import { fetchPermissionGroups } from "../../store/slices/permissionGroupSlice";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -17,7 +16,6 @@ import {
 } from "@/components/ui/card";
 import { Pencil, Trash2, ArrowLeft } from "lucide-react";
 import { RootState } from "../../store";
-import { PermissionGroup } from "../../models/permission";
 
 export default function PermissionDetail() {
   const { id } = useParams<{ id: string }>();
@@ -27,20 +25,13 @@ export default function PermissionDetail() {
   const { currentPermission, isLoading } = useAppSelector(
     (state: RootState) => state.permission
   );
-  const { permissionGroups } = useAppSelector(
-    (state: RootState) => state.permissionGroup
-  );
 
-  // Get permission group name for display
-  const permissionGroupName =
-    permissionGroups.find(
-      (group: PermissionGroup) => group.id === currentPermission?.group_id
-    )?.name || "Unknown Group";
+  // Get permission group name directly from the currentPermission object
+  const permissionGroupName = currentPermission?.group?.name || "N/A";
 
   useEffect(() => {
     if (id) {
       dispatch(fetchPermissionById(id));
-      dispatch(fetchPermissionGroups({}));
     }
   }, [dispatch, id]);
 

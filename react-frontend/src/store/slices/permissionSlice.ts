@@ -3,9 +3,11 @@ import {
   Permission,
   PermissionCreate,
   PermissionUpdate,
-  PaginatedPermissionResponse,
+  PaginatedPermissionResponse, // Use the correct response type from the model
 } from "../../models/permission";
 import permissionService from "../../services/permission.service";
+
+// Remove unused import: import { PaginatedDataResponse } from "../../models/pagination";
 
 interface PermissionState {
   permissions: Permission[];
@@ -28,13 +30,16 @@ const initialState: PermissionState = {
 };
 
 // Async thunks
-export const fetchPermissions = createAsyncThunk(
+// Adjust return type to match the actual service response (PaginatedPermissionResponse)
+export const fetchPermissions = createAsyncThunk<
+  PaginatedPermissionResponse, // Return type on success
+  { page?: number; pageSize?: number }, // Argument type
+  { rejectValue: string } // Type for rejectWithValue
+>(
   "permission/fetchPermissions",
-  async (
-    { page = 1, pageSize = 10 }: { page?: number; pageSize?: number },
-    { rejectWithValue }
-  ) => {
+  async ({ page = 1, pageSize = 10 }, { rejectWithValue }) => {
     try {
+      // Assuming permissionService.getPermissions returns PaginatedPermissionResponse
       const response = await permissionService.getPermissions(page, pageSize);
       return response;
     } catch (error: unknown) {
@@ -128,18 +133,19 @@ const permissionSlice = createSlice({
         state.isLoading = true;
         state.error = null;
       })
+      // Action type is now correctly inferred as PaginatedPermissionResponse
       .addCase(fetchPermissions.fulfilled, (state, action) => {
         state.isLoading = false;
-        // Fix the property access to match the actual response structure
-        if (action.payload?.data?.data) {
-          state.permissions = action.payload.data.data.items || [];
-          state.totalItems = action.payload.data.data.total || 0;
-          state.page = action.payload.data.data.page || 1;
+        // Access data correctly based on PaginatedPermissionResponse type
+        if (action.payload?.data) {
+          state.permissions = action.payload.data.items || [];
+          state.totalItems = action.payload.data.total || 0;
+          state.page = action.payload.data.page || 1;
         }
       })
       .addCase(fetchPermissions.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload as string;
+        state.error = action.payload as string; // Cast payload to string
       })
 
       // Fetch permission by id

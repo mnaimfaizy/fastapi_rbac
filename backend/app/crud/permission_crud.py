@@ -12,7 +12,7 @@ from app.schemas.permission_schema import IPermissionCreate, IPermissionUpdate
 
 
 class CRUDPermission(CRUDBase[Permission, IPermissionCreate, IPermissionUpdate]):
-    async def get_group_by_name(
+    async def get_permission_by_name(  # Renamed from get_group_by_name
         self, *, name: str, db_session: AsyncSession | None = None
     ) -> Permission | None:
         db_session = db_session or super().get_db().session

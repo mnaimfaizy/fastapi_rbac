@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MoreHorizontal, ChevronDown, Plus } from "lucide-react";
+import { MoreHorizontal, ChevronDown } from "lucide-react";
 import { Permission } from "../../models/permission";
 import { RootState } from "../../store";
 
@@ -83,43 +83,50 @@ export default function PermissionsDataTable() {
     }
   };
 
-  const handleAddNew = () => {
-    navigate("/dashboard/permissions/new");
-  };
-
-  // Filter permissions based on search term
+  // Filter permissions based on search term (including group name)
   const filteredPermissions = permissions.filter(
     (permission: Permission) =>
       permission.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (permission.description &&
-        permission.description.toLowerCase().includes(searchTerm.toLowerCase()))
+        permission.description
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase())) ||
+      (permission.group &&
+        permission.group.name.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   // Sort permissions
   const sortedPermissions = [...filteredPermissions].sort((a, b) => {
     if (!sort.column) return 0;
 
-    const aValue = a[sort.column as keyof Permission];
-    const bValue = b[sort.column as keyof Permission];
+    // Use more specific types for sorting values
+    let aValue: string | undefined | null;
+    let bValue: string | undefined | null;
 
-    if (typeof aValue === "string" && typeof bValue === "string") {
-      return sort.direction === "asc"
-        ? aValue.localeCompare(bValue)
-        : bValue.localeCompare(aValue);
+    // Handle sorting by group name
+    if (sort.column === "group") {
+      aValue = a.group?.name?.toLowerCase();
+      bValue = b.group?.name?.toLowerCase();
+    } else {
+      // Access properties safely, default to null if not string
+      const key = sort.column as keyof Permission;
+      const rawA = a[key];
+      const rawB = b[key];
+      aValue = typeof rawA === "string" ? rawA.toLowerCase() : null;
+      bValue = typeof rawB === "string" ? rawB.toLowerCase() : null;
     }
 
-    // For non-string values or if values are undefined
+    // Comparison logic (handles null/undefined)
     if (aValue === bValue) return 0;
-    if (aValue === undefined) return 1;
-    if (bValue === undefined) return -1;
+    if (aValue === null || aValue === undefined)
+      return sort.direction === "asc" ? 1 : -1;
+    if (bValue === null || bValue === undefined)
+      return sort.direction === "asc" ? -1 : 1;
 
+    // String comparison
     return sort.direction === "asc"
-      ? aValue < bValue
-        ? -1
-        : 1
-      : aValue > bValue
-      ? -1
-      : 1;
+      ? aValue.localeCompare(bValue)
+      : bValue.localeCompare(aValue);
   });
 
   // Calculate pagination values
@@ -138,9 +145,6 @@ export default function PermissionsDataTable() {
             className="max-w-sm"
           />
         </div>
-        <Button onClick={handleAddNew} className="flex items-center gap-1">
-          <Plus className="h-4 w-4" /> Add Permission
-        </Button>
       </div>
 
       <div className="rounded-md border">
@@ -164,7 +168,22 @@ export default function PermissionsDataTable() {
                 </Button>
               </TableHead>
               <TableHead className="w-[350px]">Description</TableHead>
-              <TableHead>Group ID</TableHead>
+              <TableHead>
+                <Button
+                  variant="ghost"
+                  onClick={() => handleSort("group")}
+                  className="flex items-center gap-1 p-0 hover:bg-transparent"
+                >
+                  Group Name
+                  {sort.column === "group" && (
+                    <ChevronDown
+                      className={`h-4 w-4 transition-transform ${
+                        sort.direction === "desc" ? "rotate-180" : ""
+                      }`}
+                    />
+                  )}
+                </Button>
+              </TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -182,7 +201,7 @@ export default function PermissionsDataTable() {
                     {permission.name}
                   </TableCell>
                   <TableCell>{permission.description}</TableCell>
-                  <TableCell>{permission.group_id}</TableCell>
+                  <TableCell>{permission.group?.name ?? "N/A"}</TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
