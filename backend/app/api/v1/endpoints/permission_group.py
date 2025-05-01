@@ -12,6 +12,7 @@ from app.models.user_model import User
 from app.schemas.permission_group_schema import (
     IPermissionGroupCreate,
     IPermissionGroupRead,
+    IPermissionGroupReadWithPermissions,
     IPermissionGroupUpdate,
     IPermissionGroupWithPermissions,
 )
@@ -33,7 +34,7 @@ async def get_permission_groups(
     params: Params = Depends(),
     current_user: User = Depends(deps.get_current_user()),
     db_session: AsyncSession = Depends(deps.get_async_db),
-) -> IGetResponsePaginated[IPermissionGroupRead]:
+) -> IGetResponsePaginated[IPermissionGroupReadWithPermissions]:
     """
     Gets a paginated list of permission groups
     """

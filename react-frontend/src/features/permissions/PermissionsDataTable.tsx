@@ -23,11 +23,22 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MoreHorizontal, ChevronDown } from "lucide-react";
+import { MoreHorizontal, ChevronDown, Eye, Pencil, Trash2 } from "lucide-react";
 import { Permission } from "../../models/permission";
 import { RootState } from "../../store";
+import { toast } from "sonner";
 
 interface SortState {
   column: string | null;
@@ -46,6 +57,9 @@ export default function PermissionsDataTable() {
     column: null,
     direction: "asc",
   });
+  // Add state for delete confirmation dialog
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deleteItemId, setDeleteItemId] = useState<string | null>(null);
 
   useEffect(() => {
     dispatch(fetchPermissions({ page, pageSize }));
@@ -76,10 +90,28 @@ export default function PermissionsDataTable() {
     navigate(`/dashboard/permissions/${id}`);
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm("Are you sure you want to delete this permission?")) {
-      await dispatch(deletePermission(id));
+  const openDeleteDialog = (id: string) => {
+    setDeleteItemId(id);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteItemId) return;
+
+    try {
+      await dispatch(deletePermission(deleteItemId)).unwrap();
+      toast.success("Permission deleted successfully");
       dispatch(fetchPermissions({ page, pageSize }));
+    } catch (error: any) {
+      const errorMessage =
+        error?.response?.data?.detail ||
+        (error instanceof Error
+          ? error.message
+          : "Failed to delete permission");
+      toast.error(errorMessage);
+    } finally {
+      setIsDeleteDialogOpen(false);
+      setDeleteItemId(null);
     }
   };
 
@@ -216,16 +248,20 @@ export default function PermissionsDataTable() {
                         <DropdownMenuItem
                           onClick={() => handleEdit(permission.id)}
                         >
+                          <Pencil className="mr-2 h-4 w-4" />
                           Edit
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => handleView(permission.id)}
                         >
+                          <Eye className="mr-2 h-4 w-4" />
                           View details
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          onClick={() => handleDelete(permission.id)}
+                          onClick={() => openDeleteDialog(permission.id)}
+                          className="text-destructive focus:text-destructive"
                         >
+                          <Trash2 className="mr-2 h-4 w-4" />
                           Delete
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -243,6 +279,32 @@ export default function PermissionsDataTable() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Delete Confirmation AlertDialog */}
+      <AlertDialog
+        open={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Permission</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this permission? This action
+              cannot be undone. Any roles using this permission will lose this
+              capability.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Pagination */}
       <div className="flex items-center justify-between">

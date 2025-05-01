@@ -23,6 +23,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -259,6 +269,9 @@ export default function PermissionGroupsDataTable() {
     column: null,
     direction: "asc",
   });
+  // Add state for delete confirmation dialog
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deleteGroupId, setDeleteGroupId] = useState<string | null>(null);
 
   useEffect(() => {
     dispatch(fetchPermissionGroups({ page, pageSize }));
@@ -289,27 +302,32 @@ export default function PermissionGroupsDataTable() {
     navigate(`/dashboard/permission-groups/${id}`);
   };
 
-  const handleDelete = async (id: string) => {
-    if (
-      window.confirm("Are you sure you want to delete this permission group?")
-    ) {
-      try {
-        await dispatch(deletePermissionGroup(id)).unwrap();
-        dispatch(fetchPermissionGroups({ page, pageSize }));
-        toast.success("Permission group deleted successfully");
-      } catch (error: unknown) {
-        // Changed 'any' to 'unknown'
-        // The error message is now properly propagated from the service through the Redux slice
-        let errorMessage = "An unknown error occurred";
-        if (error instanceof Error) {
-          errorMessage = error.message;
-        } else if (typeof error === "string") {
-          errorMessage = error;
-        }
-        toast.error(errorMessage, {
-          duration: 5000,
-        });
+  const openDeleteDialog = (id: string) => {
+    setDeleteGroupId(id);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteGroupId) return;
+
+    try {
+      await dispatch(deletePermissionGroup(deleteGroupId)).unwrap();
+      dispatch(fetchPermissionGroups({ page, pageSize }));
+      toast.success("Permission group deleted successfully");
+    } catch (error: unknown) {
+      // The error message is now properly propagated from the service through the Redux slice
+      let errorMessage = "An unknown error occurred";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === "string") {
+        errorMessage = error;
       }
+      toast.error(errorMessage, {
+        duration: 5000,
+      });
+    } finally {
+      setIsDeleteDialogOpen(false);
+      setDeleteGroupId(null);
     }
   };
 
@@ -443,7 +461,7 @@ export default function PermissionGroupsDataTable() {
                     group={group}
                     allGroups={sortedGroups}
                     expandAllState={expandAll}
-                    onDelete={handleDelete}
+                    onDelete={openDeleteDialog}
                     onEdit={handleEdit}
                     onView={handleView}
                   />
@@ -458,6 +476,32 @@ export default function PermissionGroupsDataTable() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Delete Confirmation AlertDialog */}
+      <AlertDialog
+        open={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Permission Group</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this permission group? This action
+              cannot be undone. Any contained permissions will need to be
+              reassigned.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Pagination */}
       <div className="flex items-center justify-between">

@@ -102,8 +102,7 @@ export const deletePermission = createAsyncThunk(
   "permission/deletePermission",
   async (id: string, { rejectWithValue }) => {
     try {
-      const response = await permissionService.deletePermission(id);
-      return response;
+      return await permissionService.deletePermission(id);
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : "Failed to delete permission";

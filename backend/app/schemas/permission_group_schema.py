@@ -37,6 +37,13 @@ class IPermissionGroupRead(IPermissionGroupBase):
     pass
 
 
+# Add a new schema that includes permissions for paginated responses
+class IPermissionGroupReadWithPermissions(IPermissionGroupRead):
+    model_config = ConfigDict(from_attributes=True, arbitrary_types_allowed=True)
+
+    permissions: Optional[List[Permission]] = []
+
+
 @optional()
 class IPermissionGroupUpdate(PermissionGroupBase):
     pass

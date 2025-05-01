@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi_pagination import Params
 
 from app import crud
@@ -10,6 +10,7 @@ from app.models.permission_model import Permission
 from app.models.user_model import User
 from app.schemas.permission_schema import IPermissionCreate, IPermissionRead, IPermissionUpdate
 from app.schemas.response_schema import (
+    IDeleteResponseBase,
     IGetResponseBase,
     IGetResponsePaginated,
     IPostResponseBase,
@@ -143,3 +144,36 @@ async def update_permission(
         obj_current=current_permission, obj_new=permission_update
     )
     return create_response(data=permission_updated)
+
+
+@router.delete("/{permission_id}")
+async def delete_permission(
+    permission: Permission = Depends(permission_deps.get_permission_by_id),
+    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
+) -> IDeleteResponseBase[IPermissionRead]:
+    """
+    Deletes a permission by its id
+
+    Required roles:
+    - admin
+    - manager
+    """
+    try:
+        # Check if permission is currently used by any roles
+        # This check is optional but recommended to prevent orphaned references
+        # Uncomment if you want to prevent deletion of permissions in use
+        # is_in_use = await crud.permission.is_permission_in_use(permission_id=permission.id)
+        # if is_in_use:
+        #     raise HTTPException(
+        #         status_code=status.HTTP_409_CONFLICT,
+        #         detail=f"Permission '{permission.name}' is currently in use by one or more roles and cannot be deleted.",
+        #     )
+
+        deleted_permission = await crud.permission.remove(id=permission.id)
+        return create_response(data=deleted_permission, message="Permission deleted successfully")
+    except Exception as e:
+        # Catch potential DB errors or other issues during deletion
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error deleting permission: {str(e)}",
+        )

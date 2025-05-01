@@ -72,5 +72,30 @@ class CRUDPermissionGroup(CRUDBase[PermissionGroup, IPermissionGroupCreate, IPer
         result = await db_session.execute(query)
         return result.unique().scalars().all()
 
+    # Override the get_multi_paginated method to load permissions and other relationships
+    async def get_multi_paginated(
+        self, *, params=None, query_filter=None, db_session: AsyncSession | None = None, **kwargs
+    ):
+        db_session = db_session or super().get_db().session
+
+        # Start with the base query
+        base_query = select(self.model)
+
+        # Add options to load related entities
+        base_query = base_query.options(
+            selectinload(PermissionGroup.permissions),
+            selectinload(PermissionGroup.groups),
+            selectinload(PermissionGroup.creator),
+        )
+
+        # Apply any filters if provided
+        if query_filter is not None:
+            base_query = base_query.where(query_filter)
+
+        # Use the paginate function directly
+        from fastapi_pagination.ext.sqlmodel import paginate
+
+        return await paginate(db_session, base_query, params, unique=True)
+
 
 permission_group = CRUDPermissionGroup(PermissionGroup)

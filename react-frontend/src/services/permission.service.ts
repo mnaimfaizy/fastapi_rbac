@@ -41,8 +41,22 @@ class PermissionService {
   }
 
   async deletePermission(id: string) {
-    const response = await api.delete<PermissionResponse>(`/permission/${id}`);
-    return response.data;
+    try {
+      await api.delete(`/permission/${id}`);
+      return { success: true };
+    } catch (error: any) {
+      if (error.response?.data) {
+        // Use the detail field directly if it exists
+        if (error.response.data.detail) {
+          throw new Error(error.response.data.detail);
+        }
+        // Otherwise use the message field
+        if (error.response.data.message) {
+          throw new Error(error.response.data.message);
+        }
+      }
+      throw error; // Rethrow the original error to preserve stack trace
+    }
   }
 
   // Permission Group endpoints
