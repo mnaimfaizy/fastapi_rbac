@@ -5,7 +5,6 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi_cache.decorator import cache
 from fastapi_pagination import Params
 from redis.asyncio import Redis
-from sqlalchemy import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app import crud
@@ -81,33 +80,31 @@ async def get_role_group_by_id(
     db_session: AsyncSession = Depends(deps.get_async_db),
 ) -> IGetResponseBase[IRoleGroupWithRoles]:
     """
-    Gets a role group by its ID with caching
+    Gets a role group by its id with full hierarchical information.
 
     Parameters:
-    - include_nested_roles: When true, includes roles for child groups as well
+        group_id: The UUID of the group to retrieve
+        include_nested_roles: Whether to include roles for nested groups
+        current_user: The current authenticated user
+        db_session: The database session
+
+    Returns:
+        The role group with all its relationships properly loaded
     """
     try:
-        # Get the role group with all hierarchical relationships and roles
-        # We handle include_nested_roles via the dependency injection
         role_group = await role_group_deps.get_group_by_id(
             group_id=group_id, db_session=db_session, include_roles_recursive=include_nested_roles
         )
 
-        if not role_group:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Role group with id {group_id} not found",
-            )
-
-        # Convert the SQLModel object to a dictionary to avoid any potential issues with lazy loading
-        # or relationship attributes that might not be fully loaded
+        # The model will now have the parent relationship properly loaded
+        # Convert the SQLModel object to a response format
         response_data = {
             "id": role_group.id,
             "name": role_group.name,
             "parent_id": role_group.parent_id,
-            "created_at": getattr(role_group, "created_at", None),
-            "updated_at": getattr(role_group, "updated_at", None),
-            "created_by_id": getattr(role_group, "created_by_id", None),
+            "created_at": role_group.created_at,
+            "updated_at": role_group.updated_at,
+            "created_by_id": role_group.created_by_id,
             "children": [],
             "roles": [],
         }
@@ -140,14 +137,14 @@ async def get_role_group_by_id(
                     "id": child.id,
                     "name": child.name,
                     "parent_id": child.parent_id,
-                    "created_at": getattr(child, "created_at", None),
-                    "updated_at": getattr(child, "updated_at", None),
-                    "created_by_id": getattr(child, "created_by_id", None),
+                    "created_at": child.created_at,
+                    "updated_at": child.updated_at,
+                    "created_by_id": child.created_by_id,
                     "children": [],
                     "roles": [],
                 }
 
-                # Add creator information for the child if available
+                # Add creator information for child if available
                 if hasattr(child, "creator") and child.creator:
                     child_data["creator"] = {
                         "id": child.creator.id,
@@ -156,7 +153,7 @@ async def get_role_group_by_id(
                         "last_name": getattr(child.creator, "last_name", None),
                     }
 
-                # Add roles for child if they exist
+                # Add roles for child if include_nested_roles is True
                 if include_nested_roles and hasattr(child, "roles") and child.roles:
                     child_data["roles"] = [
                         {
@@ -168,106 +165,57 @@ async def get_role_group_by_id(
                         for role in child.roles
                     ]
 
-                # Add grandchildren if they exist
-                if hasattr(child, "children") and child.children:
-                    for grandchild in child.children:
-                        grandchild_data = {
-                            "id": grandchild.id,
-                            "name": grandchild.name,
-                            "parent_id": grandchild.parent_id,
-                            "created_at": getattr(grandchild, "created_at", None),
-                            "updated_at": getattr(grandchild, "updated_at", None),
-                            "created_by_id": getattr(grandchild, "created_by_id", None),
-                            "children": [],
-                            "roles": [],
-                        }
-
-                        # Add creator information for grandchild if available
-                        if hasattr(grandchild, "creator") and grandchild.creator:
-                            grandchild_data["creator"] = {
-                                "id": grandchild.creator.id,
-                                "email": grandchild.creator.email,
-                                "first_name": getattr(grandchild.creator, "first_name", None),
-                                "last_name": getattr(grandchild.creator, "last_name", None),
-                            }
-
-                        # Add roles for grandchild if they exist
-                        if include_nested_roles and hasattr(grandchild, "roles") and grandchild.roles:
-                            grandchild_data["roles"] = [
-                                {
-                                    "id": role.id,
-                                    "name": role.name,
-                                    "description": getattr(role, "description", None),
-                                    "is_default": getattr(role, "is_default", False),
-                                }
-                                for role in grandchild.roles
-                            ]
-
-                        child_data["children"].append(grandchild_data)
-
                 response_data["children"].append(child_data)
 
-        # If there's a parent_id, add parent info without relying on relationship
-        if role_group.parent_id:
-            try:
-                # Get parent directly with a separate query to avoid relationship issues
-                parent_query = select(RoleGroup).where(RoleGroup.id == role_group.parent_id)
-                parent_result = await db_session.execute(parent_query)
-                parent = parent_result.scalar_one_or_none()
+        # Add parent information if it exists
+        if hasattr(role_group, "parent") and role_group.parent:
+            parent = role_group.parent
+            response_data["parent"] = {
+                "id": parent.id,
+                "name": parent.name,
+                "parent_id": parent.parent_id,
+                "created_at": parent.created_at,
+                "updated_at": parent.updated_at,
+                "created_by_id": parent.created_by_id,
+            }
 
-                if parent:
-                    parent_data = {
-                        "id": parent.id,
-                        "name": parent.name,
-                        "parent_id": getattr(parent, "parent_id", None),
-                        "created_at": getattr(parent, "created_at", None),
-                        "updated_at": getattr(parent, "updated_at", None),
-                        "created_by_id": getattr(parent, "created_by_id", None),
+            # Add creator information for parent if available
+            if hasattr(parent, "creator") and parent.creator:
+                response_data["parent"]["creator"] = {
+                    "id": parent.creator.id,
+                    "email": parent.creator.email,
+                    "first_name": getattr(parent.creator, "first_name", None),
+                    "last_name": getattr(parent.creator, "last_name", None),
+                }
+
+            # Add parent roles if include_nested_roles is True
+            if include_nested_roles and hasattr(parent, "roles") and parent.roles:
+                response_data["parent"]["roles"] = [
+                    {
+                        "id": role.id,
+                        "name": role.name,
+                        "description": getattr(role, "description", None),
+                        "is_default": getattr(role, "is_default", False),
                     }
-
-                    # Add creator information for parent if available
-                    if hasattr(parent, "creator") and parent.creator:
-                        parent_data["creator"] = {
-                            "id": parent.creator.id,
-                            "email": parent.creator.email,
-                            "first_name": getattr(parent.creator, "first_name", None),
-                            "last_name": getattr(parent.creator, "last_name", None),
-                        }
-
-                    # We specifically don't include children for parent to avoid cyclic references
-                    # We don't include roles unless specifically requested
-                    if include_nested_roles and hasattr(parent, "roles") and parent.roles:
-                        parent_data["roles"] = [
-                            {
-                                "id": role.id,
-                                "name": role.name,
-                                "description": getattr(role, "description", None),
-                                "is_default": getattr(role, "is_default", False),
-                            }
-                            for role in parent.roles
-                        ]
-
-                    response_data["parent"] = parent_data
-            except Exception as e:
-                # Log error but continue - parent info is optional
-                import logging
-
-                logging.warning(f"Error loading parent for role group {group_id}: {str(e)}")
-                # No need to re-raise, we can continue without parent info
+                    for role in parent.roles
+                ]
 
         return create_response(data=response_data)
+
     except Exception as e:
         import logging
 
         logging.error(f"Error in get_role_group_by_id: {str(e)}")
+
         if "not found" in str(e).lower():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=str(e),
             )
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database operation failed: {str(e)}",
+            detail=str(e),
         )
 
 
@@ -311,6 +259,7 @@ async def update_role_group(
 async def delete_role_group(
     group: RoleGroup = Depends(role_group_deps.get_group_by_id),
     current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
+    db_session: AsyncSession = Depends(deps.get_async_db),
 ) -> None:
     """
     Deletes a role group by its id
@@ -319,16 +268,32 @@ async def delete_role_group(
     - admin
     - manager
     """
-    # Optional: Add checks here if a role group cannot be deleted under certain conditions
-    # For example, if it's used by certain system components
+    # Check if the group has child groups
+    if group.children and len(group.children) > 0:
+        message = (
+            f"Role group '{group.name}' has child groups and cannot be deleted. "
+            "Please delete or reassign child groups first."
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=message,
+        )
+
+    # Check if group has any roles before deletion
+    has_roles = await crud.role_group.check_role_exists_in_group(group_id=group.id, db_session=db_session)
+    if has_roles:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Group '{group.name}' has assigned roles and cannot be deleted. Please remove all roles first.",
+        )
 
     try:
-        await crud.role_group.remove(id=group.id)
+        await crud.role_group.remove(id=group.id, db_session=db_session)
     except Exception as e:
         # Catch potential DB errors or other issues during deletion
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error deleting role group: {e}",
+            detail=f"Error deleting role group: {str(e)}",
         )
 
     # No content is returned on successful deletion (204)

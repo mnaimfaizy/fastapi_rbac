@@ -192,12 +192,12 @@ function App() {
                 element={<PermissionGroupFormContent />}
               />
               <Route
-                path="/dashboard/permission-groups/:groupId"
-                element={<PermissionGroupDetail />}
-              />
-              <Route
                 path="/dashboard/permission-groups/edit/:groupId"
                 element={<PermissionGroupFormContent />}
+              />
+              <Route
+                path="/dashboard/permission-groups/:groupId"
+                element={<PermissionGroupDetail />}
               />
               {/* Role management routes */}
               <Route path="/dashboard/roles" element={<RolesContent />} />

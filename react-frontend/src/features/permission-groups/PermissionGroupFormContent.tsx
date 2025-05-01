@@ -2,8 +2,8 @@ import { useParams } from "react-router-dom";
 import PermissionGroupForm from "./PermissionGroupForm";
 
 export default function PermissionGroupFormContent() {
-  const { id } = useParams<{ id: string }>();
-  const isEdit = Boolean(id);
+  const { groupId } = useParams<{ groupId: string }>();
+  const isEdit = Boolean(groupId);
 
   return (
     <div className="p-6">
@@ -18,7 +18,7 @@ export default function PermissionGroupFormContent() {
         </p>
       </div>
       <div className="mt-6">
-        <PermissionGroupForm id={id} isEdit={isEdit} />
+        <PermissionGroupForm id={groupId} isEdit={isEdit} />
       </div>
     </div>
   );

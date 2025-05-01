@@ -3,6 +3,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import delete, select
+from sqlalchemy.orm import selectinload
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.crud.base_crud import CRUDBase
@@ -349,101 +350,63 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
             raise Exception(f"Error in role_group hierarchical query: {str(e)}") from e
 
     async def get_with_hierarchy(
-        self, *, id: UUID, db_session: AsyncSession | None = None, include_roles_recursive: bool = True
+        self,
+        *,
+        id: UUID,
+        db_session: AsyncSession | None = None,
+        include_roles_recursive: bool = True,  # Keep parameter for potential future use
     ) -> RoleGroup | None:
         """
         Get a role group by ID and ensure all hierarchical relationships
-        (children, parent) are fully loaded with their roles.
-
-        This implementation follows SQLAlchemy async best practices by avoiding nested awaits
-        and performing a single query for roles when possible.
+        (children, parent, roles, creator) are eagerly loaded.
 
         Args:
             id: The UUID of the role group
             db_session: Optional database session
-            include_roles_recursive: Whether to include roles for all groups in the hierarchy
+            include_roles_recursive: (Currently unused but kept for signature consistency)
 
         Returns:
-            The role group with all relationships loaded, or None if not found
+            The role group with relationships loaded via selectinload, or None if not found
         """
         try:
-            # Use the provided session or get a new one from the base class
             db_session = db_session or super().get_db().session
 
-            # Get the main role group with a query that eagerly loads all needed relationships
-            from sqlalchemy.orm import selectinload
+            # Define eager loading options
+            options = [
+                selectinload(RoleGroup.roles),
+                selectinload(RoleGroup.creator),
+                # Load children and their essential data (roles, creator)
+                selectinload(RoleGroup.children).selectinload(RoleGroup.roles),
+                selectinload(RoleGroup.children).selectinload(RoleGroup.creator),
+                # Load parent and its essential data (roles, creator)
+                selectinload(RoleGroup.parent).selectinload(RoleGroup.roles),
+                selectinload(RoleGroup.parent).selectinload(RoleGroup.creator),
+                # Explicitly load grandchildren to prevent lazy load later if needed by consuming code
+                # Note: This might load more data than strictly necessary for all use cases
+                # but helps prevent the MissingGreenlet error during relationship traversal.
+                selectinload(RoleGroup.children).selectinload(RoleGroup.children),
+            ]
 
-            query = (
-                select(RoleGroup)
-                .options(selectinload(RoleGroup.roles))
-                .options(selectinload(RoleGroup.creator))
-                .options(selectinload(RoleGroup.children).selectinload(RoleGroup.roles))
-                .options(selectinload(RoleGroup.children).selectinload(RoleGroup.creator))
-                .where(RoleGroup.id == id)
-            )
+            # Create a query that eagerly loads all needed relationships
+            query = select(RoleGroup).options(*options).where(RoleGroup.id == id)
 
             result = await db_session.execute(query)
-            role_group = result.scalar_one_or_none()
+            # Use unique() to handle potential duplicates from eager loading multiple paths
+            role_group = result.unique().scalar_one_or_none()
 
-            if not role_group:
-                return None
-
-            # Initialize children list if necessary
-            if not hasattr(role_group, "children") or role_group.children is None:
-                role_group.children = []
-
-            # For each child, make sure child's children is also loaded if available
-            for child in role_group.children:
-                # We avoid using the 'parent' attribute and rely on parent_id
-                # to avoid the error with accessing 'parent' property
-
-                # Process child's children if any
-                if hasattr(child, "children") and child.children:
-                    # Make sure grandchildren have roles loaded if needed
-                    if include_roles_recursive:
-                        for grandchild in child.children:
-                            # No need to explicitly load roles again as they should be loaded
-                            # by the eager loading options above
-                            if not hasattr(grandchild, "roles"):
-                                grandchild.roles = []
-
-            # Handle parent if applicable
-            # We need to separately load the parent since selectinload doesn't work
-            # well with the backref parent relationship
-            if role_group.parent_id and include_roles_recursive:
-                try:
-                    # Get parent directly with a separate query
-                    parent_query = (
-                        select(RoleGroup)
-                        .options(selectinload(RoleGroup.roles))
-                        .options(selectinload(RoleGroup.creator))
-                        .where(RoleGroup.id == role_group.parent_id)
-                    )
-                    parent_result = await db_session.execute(parent_query)
-                    parent = parent_result.scalar_one_or_none()
-
-                    # Set parent directly on the role_group object since the attribute might exist
-                    # from the relationship definition in the model
-                    if parent:
-                        # Initialize roles for parent if they don't exist
-                        if not hasattr(parent, "roles"):
-                            parent.roles = []
-
-                        # We need to manually set the 'parent' attribute
-                        # on the role_group since we're not relying on SQLAlchemy's loading
-                        # This will make the parent available in the returned object
-                        setattr(role_group, "parent", parent)
-
-                except Exception as parent_err:
-                    import logging
-
-                    logging.error(f"Error loading parent for role group {id}: {str(parent_err)}")
+            # Removed the post-processing loop that used hasattr checks.
+            # Relying solely on selectinload to populate the attributes.
+            # If relationships are accessed later (e.g., in the endpoint),
+            # they should be available without triggering lazy loads.
 
             return role_group
+
         except Exception as e:
             import logging
 
-            logging.error(f"Error in get_with_hierarchy for id {id}: {str(e)}")
+            # Log the specific error and context
+            logging.error(f"Error in get_with_hierarchy for id {id}: {str(e)}", exc_info=True)
+            # Re-raise the exception to be handled by the caller or FastAPI's exception handlers
             raise
 
     async def _load_roles_recursive(

@@ -1,13 +1,27 @@
+import React from "react";
+import { useNavigate } from "react-router-dom";
 import PermissionsDataTable from "./PermissionsDataTable";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-export default function PermissionsContent() {
+const PermissionsContent: React.FC = () => {
+  const navigate = useNavigate();
+
+  const handleCreatePermission = () => {
+    navigate("/dashboard/permissions/new");
+  };
+
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold">Permissions</h1>
-        <p className="text-gray-500 mt-1">Manage system permissions</p>
-      </div>
-      <PermissionsDataTable />
-    </div>
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>Manage Permissions</CardTitle>
+        <Button onClick={handleCreatePermission}>Create Permission</Button>
+      </CardHeader>
+      <CardContent>
+        <PermissionsDataTable />
+      </CardContent>
+    </Card>
   );
-}
+};
+
+export default PermissionsContent;

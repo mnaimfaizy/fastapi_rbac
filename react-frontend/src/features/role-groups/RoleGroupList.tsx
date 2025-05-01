@@ -280,14 +280,7 @@ const RoleGroupRow: React.FC<
 
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive"
-                  onClick={() => {
-                    const dialog = document.getElementById(
-                      `delete-dialog-${group.id}`
-                    );
-                    if (dialog instanceof HTMLDialogElement) {
-                      dialog.showModal();
-                    }
-                  }}
+                  onClick={() => onDelete(group.id)}
                 >
                   <Trash2 className="h-4 w-4 mr-2" />
                   Delete
@@ -357,9 +350,10 @@ const RoleGroupList: React.FC = () => {
   );
   const [search, setSearch] = useState("");
   const [expandAll, setExpandAll] = useState(true);
+  const [deleteGroupId, setDeleteGroupId] = useState<string | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   useEffect(() => {
-    // Load role groups when component mounts
     dispatch(fetchRoleGroups({ page: 1, size: 10 }));
   }, [dispatch]);
 
@@ -402,12 +396,42 @@ const RoleGroupList: React.FC = () => {
     navigate(`/dashboard/role-groups/${groupId}`);
   };
 
-  const handleDeleteRoleGroup = async (groupId: string) => {
+  const openDeleteDialog = (groupId: string) => {
+    setDeleteGroupId(groupId);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteGroupId) return;
+
     try {
-      await dispatch(deleteRoleGroup(groupId)).unwrap();
+      await dispatch(deleteRoleGroup(deleteGroupId)).unwrap();
       toast.success("Role group deleted successfully");
-    } catch {
-      toast.error("Failed to delete role group");
+      // Refresh the list after deletion
+      dispatch(
+        fetchRoleGroups({ page: pagination.page, size: pagination.size })
+      );
+    } catch (error: any) {
+      // Extract the most specific error message from the error response
+      const errorMessage =
+        error.response?.data?.detail ||
+        (error instanceof Error
+          ? error.message
+          : "Failed to delete role group");
+
+      // Use longer duration for conflict errors as they contain important instructions
+      const duration =
+        errorMessage.includes("has child groups") ||
+        errorMessage.includes("has assigned roles")
+          ? 8000
+          : 5000;
+
+      toast.error(errorMessage, {
+        duration: duration,
+      });
+    } finally {
+      setIsDeleteDialogOpen(false);
+      setDeleteGroupId(null);
     }
   };
 
@@ -469,7 +493,7 @@ const RoleGroupList: React.FC = () => {
         </div>
       </div>
 
-      <div className="border rounded-md overflow-hidden">
+      <div className="border rounded-md">
         <Table>
           <TableHeader>
             <TableRow>
@@ -491,7 +515,6 @@ const RoleGroupList: React.FC = () => {
                 </TableCell>
               </TableRow>
             ) : (
-              // Only render top-level groups (those without parents)
               roleGroupsWithUsers
                 .filter((group) => !group.parent_id)
                 .map((group) => (
@@ -501,7 +524,7 @@ const RoleGroupList: React.FC = () => {
                     onMove={handleMoveGroup}
                     onEdit={handleEditRoleGroup}
                     onView={handleViewRoleGroup}
-                    onDelete={handleDeleteRoleGroup}
+                    onDelete={openDeleteDialog}
                     allGroups={roleGroupsWithUsers}
                     expandAllState={expandAll}
                   />
@@ -511,6 +534,33 @@ const RoleGroupList: React.FC = () => {
         </Table>
       </div>
 
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog
+        open={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Role Group</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this role group? This action
+              cannot be undone. Any child groups will need to be deleted or
+              reassigned first.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Pagination */}
       {!loading && pagination.pages > 1 && (
         <Pagination>
           <PaginationContent>
@@ -524,7 +574,6 @@ const RoleGroupList: React.FC = () => {
 
             {Array.from({ length: pagination.pages }, (_, i) => i + 1).map(
               (pageNumber) => {
-                // Show first page, last page, current page, and one page before and after current page
                 if (
                   pageNumber === 1 ||
                   pageNumber === pagination.pages ||

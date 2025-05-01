@@ -110,11 +110,10 @@ export const deletePermissionGroup = createAsyncThunk(
       const response = await permissionService.deletePermissionGroup(id);
       return response;
     } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : "Failed to delete permission group";
-      return rejectWithValue(errorMessage);
+      if (error instanceof Error) {
+        return rejectWithValue(error.message);
+      }
+      return rejectWithValue("Failed to delete permission group");
     }
   }
 );
@@ -125,6 +124,9 @@ const permissionGroupSlice = createSlice({
   reducers: {
     clearCurrentPermissionGroup: (state) => {
       state.currentPermissionGroup = null;
+    },
+    clearPermissionGroupErrors: (state) => {
+      state.error = null;
     },
     setPage: (state, action: PayloadAction<number>) => {
       state.page = action.payload;
@@ -142,11 +144,11 @@ const permissionGroupSlice = createSlice({
       })
       .addCase(fetchPermissionGroups.fulfilled, (state, action) => {
         state.isLoading = false;
-        // Fix property access with optional chaining and fallbacks
-        if (action.payload?.data?.data) {
-          state.permissionGroups = action.payload.data.data.items || [];
-          state.totalItems = action.payload.data.data.total || 0;
-          state.page = action.payload.data.data.page || 1;
+        if (action.payload?.data) {
+          state.permissionGroups = action.payload.data.items || [];
+          state.totalItems = action.payload.data.total || 0;
+          state.page = action.payload.data.page || 1;
+          state.pageSize = action.payload.data.size || 10;
         }
       })
       .addCase(fetchPermissionGroups.rejected, (state, action) => {
@@ -161,9 +163,8 @@ const permissionGroupSlice = createSlice({
       })
       .addCase(fetchPermissionGroupById.fulfilled, (state, action) => {
         state.isLoading = false;
-        if (action.payload?.data) {
-          state.currentPermissionGroup = action.payload.data;
-        }
+        // Handle both direct response and nested data structure
+        state.currentPermissionGroup = action.payload?.data || action.payload;
       })
       .addCase(fetchPermissionGroupById.rejected, (state, action) => {
         state.isLoading = false;
@@ -175,8 +176,20 @@ const permissionGroupSlice = createSlice({
         state.isLoading = true;
         state.error = null;
       })
-      .addCase(createPermissionGroup.fulfilled, (state) => {
+      .addCase(createPermissionGroup.fulfilled, (state, action) => {
         state.isLoading = false;
+        // Add the newly created permission group to the state
+        if (action.payload?.data) {
+          // Add the new group to the existing array
+          state.permissionGroups = [
+            ...state.permissionGroups,
+            action.payload.data,
+          ];
+          // Update the total count
+          state.totalItems = state.totalItems + 1;
+          // Set as current group
+          state.currentPermissionGroup = action.payload.data;
+        }
       })
       .addCase(createPermissionGroup.rejected, (state, action) => {
         state.isLoading = false;
@@ -209,6 +222,7 @@ const permissionGroupSlice = createSlice({
       })
       .addCase(deletePermissionGroup.fulfilled, (state) => {
         state.isLoading = false;
+        state.error = null;
       })
       .addCase(deletePermissionGroup.rejected, (state, action) => {
         state.isLoading = false;
@@ -217,6 +231,10 @@ const permissionGroupSlice = createSlice({
   },
 });
 
-export const { clearCurrentPermissionGroup, setPage, setPageSize } =
-  permissionGroupSlice.actions;
+export const {
+  clearCurrentPermissionGroup,
+  clearPermissionGroupErrors,
+  setPage,
+  setPageSize,
+} = permissionGroupSlice.actions;
 export default permissionGroupSlice.reducer;

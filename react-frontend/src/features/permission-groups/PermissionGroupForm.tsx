@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -9,6 +9,8 @@ import {
   createPermissionGroup,
   updatePermissionGroup,
   fetchPermissionGroups,
+  clearCurrentPermissionGroup,
+  clearPermissionGroupErrors,
 } from "../../store/slices/permissionGroupSlice";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,16 +29,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft } from "lucide-react";
 import { RootState } from "../../store";
 import { PermissionGroup } from "../../models/permission";
+import { toast } from "sonner";
 
 // Form validation schema
 const formSchema = z.object({
@@ -46,13 +43,19 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-export default function PermissionGroupForm() {
-  const { id } = useParams<{ id: string }>();
+interface PermissionGroupFormProps {
+  id?: string;
+  isEdit: boolean;
+}
+
+export default function PermissionGroupForm({
+  id,
+  isEdit,
+}: PermissionGroupFormProps) {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-  const isEdit = !!id;
 
-  const { currentPermissionGroup, permissionGroups, isLoading } =
+  const { currentPermissionGroup, permissionGroups, isLoading, error } =
     useAppSelector((state: RootState) => state.permissionGroup);
 
   // Filter out the current group if editing (can't be its own parent)
@@ -75,6 +78,12 @@ export default function PermissionGroupForm() {
     if (isEdit && id) {
       dispatch(fetchPermissionGroupById(id));
     }
+
+    // Cleanup when component unmounts
+    return () => {
+      dispatch(clearCurrentPermissionGroup());
+      dispatch(clearPermissionGroupErrors());
+    };
   }, [dispatch, isEdit, id]);
 
   // Fill form with current permission group data when editing
@@ -89,11 +98,13 @@ export default function PermissionGroupForm() {
 
   const onSubmit = async (data: FormValues) => {
     try {
-      // If permission_group_id is "none", set it to an empty string for the API
+      // If permission_group_id is "none", set it to null for the API
       const submissionData = {
         ...data,
         permission_group_id:
-          data.permission_group_id === "none" ? "" : data.permission_group_id,
+          data.permission_group_id === "none"
+            ? null
+            : data.permission_group_id || null,
       };
 
       if (isEdit && id) {
@@ -103,12 +114,15 @@ export default function PermissionGroupForm() {
             groupData: submissionData,
           })
         ).unwrap();
+        toast.success("Permission group updated successfully");
       } else {
         await dispatch(createPermissionGroup(submissionData)).unwrap();
+        toast.success("Permission group created successfully");
       }
       navigate("/dashboard/permission-groups");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving permission group:", error);
+      toast.error(error?.message || "Failed to save permission group");
     }
   };
 
@@ -137,6 +151,12 @@ export default function PermissionGroupForm() {
         </CardTitle>
       </CardHeader>
       <CardContent>
+        {error && (
+          <div className="p-3 mb-4 bg-destructive/10 border border-destructive text-destructive rounded">
+            {error}
+          </div>
+        )}
+
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <FormField
@@ -202,7 +222,7 @@ export default function PermissionGroupForm() {
               <Button variant="outline" type="button" onClick={handleCancel}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isLoading && isEdit}>
+              <Button type="submit" disabled={isLoading}>
                 {isEdit ? "Update" : "Create"}
               </Button>
             </div>

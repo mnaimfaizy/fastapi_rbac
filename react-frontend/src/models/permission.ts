@@ -36,12 +36,12 @@ export interface PermissionUpdate {
 
 export interface PermissionGroupCreate {
   name: string;
-  permission_group_id?: string;
+  permission_group_id?: string | null;
 }
 
 export interface PermissionGroupUpdate {
   name?: string;
-  permission_group_id?: string;
+  permission_group_id?: string | null;
 }
 
 // API response interfaces

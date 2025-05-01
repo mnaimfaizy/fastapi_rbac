@@ -18,24 +18,27 @@ class RoleGroupBase(SQLModel):
 
 
 class RoleGroup(BaseUUIDModel, RoleGroupBase, table=True):
+    __tablename__ = "RoleGroup"
+
     name: str | None = Field(String(250), nullable=True, index=True)
     created_by_id: UUID | None = Field(default=None, foreign_key="User.id")
     parent_id: UUID | None = Field(default=None, foreign_key="RoleGroup.id", nullable=True)
 
-    # Relationships
+    # Relationships with eager loading and proper backref configuration
     roles: List["Role"] = Relationship(
         link_model=RoleGroupMap,
         back_populates="groups",
-        sa_relationship_kwargs={"lazy": "selectin"},
+        sa_relationship_kwargs={"lazy": "selectin", "overlaps": "children,parent"},
     )
+
     children: List["RoleGroup"] = Relationship(
         sa_relationship_kwargs=dict(
             lazy="selectin",
             cascade="all",
-            backref=backref("parent", remote_side="RoleGroup.id"),
-            overlaps="roles",
+            backref=backref("parent", remote_side="RoleGroup.id", lazy="joined", overlaps="roles"),
         )
     )
+
     creator: "User" = Relationship(
         sa_relationship_kwargs={"lazy": "selectin", "foreign_keys": "RoleGroup.created_by_id"}
     )

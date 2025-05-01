@@ -25,14 +25,215 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MoreHorizontal, ChevronDown, Plus } from "lucide-react";
+import {
+  MoreHorizontal,
+  ChevronDown,
+  ChevronRight,
+  List,
+  Users,
+} from "lucide-react";
 import { PermissionGroup } from "../../models/permission";
 import { RootState } from "../../store";
+import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
-interface SortState {
-  column: string | null;
-  direction: "asc" | "desc";
+interface PermissionGroupRowProps {
+  group: PermissionGroup;
+  level?: number;
+  allGroups: PermissionGroup[];
+  expandAllState: boolean;
+  onDelete: (id: string) => void;
+  onEdit: (id: string) => void;
+  onView: (id: string) => void;
 }
+
+const PermissionGroupRow: React.FC<PermissionGroupRowProps> = ({
+  group,
+  level = 0,
+  allGroups,
+  expandAllState,
+  onDelete,
+  onEdit,
+  onView,
+}) => {
+  // State for expand/collapse functionality
+  const [isExpanded, setIsExpanded] = useState(true);
+
+  // Sync with expandAllState from parent when it changes
+  useEffect(() => {
+    setIsExpanded(expandAllState);
+  }, [expandAllState]);
+
+  // Find direct children of this group
+  const childGroups = allGroups.filter(
+    (g) => g.permission_group_id === group.id
+  );
+  const hasChildren = childGroups.length > 0;
+  const hasPermissions = group.permissions && group.permissions.length > 0;
+  const isExpandable = hasChildren || hasPermissions;
+
+  // Generate vertical line styles based on nesting level
+  const verticalLineClass = level > 0 ? "relative" : "";
+
+  return (
+    <>
+      <TableRow className={cn(level > 0 && "hover:bg-accent/30")}>
+        <TableCell className="font-medium">
+          <div className="flex items-center gap-2">
+            <div
+              className="flex items-center"
+              style={{ marginLeft: `${level * 1.5}rem` }}
+            >
+              {/* Show expand/collapse control only if there are children */}
+              {isExpandable ? (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => setIsExpanded(!isExpanded)}
+                        className="p-1 hover:bg-accent rounded-sm mr-1 focus:outline-none focus:ring-1 focus:ring-primary"
+                        aria-expanded={isExpanded}
+                        aria-label={
+                          isExpanded ? "Collapse group" : "Expand group"
+                        }
+                      >
+                        {isExpanded ? (
+                          <ChevronDown className="h-4 w-4 text-primary" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-primary" />
+                        )}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {isExpanded ? "Collapse" : "Expand"} group
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : (
+                // Add empty space for alignment when no expand button
+                <div className="w-6"></div>
+              )}
+
+              {/* Row content with connecting lines */}
+              <div className={verticalLineClass}>
+                {level > 0 && (
+                  <div className="absolute left-[-1rem] top-1/2 w-[0.75rem] h-px bg-border"></div>
+                )}
+                <button
+                  onClick={() => onView(group.id)}
+                  className="font-medium hover:underline focus:outline-none focus:text-primary"
+                >
+                  {group.name}
+                </button>
+              </div>
+            </div>
+
+            {/* Show badges for child groups and permissions count if any */}
+            <div className="inline-flex ml-2 gap-1 items-center">
+              {hasChildren && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge
+                        variant="outline"
+                        className="flex items-center gap-1 text-xs"
+                      >
+                        <List className="h-3 w-3" />
+                        {childGroups.length}
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      {childGroups.length} child{" "}
+                      {childGroups.length === 1 ? "group" : "groups"}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+
+              {hasPermissions && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge
+                        variant="secondary"
+                        className="flex items-center gap-1 text-xs"
+                      >
+                        <Users className="h-3 w-3" />
+                        {group.permissions?.length}
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      {group.permissions?.length} assigned{" "}
+                      {group.permissions?.length === 1
+                        ? "permission"
+                        : "permissions"}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </div>
+          </div>
+        </TableCell>
+
+        {/* Show parent group name */}
+        <TableCell>
+          {group.permission_group_id
+            ? allGroups.find((g) => g.id === group.permission_group_id)?.name ||
+              "Unknown"
+            : "Root Level"}
+        </TableCell>
+
+        <TableCell>{group.permissions?.length || 0}</TableCell>
+
+        <TableCell className="text-right">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 p-0">
+                <span className="sr-only">Open menu</span>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => onEdit(group.id)}>
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onView(group.id)}>
+                View details
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onDelete(group.id)}>
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </TableCell>
+      </TableRow>
+
+      {/* Only render children if expanded */}
+      {isExpanded &&
+        childGroups.map((child) => (
+          <PermissionGroupRow
+            key={child.id}
+            group={child}
+            level={level + 1}
+            allGroups={allGroups}
+            expandAllState={expandAllState}
+            onDelete={onDelete}
+            onEdit={onEdit}
+            onView={onView}
+          />
+        ))}
+    </>
+  );
+};
 
 export default function PermissionGroupsDataTable() {
   const dispatch = useAppDispatch();
@@ -41,7 +242,11 @@ export default function PermissionGroupsDataTable() {
     useAppSelector((state: RootState) => state.permissionGroup);
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [sort, setSort] = useState<SortState>({
+  const [expandAll, setExpandAll] = useState(true);
+  const [sort, setSort] = useState<{
+    column: string | null;
+    direction: "asc" | "desc";
+  }>({
     column: null,
     direction: "asc",
   });
@@ -79,21 +284,46 @@ export default function PermissionGroupsDataTable() {
     if (
       window.confirm("Are you sure you want to delete this permission group?")
     ) {
-      await dispatch(deletePermissionGroup(id));
-      dispatch(fetchPermissionGroups({ page, pageSize }));
+      try {
+        await dispatch(deletePermissionGroup(id)).unwrap();
+        dispatch(fetchPermissionGroups({ page, pageSize }));
+        toast.success("Permission group deleted successfully");
+      } catch (error: any) {
+        // The error message is now properly propagated from the service through the Redux slice
+        const errorMessage = error.toString();
+        toast.error(errorMessage, {
+          duration: 5000,
+        });
+      }
     }
   };
 
-  const handleAddNew = () => {
-    navigate("/dashboard/permission-groups/new");
+  // Filter groups based on search term (including children)
+  const filterGroupsRecursively = (
+    groups: PermissionGroup[]
+  ): PermissionGroup[] => {
+    return groups
+      .filter((group) => {
+        const matchesSearch = group.name
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase());
+        const hasMatchingChildren = group.groups?.some((child) =>
+          child.name.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+        return matchesSearch || hasMatchingChildren;
+      })
+      .map((group) => ({
+        ...group,
+        groups: group.groups ? filterGroupsRecursively(group.groups) : [],
+      }));
   };
 
-  // Filter permission groups based on search term
-  const filteredGroups = permissionGroups.filter((group: PermissionGroup) =>
-    group.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Filter groups based on search term
+  const filteredGroups = searchTerm
+    ? filterGroupsRecursively(permissionGroups)
+    : permissionGroups;
 
-  // Sort permission groups
+  // Sort groups
   const sortedGroups = [...filteredGroups].sort((a, b) => {
     if (!sort.column) return 0;
 
@@ -106,7 +336,6 @@ export default function PermissionGroupsDataTable() {
         : bValue.localeCompare(aValue);
     }
 
-    // For non-string values or if values are undefined
     if (aValue === bValue) return 0;
     if (aValue === undefined) return 1;
     if (bValue === undefined) return -1;
@@ -136,16 +365,32 @@ export default function PermissionGroupsDataTable() {
             className="max-w-sm"
           />
         </div>
-        <Button onClick={handleAddNew} className="flex items-center gap-1">
-          <Plus className="h-4 w-4" /> Add Permission Group
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setExpandAll(!expandAll)}
+            className="flex items-center gap-1"
+          >
+            {expandAll ? (
+              <>
+                <ChevronDown className="h-4 w-4" />
+                Collapse All
+              </>
+            ) : (
+              <>
+                <ChevronRight className="h-4 w-4" />
+                Expand All
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       <div className="rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[300px]">
+              <TableHead className="w-[250px]">
                 <Button
                   variant="ghost"
                   onClick={() => handleSort("name")}
@@ -174,38 +419,20 @@ export default function PermissionGroupsDataTable() {
                 </TableCell>
               </TableRow>
             ) : sortedGroups.length > 0 ? (
-              sortedGroups.map((group) => (
-                <TableRow key={group.id}>
-                  <TableCell className="font-medium">{group.name}</TableCell>
-                  <TableCell>{group.permission_group_id || "None"}</TableCell>
-                  <TableCell>{group.permissions?.length || 0}</TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                          <span className="sr-only">Open menu</span>
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => handleEdit(group.id)}>
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleView(group.id)}>
-                          View details
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => handleDelete(group.id)}
-                        >
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))
+              // Only show top-level groups (those without parents) initially
+              sortedGroups
+                .filter((group) => !group.permission_group_id)
+                .map((group) => (
+                  <PermissionGroupRow
+                    key={group.id}
+                    group={group}
+                    allGroups={sortedGroups}
+                    expandAllState={expandAll}
+                    onDelete={handleDelete}
+                    onEdit={handleEdit}
+                    onView={handleView}
+                  />
+                ))
             ) : (
               <TableRow>
                 <TableCell colSpan={4} className="h-24 text-center">

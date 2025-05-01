@@ -25,8 +25,8 @@ class Permission(BaseUUIDModel, PermissionBase, table=True):
     roles: Optional[List["Role"]] = Relationship(
         back_populates="permissions",
         link_model=RolePermission,
-        sa_relationship_kwargs={"lazy": "joined"},
+        sa_relationship_kwargs={"lazy": "selectin"},
     )
     groups: List["PermissionGroup"] = Relationship(
-        back_populates="permissions", sa_relationship_kwargs={"lazy": "joined"}
+        back_populates="permissions", sa_relationship_kwargs={"lazy": "selectin"}
     )

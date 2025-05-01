@@ -354,9 +354,24 @@ const RoleGroupDetail: React.FC = () => {
         await dispatch(deleteRoleGroup(groupId)).unwrap();
         toast.success("Role group deleted successfully");
         navigate("/dashboard/role-groups");
-      } catch (error) {
-        console.error("Failed to delete role group:", error);
-        toast.error("Failed to delete role group");
+      } catch (error: any) {
+        // Extract the most specific error message from the error response
+        const errorMessage =
+          error.response?.data?.detail ||
+          (error instanceof Error
+            ? error.message
+            : "Failed to delete role group");
+
+        // Use longer duration for conflict errors as they contain important instructions
+        const duration =
+          errorMessage.includes("has child groups") ||
+          errorMessage.includes("has assigned roles")
+            ? 8000
+            : 5000;
+
+        toast.error(errorMessage, {
+          duration: duration,
+        });
       }
     }
   };
