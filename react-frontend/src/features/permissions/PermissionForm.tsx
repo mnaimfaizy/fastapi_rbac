@@ -85,7 +85,7 @@ export default function PermissionForm() {
       form.reset({
         name: currentPermission.name,
         description: currentPermission.description || "",
-        group_id: currentPermission.group_id,
+        group_id: currentPermission.group?.id || "", // Extract ID from group object
       });
     }
   }, [currentPermission, form, isEdit]);
@@ -93,10 +93,18 @@ export default function PermissionForm() {
   const onSubmit = async (data: FormValues) => {
     try {
       if (isEdit && id) {
+        // Create a complete update payload with all required fields
+        const updateData = {
+          name: data.name,
+          description: data.description,
+          // Explicitly include group_id as a non-optional field to satisfy backend validation
+          group_id: data.group_id,
+        };
+
         await dispatch(
           updatePermission({
             id,
-            permissionData: data,
+            permissionData: updateData,
           })
         ).unwrap();
       } else {

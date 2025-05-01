@@ -31,7 +31,9 @@ export interface PermissionCreate {
 export interface PermissionUpdate {
   name?: string;
   description?: string;
-  group_id?: string;
+  // While TypeScript marks this as optional, the backend database requires it
+  // Always include this field in update requests
+  group_id: string;
 }
 
 export interface PermissionGroupCreate {

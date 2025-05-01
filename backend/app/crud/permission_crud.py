@@ -20,6 +20,24 @@ class CRUDPermission(CRUDBase[Permission, IPermissionCreate, IPermissionUpdate])
         result = await db_session.execute(stmt)
         return result.unique().scalar_one_or_none()
 
+    async def get_permission_by_id(
+        self, *, permission_id: UUID, db_session: AsyncSession | None = None
+    ) -> Permission | None:
+        """
+        Get a permission by ID with relationships loaded
+        """
+        from sqlalchemy.orm import selectinload
+
+        db_session = db_session or super().get_db().session
+        stmt = (
+            select(Permission)
+            .options(selectinload(Permission.group))
+            .options(selectinload(Permission.created_by))
+            .where(Permission.id == permission_id)
+        )
+        result = await db_session.execute(stmt)
+        return result.unique().scalar_one_or_none()
+
     async def assign_permissions_to_role(
         self,
         *,

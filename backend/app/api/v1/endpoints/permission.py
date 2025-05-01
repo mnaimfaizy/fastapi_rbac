@@ -22,6 +22,7 @@ from app.utils.exceptions.common_exception import (
     IdNotFoundException,
     NameExistException,
 )
+from app.utils.string_utils import format_permission_name
 
 router = APIRouter()
 
@@ -37,7 +38,7 @@ async def get_permissions(
     return create_response(data=permissions)
 
 
-@router.get("/{permission_id}", response_model=IPermissionRead)
+@router.get("/{permission_id}", response_model=IGetResponseBase[IPermissionRead])
 async def get_permission_by_id(
     permission_id: UUID, current_user: User = Depends(deps.get_current_user())
 ) -> IGetResponseBase[IPermissionRead]:
@@ -63,10 +64,29 @@ async def create_permission(
     - admin
     - manager
     """
-    permission_current = await crud.permission.get_permission_by_name(name=permission.name)
+    # Get the permission group to format the name correctly
+    permission_group = await crud.permission_group.get(id=permission.group_id)
+
+    # Format the permission name using the utility function
+    if permission_group:
+        # Create a copy of the permission object to avoid modifying the input
+        permission_dict = permission.model_dump()
+        # Format the name using both permission name and group name
+        permission_dict["name"] = format_permission_name(permission.name, permission_group.name)
+        # Create a new IPermissionCreate instance with the formatted name
+        formatted_permission = IPermissionCreate(**permission_dict)
+    else:
+        # If group not found, just format the permission name without group context
+        permission_dict = permission.model_dump()
+        permission_dict["name"] = format_permission_name(permission.name)
+        formatted_permission = IPermissionCreate(**permission_dict)
+
+    # Check if a permission with the formatted name already exists
+    permission_current = await crud.permission.get_permission_by_name(name=formatted_permission.name)
     if permission_current:
-        raise NameExistException(Permission, name=permission.name)
-    new_permission = await crud.permission.create(obj_in=permission, created_by_id=current_user.id)
+        raise NameExistException(Permission, name=formatted_permission.name)
+
+    new_permission = await crud.permission.create(obj_in=formatted_permission, created_by_id=current_user.id)
     return create_response(data=new_permission)
 
 
@@ -83,17 +103,40 @@ async def update_permission(
     - admin
     - manager
     """
+    # If name is being updated, format it properly
+    if permission_update.name:
+        # Get the permission group for formatting
+        if permission_update.group_id:
+            permission_group = await crud.permission_group.get(id=permission_update.group_id)
+        else:
+            permission_group = await crud.permission_group.get(id=current_permission.group_id)
+
+        # Format the name
+        if permission_group:
+            formatted_name = format_permission_name(permission_update.name, permission_group.name)
+        else:
+            formatted_name = format_permission_name(permission_update.name)
+
+        # Create a copy with the formatted name
+        update_dict = permission_update.model_dump(exclude_unset=True)
+        update_dict["name"] = formatted_name
+        permission_update = IPermissionUpdate(**update_dict)
+
     # Check if there are any actual changes
+    current_name = current_permission.name
+    update_name = permission_update.name or current_permission.name
+
     if (
-        current_permission.name == permission_update.name
+        current_name == update_name
         and current_permission.description == permission_update.description
+        and current_permission.group_id == permission_update.group_id
     ):
         raise ContentNoChangeException()
 
     # Check if the new name conflicts with an existing permission (excluding itself)
     if permission_update.name and permission_update.name != current_permission.name:
         existing_permission = await crud.permission.get_permission_by_name(name=permission_update.name)
-        if existing_permission:
+        if existing_permission and existing_permission.id != current_permission.id:
             raise NameExistException(Permission, name=permission_update.name)
 
     permission_updated = await crud.permission.update(
