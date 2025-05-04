@@ -51,10 +51,11 @@ class IUserUpdate(UserBase):
 
 class IUserRead(UserBase):
     id: UUID
-    roles: list[str] | None = None
+    roles: list[dict[str, Any]]  # Change to accept role objects instead of strings
 
     # This usage is standard for Pydantic v2/SQLModel
     model_config = ConfigDict(
+        from_attributes=True,
         json_schema_extra={
             "example": {
                 "id": "a3a3a3a3-a3a3-a3a3-a3a3-a3a3a3a3a3a3",
@@ -71,7 +72,7 @@ class IUserRead(UserBase):
                 "is_locked": False,
                 "locked_until": None,
                 "verified": True,
-                "roles": ["user"],
+                "roles": [{"id": "uuid-here", "name": "admin"}, {"id": "uuid-here", "name": "user"}],
             }
         },
     )

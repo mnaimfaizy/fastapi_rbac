@@ -5,17 +5,20 @@ export interface User {
   last_name: string;
   is_active: boolean;
   is_superuser: boolean;
-  needsToChangePassword: boolean;
+  is_locked: boolean;
+  locked_until: string | null;
+  needs_to_change_password: boolean;
   verified: boolean;
   created_at: string;
   updated_at: string;
-  expiry_date: string;
-  last_changed_password_date: string;
+  expiry_date: string | null;
+  last_changed_password_date: string | null;
   contact_phone: string | null;
   number_of_failed_attempts: number | null;
   verification_code: string | null;
   last_updated_by: string | null;
-  roles?: Role[];
+  roles: Role[];
+  role_id?: string[];
 }
 
 export interface Role {

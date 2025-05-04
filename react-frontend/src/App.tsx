@@ -8,7 +8,8 @@ import { Provider, useSelector } from "react-redux";
 import { store, RootState } from "./store"; // Adjust path if needed
 import { useEffect } from "react";
 import { getStoredRefreshToken } from "./lib/tokenStorage";
-import { refreshAccessToken } from "./store/slices/authSlice";
+import { refreshAccessToken, getCurrentUser } from "./store/slices/authSlice";
+import { useAppDispatch } from "./store/hooks"; // Add this import for useAppDispatch
 import { Toaster } from "@/components/ui/sonner";
 
 // Layouts
@@ -31,7 +32,7 @@ import ProfileContent from "./components/dashboard/ProfileContent";
 import ChangePasswordContent from "./components/dashboard/ChangePasswordContent";
 import UsersList from "./features/users/UsersList";
 import UserEditPage from "./features/users/UserEditPage";
-import UserDetailContent from "./components/dashboard/UserDetailContent";
+import UserDetailContent from "./features/users/UserDetailContent";
 import PermissionsContent from "./features/permissions/PermissionsContent";
 import PermissionFormContent from "./features/permissions/PermissionFormContent";
 import PermissionDetail from "./features/permissions/PermissionDetail";
@@ -40,6 +41,7 @@ import PermissionGroupFormContent from "./features/permission-groups/PermissionG
 import PermissionGroupDetail from "./features/permission-groups/PermissionGroupDetail";
 import RolesContent from "./features/roles/RolesContent";
 import RoleFormContent from "./features/roles/RoleFormContent";
+import RoleDetail from "./features/roles/RoleDetail";
 import RoleGroupContent from "./features/role-groups/RoleGroupContent";
 import RoleGroupFormContent from "./features/role-groups/RoleGroupFormContent";
 import RoleGroupDetail from "./features/role-groups/RoleGroupDetail";
@@ -60,12 +62,23 @@ const PublicOnlyRoute = ({ children }: { children: any }) => {
 
 // Component to initialize auth state if refresh token exists
 const InitAuth = () => {
+  const dispatch = useAppDispatch();
+
   useEffect(() => {
     const refreshToken = getStoredRefreshToken();
     if (refreshToken) {
-      store.dispatch(refreshAccessToken(refreshToken));
+      dispatch(refreshAccessToken(refreshToken))
+        .unwrap()
+        .then(() => {
+          // If refresh token worked, also get the current user data
+          dispatch(getCurrentUser());
+        })
+        .catch((error) => {
+          console.error("Failed to refresh token on application start:", error);
+          // The refreshAccessToken action already handles logout if it fails
+        });
     }
-  }, []);
+  }, [dispatch]);
 
   return null;
 };
@@ -162,7 +175,7 @@ function App() {
                 element={<UserDetailContent />}
               />
               <Route
-                path="/dashboard/users/edit/:userId"
+                path="/dashboard/users/:userId/edit" // Corrected path
                 element={<UserEditPage />}
               />
               {/* Permission management routes */}
@@ -202,9 +215,10 @@ function App() {
               {/* Role management routes */}
               <Route path="/dashboard/roles" element={<RolesContent />} />
               <Route
-                path="/dashboard//roles/new"
+                path="/dashboard/roles/new"
                 element={<RoleFormContent />}
               />
+              <Route path="/dashboard/roles/:roleId" element={<RoleDetail />} />
               <Route
                 path="/dashboard/roles/edit/:roleId"
                 element={<RoleFormContent />}
@@ -235,7 +249,7 @@ function App() {
           {/* Not Found Route */}
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
-        <Toaster />
+        <Toaster position="top-right" expand={false} richColors closeButton />
       </Router>{" "}
       {/* Ensure Router is closed correctly */}
     </Provider>

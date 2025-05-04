@@ -5,6 +5,7 @@ import { PaginatedResponse, PaginationParams } from "../../models/pagination";
 
 interface RoleState {
   roles: Role[];
+  allRoles: Role[]; // New state property for all roles
   currentRole: Role | null;
   pagination: {
     total: number;
@@ -12,12 +13,13 @@ interface RoleState {
     size: number;
     pages: number;
   } | null;
-  loading: boolean;
+  loading: boolean; // Consider separate loading states if needed (e.g., loadingList, loadingAll)
   error: string | null;
 }
 
 const initialState: RoleState = {
   roles: [],
+  allRoles: [], // Initialize empty
   currentRole: null,
   pagination: null,
   loading: false,
@@ -85,6 +87,57 @@ export const deleteRole = createAsyncThunk(
     try {
       await roleService.deleteRole(roleId);
       return roleId; // Return the ID of the deleted role for reducer
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.message || error.message);
+    }
+  }
+);
+
+// New thunks for permission management
+export const assignPermissionsToRole = createAsyncThunk(
+  "roles/assignPermissions",
+  async (
+    { roleId, permissionIds }: { roleId: string; permissionIds: string[] },
+    { rejectWithValue }
+  ) => {
+    try {
+      const response = await roleService.assignPermissionsToRole(
+        roleId,
+        permissionIds
+      );
+      return response.data;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.message || error.message);
+    }
+  }
+);
+
+export const removePermissionsFromRole = createAsyncThunk(
+  "roles/removePermissions",
+  async (
+    { roleId, permissionIds }: { roleId: string; permissionIds: string[] },
+    { rejectWithValue }
+  ) => {
+    try {
+      const response = await roleService.removePermissionsFromRole(
+        roleId,
+        permissionIds
+      );
+      return response.data;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.message || error.message);
+    }
+  }
+);
+
+// New Thunk to fetch all roles
+export const fetchAllRoles = createAsyncThunk(
+  "roles/fetchAllRoles",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await roleService.getAllRoles();
+      // Assuming the API returns { message: string, data: Role[] }
+      return response.data;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || error.message);
     }
@@ -203,6 +256,76 @@ const roleSlice = createSlice({
       .addCase(deleteRole.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
+      })
+      // assignPermissionsToRole
+      .addCase(assignPermissionsToRole.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(
+        assignPermissionsToRole.fulfilled,
+        (state, action: PayloadAction<Role>) => {
+          state.loading = false;
+          // Update the current role with new permissions
+          if (state.currentRole?.id === action.payload.id) {
+            state.currentRole = action.payload;
+          }
+          // Also update the role in the roles list if it's there
+          const index = state.roles.findIndex(
+            (role) => role.id === action.payload.id
+          );
+          if (index !== -1) {
+            state.roles[index] = action.payload;
+          }
+        }
+      )
+      .addCase(assignPermissionsToRole.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      })
+      // removePermissionsFromRole
+      .addCase(removePermissionsFromRole.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(
+        removePermissionsFromRole.fulfilled,
+        (state, action: PayloadAction<Role>) => {
+          state.loading = false;
+          // Update the current role with the new permissions list
+          if (state.currentRole?.id === action.payload.id) {
+            state.currentRole = action.payload;
+          }
+          // Also update the role in the roles list if it's there
+          const index = state.roles.findIndex(
+            (role) => role.id === action.payload.id
+          );
+          if (index !== -1) {
+            state.roles[index] = action.payload;
+          }
+        }
+      )
+      .addCase(removePermissionsFromRole.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      })
+      // fetchAllRoles
+      .addCase(fetchAllRoles.pending, (state) => {
+        state.loading = true; // Or a specific loading state like state.loadingAll = true;
+        state.error = null;
+      })
+      .addCase(
+        fetchAllRoles.fulfilled,
+        (state, action: PayloadAction<Role[]>) => {
+          // Payload is directly the array of roles
+          state.loading = false;
+          state.allRoles = action.payload;
+        }
+      )
+      .addCase(fetchAllRoles.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+        state.allRoles = []; // Clear or keep stale data on error? Clearing for now.
       });
   },
 });

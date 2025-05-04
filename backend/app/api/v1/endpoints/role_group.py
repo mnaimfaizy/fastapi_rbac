@@ -406,8 +406,24 @@ async def add_roles_to_group(
         # Add roles to the group with converted UUIDs
         await crud.role_group.add_roles_to_group(group_id=group_id, role_ids=uuid_role_ids)
 
+        # Comprehensive cache invalidation
         # Invalidate cache for this role group
-        background_tasks.add_task(redis_client.delete, f"role_group:{group_id}")
+        await redis_client.delete(f"role_group:{group_id}")
+
+        # Invalidate role groups list cache
+        await redis_client.delete("role_groups:list")
+
+        # Invalidate roles list cache
+        await redis_client.delete("roles:list")
+
+        # Invalidate individual role caches
+        for role_id in uuid_role_ids:
+            await redis_client.delete(f"role:{role_id}")
+
+            # Invalidate user permissions caches for each role
+            background_tasks.add_task(
+                crud.role.invalidate_user_permission_caches, role_id=role_id, redis_client=redis_client
+            )
 
         # Get updated group
         updated_group = await role_group_deps.get_group_by_id(group_id=group_id)
@@ -430,6 +446,8 @@ async def remove_roles_from_group(
     group_id: UUID,
     role_ids: dict,
     current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
+    redis_client: Redis = Depends(get_redis_client),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
 ) -> IPostResponseBase[IRoleGroupWithRoles]:
     """
     Removes roles from a role group
@@ -456,6 +474,25 @@ async def remove_roles_from_group(
 
         # Call the CRUD method with converted UUIDs
         await crud.role_group.remove_roles_from_group(group_id=group_id, role_ids=uuid_role_ids)
+
+        # Comprehensive cache invalidation
+        # Invalidate cache for this role group
+        await redis_client.delete(f"role_group:{group_id}")
+
+        # Invalidate role groups list cache
+        await redis_client.delete("role_groups:list")
+
+        # Invalidate roles list cache
+        await redis_client.delete("roles:list")
+
+        # Invalidate individual role caches
+        for role_id in uuid_role_ids:
+            await redis_client.delete(f"role:{role_id}")
+
+            # Invalidate user permissions caches for each role
+            background_tasks.add_task(
+                crud.role.invalidate_user_permission_caches, role_id=role_id, redis_client=redis_client
+            )
 
         # Get updated group
         updated_group = await role_group_deps.get_group_by_id(group_id=group_id)
@@ -503,13 +540,30 @@ async def clone_role_group(
         )
 
         # Get all roles from source group and assign to new group
+        role_ids = []
         if source_group.roles:
             role_ids = [role.id for role in source_group.roles]
             await crud.role_group.add_roles_to_group(group_id=new_group.id, role_ids=role_ids)
 
-        # Invalidate caches
-        background_tasks.add_task(redis_client.delete, "role_groups:list")
-        background_tasks.add_task(redis_client.delete, f"role_group:{new_group.id}")
+        # Comprehensive cache invalidation
+        # Invalidate role groups list cache
+        await redis_client.delete("role_groups:list")
+
+        # Invalidate source and new group caches
+        await redis_client.delete(f"role_group:{group_id}")
+        await redis_client.delete(f"role_group:{new_group.id}")
+
+        # Invalidate roles list cache since role-group relationships changed
+        await redis_client.delete("roles:list")
+
+        # Invalidate individual role caches for all roles in the cloned group
+        for role_id in role_ids:
+            await redis_client.delete(f"role:{role_id}")
+
+            # Invalidate user permissions caches for each role
+            background_tasks.add_task(
+                crud.role.invalidate_user_permission_caches, role_id=role_id, redis_client=redis_client
+            )
 
         # Get updated group with roles
         updated_group = await role_group_deps.get_group_by_id(group_id=new_group.id)

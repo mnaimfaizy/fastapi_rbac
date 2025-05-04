@@ -31,7 +31,12 @@ export interface RoleResponse {
   meta: Record<string, unknown>;
 }
 
-// Assuming assign/remove permission endpoints exist
-export interface RolePermissionPayload {
-  permission_id: string;
+// For assigning permissions to a role
+export interface RolePermissionAssign {
+  permission_ids: string[];
+}
+
+// For removing permissions from a role
+export interface RolePermissionUnassign {
+  permission_ids: string[];
 }

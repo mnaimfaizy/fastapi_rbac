@@ -1,7 +1,9 @@
+from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
-from fastapi_cache.decorator import cache
+from sqlmodel.ext.asyncio.session import AsyncSession
+
 from fastapi_pagination import Params
 from redis.asyncio import Redis
 
@@ -43,20 +45,84 @@ async def get_roles(
     """
     Gets a paginated list of roles
     """
-    roles = await crud.role.get_multi_paginated(params=params)
+    paginated_roles = await crud.role.get_multi_paginated(params=params)
+
+    # Create a new serialized response structure instead of modifying the ORM objects
+    response_data = {
+        "items": [
+            {
+                "id": role.id,
+                "name": role.name,
+                "description": role.description,
+                "created_at": role.created_at,
+                "updated_at": role.updated_at,
+                "created_by_id": role.created_by_id,
+                "role_group_id": role.role_group_id,
+                "permissions": (
+                    [
+                        {
+                            "id": perm.id,
+                            "name": perm.name,
+                            "description": perm.description,
+                            "group_id": perm.group_id,
+                        }
+                        for perm in role.permissions
+                    ]
+                    if hasattr(role, "permissions")
+                    else []
+                ),
+            }
+            for role in paginated_roles.items
+        ],
+        "total": paginated_roles.total,
+        "page": paginated_roles.page,
+        "size": paginated_roles.size,
+        "pages": paginated_roles.pages,
+    }
+
+    return create_response(data=response_data)
+
+
+# Add the new endpoint here
+@router.get("/list", response_model=IGetResponseBase[List[IRoleRead]])
+async def get_all_roles_list(
+    current_user: User = Depends(deps.get_current_user()),  # Ensure user is authenticated
+    db_session: AsyncSession = Depends(deps.get_db),  # Get DB session
+) -> IGetResponseBase[List[IRoleRead]]:
+    """
+    Gets a list of all roles (no pagination).
+    """
+    roles = await crud.role.get_all(db_session=db_session)
+    # Manually serialize to match IRoleRead structure if needed,
+    # especially if relationships like permissions are involved.
+    # For simple cases (id, name, description), direct return might work
+    # if the response_model handles serialization correctly.
+    # Let's assume direct return works for now, adjust if needed.
     return create_response(data=roles)
 
 
 @router.get("/{role_id}")
-@cache(expire=300)  # Cache for 5 minutes
 async def get_role_by_id(
     role: Role = Depends(role_deps.get_user_role_by_id),
     current_user: User = Depends(deps.get_current_user()),
 ) -> IGetResponseBase[IRoleRead]:
     """
-    Gets a role by its id with caching enabled
+    Gets a role by its id
     """
-    return create_response(data=role)
+    role_data = {
+        "id": role.id,
+        "name": role.name,
+        "description": role.description,
+        "created_at": role.created_at,
+        "updated_at": role.updated_at,
+        "created_by_id": role.created_by_id,
+        "role_group_id": role.role_group_id,
+        "permissions": [
+            {"id": perm.id, "name": perm.name, "description": perm.description, "group_id": perm.group_id}
+            for perm in role.permissions
+        ],
+    }
+    return create_response(data=role_data)
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -114,14 +180,35 @@ async def delete_role(
     Required roles:
     - admin
     """
+    # Check if the role has permissions assigned
+    if role.permissions and len(role.permissions) > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Role '{role.name}' has associated permissions and cannot be deleted. "
+                f"Please remove permissions first."
+            ),
+        )
+
+    # Check if the role is assigned to any users
+    user_exists = await crud.role.user_exist_in_role(role_id=role.id)
+    if user_exists:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Role '{role.name}' is assigned to one or more users and cannot be deleted. "
+                f"Please unassign the role from users first."
+            ),
+        )
+
     # Optional: Add checks here if a role cannot be deleted under certain conditions
-    # (e.g., if it's assigned to users or has specific permissions)
-    # Example check (if permissions are linked):
-    # permission_exists = await crud.role.permission_exist_in_role(role_id=role.id)
-    # if permission_exists:
+    # (e.g., if it's assigned to users)
+    # Example check (if users are linked):
+    # user_exists = await crud.role.user_exist_in_role(role_id=role.id)
+    # if user_exists:
     #     raise HTTPException(
     #         status_code=status.HTTP_409_CONFLICT,
-    #         detail="Cannot delete role with assigned permissions.",
+    #         detail="Cannot delete role assigned to users.",
     #     )
 
     try:
@@ -165,10 +252,41 @@ async def assign_permissions_to_role(
             current_user=current_user,
         )
 
-        # Invalidate role cache in background
-        background_tasks.add_task(redis_client.delete, f"role:{role_id}")
+        # Comprehensive cache invalidation
+        # Clear specific role cache
+        await redis_client.delete(f"role:{role_id}")
 
-        return create_response(data=role, message="Permissions assigned successfully")
+        # Clear roles list cache
+        await redis_client.delete("roles:list")
+
+        # If the role is part of a role group, clear that cache too
+        if role.role_group_id:
+            await redis_client.delete(f"role_group:{role.role_group_id}")
+            # Also clear the role groups list cache
+            await redis_client.delete("role_groups:list")
+
+        # Clear user permissions caches that might include this role
+        # This is done in background to not block the response
+        background_tasks.add_task(
+            crud.role.invalidate_user_permission_caches, role_id=role_id, redis_client=redis_client
+        )
+
+        # Properly serialize the role data including permissions
+        role_data = {
+            "id": role.id,
+            "name": role.name,
+            "description": role.description,
+            "created_at": role.created_at,
+            "updated_at": role.updated_at,
+            "created_by_id": role.created_by_id,
+            "role_group_id": role.role_group_id,
+            "permissions": [
+                {"id": perm.id, "name": perm.name, "description": perm.description, "group_id": perm.group_id}
+                for perm in role.permissions
+            ],
+        }
+
+        return create_response(data=role_data, message="Permissions assigned successfully")
     except ResourceNotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
@@ -207,10 +325,41 @@ async def remove_permissions_from_role(
             current_user=current_user,
         )
 
-        # Invalidate role cache in background
-        background_tasks.add_task(redis_client.delete, f"role:{role_id}")
+        # Comprehensive cache invalidation
+        # Clear specific role cache
+        await redis_client.delete(f"role:{role_id}")
 
-        return create_response(data=role, message="Permissions removed successfully")
+        # Clear roles list cache
+        await redis_client.delete("roles:list")
+
+        # If the role is part of a role group, clear that cache too
+        if role.role_group_id:
+            await redis_client.delete(f"role_group:{role.role_group_id}")
+            # Also clear the role groups list cache
+            await redis_client.delete("role_groups:list")
+
+        # Clear user permissions caches that might include this role
+        # This is done in background to not block the response
+        background_tasks.add_task(
+            crud.role.invalidate_user_permission_caches, role_id=role_id, redis_client=redis_client
+        )
+
+        # Properly serialize the role data including permissions
+        role_data = {
+            "id": role.id,
+            "name": role.name,
+            "description": role.description,
+            "created_at": role.created_at,
+            "updated_at": role.updated_at,
+            "created_by_id": role.created_by_id,
+            "role_group_id": role.role_group_id,
+            "permissions": [
+                {"id": perm.id, "name": perm.name, "description": perm.description, "group_id": perm.group_id}
+                for perm in role.permissions
+            ],
+        }
+
+        return create_response(data=role_data, message="Permissions removed successfully")
     except ResourceNotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:

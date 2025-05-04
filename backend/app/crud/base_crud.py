@@ -57,6 +57,23 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         response = await db_session.execute(select(self.model).where(self.model.id.in_(list_ids)))
         return response.scalars().all()
 
+    async def get_multi_by_ids(
+        self, *, ids: list[UUID], db_session: AsyncSession | None = None
+    ) -> list[ModelType]:
+        """
+        Get multiple records by their IDs
+
+        Args:
+            ids: List of UUIDs to fetch
+            db_session: Optional database session
+
+        Returns:
+            List of found records
+        """
+        db_session = db_session or self.db.session
+        response = await db_session.execute(select(self.model).where(self.model.id.in_(ids)))
+        return response.scalars().all()
+
     async def get_count(self, db_session: AsyncSession | None = None) -> ModelType | None:
         """Get the total count of records."""
         db_session = db_session or self.db.session

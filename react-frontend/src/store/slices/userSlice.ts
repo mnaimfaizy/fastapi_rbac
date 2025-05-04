@@ -1,6 +1,9 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import { User, PaginatedItems } from "../../models/user";
-import userService from "../../services/user.service";
+import userService, {
+  UserCreatePayload,
+  UserUpdatePayload,
+} from "../../services/user.service";
 
 // Define the initial state interface
 interface UserState {
@@ -66,11 +69,17 @@ export const fetchUserById = createAsyncThunk(
 
 export const createUser = createAsyncThunk(
   "user/createUser",
-  async (userData: Partial<User>, { rejectWithValue }) => {
+  async (userData: UserCreatePayload, { rejectWithValue }) => {
     try {
-      return await userService.createUser(userData);
-    } catch (error) {
-      return rejectWithValue((error as Error).message);
+      const newUser = await userService.createUser(userData);
+      return newUser;
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        return rejectWithValue(error.message);
+      }
+      return rejectWithValue(
+        "An unexpected error occurred while creating the user"
+      );
     }
   }
 );
@@ -78,13 +87,19 @@ export const createUser = createAsyncThunk(
 export const updateUser = createAsyncThunk(
   "user/updateUser",
   async (
-    { userId, userData }: { userId: string; userData: Partial<User> },
+    { userId, userData }: { userId: string; userData: UserUpdatePayload },
     { rejectWithValue }
   ) => {
     try {
-      return await userService.updateUser(userId, userData);
-    } catch (error) {
-      return rejectWithValue((error as Error).message);
+      const updatedUser = await userService.updateUser(userId, userData);
+      return updatedUser;
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        return rejectWithValue(error.message);
+      }
+      return rejectWithValue(
+        "An unexpected error occurred while updating the user"
+      );
     }
   }
 );
@@ -124,7 +139,15 @@ const userSlice = createSlice({
         fetchUsers.fulfilled,
         (state, action: PayloadAction<PaginatedItems<User>>) => {
           state.loading = false;
-          state.users = action.payload.items;
+          // Ensure dates are properly formatted
+          state.users = action.payload.items.map((user) => ({
+            ...user,
+            created_at: user.created_at || null,
+            updated_at: user.updated_at || null,
+            expiry_date: user.expiry_date || null,
+            last_changed_password_date: user.last_changed_password_date || null,
+            locked_until: user.locked_until || null,
+          }));
           state.pagination = {
             total: action.payload.total,
             page: action.payload.page,

@@ -182,6 +182,16 @@ async def delete_permission_group(
             ),
         )
 
+    # Check if the group has permissions
+    if group.permissions and len(group.permissions) > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Permission group '{group.name}' has associated permissions and cannot be deleted. "
+                f"Please remove or reassign permissions first."
+            ),
+        )
+
     try:
         await crud.permission_group.remove(id=group.id, db_session=db_session)
     except Exception as e:

@@ -40,7 +40,9 @@ class User(BaseUUIDModel, UserBase, table=True):
     roles: List["Role"] = Relationship(
         back_populates="users",
         link_model=UserRole,
-        sa_relationship_kwargs={"lazy": "joined"},
+        sa_relationship_kwargs={
+            "lazy": "selectin"
+        },  # Changed from 'joined' to 'selectin' for better performance
     )
 
     created_permissions: List["Permission"] = Relationship(
@@ -60,3 +62,29 @@ class User(BaseUUIDModel, UserBase, table=True):
             "foreign_keys": "[PermissionGroup.created_by_id]",
         },
     )
+
+    def __str__(self) -> str:
+        return f"{self.first_name} {self.last_name}"
+
+    @property
+    def role_names(self) -> list[str]:
+        """Get list of role names for serialization"""
+        return [role.name for role in self.roles] if self.roles else []
+
+    def model_dump(self, *args, **kwargs):
+        """Override model_dump to customize role serialization"""
+        data = super().model_dump(*args, **kwargs)
+        # Always serialize roles as objects with id and name
+        data["roles"] = (
+            [
+                {
+                    "id": str(role.id),  # Ensure UUID is converted to string
+                    "name": role.name,
+                    "description": role.description,
+                }
+                for role in self.roles
+            ]
+            if self.roles
+            else []
+        )
+        return data

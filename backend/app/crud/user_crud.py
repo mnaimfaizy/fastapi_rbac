@@ -11,6 +11,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.core.security import get_password_hash, verify_password
 from app.crud.base_crud import CRUDBase
 from app.models.password_history_model import UserPasswordHistory
+from app.models.role_model import Role  # Import Role model
 from app.models.user_model import User
 from app.schemas.user_schema import IUserCreate, IUserUpdate
 
@@ -48,31 +49,70 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         created_by_id: UUID | str | None = None,
         db_session: AsyncSession | None = None,
     ) -> User:
-        """Override the create method to hash the password before storing it"""
+        """Override the create method to hash the password and handle roles"""
         db_session = db_session or self.db.session
 
-        if isinstance(obj_in, User):
-            db_obj = obj_in
-        else:
-            # Create a dict without the password to avoid storing it in plaintext
-            obj_in_data = obj_in.model_dump(exclude={"password"})
+        role_ids = []
+        if isinstance(obj_in, IUserCreate):
+            role_ids = obj_in.role_id
+            # Create a dict without password and role_id
+            obj_in_data = obj_in.model_dump(exclude={"password", "role_id"})
             db_obj = User(**obj_in_data)
             # Hash the password
             db_obj.password = get_password_hash(obj_in.password)
+        else:  # isinstance(obj_in, User)
+            # If a User model instance is passed directly, we assume roles are already handled
+            # or not applicable in this context. Password should already be hashed.
+            db_obj = obj_in
 
         if created_by_id:
             db_obj.created_by_id = created_by_id
 
         try:
             db_session.add(db_obj)
+
+            # Handle roles if role_ids were provided in IUserCreate
+            if role_ids:
+                # Fetch Role objects based on the provided IDs
+                result = await db_session.execute(select(Role).where(Role.id.in_(role_ids)))
+                roles = result.scalars().all()
+                if len(roles) != len(role_ids):
+                    # Handle error: some role IDs were not found
+                    await db_session.rollback()
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"One or more roles not found for IDs: {role_ids}",
+                    )
+                db_obj.roles = roles  # Assign the fetched roles
+
             await db_session.commit()
-        except exc.IntegrityError:
+        except exc.IntegrityError as e:
             await db_session.rollback()
-            raise HTTPException(
-                status_code=409,
-                detail="Resource already exists",
-            )
+            # Check if it's a unique constraint violation (e.g., email)
+            is_unique_constraint_violation = "UNIQUE constraint failed" in str(
+                e
+            ) or "duplicate key value violates unique constraint" in str(e)
+            if is_unique_constraint_violation:
+                raise HTTPException(
+                    status_code=409,
+                    detail="User with this email already exists",
+                )
+            else:
+                # Handle other integrity errors if necessary
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Database integrity error: {e}",
+                )
+        except HTTPException:  # Re-raise HTTPException (like the 404 for roles)
+            raise
+        except Exception as e:
+            await db_session.rollback()
+            # Log the exception e
+            raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
+
         await db_session.refresh(db_obj)
+        # Eagerly load roles after creation/refresh if needed for the return value
+        await db_session.refresh(db_obj, attribute_names=["roles"])
         return db_obj
 
     async def update(
@@ -82,26 +122,70 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         obj_new: IUserUpdate | dict[str, Any] | User,
         db_session: AsyncSession | None = None,
     ) -> User:
-        """Override base update method to handle password hashing during updates"""
+        """Override base update method to handle password hashing and roles"""
         db_session = db_session or self.db.session
 
-        # Convert to dict if needed
         if isinstance(obj_new, dict):
             update_data = obj_new
         else:
             update_data = obj_new.model_dump(exclude_unset=True)
 
         # Handle password hashing if password is being updated
-        if "password" in update_data:
-            update_data["password"] = get_password_hash(update_data["password"])
+        if "password" in update_data and update_data["password"]:
+            hashed_password = get_password_hash(update_data["password"])
+            obj_current.password = hashed_password
+            obj_current.last_changed_password_date = datetime.utcnow()
+            del update_data["password"]
+        elif "password" in update_data:
+            del update_data["password"]
 
-        # Update fields in the current object
-        for field in update_data:
-            setattr(obj_current, field, update_data[field])
+        # Handle roles update
+        if "role_id" in update_data:
+            role_ids = update_data.get("role_id", [])
+            if role_ids:
+                result = await db_session.execute(select(Role).where(Role.id.in_(role_ids)))
+                roles = result.scalars().all()
+                if len(roles) != len(role_ids):
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"One or more roles not found for IDs: {role_ids}",
+                    )
+                obj_current.roles = roles  # Replace existing roles
+            else:
+                obj_current.roles = []  # Clear roles if empty list
+            del update_data["role_id"]
 
-        db_session.add(obj_current)
-        await db_session.commit()
+        # Update remaining fields
+        for field, value in update_data.items():
+            setattr(obj_current, field, value)
+
+        try:
+            db_session.add(obj_current)
+            await db_session.commit()
+        except exc.IntegrityError as e:
+            await db_session.rollback()
+            is_unique_constraint_violation = "UNIQUE constraint failed" in str(
+                e
+            ) or "duplicate key value violates unique constraint" in str(e)
+            if is_unique_constraint_violation:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Email already exists for another user.",
+                )
+            else:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Database integrity error during update: {e}",
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            await db_session.rollback()
+            raise HTTPException(status_code=500, detail=f"An unexpected error occurred during update: {e}")
+
+        # Refresh the object to get updated data and roles
         await db_session.refresh(obj_current)
+        await db_session.refresh(obj_current, attribute_names=["roles"])
         return obj_current
 
     def has_verified(self, user: User) -> bool:
