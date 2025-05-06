@@ -33,6 +33,7 @@ from app.utils.background_tasks import (
     send_verification_email,
 )
 from app.utils.token import add_token_to_redis, get_valid_tokens
+from app.utils.user_utils import serialize_user
 
 router = APIRouter()
 
@@ -211,7 +212,7 @@ async def login(
         access_token=access_token,
         token_type="bearer",
         refresh_token=refresh_token,
-        user=user,
+        user=serialize_user(user),
     )
 
     # Handle token storage in Redis
@@ -303,7 +304,7 @@ async def register(
         access_token=access_token,
         token_type="bearer",
         refresh_token=refresh_token,
-        user=user,  # Include user details in response
+        user=serialize_user(user),  # Include user details in response
     )
 
     # Add tokens to Redis
