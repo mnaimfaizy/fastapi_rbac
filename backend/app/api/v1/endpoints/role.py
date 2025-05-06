@@ -33,6 +33,7 @@ from app.utils.exceptions.common_exception import (
     NameExistException,
     ResourceNotFoundException,
 )
+from app.utils.role_utils import serialize_role
 
 router = APIRouter()
 
@@ -47,33 +48,8 @@ async def get_roles(
     """
     paginated_roles = await crud.role.get_multi_paginated(params=params)
 
-    # Create a new serialized response structure instead of modifying the ORM objects
     response_data = {
-        "items": [
-            {
-                "id": role.id,
-                "name": role.name,
-                "description": role.description,
-                "created_at": role.created_at,
-                "updated_at": role.updated_at,
-                "created_by_id": role.created_by_id,
-                "role_group_id": role.role_group_id,
-                "permissions": (
-                    [
-                        {
-                            "id": perm.id,
-                            "name": perm.name,
-                            "description": perm.description,
-                            "group_id": perm.group_id,
-                        }
-                        for perm in role.permissions
-                    ]
-                    if hasattr(role, "permissions")
-                    else []
-                ),
-            }
-            for role in paginated_roles.items
-        ],
+        "items": [serialize_role(role) for role in paginated_roles.items],
         "total": paginated_roles.total,
         "page": paginated_roles.page,
         "size": paginated_roles.size,
@@ -83,7 +59,6 @@ async def get_roles(
     return create_response(data=response_data)
 
 
-# Add the new endpoint here
 @router.get("/list", response_model=IGetResponseBase[List[IRoleRead]])
 async def get_all_roles_list(
     current_user: User = Depends(deps.get_current_user()),  # Ensure user is authenticated
@@ -93,12 +68,7 @@ async def get_all_roles_list(
     Gets a list of all roles (no pagination).
     """
     roles = await crud.role.get_all(db_session=db_session)
-    # Manually serialize to match IRoleRead structure if needed,
-    # especially if relationships like permissions are involved.
-    # For simple cases (id, name, description), direct return might work
-    # if the response_model handles serialization correctly.
-    # Let's assume direct return works for now, adjust if needed.
-    return create_response(data=roles)
+    return create_response(data=[serialize_role(role) for role in roles])
 
 
 @router.get("/{role_id}")
@@ -109,20 +79,7 @@ async def get_role_by_id(
     """
     Gets a role by its id
     """
-    role_data = {
-        "id": role.id,
-        "name": role.name,
-        "description": role.description,
-        "created_at": role.created_at,
-        "updated_at": role.updated_at,
-        "created_by_id": role.created_by_id,
-        "role_group_id": role.role_group_id,
-        "permissions": [
-            {"id": perm.id, "name": perm.name, "description": perm.description, "group_id": perm.group_id}
-            for perm in role.permissions
-        ],
-    }
-    return create_response(data=role_data)
+    return create_response(data=serialize_role(role))
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -271,22 +228,7 @@ async def assign_permissions_to_role(
             crud.role.invalidate_user_permission_caches, role_id=role_id, redis_client=redis_client
         )
 
-        # Properly serialize the role data including permissions
-        role_data = {
-            "id": role.id,
-            "name": role.name,
-            "description": role.description,
-            "created_at": role.created_at,
-            "updated_at": role.updated_at,
-            "created_by_id": role.created_by_id,
-            "role_group_id": role.role_group_id,
-            "permissions": [
-                {"id": perm.id, "name": perm.name, "description": perm.description, "group_id": perm.group_id}
-                for perm in role.permissions
-            ],
-        }
-
-        return create_response(data=role_data, message="Permissions assigned successfully")
+        return create_response(data=serialize_role(role), message="Permissions assigned successfully")
     except ResourceNotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
@@ -344,22 +286,7 @@ async def remove_permissions_from_role(
             crud.role.invalidate_user_permission_caches, role_id=role_id, redis_client=redis_client
         )
 
-        # Properly serialize the role data including permissions
-        role_data = {
-            "id": role.id,
-            "name": role.name,
-            "description": role.description,
-            "created_at": role.created_at,
-            "updated_at": role.updated_at,
-            "created_by_id": role.created_by_id,
-            "role_group_id": role.role_group_id,
-            "permissions": [
-                {"id": perm.id, "name": perm.name, "description": perm.description, "group_id": perm.group_id}
-                for perm in role.permissions
-            ],
-        }
-
-        return create_response(data=role_data, message="Permissions removed successfully")
+        return create_response(data=serialize_role(role), message="Permissions removed successfully")
     except ResourceNotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
