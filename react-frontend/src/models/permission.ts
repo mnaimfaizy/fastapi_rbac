@@ -4,7 +4,7 @@ export interface Permission {
   id: string;
   name: string;
   description?: string;
-  group_id: string;
+  group?: PermissionGroup;
   created_at: string;
   updated_at: string;
   created_by_id?: string;
@@ -31,17 +31,19 @@ export interface PermissionCreate {
 export interface PermissionUpdate {
   name?: string;
   description?: string;
-  group_id?: string;
+  // While TypeScript marks this as optional, the backend database requires it
+  // Always include this field in update requests
+  group_id: string;
 }
 
 export interface PermissionGroupCreate {
   name: string;
-  permission_group_id?: string;
+  permission_group_id?: string | null;
 }
 
 export interface PermissionGroupUpdate {
   name?: string;
-  permission_group_id?: string;
+  permission_group_id?: string | null;
 }
 
 // API response interfaces

@@ -3,6 +3,8 @@ Celery worker configuration for handling background tasks.
 """
 
 # Import the Celery app from the centralized configuration
+from typing import Any
+
 from app.celery_app import celery_app
 
 
@@ -33,7 +35,7 @@ def cleanup_tokens_task(user_id: str, token_type: str) -> None:
 
     from app.schemas.common_schema import TokenType
 
-    async def async_cleanup_tokens(user_id_str: str, token_type_str: str):
+    async def async_cleanup_tokens(user_id_str: str, token_type_str: str) -> None:
         from app.db.session import get_redis_client
 
         async for redis_client in get_redis_client():
@@ -47,17 +49,22 @@ def cleanup_tokens_task(user_id: str, token_type: str) -> None:
             if keys:
                 await redis_client.delete(*keys)
             # Redis client is closed automatically after exiting the async for loop
+            break  # Exit after first iteration
 
     asyncio.run(async_cleanup_tokens(user_id, token_type))
 
 
 @celery_app.task
-def log_security_event_task(event_type: str, user_id: str = None, details: dict = None) -> None:
+def log_security_event_task(
+    event_type: str, user_id: str | None = None, details: dict[Any, Any] | None = None
+) -> None:
     """Celery task for logging security events"""
     import asyncio
     from uuid import UUID
 
-    async def async_log_security_event(event_type: str, user_id_str, details):
+    async def async_log_security_event(
+        event_type: str, user_id_str: str | None, details: dict[Any, Any] | None
+    ) -> None:
         from app.db.session import get_async_session
 
         async for db_session in get_async_session():
@@ -79,7 +86,7 @@ def process_account_lockout_task(user_id: str, lock_duration_hours: int = 24) ->
     from datetime import datetime, timedelta
     from uuid import UUID
 
-    async def async_process_lockout(user_id_str: str, lock_duration_hours: int):
+    async def async_process_lockout(user_id_str: str, lock_duration_hours: int) -> None:
         from app import crud
         from app.db.session import get_async_session
 

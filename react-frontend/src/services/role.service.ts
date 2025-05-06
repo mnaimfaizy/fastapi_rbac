@@ -1,8 +1,9 @@
 import api from "./api";
 import { Role, RoleCreate, RoleResponse, RoleUpdate } from "../models/role";
 import { PaginatedDataResponse, PaginationParams } from "../models/pagination";
+import { ApiResponse } from "../models/user";
 
-const API_URL = "/roles";
+const API_URL = "/role";
 
 export const roleService = {
   // Fetch paginated roles
@@ -45,6 +46,38 @@ export const roleService = {
     // No content is returned on success (204)
   },
 
-  // Note: Assign/Remove permission endpoints were not found in the provided backend role.py
-  // These might need to be added to the backend or located elsewhere.
+  // Assign permissions to a role
+  assignPermissionsToRole: async (
+    roleId: string,
+    permissionIds: string[]
+  ): Promise<RoleResponse> => {
+    try {
+      const response = await api.post<RoleResponse>(
+        `${API_URL}/${roleId}/permissions`,
+        { permission_ids: permissionIds }
+      );
+      return response.data;
+    } catch (error) {
+      console.error("Error assigning permissions to role:", error);
+      throw error;
+    }
+  },
+
+  // Remove permissions from a role
+  removePermissionsFromRole: async (
+    roleId: string,
+    permissionIds: string[]
+  ): Promise<RoleResponse> => {
+    const response = await api.delete<RoleResponse>(
+      `${API_URL}/${roleId}/permissions`,
+      { data: { permission_ids: permissionIds } }
+    );
+    return response.data;
+  },
+
+  // Fetch ALL roles (no pagination)
+  getAllRoles: async (): Promise<ApiResponse<Role[]>> => {
+    const response = await api.get<ApiResponse<Role[]>>(`${API_URL}/list`);
+    return response.data;
+  },
 };

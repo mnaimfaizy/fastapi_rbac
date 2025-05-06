@@ -12,7 +12,12 @@ let inMemoryToken: string | null = null;
  * Stores access token in memory (not in localStorage for security)
  */
 export const setStoredAccessToken = (token: string): void => {
-  inMemoryToken = token;
+  try {
+    inMemoryToken = token;
+  } catch (error) {
+    console.error("Failed to store access token:", error);
+    inMemoryToken = null;
+  }
 };
 
 /**
@@ -35,9 +40,14 @@ export const removeStoredAccessToken = (): void => {
  */
 export const setStoredRefreshToken = (token: string): void => {
   try {
+    if (typeof token !== "string") {
+      throw new Error("Token must be a string");
+    }
     localStorage.setItem(REFRESH_TOKEN_KEY, token);
   } catch (error) {
     console.error("Failed to store refresh token:", error);
+    // Clean up any partial data
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
   }
 };
 
@@ -46,9 +56,19 @@ export const setStoredRefreshToken = (token: string): void => {
  */
 export const getStoredRefreshToken = (): string | null => {
   try {
-    return localStorage.getItem(REFRESH_TOKEN_KEY);
+    const token = localStorage.getItem(REFRESH_TOKEN_KEY);
+    if (!token) return null;
+
+    // Validate that we can parse it if it's supposed to be JSON
+    if (token.startsWith("{") || token.startsWith("[")) {
+      JSON.parse(token);
+    }
+
+    return token;
   } catch (error) {
     console.error("Failed to retrieve refresh token:", error);
+    // Clean up invalid data
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
     return null;
   }
 };

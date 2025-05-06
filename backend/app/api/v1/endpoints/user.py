@@ -18,6 +18,7 @@ from app.schemas.response_schema import (
 from app.schemas.role_schema import IRoleEnum
 from app.schemas.user_schema import IUserCreate, IUserRead, IUserUpdate
 from app.utils.exceptions.user_exceptions import UserSelfDeleteException
+from app.utils.user_utils import serialize_user
 
 router = APIRouter()
 
@@ -35,7 +36,16 @@ async def read_users_list(
     - manager
     """
     users = await crud.user.get_multi_paginated(params=params)
-    return create_response(data=users)
+
+    # Convert to a response format that includes roles
+    response_data = {
+        "items": [serialize_user(user) for user in users.items],
+        "total": users.total,
+        "page": users.page,
+        "size": users.size,
+        "pages": users.pages,
+    }
+    return create_response(data=response_data)
 
 
 @router.get("/order_by_created_at")
@@ -51,7 +61,16 @@ async def get_user_list_order_by_created_at(
     - manager
     """
     users = await crud.user.get_multi_paginated_ordered(params=params, order_by="created_at")
-    return create_response(data=users)
+
+    # Convert to a response format that includes roles
+    response_data = {
+        "items": [serialize_user(user) for user in users.items],
+        "total": users.total,
+        "page": users.page,
+        "size": users.size,
+        "pages": users.pages,
+    }
+    return create_response(data=response_data)
 
 
 @router.get("/{user_id}")
@@ -66,7 +85,7 @@ async def get_user_by_id(
     - admin
     - manager
     """
-    return create_response(data=user)
+    return create_response(data=serialize_user(user))
 
 
 @router.get("")
@@ -76,7 +95,7 @@ async def get_my_data(
     """
     Gets my user profile information
     """
-    return create_response(data=current_user)
+    return create_response(data=serialize_user(current_user))
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -91,7 +110,7 @@ async def create_user(
     - admin
     """
     user = await crud.user.create_with_role(obj_in=new_user)
-    return create_response(data=user)
+    return create_response(data=serialize_user(user))
 
 
 @router.put("/{user_id}")
@@ -118,9 +137,9 @@ async def update_user(
     # Update other fields if any
     if any(getattr(user_update, field) is not None for field in user_update.__fields__):
         updated_user = await crud.user.update(obj_current=user, obj_new=user_update)
-        return create_response(data=updated_user, message="User updated successfully")
-    else:
-        return create_response(data=user, message="User updated successfully")
+        return create_response(data=serialize_user(updated_user), message="User updated successfully")
+
+    return create_response(data=serialize_user(user), message="No changes to update")
 
 
 @router.delete("/{user_id}")
@@ -137,5 +156,16 @@ async def remove_user(
     if current_user.id == user_id:
         raise UserSelfDeleteException()
 
-    user = await crud.user.remove(id=user_id)
-    return create_response(data=user, message="User removed")
+    # Get the user to check their roles
+    user = await crud.user.get(id=user_id)
+    if user and user.roles and len(user.roles) > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"User has {len(user.roles)} role(s) assigned and cannot be deleted. "
+                "Please remove all roles first."
+            ),
+        )
+
+    deleted_user = await crud.user.remove(id=user_id)
+    return create_response(data=serialize_user(deleted_user), message="User removed")

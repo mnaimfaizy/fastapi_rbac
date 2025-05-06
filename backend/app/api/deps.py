@@ -37,18 +37,30 @@ async def get_redis_client() -> AsyncGenerator[Redis, None]:
     try:
         yield redis_client
     finally:
-        await redis_client.close()
+        await redis_client.aclose()  # Changed close() to aclose()
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    """
+    Get database session for dependency injection.
+    Uses AsyncSession to ensure all database operations occur within proper async context.
+    """
     async with SessionLocal() as session:
-        yield session
+        try:
+            yield session
+        finally:
+            await session.close()
+
+
+# Alias for get_db to maintain consistent naming
+get_async_db = get_db
 
 
 def get_current_user(required_roles: list[str] = None) -> Callable[[], User]:
     async def current_user(
         access_token: str = Depends(reusable_oauth2),
         redis_client: Redis = Depends(get_redis_client),
+        db_session: AsyncSession = Depends(get_db),  # Make sure to use session from DI
     ) -> User:
         try:
             payload = decode_token(access_token)
@@ -84,7 +96,8 @@ def get_current_user(required_roles: list[str] = None) -> Callable[[], User]:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Could not validate credentials",
             )
-        user: User = await crud.user.get(id=user_id)
+        # Use the session from dependency injection
+        user: User = await crud.user.get(id=user_id, db_session=db_session)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 

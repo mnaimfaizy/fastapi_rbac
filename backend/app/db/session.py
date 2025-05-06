@@ -9,20 +9,16 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import ModeEnum, settings
 
-DB_POOL_SIZE = 83
-WEB_CONCURRENCY = 9
+DB_POOL_SIZE = settings.DB_POOL_SIZE
+WEB_CONCURRENCY = settings.WEB_CONCURRENCY
 POOL_SIZE = max(DB_POOL_SIZE // WEB_CONCURRENCY, 5)
-
-connect_args = {"check_same_thread": False}
 
 engine = create_async_engine(
     str(settings.ASYNC_DATABASE_URI),
     echo=False,
-    poolclass=(
-        NullPool if settings.MODE == ModeEnum.testing else AsyncAdaptedQueuePool
-    ),  # Asincio pytest works with NullPool
-    # pool_size=POOL_SIZE,
-    # max_overflow=64,
+    poolclass=(NullPool if settings.MODE == ModeEnum.testing else AsyncAdaptedQueuePool),
+    pool_size=POOL_SIZE,
+    max_overflow=64,
 )
 
 SessionLocal = sessionmaker(
@@ -36,11 +32,9 @@ SessionLocal = sessionmaker(
 engine_celery = create_async_engine(
     str(settings.ASYNC_CELERY_BEAT_DATABASE_URI),
     echo=False,
-    poolclass=(
-        NullPool if settings.MODE == ModeEnum.testing else AsyncAdaptedQueuePool
-    ),  # Asincio pytest works with NullPool
-    # pool_size=POOL_SIZE,
-    # max_overflow=64,
+    poolclass=(NullPool if settings.MODE == ModeEnum.testing else AsyncAdaptedQueuePool),
+    pool_size=POOL_SIZE,
+    max_overflow=64,
 )
 
 SessionLocalCelery = sessionmaker(
@@ -52,7 +46,6 @@ SessionLocalCelery = sessionmaker(
 )
 
 
-# Add the missing async session provider function
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     """
     Create and get async database session.
@@ -66,7 +59,6 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
-# Update the Redis client function to support async iteration
 async def get_redis_client() -> AsyncGenerator[aioredis.Redis, None]:
     """
     Get Redis client instance as an async generator.

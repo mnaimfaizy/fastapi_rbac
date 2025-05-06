@@ -9,12 +9,14 @@ export interface Role {
   updated_at: string;
   created_by_id?: string;
   created_by?: User; // Optional: if backend populates this
+  role_group_id?: string;
   permissions?: Permission[]; // Optional: if backend populates this
 }
 
 export interface RoleCreate {
   name: string;
   description?: string;
+  role_group_id?: string;
 }
 
 export interface RoleUpdate {
@@ -29,7 +31,12 @@ export interface RoleResponse {
   meta: Record<string, unknown>;
 }
 
-// Assuming assign/remove permission endpoints exist
-export interface RolePermissionPayload {
-  permission_id: string;
+// For assigning permissions to a role
+export interface RolePermissionAssign {
+  permission_ids: string[];
+}
+
+// For removing permissions from a role
+export interface RolePermissionUnassign {
+  permission_ids: string[];
 }

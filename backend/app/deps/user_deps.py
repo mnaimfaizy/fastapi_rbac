@@ -17,9 +17,18 @@ async def user_exists(new_user: IUserCreate) -> IUserCreate:
             status_code=status.HTTP_409_CONFLICT,
             detail="There is already a user with same email",
         )
-    role = await crud.role.get(id=new_user.role_id)
-    if not role:
-        raise IdNotFoundException(Role, id=new_user.role_id)
+
+    # Handle role validation
+    if new_user.role_id:
+        # Get all roles at once
+        result = await crud.role.get_multi_by_ids(ids=new_user.role_id)
+        found_roles = result
+
+        # Check if all roles were found
+        if len(found_roles) != len(new_user.role_id):
+            found_role_ids = {role.id for role in found_roles}
+            missing_role_ids = [str(role_id) for role_id in new_user.role_id if role_id not in found_role_ids]
+            raise IdNotFoundException(Role, id=", ".join(missing_role_ids))
 
     return new_user
 

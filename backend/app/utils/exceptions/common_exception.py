@@ -79,3 +79,22 @@ class NameExistException(HTTPException, Generic[ModelType]):
             detail=f"The {model.__name__} name already exists.",
             headers=headers,
         )
+
+
+class CircularDependencyException(Exception):
+    """Exception raised when a circular dependency is detected"""
+
+    def __init__(self, message: str):
+        super().__init__(message)
+        self.message = message
+
+
+class ResourceNotFoundException(Exception):
+    """Exception raised when a resource is not found"""
+
+    def __init__(self, model: type, **kwargs: Any) -> None:
+        message = f"{model.__name__} not found. "
+        if kwargs:
+            message += " ".join(f"{k}={v}" for k, v in kwargs.items())
+        super().__init__(message)
+        self.message = message

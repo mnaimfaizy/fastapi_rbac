@@ -59,7 +59,8 @@ def wait_for_database() -> None:
                     database_uri = f"postgresql://{db_user}:{db_pass}" f"@{db_host}:{db_port}/{db_name}"
 
         # Mask password for logging
-        masked_uri = database_uri.replace(settings.DATABASE_PASSWORD, "****") if database_uri else "None"
+        password_to_mask = settings.DATABASE_PASSWORD if settings.DATABASE_PASSWORD else ""
+        masked_uri = database_uri.replace(password_to_mask, "****") if database_uri else "None"
         logger.info(f"Connecting to database using URI: {masked_uri}")
 
         # Create engine and test connection

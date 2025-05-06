@@ -47,25 +47,38 @@ export const loginUser = createAsyncThunk(
 
 export const refreshAccessToken = createAsyncThunk(
   "auth/refreshToken",
-  async (refreshToken: string, { rejectWithValue }) => {
+  async (refreshToken: string, { rejectWithValue, dispatch }) => {
     try {
       const response = await authService.refreshToken(refreshToken);
       return response;
     } catch (error) {
+      // Log the user out whenever token refresh fails
+      // This ensures users with expired/invalid refresh tokens don't get stuck
+      dispatch(logout());
+
       if (error && typeof error === "object" && "response" in error) {
         const err = error as {
           response?: {
+            status?: number;
             data?: { errors?: Array<{ message: string }>; message?: string };
           };
         };
+
+        // Handle specific error cases
+        if (err.response?.status === 403) {
+          return rejectWithValue("Session expired. Please log in again.");
+        }
+
         if (err.response?.data?.errors?.[0]) {
           return rejectWithValue(err.response.data.errors[0].message);
         }
+
         return rejectWithValue(
-          err.response?.data?.message || "Failed to refresh token"
+          err.response?.data?.message ||
+            "Failed to refresh token. Please log in again."
         );
       }
-      return rejectWithValue("Failed to refresh token");
+      return rejectWithValue("Authentication failed. Please log in again.");
     }
   }
 );
@@ -241,12 +254,16 @@ const authSlice = createSlice({
         state.accessToken = action.payload.access_token;
         state.refreshToken = action.payload.refresh_token;
 
-        // Store tokens securely
-        setStoredAccessToken(action.payload.access_token);
-        setStoredRefreshToken(action.payload.refresh_token);
+        try {
+          // Store tokens securely
+          setStoredAccessToken(action.payload.access_token);
+          setStoredRefreshToken(action.payload.refresh_token);
 
-        // Setup token expiry timer
-        authTokenManager.setupTokenExpiryTimer(action.payload.access_token);
+          // Setup token expiry timer
+          authTokenManager.setupTokenExpiryTimer(action.payload.access_token);
+        } catch (error) {
+          console.error("Error storing auth tokens:", error);
+        }
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.isLoading = false;
@@ -259,12 +276,16 @@ const authSlice = createSlice({
       })
       .addCase(refreshAccessToken.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.isAuthenticated = true; // Set isAuthenticated to true when token refresh succeeds
+        state.isAuthenticated = true;
         state.accessToken = action.payload.access_token;
-        setStoredAccessToken(action.payload.access_token);
 
-        // Setup token expiry timer with new access token
-        authTokenManager.setupTokenExpiryTimer(action.payload.access_token);
+        try {
+          setStoredAccessToken(action.payload.access_token);
+          // Setup token expiry timer with new access token
+          authTokenManager.setupTokenExpiryTimer(action.payload.access_token);
+        } catch (error) {
+          console.error("Error storing refreshed access token:", error);
+        }
       })
       .addCase(refreshAccessToken.rejected, (state, action) => {
         state.isLoading = false;

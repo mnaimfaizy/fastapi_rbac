@@ -9,18 +9,18 @@ from app.utils.exceptions.common_exception import IdNotFoundException, NameNotFo
 
 
 async def get_permission_by_name(
-    group_name: Annotated[str, Query(description="String compare with role group name")] = "",
+    permission_name: Annotated[str, Query(description="String compare with role group name")] = "",
 ) -> str:
-    group = await crud.permission.get_group_by_name(name=group_name)
-    if not group:
-        raise NameNotFoundException(Permission, name=group_name)
-    return group
+    permission = await crud.permission.get_group_by_name(name=permission_name)
+    if not permission:
+        raise NameNotFoundException(Permission, name=permission_name)
+    return permission
 
 
 async def get_permission_by_id(
-    group_id: Annotated[UUID, Path(description="The UUID id of the group")],
+    permission_id: Annotated[UUID, Path(description="The UUID id of the group")],
 ) -> Permission:
-    group = await crud.permission.get(id=group_id)
-    if not group:
-        raise IdNotFoundException(Permission, id=group_id)
-    return group
+    permission = await crud.permission.get(id=permission_id)
+    if not permission:
+        raise IdNotFoundException(Permission, id=permission_id)
+    return permission

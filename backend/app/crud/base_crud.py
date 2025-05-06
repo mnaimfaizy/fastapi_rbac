@@ -31,12 +31,17 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         self.model = model
         self.db = db
 
-    def get_db(self) -> type(db):
+    def get_db(self) -> Any:
+        """
+        Returns the db object. This method is kept for backwards compatibility.
+        New code should always pass in the db_session parameter explicitly.
+        """
         return self.db
 
     async def get(self, *, id: UUID | str, db_session: AsyncSession | None = None) -> ModelType | None:
+        """Get a single record by ID."""
         db_session = db_session or self.db.session
-        query: Select[ModelType] = select(self.model).where(self.model.id == id)
+        query = select(self.model).where(self.model.id == id)
         result = await db_session.execute(query)
         response = result.unique()
         return response.scalar_one_or_none()
@@ -47,11 +52,30 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         list_ids: list[UUID | str],
         db_session: AsyncSession | None = None,
     ) -> list[ModelType] | None:
+        """Get multiple records by their IDs."""
         db_session = db_session or self.db.session
         response = await db_session.execute(select(self.model).where(self.model.id.in_(list_ids)))
         return response.scalars().all()
 
+    async def get_multi_by_ids(
+        self, *, ids: list[UUID], db_session: AsyncSession | None = None
+    ) -> list[ModelType]:
+        """
+        Get multiple records by their IDs
+
+        Args:
+            ids: List of UUIDs to fetch
+            db_session: Optional database session
+
+        Returns:
+            List of found records
+        """
+        db_session = db_session or self.db.session
+        response = await db_session.execute(select(self.model).where(self.model.id.in_(ids)))
+        return response.scalars().all()
+
     async def get_count(self, db_session: AsyncSession | None = None) -> ModelType | None:
+        """Get the total count of records."""
         db_session = db_session or self.db.session
         response = await db_session.execute(select(func.count()).select_from(select(self.model).subquery()))
         return response.scalar_one()
@@ -64,6 +88,7 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         query: T | Select[T] | None = None,
         db_session: AsyncSession | None = None,
     ) -> list[ModelType]:
+        """Get multiple records with optional pagination."""
         db_session = db_session or self.db.session
         if query is None:
             query_obj: Select[ModelType] = (
@@ -72,7 +97,9 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         else:
             query_obj = query
         response = await db_session.execute(query_obj)
-        return response.scalars().all()
+        # Apply unique() to handle joined eager loads
+        unique_response = response.unique()
+        return unique_response.scalars().all()
 
     async def get_multi_paginated(
         self,
@@ -81,11 +108,18 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         query: T | Select[T] | None = None,
         db_session: AsyncSession | None = None,
     ) -> Page[ModelType]:
-        db_session = db_session or self.db.session
-        if query is None:
-            query = select(self.model)
+        """Get multiple records with pagination."""
+        try:
+            db_session = db_session or self.db.session
+            if query is None:
+                query = select(self.model)
 
-        return await paginate(db_session, query, params, unique=True)
+            return await paginate(db_session, query, params, unique=True)
+        except Exception as e:
+            import logging
+
+            logging.error(f"Error in get_multi_paginated: {str(e)}")
+            raise Exception(f"Database pagination operation failed: {str(e)}") from e
 
     async def get_multi_paginated_ordered(
         self,
@@ -147,7 +181,7 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         db_session: AsyncSession | None = None,
     ) -> ModelType:
         db_session = db_session or self.db.session
-        db_obj = self.model.model_validate(obj_in)  # type: ignore
+        db_obj = self.model.model_validate(obj_in)
 
         if created_by_id:
             db_obj.created_by_id = created_by_id
@@ -191,7 +225,9 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     async def remove(self, *, id: UUID | str, db_session: AsyncSession | None = None) -> ModelType:
         db_session = db_session or self.db.session
         response = await db_session.execute(select(self.model).where(self.model.id == id))
-        obj = response.scalar_one()
+        # Apply unique() to handle joined eager loads
+        unique_response = response.unique()
+        obj = unique_response.scalar_one()
         await db_session.delete(obj)
         await db_session.commit()
         return obj

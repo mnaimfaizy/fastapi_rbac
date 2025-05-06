@@ -16,14 +16,14 @@ class UUID(uuid.UUID):
 
     def __init__(
         self,
-        hex: str = None,
-        bytes: bytes = None,
-        bytes_le: bytes = None,
-        fields: tuple[int, int, int, int, int, int] = None,
-        int: int = None,
-        version: int = None,
+        hex: str | None = None,
+        bytes: bytes | None = None,
+        bytes_le: bytes | None = None,
+        fields: tuple[int, int, int, int, int, int] | None = None,
+        int: int | None = None,
+        version: int | None = None,
         *,
-        is_safe=uuid.SafeUUID.unknown,
+        is_safe: uuid.SafeUUID = uuid.SafeUUID.unknown,
     ) -> None:
         r"""Create a UUID."""
 
@@ -117,9 +117,10 @@ def uuid7() -> UUID:
     global _last_v7_timestamp
 
     current_nanoseconds = time.time_ns()
-    # Ensure timestamp monotonicity
-    if _last_v7_timestamp is None:
-        nanoseconds = current_nanoseconds
+    nanoseconds = current_nanoseconds
+    if _last_v7_timestamp is not None:
+        if nanoseconds <= _last_v7_timestamp:  # type: ignore[unreachable]
+            nanoseconds = _last_v7_timestamp + 1
     _last_v7_timestamp = nanoseconds
     timestamp_ms, timestamp_ns = divmod(nanoseconds, 10**6)
     subsec = _subsec_encode(timestamp_ns)

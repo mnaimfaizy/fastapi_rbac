@@ -12,12 +12,31 @@ from app.schemas.permission_schema import IPermissionCreate, IPermissionUpdate
 
 
 class CRUDPermission(CRUDBase[Permission, IPermissionCreate, IPermissionUpdate]):
-    async def get_group_by_name(
+    async def get_permission_by_name(  # Renamed from get_group_by_name
         self, *, name: str, db_session: AsyncSession | None = None
     ) -> Permission | None:
         db_session = db_session or super().get_db().session
-        permission = await db_session.execute(select(Permission).where(Permission.name == name))
-        return permission.scalar_one_or_none()
+        stmt = select(Permission).where(Permission.name == name)
+        result = await db_session.execute(stmt)
+        return result.unique().scalar_one_or_none()
+
+    async def get_permission_by_id(
+        self, *, permission_id: UUID, db_session: AsyncSession | None = None
+    ) -> Permission | None:
+        """
+        Get a permission by ID with relationships loaded
+        """
+        from sqlalchemy.orm import selectinload
+
+        db_session = db_session or super().get_db().session
+        stmt = (
+            select(Permission)
+            .options(selectinload(Permission.group))
+            .options(selectinload(Permission.created_by))
+            .where(Permission.id == permission_id)
+        )
+        result = await db_session.execute(stmt)
+        return result.unique().scalar_one_or_none()
 
     async def assign_permissions_to_role(
         self,
@@ -54,4 +73,6 @@ class CRUDPermission(CRUDBase[Permission, IPermissionCreate, IPermissionUpdate])
         return None
 
 
-permission = CRUDPermission(Permission)
+permission_crud = CRUDPermission(Permission)
+# Keep the original name for backward compatibility
+permission = permission_crud

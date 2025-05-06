@@ -15,11 +15,16 @@ export function formatDate(dateString?: string): string {
 
   try {
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) {
+      return "Invalid date";
+    }
+
     return new Intl.DateTimeFormat("en-US", {
       dateStyle: "medium",
       timeStyle: "short",
     }).format(date);
   } catch (error) {
-    return dateString; // Return original string if parsing fails
+    console.error("Error formatting date:", error);
+    return "Invalid date";
   }
 }

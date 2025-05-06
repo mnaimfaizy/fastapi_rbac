@@ -14,3 +14,4 @@ public/
 celerybeat-schedule
 docker-compose.override.yml
 logfile.log
+node_modules

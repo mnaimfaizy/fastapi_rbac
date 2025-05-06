@@ -1,4 +1,4 @@
-import axios, { AxiosError, AxiosResponse } from "axios";
+import axios, { AxiosError } from "axios";
 import {
   getStoredRefreshToken,
   getStoredAccessToken,
@@ -8,20 +8,32 @@ import { store } from "../store";
 import { refreshAccessToken, logout } from "../store/slices/authSlice";
 
 // Define error response interface to match backend format
-interface ErrorDetail {
+export interface ErrorDetail {
   field?: string;
   code?: string;
   message: string;
 }
 
-interface ErrorResponse {
-  status: string;
-  message: string;
-  errors: ErrorDetail[];
-  meta?: Record<string, any>;
+interface ErrorResponseData {
+  status?: string;
+  message?: string;
+  errors?: ErrorDetail[];
+  detail?:
+    | {
+        field_name?: string;
+        message?: string;
+      }
+    | string;
+  [key: string]: unknown;
 }
 
-// Create axios instance with base configuration
+export interface SuccessResponse<T> {
+  status: string;
+  message: string;
+  data: T;
+  meta?: Record<string, unknown>;
+}
+
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1",
   headers: {
@@ -29,7 +41,7 @@ const api = axios.create({
   },
 });
 
-// Add request interceptor to include auth token
+// Request interceptor
 api.interceptors.request.use(
   (config) => {
     const token = getStoredAccessToken();
@@ -41,70 +53,110 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Add response interceptor to handle token refresh
+// Response interceptor
 api.interceptors.response.use(
   (response) => response,
-  async (error: AxiosError) => {
-    const originalRequest: any = error.config;
+  async (error: AxiosError<ErrorResponseData>) => {
+    const originalRequest = error.config as typeof error.config & {
+      _retry?: boolean;
+    };
 
     // Transform error response to our standardized format
     if (error.response?.data) {
-      // If the error response already follows our standardized format
-      if (
-        error.response.data.status === "error" &&
-        error.response.data.message
-      ) {
-        // Keep the error as is
+      const responseData = error.response.data as ErrorResponseData;
+
+      // If it's already in our format, keep it
+      if (responseData.status === "error" && responseData.message) {
+        // Keep as is
       }
-      // Handle legacy error format
-      else if (error.response.data.detail) {
-        // Format old-style detail field into our standardized format
-        const detail = error.response.data.detail;
-        let message = typeof detail === "string" ? detail : "An error occurred";
-        let errorDetails: ErrorDetail[] = [];
-
-        // Handle detailed field error format
-        if (typeof detail === "object" && detail.field_name && detail.message) {
-          errorDetails.push({
-            field: detail.field_name,
-            message: detail.message,
-          });
+      // Handle structured error format from backend
+      else if (responseData.detail) {
+        let errorMessage = "";
+        if (
+          typeof responseData.detail === "object" &&
+          responseData.detail.field_name &&
+          responseData.detail.message
+        ) {
+          // Handle field-specific errors
+          errorMessage = responseData.detail.message;
+          error.response.data = {
+            status: "error",
+            message: errorMessage,
+            errors: [
+              {
+                field: responseData.detail.field_name,
+                message: errorMessage,
+              },
+            ],
+          };
+        } else if (typeof responseData.detail === "string") {
+          // Handle string error messages
+          errorMessage = responseData.detail;
+          error.response.data = {
+            status: "error",
+            message: errorMessage,
+            errors: [
+              {
+                message: errorMessage,
+              },
+            ],
+          };
+        } else {
+          // Generic error handling
+          errorMessage = "An unexpected error occurred";
+          error.response.data = {
+            status: "error",
+            message: errorMessage,
+            detail: responseData,
+          };
         }
-
-        error.response.data = {
-          status: "error",
-          message,
-          errors: errorDetails,
-        };
       }
     }
 
-    // If the error is 401 and we haven't attempted to refresh the token yet
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
+    // Handle 401 (Unauthorized) - Token refresh flow
+    if (error.response?.status === 401 && !originalRequest?._retry) {
+      if (originalRequest) {
+        originalRequest._retry = true;
 
-      try {
-        const refreshToken = getStoredRefreshToken();
+        try {
+          const refreshToken = getStoredRefreshToken();
+          if (!refreshToken) {
+            store.dispatch(logout());
+            return Promise.reject(error);
+          }
 
-        if (!refreshToken) {
-          // No refresh token available, logout the user
+          const response = await store
+            .dispatch(refreshAccessToken(refreshToken))
+            .unwrap();
+          if (response && response.access_token) {
+            setStoredAccessToken(response.access_token);
+            if (originalRequest?.headers) {
+              originalRequest.headers.Authorization = `Bearer ${response.access_token}`;
+              return api(originalRequest);
+            }
+          }
+
+          store.dispatch(logout());
+          return Promise.reject(error);
+        } catch (refreshError) {
+          console.error("Token refresh failed:", refreshError);
           store.dispatch(logout());
           return Promise.reject(error);
         }
+      }
+    }
 
-        // Attempt to refresh the token
-        const response = await store
-          .dispatch(refreshAccessToken(refreshToken))
-          .unwrap();
-        setStoredAccessToken(response.access_token);
-
-        // Retry the original request with the new token
-        originalRequest.headers.Authorization = `Bearer ${response.access_token}`;
-        return api(originalRequest);
-      } catch (refreshError) {
-        // If refresh token fails, logout the user
+    // Handle 403 (Forbidden)
+    if (error.response?.status === 403) {
+      const responseData = error.response.data as ErrorResponseData;
+      if (
+        (typeof responseData === "object" &&
+          responseData?.message?.toLowerCase().includes("token")) ||
+        (responseData?.detail &&
+          typeof responseData.detail === "object" &&
+          responseData.detail?.message?.toLowerCase().includes("token"))
+      ) {
         store.dispatch(logout());
-        return Promise.reject(error);
       }
     }
 

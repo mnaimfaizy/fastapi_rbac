@@ -15,10 +15,18 @@ import { Input } from "@/components/ui/input";
 import { RoleGroup } from "@/models/roleGroup";
 import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 // Define form schema with Zod
 const roleGroupSchema = z.object({
   name: z.string().min(1, "Name is required"),
+  parent_id: z.string().optional(),
 });
 
 // Define form value types
@@ -29,6 +37,7 @@ interface RoleGroupFormProps {
   isLoading: boolean;
   error: string | null;
   onSubmit: (data: RoleGroupFormValues) => void;
+  availableParents?: RoleGroup[];
 }
 
 const RoleGroupForm: React.FC<RoleGroupFormProps> = ({
@@ -36,12 +45,14 @@ const RoleGroupForm: React.FC<RoleGroupFormProps> = ({
   isLoading,
   error,
   onSubmit,
+  availableParents = [],
 }) => {
   // Create form with validation
   const form = useForm<RoleGroupFormValues>({
     resolver: zodResolver(roleGroupSchema),
     defaultValues: {
       name: initialData?.name || "",
+      parent_id: initialData?.parent_id || undefined,
     },
   });
 
@@ -50,14 +61,15 @@ const RoleGroupForm: React.FC<RoleGroupFormProps> = ({
     if (initialData) {
       form.reset({
         name: initialData.name,
+        parent_id: initialData.parent_id,
       });
     }
   }, [initialData, form]);
 
-  // Handle form submission
-  const handleSubmit = (data: RoleGroupFormValues) => {
-    onSubmit(data);
-  };
+  // Filter out the current group and its descendants from available parents
+  const filteredParents = initialData
+    ? availableParents.filter((parent) => parent.id !== initialData.id)
+    : availableParents;
 
   return (
     <div className="space-y-6">
@@ -78,7 +90,7 @@ const RoleGroupForm: React.FC<RoleGroupFormProps> = ({
       )}
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <FormField
             control={form.control}
             name="name"
@@ -88,6 +100,37 @@ const RoleGroupForm: React.FC<RoleGroupFormProps> = ({
                 <FormControl>
                   <Input placeholder="Enter role group name" {...field} />
                 </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="parent_id"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Parent Group (Optional)</FormLabel>
+                <Select
+                  onValueChange={(value) =>
+                    field.onChange(value === "root" ? undefined : value)
+                  }
+                  defaultValue={field.value || "root"}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a parent group" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="root">None</SelectItem>
+                    {filteredParents.map((parent) => (
+                      <SelectItem key={parent.id} value={parent.id}>
+                        {parent.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <FormMessage />
               </FormItem>
             )}

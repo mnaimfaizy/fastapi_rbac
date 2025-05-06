@@ -62,14 +62,12 @@ repos:
             ^.pytest_cache/|
             ^.mypy_cache/
           )
-  - repo: local
+  # Replace local mypy hook with the standard one
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.1 # Use an appropriate version, check for the latest stable one
     hooks:
-      - id: mypy-custom
-        name: mypy
-        entry: mypy
-        language: python
-        types: [python]
-        files: ^backend/
+      - id: mypy
+        files: ^backend/ # Ensure it only runs on backend code
         exclude: >
           (?x)(
             ^.venv/|
@@ -81,7 +79,7 @@ repos:
             ^.pytest_cache/|
             ^.mypy_cache/
           )
-        args:
+        args: # Keep your existing arguments
           [
             "--ignore-missing-imports",
             "--disable-error-code=import-not-found",
@@ -100,5 +98,7 @@ repos:
             "--no-warn-no-return",
             "--no-warn-return-any",
             "--no-strict-optional",
-            "--config-file=backend/mypy.ini",
+            "--config-file=backend/mypy.ini", # Point to your mypy config
           ]
+        # If mypy needs dependencies from your project, add them here:
+        # additional_dependencies: ['types-requests', ...]

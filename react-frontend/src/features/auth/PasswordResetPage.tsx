@@ -1,13 +1,8 @@
-import { useState, useEffect } from "react";
-import {
-  Link,
-  useNavigate,
-  useParams,
-  useSearchParams,
-} from "react-router-dom";
+import { useEffect } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import {
-  resetPassword,
+  confirmPasswordReset, // Corrected import name
   clearError,
   resetPasswordResetSuccess,
 } from "../../store/slices/authSlice";
@@ -23,7 +18,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "../../components/ui/card";
@@ -94,12 +88,13 @@ const PasswordResetPage = () => {
     try {
       // Dispatch password reset action with token and new password
       await dispatch(
-        resetPassword({
+        confirmPasswordReset({
+          // Corrected action name
           token,
           newPassword: data.password,
         })
       ).unwrap();
-    } catch (_) {
+    } catch {
       // Error is handled by the auth slice
     }
   };

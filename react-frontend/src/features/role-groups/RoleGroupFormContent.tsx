@@ -8,10 +8,12 @@ import {
   updateRoleGroup,
   clearCurrentRoleGroup,
   clearRoleGroupErrors,
+  fetchRoleGroups,
 } from "../../store/slices/roleGroupSlice";
 import { RoleGroupCreate, RoleGroupUpdate } from "../../models/roleGroup";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import RoleGroupForm from "./RoleGroupForm";
+import { toast } from "sonner";
 
 const RoleGroupFormContent: React.FC = () => {
   const { groupId } = useParams<{ groupId: string }>();
@@ -19,11 +21,14 @@ const RoleGroupFormContent: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
 
-  const { currentRoleGroup, loading, error } = useSelector(
+  const { currentRoleGroup, loading, error, roleGroups } = useSelector(
     (state: RootState) => state.roleGroup
   );
 
   useEffect(() => {
+    // Load all role groups for parent selection
+    dispatch(fetchRoleGroups({ page: 1, size: 100 }));
+
     // If editing, load the role group data
     if (isEditMode && groupId) {
       dispatch(fetchRoleGroupById(groupId));
@@ -46,14 +51,16 @@ const RoleGroupFormContent: React.FC = () => {
             roleGroupData: data as RoleGroupUpdate,
           })
         ).unwrap();
+        toast.success("Role group updated successfully");
       } else {
         // Create new role group
         await dispatch(createRoleGroup(data as RoleGroupCreate)).unwrap();
+        toast.success("Role group created successfully");
       }
       navigate("/dashboard/role-groups");
     } catch (err) {
-      // Error handling is managed by the slice
       console.error("Failed to save role group:", err);
+      toast.error("Failed to save role group");
     }
   };
 
@@ -78,6 +85,7 @@ const RoleGroupFormContent: React.FC = () => {
           isLoading={loading}
           error={error}
           onSubmit={handleSubmit}
+          availableParents={roleGroups}
         />
       </CardContent>
     </Card>
