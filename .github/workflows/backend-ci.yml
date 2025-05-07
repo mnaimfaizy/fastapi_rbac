@@ -101,6 +101,15 @@ jobs:
       REDIS_PORT: 6379
       SECRET_KEY: testing_secret_key
       BACKEND_CORS_ORIGINS: '["http://localhost:8000", "http://localhost:5173"]'
+      PROJECT_NAME: "FastAPI RBAC Test"
+      TOKEN_ISSUER: "test_issuer"
+      TOKEN_AUDIENCE: "test_audience"
+      FIRST_SUPERUSER_EMAIL: "admin@example.com"
+      FIRST_SUPERUSER_PASSWORD: "testpassword"
+      USER_CHANGED_PASSWORD_DATE: "2023-01-01T00:00:00" # Example date
+      JWT_REFRESH_SECRET_KEY: "another_testing_secret_key"
+      JWT_RESET_SECRET_KEY: "reset_testing_secret_key"
+      ENCRYPT_KEY: "a_very_strong_encryption_key_32" # Must be 32 url-safe base64-encoded bytes
 
     steps:
       - uses: actions/checkout@v4
