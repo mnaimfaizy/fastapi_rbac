@@ -22,12 +22,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table("role") as batch_op:
+    with op.batch_alter_table("Role") as batch_op:  # Changed "role" to "Role"
         batch_op.add_column(sa.Column("role_group_id", sa.UUID(), nullable=True))
-        batch_op.create_foreign_key("fk_role_role_group_id", "role_group", ["role_group_id"], ["id"])
+        batch_op.create_foreign_key(
+            "fk_role_role_group_id", "RoleGroup", ["role_group_id"], ["id"]
+        )  # Changed "role_group" to "RoleGroup"
 
 
 def downgrade() -> None:
-    with op.batch_alter_table("role") as batch_op:
+    with op.batch_alter_table("Role") as batch_op:  # Changed "role" to "Role"
         batch_op.drop_constraint("fk_role_role_group_id", type_="foreignkey")
         batch_op.drop_column("role_group_id")
