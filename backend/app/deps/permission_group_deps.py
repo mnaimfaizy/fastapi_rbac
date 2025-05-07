@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import Path, Query, Depends
+from fastapi import Depends, Path, Query
 from sqlmodel.ext.asyncio.session import AsyncSession
 from typing_extensions import Annotated
 

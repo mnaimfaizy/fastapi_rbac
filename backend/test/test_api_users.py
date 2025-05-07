@@ -1,15 +1,16 @@
 import pytest
 from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel.ext.asyncio.session import AsyncSession  # Updated import
 
 from app.core.config import settings
 from app.crud.user_crud import user_crud
 from app.schemas.user_schema import IUserCreate as UserCreate
-from app.tests.utils import random_email, random_lower_string
+
+from .utils import random_email, random_lower_string
 
 
 @pytest.mark.asyncio
-async def test_create_user(client: AsyncClient, superuser_token_headers: dict):
+async def test_create_user(client: AsyncClient, superuser_token_headers: dict) -> None:
     """Test creating a user as superuser"""
     # Generate random user data
     email = random_email()
@@ -43,7 +44,7 @@ async def test_create_user(client: AsyncClient, superuser_token_headers: dict):
 @pytest.mark.asyncio
 async def test_create_user_existing_email(
     client: AsyncClient, superuser_token_headers: dict, db: AsyncSession
-):
+) -> None:
     """Test creating a user with an existing email"""
     # Create a user directly in the database
     email = random_email()
@@ -51,7 +52,7 @@ async def test_create_user_existing_email(
         email=email,
         password=random_lower_string(),
     )
-    await user_crud.create(db, obj_in=user_in)
+    await user_crud.create(obj_in=user_in, db_session=db)
 
     # Try to create another user with the same email
     data = {
@@ -67,7 +68,7 @@ async def test_create_user_existing_email(
 
 
 @pytest.mark.asyncio
-async def test_get_users(client: AsyncClient, superuser_token_headers: dict, db: AsyncSession):
+async def test_get_users(client: AsyncClient, superuser_token_headers: dict, db: AsyncSession) -> None:
     """Test retrieving users with pagination"""
     # Create some users directly in the database
     for i in range(5):
@@ -77,7 +78,7 @@ async def test_get_users(client: AsyncClient, superuser_token_headers: dict, db:
             first_name=f"Test{i}",
             last_name=f"User{i}",
         )
-        await user_crud.create(db, obj_in=user_in)
+        await user_crud.create(obj_in=user_in, db_session=db)
 
     # Send request to get users
     response = await client.get(f"{settings.API_V1_STR}/user/", headers=superuser_token_headers)
@@ -99,7 +100,7 @@ async def test_get_users(client: AsyncClient, superuser_token_headers: dict, db:
 
 
 @pytest.mark.asyncio
-async def test_get_user_me(client: AsyncClient, superuser_token_headers: dict):
+async def test_get_user_me(client: AsyncClient, superuser_token_headers: dict) -> None:
     """Test retrieving the current user's info"""
     response = await client.get(f"{settings.API_V1_STR}/user/me", headers=superuser_token_headers)
 
@@ -112,7 +113,7 @@ async def test_get_user_me(client: AsyncClient, superuser_token_headers: dict):
 
 
 @pytest.mark.asyncio
-async def test_update_user_me(client: AsyncClient, normal_user_token_headers: dict):
+async def test_update_user_me(client: AsyncClient, normal_user_token_headers: dict) -> None:
     """Test updating the current user's info"""
     # Get current user info to verify later changes
     response = await client.get(f"{settings.API_V1_STR}/user/me", headers=normal_user_token_headers)
@@ -141,7 +142,9 @@ async def test_update_user_me(client: AsyncClient, normal_user_token_headers: di
 
 
 @pytest.mark.asyncio
-async def test_get_specific_user(client: AsyncClient, superuser_token_headers: dict, db: AsyncSession):
+async def test_get_specific_user(
+    client: AsyncClient, superuser_token_headers: dict, db: AsyncSession
+) -> None:
     """Test retrieving a specific user by ID"""
     # Create a user
     email = random_email()
@@ -151,7 +154,7 @@ async def test_get_specific_user(client: AsyncClient, superuser_token_headers: d
         first_name="Test",
         last_name="User",
     )
-    user = await user_crud.create(db, obj_in=user_in)
+    user = await user_crud.create(obj_in=user_in, db_session=db)
 
     # Get the user by ID
     response = await client.get(f"{settings.API_V1_STR}/user/{user.id}", headers=superuser_token_headers)
@@ -166,7 +169,7 @@ async def test_get_specific_user(client: AsyncClient, superuser_token_headers: d
 
 
 @pytest.mark.asyncio
-async def test_update_user(client: AsyncClient, superuser_token_headers: dict, db: AsyncSession):
+async def test_update_user(client: AsyncClient, superuser_token_headers: dict, db: AsyncSession) -> None:
     """Test updating a user as superuser"""
     # Create a user
     email = random_email()
@@ -174,7 +177,7 @@ async def test_update_user(client: AsyncClient, superuser_token_headers: dict, d
         email=email,
         password=random_lower_string(),
     )
-    user = await user_crud.create(db, obj_in=user_in)
+    user = await user_crud.create(obj_in=user_in, db_session=db)
 
     # Update data
     new_first_name = "UpdatedFirstName"
@@ -200,7 +203,7 @@ async def test_update_user(client: AsyncClient, superuser_token_headers: dict, d
 
 
 @pytest.mark.asyncio
-async def test_delete_user(client: AsyncClient, superuser_token_headers: dict, db: AsyncSession):
+async def test_delete_user(client: AsyncClient, superuser_token_headers: dict, db: AsyncSession) -> None:
     """Test deleting a user as superuser"""
     # Create a user
     email = random_email()
@@ -208,7 +211,7 @@ async def test_delete_user(client: AsyncClient, superuser_token_headers: dict, d
         email=email,
         password=random_lower_string(),
     )
-    user = await user_crud.create(db, obj_in=user_in)
+    user = await user_crud.create(obj_in=user_in, db_session=db)
 
     # Delete the user
     response = await client.delete(f"{settings.API_V1_STR}/user/{user.id}", headers=superuser_token_headers)

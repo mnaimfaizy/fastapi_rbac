@@ -284,7 +284,10 @@ async def delete_role_group(
     if has_roles:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Group '{group.name}' has assigned roles and cannot be deleted. Please remove all roles first.",
+            detail=(
+                f"Group '{group.name}' has assigned roles and cannot be deleted. "
+                "Please remove all roles first."
+            ),
         )
 
     try:

@@ -5,7 +5,7 @@ from app.core.config import settings
 
 
 @pytest.mark.asyncio
-async def test_health_check(client: AsyncClient):
+async def test_health_check(client: AsyncClient) -> None:
     """Test health check endpoint is working properly"""
     response = await client.get(f"{settings.API_V1_STR}/health/")
 

@@ -8,11 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.role_model import Role
 from app.models.user_model import User
 from app.models.user_role_model import UserRole
-from app.tests.utils import random_email, random_lower_string
+
+from .utils import random_email, random_lower_string
 
 
 @pytest.mark.asyncio
-async def test_create_user(db: AsyncSession):
+async def test_create_user(db: AsyncSession) -> None:
     """Test creating a user in the database"""
     # Create user data
     email = random_email()
@@ -48,7 +49,7 @@ async def test_create_user(db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_user_with_roles(db: AsyncSession):
+async def test_user_with_roles(db: AsyncSession) -> None:
     """Test assigning roles to a user"""
     # Create user
     email = random_email()
@@ -88,7 +89,7 @@ async def test_user_with_roles(db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_user_unique_email_constraint(db: AsyncSession):
+async def test_user_unique_email_constraint(db: AsyncSession) -> None:
     """Test that users must have unique emails"""
     # Create first user
     email = random_email()
@@ -109,7 +110,7 @@ async def test_user_unique_email_constraint(db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_user_update(db: AsyncSession):
+async def test_user_update(db: AsyncSession) -> None:
     """Test updating user information"""
     # Create user
     email = random_email()

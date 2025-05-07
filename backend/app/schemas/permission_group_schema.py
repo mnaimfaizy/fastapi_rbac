@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, model_validator
@@ -59,12 +59,23 @@ class IPermissionGroupWithPermissions(IPermissionGroupBase):
 
     @model_validator(mode="before")
     @classmethod
-    def prevent_recursion(cls, values):
+    def prevent_recursion(cls, values: dict[str, Any]) -> dict[str, Any]:
         """Prevent infinite recursion in parent/child relationships"""
         if "parent" in values and values["parent"]:
             # Only include basic parent info
-            values["parent"] = IPermissionGroupBase(**values["parent"].model_dump())
+            # Ensure parent is converted to dict if it's a model instance before creating IPermissionGroupBase
+            parent_data = values["parent"]
+            if hasattr(parent_data, "model_dump"):
+                parent_data = parent_data.model_dump()
+            values["parent"] = IPermissionGroupBase(**parent_data)
         if "groups" in values and values["groups"]:
             # Only include basic child info
-            values["groups"] = [IPermissionGroupBase(**g.model_dump()) for g in values["groups"]]
+            # Ensure group is converted to dict if it's a model instance before creating IPermissionGroupBase
+            processed_groups = []
+            for g in values["groups"]:
+                group_data = g
+                if hasattr(group_data, "model_dump"):
+                    group_data = group_data.model_dump()
+                processed_groups.append(IPermissionGroupBase(**group_data))
+            values["groups"] = processed_groups
         return values

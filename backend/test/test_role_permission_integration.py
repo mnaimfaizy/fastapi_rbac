@@ -1,6 +1,6 @@
 import pytest
 from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel.ext.asyncio.session import AsyncSession  # Import the correct AsyncSession
 
 from app.core.config import settings
 from app.crud.permission_crud import permission_crud
@@ -11,13 +11,14 @@ from app.models.user_role_model import UserRole
 from app.schemas.permission_schema import IPermissionCreate as PermissionCreate
 from app.schemas.role_schema import IRoleCreate as RoleCreate
 from app.schemas.user_schema import IUserCreate as UserCreate
-from app.tests.utils import random_email, random_lower_string
+
+from .utils import random_email, random_lower_string
 
 
 @pytest.mark.asyncio
 async def test_assign_permission_to_role(
     client: AsyncClient, superuser_token_headers: dict, db: AsyncSession
-):
+) -> None:
     """Test assigning a permission to a role"""
     # Create a role
     role_name = f"test-role-{random_lower_string(8)}"
@@ -50,7 +51,9 @@ async def test_assign_permission_to_role(
 
 
 @pytest.mark.asyncio
-async def test_assign_role_to_user(client: AsyncClient, superuser_token_headers: dict, db: AsyncSession):
+async def test_assign_role_to_user(
+    client: AsyncClient, superuser_token_headers: dict, db: AsyncSession
+) -> None:
     """Test assigning a role to a user"""
     # Create a user
     email = random_email()
@@ -84,7 +87,7 @@ async def test_assign_role_to_user(client: AsyncClient, superuser_token_headers:
 
 
 @pytest.mark.asyncio
-async def test_user_permission_through_role(client: AsyncClient, db: AsyncSession):
+async def test_user_permission_through_role(client: AsyncClient, db: AsyncSession) -> None:
     """Test that a user gets permissions through their assigned roles"""
     # Create a user
     email = random_email()
@@ -143,7 +146,7 @@ async def test_user_permission_through_role(client: AsyncClient, db: AsyncSessio
 @pytest.mark.asyncio
 async def test_remove_permission_from_role(
     client: AsyncClient, superuser_token_headers: dict, db: AsyncSession
-):
+) -> None:
     """Test removing a permission from a role"""
     # Create a role
     role_name = f"test-role-{random_lower_string(8)}"
@@ -178,7 +181,9 @@ async def test_remove_permission_from_role(
 
 
 @pytest.mark.asyncio
-async def test_remove_role_from_user(client: AsyncClient, superuser_token_headers: dict, db: AsyncSession):
+async def test_remove_role_from_user(
+    client: AsyncClient, superuser_token_headers: dict, db: AsyncSession
+) -> None:
     """Test removing a role from a user"""
     # Create a user
     email = random_email()

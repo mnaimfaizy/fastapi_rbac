@@ -2,11 +2,12 @@ import pytest
 from httpx import AsyncClient
 
 from app.core.config import settings
-from app.tests.utils import random_email
+
+from .utils import random_email
 
 
 @pytest.mark.asyncio
-async def test_get_access_token(client: AsyncClient):
+async def test_get_access_token(client: AsyncClient) -> None:
     """Test login endpoint to get access token with superuser credentials"""
     login_data = {
         "username": settings.FIRST_SUPERUSER_EMAIL,
@@ -24,7 +25,7 @@ async def test_get_access_token(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_get_access_token_incorrect_password(client: AsyncClient):
+async def test_get_access_token_incorrect_password(client: AsyncClient) -> None:
     """Test login with incorrect password"""
     login_data = {
         "username": settings.FIRST_SUPERUSER_EMAIL,
@@ -42,7 +43,7 @@ async def test_get_access_token_incorrect_password(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_get_access_token_nonexistent_user(client: AsyncClient):
+async def test_get_access_token_nonexistent_user(client: AsyncClient) -> None:
     """Test login with non-existent user"""
     login_data = {
         "username": f"nonexistent-{random_email()}",
@@ -60,13 +61,16 @@ async def test_get_access_token_nonexistent_user(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_refresh_token(client: AsyncClient, superuser_token_headers):
+async def test_refresh_token(client: AsyncClient, superuser_token_headers: dict[str, str]) -> None:
     # Assuming the superuser is already logged in and has headers
     # tokens = superuser_token_headers # F841: Variable 'tokens' assigned but never used
-    refresh_token = "..."  # Placeholder: Need to extract refresh token from login response
+    # refresh_token = "..."  # Placeholder: Need to extract refresh token from login response
     # For now, let's assume we have a valid refresh token somehow
     # In a real test, you'd get this from the initial login response
-    # response = await client.post(f"{settings.API_V1_STR}/login/refresh-token", headers=superuser_token_headers)
+    # response = await client.post(
+    #     f"{settings.API_V1_STR}/login/refresh-token",
+    #     headers=superuser_token_headers
+    # )
     # assert response.status_code == 200
     # new_tokens = response.json()
     # assert "access_token" in new_tokens
@@ -75,15 +79,15 @@ async def test_refresh_token(client: AsyncClient, superuser_token_headers):
 
 
 @pytest.mark.asyncio
-async def test_refresh_token_invalid(client: AsyncClient):
+async def test_refresh_token_invalid(client: AsyncClient) -> None:
     headers = {"Authorization": "Bearer invalidtoken"}
     response = await client.post(f"{settings.API_V1_STR}/login/refresh-token", headers=headers)
     assert response.status_code == 401  # Expect unauthorized
 
 
 @pytest.mark.asyncio
-async def test_test_token(client: AsyncClient, superuser_token_headers):
+async def test_test_token(client: AsyncClient, superuser_token_headers: dict[str, str]) -> None:
     response = await client.post(f"{settings.API_V1_STR}/login/test-token", headers=superuser_token_headers)
     assert response.status_code == 200
     user_data = response.json()
-    assert user_data["email"] == settings.FIRST_SUPERUSER
+    assert user_data["email"] == settings.FIRST_SUPERUSER_EMAIL

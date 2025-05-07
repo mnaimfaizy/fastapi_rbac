@@ -1,15 +1,16 @@
 import pytest
 from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel.ext.asyncio.session import AsyncSession as SQLModelAsyncSession
 
 from app.core.config import settings
 from app.crud.role_crud import role_crud
 from app.schemas.role_schema import IRoleCreate as RoleCreate
-from app.tests.utils import random_lower_string
+
+from .utils import random_lower_string
 
 
 @pytest.mark.asyncio
-async def test_create_role(client: AsyncClient, superuser_token_headers: dict):
+async def test_create_role(client: AsyncClient, superuser_token_headers: dict) -> None:
     """Test creating a role as superuser"""
     # Generate random role data
     name = f"test-role-{random_lower_string(8)}"
@@ -34,8 +35,8 @@ async def test_create_role(client: AsyncClient, superuser_token_headers: dict):
 
 @pytest.mark.asyncio
 async def test_create_role_existing_name(
-    client: AsyncClient, superuser_token_headers: dict, db: AsyncSession
-):
+    client: AsyncClient, superuser_token_headers: dict, db: SQLModelAsyncSession
+) -> None:
     """Test creating a role with an existing name"""
     # Create a role directly in the database
     name = f"unique-role-{random_lower_string(8)}"
@@ -43,7 +44,7 @@ async def test_create_role_existing_name(
         name=name,
         description="Test Role",
     )
-    await role_crud.create(db, obj_in=role_in)
+    await role_crud.create(obj_in=role_in, db_session=db)
 
     # Try to create another role with the same name
     data = {
@@ -59,7 +60,9 @@ async def test_create_role_existing_name(
 
 
 @pytest.mark.asyncio
-async def test_get_roles(client: AsyncClient, superuser_token_headers: dict, db: AsyncSession):
+async def test_get_roles(
+    client: AsyncClient, superuser_token_headers: dict, db: SQLModelAsyncSession
+) -> None:
     """Test retrieving roles with pagination"""
     # Create some roles directly in the database
     for i in range(5):
@@ -67,7 +70,7 @@ async def test_get_roles(client: AsyncClient, superuser_token_headers: dict, db:
             name=f"test-role-{i}-{random_lower_string(5)}",
             description=f"Test Role {i}",
         )
-        await role_crud.create(db, obj_in=role_in)
+        await role_crud.create(obj_in=role_in, db_session=db)
 
     # Send request to get roles
     response = await client.get(f"{settings.API_V1_STR}/role/", headers=superuser_token_headers)
@@ -89,7 +92,9 @@ async def test_get_roles(client: AsyncClient, superuser_token_headers: dict, db:
 
 
 @pytest.mark.asyncio
-async def test_get_specific_role(client: AsyncClient, superuser_token_headers: dict, db: AsyncSession):
+async def test_get_specific_role(
+    client: AsyncClient, superuser_token_headers: dict, db: SQLModelAsyncSession
+) -> None:
     """Test retrieving a specific role by ID"""
     # Create a role
     name = f"specific-role-{random_lower_string(8)}"
@@ -97,7 +102,7 @@ async def test_get_specific_role(client: AsyncClient, superuser_token_headers: d
         name=name,
         description="Specific Test Role",
     )
-    role = await role_crud.create(db, obj_in=role_in)
+    role = await role_crud.create(obj_in=role_in, db_session=db)
 
     # Get the role by ID
     response = await client.get(f"{settings.API_V1_STR}/role/{role.id}", headers=superuser_token_headers)
@@ -111,7 +116,9 @@ async def test_get_specific_role(client: AsyncClient, superuser_token_headers: d
 
 
 @pytest.mark.asyncio
-async def test_get_role_by_name(client: AsyncClient, superuser_token_headers: dict, db: AsyncSession):
+async def test_get_role_by_name(
+    client: AsyncClient, superuser_token_headers: dict, db: SQLModelAsyncSession
+) -> None:
     """Test retrieving a role by name"""
     # Create a role
     name = f"name-lookup-role-{random_lower_string(8)}"
@@ -119,7 +126,7 @@ async def test_get_role_by_name(client: AsyncClient, superuser_token_headers: di
         name=name,
         description="Name Lookup Test Role",
     )
-    role = await role_crud.create(db, obj_in=role_in)
+    role = await role_crud.create(obj_in=role_in, db_session=db)
 
     # Get the role by name
     response = await client.get(f"{settings.API_V1_STR}/role/by-name/{name}", headers=superuser_token_headers)
@@ -133,7 +140,9 @@ async def test_get_role_by_name(client: AsyncClient, superuser_token_headers: di
 
 
 @pytest.mark.asyncio
-async def test_update_role(client: AsyncClient, superuser_token_headers: dict, db: AsyncSession):
+async def test_update_role(
+    client: AsyncClient, superuser_token_headers: dict, db: SQLModelAsyncSession
+) -> None:
     """Test updating a role as superuser"""
     # Create a role
     name = f"update-role-{random_lower_string(8)}"
@@ -141,7 +150,7 @@ async def test_update_role(client: AsyncClient, superuser_token_headers: dict, d
         name=name,
         description="Original Description",
     )
-    role = await role_crud.create(db, obj_in=role_in)
+    role = await role_crud.create(obj_in=role_in, db_session=db)
 
     # Update data
     new_description = f"Updated Description {random_lower_string(5)}"
@@ -162,7 +171,9 @@ async def test_update_role(client: AsyncClient, superuser_token_headers: dict, d
 
 
 @pytest.mark.asyncio
-async def test_update_role_name(client: AsyncClient, superuser_token_headers: dict, db: AsyncSession):
+async def test_update_role_name(
+    client: AsyncClient, superuser_token_headers: dict, db: SQLModelAsyncSession
+) -> None:
     """Test updating a role's name"""
     # Create a role
     name = f"rename-role-{random_lower_string(8)}"
@@ -170,7 +181,7 @@ async def test_update_role_name(client: AsyncClient, superuser_token_headers: di
         name=name,
         description="Role to be renamed",
     )
-    role = await role_crud.create(db, obj_in=role_in)
+    role = await role_crud.create(obj_in=role_in, db_session=db)
 
     # Update data with new name
     new_name = f"new-name-{random_lower_string(8)}"
@@ -197,7 +208,9 @@ async def test_update_role_name(client: AsyncClient, superuser_token_headers: di
 
 
 @pytest.mark.asyncio
-async def test_delete_role(client: AsyncClient, superuser_token_headers: dict, db: AsyncSession):
+async def test_delete_role(
+    client: AsyncClient, superuser_token_headers: dict, db: SQLModelAsyncSession
+) -> None:
     """Test deleting a role as superuser"""
     # Create a role
     name = f"delete-role-{random_lower_string(8)}"
@@ -205,7 +218,7 @@ async def test_delete_role(client: AsyncClient, superuser_token_headers: dict, d
         name=name,
         description="Role to be deleted",
     )
-    role = await role_crud.create(db, obj_in=role_in)
+    role = await role_crud.create(obj_in=role_in, db_session=db)
 
     # Delete the role
     response = await client.delete(f"{settings.API_V1_STR}/role/{role.id}", headers=superuser_token_headers)
@@ -223,8 +236,8 @@ async def test_delete_role(client: AsyncClient, superuser_token_headers: dict, d
 
 @pytest.mark.asyncio
 async def test_role_access_normal_user(
-    client: AsyncClient, normal_user_token_headers: dict, db: AsyncSession
-):
+    client: AsyncClient, normal_user_token_headers: dict, db: SQLModelAsyncSession
+) -> None:
     """Test that normal users cannot create roles"""
     # Generate random role data
     name = f"unauthorized-role-{random_lower_string(8)}"

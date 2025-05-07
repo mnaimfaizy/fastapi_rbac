@@ -1,6 +1,6 @@
 import pytest
 from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel.ext.asyncio.session import AsyncSession as SQLModelAsyncSession
 
 from app.core.config import settings
 from app.crud.permission_crud import permission_crud
@@ -11,11 +11,12 @@ from app.models.user_role_model import UserRole
 from app.schemas.permission_schema import IPermissionCreate as PermissionCreate
 from app.schemas.role_schema import IRoleCreate as RoleCreate
 from app.schemas.user_schema import IUserCreate as UserCreate
-from app.tests.utils import random_email, random_lower_string
+
+from .utils import random_email, random_lower_string
 
 
 @pytest.mark.asyncio
-async def test_rbac_access_control(client: AsyncClient, db: AsyncSession):
+async def test_rbac_access_control(client: AsyncClient, db: SQLModelAsyncSession) -> None:
     """
     Integration test for role-based access control.
 
@@ -111,7 +112,7 @@ async def test_rbac_access_control(client: AsyncClient, db: AsyncSession):
     await db.commit()
 
     # Helper function to get token headers for a user
-    async def get_user_token(email, password):
+    async def get_user_token(email: str, password: str) -> dict[str, str]:
         login_response = await client.post(
             f"{settings.API_V1_STR}/login/access-token", data={"username": email, "password": password}
         )

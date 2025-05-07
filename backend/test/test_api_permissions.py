@@ -1,15 +1,18 @@
 import pytest
 from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
+
+# Use SQLModel's AsyncSession
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import settings
 from app.crud.permission_crud import permission_crud
 from app.schemas.permission_schema import IPermissionCreate as PermissionCreate
-from app.tests.utils import random_lower_string
+
+from .utils import random_lower_string  # Changed import
 
 
 @pytest.mark.asyncio
-async def test_create_permission(client: AsyncClient, superuser_token_headers: dict):
+async def test_create_permission(client: AsyncClient, superuser_token_headers: dict) -> None:  # Reformatted
     """Test creating a permission as superuser"""
     # Generate random permission data
     name = f"test-permission-{random_lower_string(8)}"
@@ -37,7 +40,7 @@ async def test_create_permission(client: AsyncClient, superuser_token_headers: d
 @pytest.mark.asyncio
 async def test_create_permission_existing_name(
     client: AsyncClient, superuser_token_headers: dict, db: AsyncSession
-):
+) -> None:  # Reformatted
     """Test creating a permission with an existing name"""
     # Create a permission directly in the database
     name = f"unique-permission-{random_lower_string(8)}"
@@ -45,7 +48,7 @@ async def test_create_permission_existing_name(
         name=name,
         description="Test Permission",
     )
-    await permission_crud.create(db, obj_in=permission_in)
+    await permission_crud.create(db_session=db, obj_in=permission_in)
 
     # Try to create another permission with the same name
     data = {
@@ -63,7 +66,9 @@ async def test_create_permission_existing_name(
 
 
 @pytest.mark.asyncio
-async def test_get_permissions(client: AsyncClient, superuser_token_headers: dict, db: AsyncSession):
+async def test_get_permissions(
+    client: AsyncClient, superuser_token_headers: dict, db: AsyncSession
+) -> None:  # Reformatted
     """Test retrieving permissions with pagination"""
     # Create some permissions directly in the database
     for i in range(5):
@@ -71,7 +76,7 @@ async def test_get_permissions(client: AsyncClient, superuser_token_headers: dic
             name=f"test-permission-{i}-{random_lower_string(5)}",
             description=f"Test Permission {i}",
         )
-        await permission_crud.create(db, obj_in=permission_in)
+        await permission_crud.create(db_session=db, obj_in=permission_in)
 
     # Send request to get permissions
     response = await client.get(f"{settings.API_V1_STR}/permission/", headers=superuser_token_headers)
@@ -93,7 +98,9 @@ async def test_get_permissions(client: AsyncClient, superuser_token_headers: dic
 
 
 @pytest.mark.asyncio
-async def test_get_specific_permission(client: AsyncClient, superuser_token_headers: dict, db: AsyncSession):
+async def test_get_specific_permission(
+    client: AsyncClient, superuser_token_headers: dict, db: AsyncSession
+) -> None:  # Reformatted
     """Test retrieving a specific permission by ID"""
     # Create a permission
     name = f"specific-permission-{random_lower_string(8)}"
@@ -101,7 +108,7 @@ async def test_get_specific_permission(client: AsyncClient, superuser_token_head
         name=name,
         description="Specific Test Permission",
     )
-    permission = await permission_crud.create(db, obj_in=permission_in)
+    permission = await permission_crud.create(db_session=db, obj_in=permission_in)
 
     # Get the permission by ID
     response = await client.get(
@@ -117,7 +124,9 @@ async def test_get_specific_permission(client: AsyncClient, superuser_token_head
 
 
 @pytest.mark.asyncio
-async def test_get_permission_by_name(client: AsyncClient, superuser_token_headers: dict, db: AsyncSession):
+async def test_get_permission_by_name(
+    client: AsyncClient, superuser_token_headers: dict, db: AsyncSession
+) -> None:  # Reformatted
     """Test retrieving a permission by name"""
     # Create a permission
     name = f"name-lookup-permission-{random_lower_string(8)}"
@@ -125,7 +134,7 @@ async def test_get_permission_by_name(client: AsyncClient, superuser_token_heade
         name=name,
         description="Name Lookup Test Permission",
     )
-    permission = await permission_crud.create(db, obj_in=permission_in)
+    permission = await permission_crud.create(db_session=db, obj_in=permission_in)
 
     # Get the permission by name
     response = await client.get(
@@ -141,7 +150,9 @@ async def test_get_permission_by_name(client: AsyncClient, superuser_token_heade
 
 
 @pytest.mark.asyncio
-async def test_update_permission(client: AsyncClient, superuser_token_headers: dict, db: AsyncSession):
+async def test_update_permission(
+    client: AsyncClient, superuser_token_headers: dict, db: AsyncSession
+) -> None:  # Reformatted
     """Test updating a permission as superuser"""
     # Create a permission
     name = f"update-permission-{random_lower_string(8)}"
@@ -149,7 +160,7 @@ async def test_update_permission(client: AsyncClient, superuser_token_headers: d
         name=name,
         description="Original Description",
     )
-    permission = await permission_crud.create(db, obj_in=permission_in)
+    permission = await permission_crud.create(db_session=db, obj_in=permission_in)
 
     # Update data
     new_description = f"Updated Description {random_lower_string(5)}"
@@ -170,7 +181,9 @@ async def test_update_permission(client: AsyncClient, superuser_token_headers: d
 
 
 @pytest.mark.asyncio
-async def test_update_permission_name(client: AsyncClient, superuser_token_headers: dict, db: AsyncSession):
+async def test_update_permission_name(
+    client: AsyncClient, superuser_token_headers: dict, db: AsyncSession
+) -> None:  # Reformatted
     """Test updating a permission's name"""
     # Create a permission
     name = f"rename-permission-{random_lower_string(8)}"
@@ -178,7 +191,7 @@ async def test_update_permission_name(client: AsyncClient, superuser_token_heade
         name=name,
         description="Permission to be renamed",
     )
-    permission = await permission_crud.create(db, obj_in=permission_in)
+    permission = await permission_crud.create(db_session=db, obj_in=permission_in)
 
     # Update data with new name
     new_name = f"new-name-{random_lower_string(8)}"
@@ -207,7 +220,9 @@ async def test_update_permission_name(client: AsyncClient, superuser_token_heade
 
 
 @pytest.mark.asyncio
-async def test_delete_permission(client: AsyncClient, superuser_token_headers: dict, db: AsyncSession):
+async def test_delete_permission(
+    client: AsyncClient, superuser_token_headers: dict, db: AsyncSession
+) -> None:  # Reformatted
     """Test deleting a permission as superuser"""
     # Create a permission
     name = f"delete-permission-{random_lower_string(8)}"
@@ -215,7 +230,7 @@ async def test_delete_permission(client: AsyncClient, superuser_token_headers: d
         name=name,
         description="Permission to be deleted",
     )
-    permission = await permission_crud.create(db, obj_in=permission_in)
+    permission = await permission_crud.create(db_session=db, obj_in=permission_in)
 
     # Delete the permission
     response = await client.delete(
@@ -238,7 +253,7 @@ async def test_delete_permission(client: AsyncClient, superuser_token_headers: d
 @pytest.mark.asyncio
 async def test_permission_access_normal_user(
     client: AsyncClient, normal_user_token_headers: dict, db: AsyncSession
-):
+) -> None:  # Reformatted
     """Test that normal users cannot create permissions"""
     # Generate random permission data
     name = f"unauthorized-permission-{random_lower_string(8)}"

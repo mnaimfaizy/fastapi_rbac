@@ -13,7 +13,7 @@ from app.core.security import (
 )
 
 
-def test_password_hashing():
+def test_password_hashing() -> None:
     """Test password hashing and verification"""
     # Test that hashing works
     password = "test-password"
@@ -29,7 +29,7 @@ def test_password_hashing():
     assert not verify_password("wrong-password", hashed_password)
 
 
-def test_access_token_generation():
+def test_access_token_generation() -> None:
     """Test JWT access token generation"""
     # Generate an access token with some claims
     user_id = "test-user-id"
@@ -61,7 +61,7 @@ def test_access_token_generation():
     assert decoded["aud"] == settings.TOKEN_AUDIENCE
 
 
-def test_refresh_token_generation():
+def test_refresh_token_generation() -> None:
     """Test JWT refresh token generation"""
     # Generate a refresh token
     user_id = "test-user-id"
@@ -95,7 +95,7 @@ def test_refresh_token_generation():
     assert decoded["aud"] == settings.TOKEN_AUDIENCE
 
 
-def test_token_expiration():
+def test_token_expiration() -> None:
     """Test that tokens expire correctly"""
     # Generate a token that's already expired
     user_id = "test-user-id"
@@ -114,7 +114,7 @@ def test_token_expiration():
         )
 
 
-def test_decode_token():
+def test_decode_token() -> None:
     """Test token decoding function"""
     # Generate a valid token
     user_id = "test-user-id"

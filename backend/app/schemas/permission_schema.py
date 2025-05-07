@@ -1,11 +1,11 @@
-from uuid import UUID
 from typing import Optional
+from uuid import UUID
 
 from app.models.permission_model import PermissionBase
-from app.utils.partial import optional
 
 # Import the basic group schema
 from app.schemas.permission_group_schema import IPermissionGroupRead
+from app.utils.partial import optional
 
 
 class IPermissionCreate(PermissionBase):

@@ -18,13 +18,8 @@ from app.models.user_model import User
 from app.schemas.common_schema import TokenType
 from app.schemas.response_schema import IPostResponseBase, create_response
 from app.schemas.token_schema import RefreshToken, Token, TokenRead
-from app.schemas.user_schema import (
-    IUserCreate,  # Added IUserCreate import
-    PasswordResetConfirm,
-    PasswordResetRequest,
-    UserRegister,
-    VerifyEmail,
-)
+from app.schemas.user_schema import IUserCreate  # Added IUserCreate import
+from app.schemas.user_schema import PasswordResetConfirm, PasswordResetRequest, UserRegister, VerifyEmail
 from app.utils.background_tasks import (
     cleanup_expired_tokens,
     log_security_event,

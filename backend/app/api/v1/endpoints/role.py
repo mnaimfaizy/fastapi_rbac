@@ -2,10 +2,9 @@ from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
-from sqlmodel.ext.asyncio.session import AsyncSession
-
 from fastapi_pagination import Params
 from redis.asyncio import Redis
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app import crud
 from app.api import deps

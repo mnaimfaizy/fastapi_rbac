@@ -5,11 +5,12 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.crud.role_crud import role_crud
 from app.schemas.role_schema import IRoleCreate, IRoleUpdate
-from app.tests.utils import random_lower_string
+
+from .utils import random_lower_string
 
 
 @pytest.mark.asyncio
-async def test_create_role(db: AsyncSession):
+async def test_create_role(db: AsyncSession) -> None:
     """Test creating a role through CRUD operations"""
     # Create role data
     name = f"test-role-{random_lower_string(8)}"
@@ -28,7 +29,7 @@ async def test_create_role(db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_get_role(db: AsyncSession):
+async def test_get_role(db: AsyncSession) -> None:
     """Test retrieving a role by ID"""
     # Create a role
     name = f"test-role-{random_lower_string(8)}"
@@ -47,7 +48,7 @@ async def test_get_role(db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_get_role_by_name(db: AsyncSession):
+async def test_get_role_by_name(db: AsyncSession) -> None:
     """Test retrieving a role by name"""
     # Create a role
     name = f"test-role-{random_lower_string(8)}"
@@ -66,7 +67,7 @@ async def test_get_role_by_name(db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_update_role(db: AsyncSession):
+async def test_update_role(db: AsyncSession) -> None:
     """Test updating a role"""
     # Create a role
     name = f"test-role-{random_lower_string(8)}"
@@ -77,7 +78,7 @@ async def test_update_role(db: AsyncSession):
     role = await role_crud.create(obj_in=role_in, db_session=db)
     # Update the role description
     new_description = "Updated Description"
-    role_update = IRoleUpdate(description=new_description)
+    role_update = IRoleUpdate(name=role.name, description=new_description)
     updated_role = await role_crud.update(obj_current=role, obj_new=role_update, db_session=db)
     # Check that the role was updated
     assert updated_role.id == role.id
@@ -86,7 +87,7 @@ async def test_update_role(db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_update_role_name(db: AsyncSession):
+async def test_update_role_name(db: AsyncSession) -> None:
     """Test updating a role's name"""
     # Create a role
     name = f"test-role-{random_lower_string(8)}"
@@ -110,7 +111,7 @@ async def test_update_role_name(db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_get_multi_roles(db: AsyncSession):
+async def test_get_multi_roles(db: AsyncSession) -> None:
     """Test retrieving multiple roles with pagination"""
     # Create several roles
     role_count = 10
@@ -133,7 +134,7 @@ async def test_get_multi_roles(db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_delete_role(db: AsyncSession):
+async def test_delete_role(db: AsyncSession) -> None:
     """Test deleting a role"""
     # Create a role
     name = f"test-role-{random_lower_string(8)}"

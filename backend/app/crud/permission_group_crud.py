@@ -1,6 +1,7 @@
-from typing import Any, TypedDict, List
+from typing import Any, List, TypedDict
 from uuid import UUID
 
+from fastapi_pagination import Params
 from sqlalchemy.orm import selectinload
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -8,6 +9,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.crud.base_crud import CRUDBase
 from app.models.permission_group_model import PermissionGroup
 from app.schemas.permission_group_schema import IPermissionGroupCreate, IPermissionGroupUpdate
+from app.schemas.response_schema import IPaginatedResponseBase
 
 
 class PermissionGroupData(TypedDict):
@@ -74,8 +76,13 @@ class CRUDPermissionGroup(CRUDBase[PermissionGroup, IPermissionGroupCreate, IPer
 
     # Override the get_multi_paginated method to load permissions and other relationships
     async def get_multi_paginated(
-        self, *, params=None, query_filter=None, db_session: AsyncSession | None = None, **kwargs
-    ):
+        self,
+        *,
+        params: Params | None = None,
+        query_filter: Any | None = None,
+        db_session: AsyncSession | None = None,
+        **kwargs: Any,
+    ) -> IPaginatedResponseBase[PermissionGroup]:
         db_session = db_session or super().get_db().session
 
         # Start with the base query

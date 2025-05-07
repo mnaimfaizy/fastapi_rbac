@@ -1,4 +1,5 @@
 from typing import Any
+
 from app.models.user_model import User
 
 

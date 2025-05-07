@@ -1,12 +1,14 @@
+import asyncio
 import os
-from typing import AsyncGenerator, Dict
+from test.utils import random_email, random_lower_string  # Fixed import path
+from typing import AsyncGenerator, Dict, Generator  # Added Generator
 
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
+from sqlmodel.ext.asyncio.session import AsyncSession  # Changed import
 
 from app.api.deps import get_db
 from app.core.config import settings
@@ -14,7 +16,6 @@ from app.db.init_db import init_db
 
 # Import our app code
 from app.main import fastapi_app as main_app
-from test.utils import random_email, random_lower_string  # Fixed import path
 
 # Set the mode to testing to ensure we use test settings
 os.environ["MODE"] = "testing"
@@ -25,10 +26,8 @@ TEST_SQLALCHEMY_DATABASE_URI = "sqlite+aiosqlite:///:memory:"
 
 # Define a session-scoped event loop fixture
 @pytest.fixture(scope="session")
-def event_loop():
+def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:  # Changed return type
     """Create an instance of the default event loop for each test session."""
-    import asyncio
-
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
     loop.close()
@@ -36,7 +35,7 @@ def event_loop():
 
 # Fixture to setup the test database
 @pytest_asyncio.fixture(scope="session")
-async def db_engine():
+async def db_engine() -> AsyncGenerator[AsyncEngine, None]:  # Changed return type
     # Create an engine connected to a test database
     engine = create_async_engine(TEST_SQLALCHEMY_DATABASE_URI, echo=False)
 
@@ -50,8 +49,10 @@ async def db_engine():
         await conn.run_sync(SQLModel.metadata.create_all)
 
     # Initialize the database with test data
-    async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    async with async_session() as session:
+    session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
+        engine, class_=AsyncSession, expire_on_commit=False
+    )
+    async with session_factory() as session:
         await init_db(session)
 
     # Return the engine
@@ -66,12 +67,14 @@ async def db_engine():
 
 # Fixture to provide a database session for tests
 @pytest_asyncio.fixture(scope="function")
-async def db(db_engine) -> AsyncGenerator[AsyncSession, None]:
+async def db(db_engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
     # Create a new sessionmaker bound to the engine
-    async_session = sessionmaker(db_engine, class_=AsyncSession, expire_on_commit=False)
+    session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
+        db_engine, class_=AsyncSession, expire_on_commit=False
+    )
 
     # Create a new session for each test
-    async with async_session() as session:
+    async with session_factory() as session:
         yield session
         # Roll back any changes made during the test
         await session.rollback()
@@ -79,9 +82,9 @@ async def db(db_engine) -> AsyncGenerator[AsyncSession, None]:
 
 # Fixture to override the dependency in FastAPI app
 @pytest_asyncio.fixture(scope="function")
-async def app(db) -> FastAPI:
+async def app(db: AsyncSession) -> FastAPI:
     # Override the get_db dependency to use our test database
-    async def get_test_db():
+    async def get_test_db() -> AsyncGenerator[AsyncSession, None]:
         try:
             yield db
         finally:
@@ -95,7 +98,7 @@ async def app(db) -> FastAPI:
 
 # Fixture to provide a test client
 @pytest_asyncio.fixture(scope="function")
-async def client(app) -> AsyncGenerator[AsyncClient, None]:
+async def client(app: FastAPI) -> AsyncGenerator[AsyncClient, None]:
     # Use httpx's AsyncClient for testing the API
     from httpx import ASGITransport
 
@@ -109,7 +112,7 @@ async def client(app) -> AsyncGenerator[AsyncClient, None]:
 
 # Fixture for a superuser token
 @pytest_asyncio.fixture(scope="function")
-async def superuser_token_headers(client) -> Dict[str, str]:
+async def superuser_token_headers(client: AsyncClient) -> Dict[str, str]:
     login_data = {
         "username": settings.FIRST_SUPERUSER_EMAIL,
         "password": settings.FIRST_SUPERUSER_PASSWORD,
@@ -125,7 +128,7 @@ async def superuser_token_headers(client) -> Dict[str, str]:
 
 # Fixture for a regular user token
 @pytest_asyncio.fixture(scope="function")
-async def normal_user_token_headers(client, db) -> Dict[str, str]:
+async def normal_user_token_headers(client: AsyncClient, db: AsyncSession) -> Dict[str, str]:
     # Import user creation functions
     from app.crud.user_crud import user_crud
     from app.schemas.user_schema import IUserCreate

@@ -166,7 +166,10 @@ async def delete_permission(
         # if is_in_use:
         #     raise HTTPException(
         #         status_code=status.HTTP_409_CONFLICT,
-        #         detail=f"Permission '{permission.name}' is currently in use by one or more roles and cannot be deleted.",
+        #         detail=(
+        #             f"Permission '{permission.name}' is currently in use by one or more roles "
+        #             "and cannot be deleted."
+        #         ),
         #     )
 
         deleted_permission = await crud.permission.remove(id=permission.id)

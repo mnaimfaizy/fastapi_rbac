@@ -8,6 +8,8 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field  # Added ConfigDict 
 from app.models.user_model import User, UserBase
 from app.utils.partial import optional
 
+# Removed unused SQLModel import
+
 
 # Properties to receive via API on creation
 class IUserCreate(UserBase):
@@ -54,9 +56,9 @@ class IUserRead(UserBase):
     roles: list[dict[str, Any]]  # Change to accept role objects instead of strings
 
     # This usage is standard for Pydantic v2/SQLModel
-    model_config = ConfigDict(
-        from_attributes=True,
-        json_schema_extra={
+    model_config = {  # Changed from SQLModel.Config(...) to a dictionary
+        "from_attributes": True,
+        "json_schema_extra": {
             "example": {
                 "id": "a3a3a3a3-a3a3-a3a3-a3a3-a3a3a3a3a3a3",
                 "first_name": "John",
@@ -75,7 +77,7 @@ class IUserRead(UserBase):
                 "roles": [{"id": "uuid-here", "name": "admin"}, {"id": "uuid-here", "name": "user"}],
             }
         },
-    )
+    }
 
 
 @optional()

@@ -1,14 +1,15 @@
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel.ext.asyncio.session import AsyncSession  # Changed import
 
 from app.core.security import verify_password
 from app.crud.user_crud import user_crud
 from app.schemas.user_schema import IUserCreate, IUserUpdate
-from app.tests.utils import random_email, random_lower_string
+
+from .utils import random_email, random_lower_string
 
 
 @pytest.mark.asyncio
-async def test_create_user(db: AsyncSession):
+async def test_create_user(db: AsyncSession) -> None:  # Added return type
     """Test creating a user through CRUD operations"""
     # Create user data
     email = random_email()
@@ -34,12 +35,13 @@ async def test_create_user(db: AsyncSession):
     assert user.is_active  # Default value should be True
     assert not user.is_superuser  # Default value should be False
     assert hasattr(user, "password")
+    assert user.password is not None  # Added assertion
     assert user.password != password  # Password should be hashed
     assert verify_password(password, user.password)  # Verify password hashing worked
 
 
 @pytest.mark.asyncio
-async def test_get_user(db: AsyncSession):
+async def test_get_user(db: AsyncSession) -> None:  # Added return type
     """Test retrieving a user by ID"""
     # Create a user
     email = random_email()
@@ -61,7 +63,7 @@ async def test_get_user(db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_get_user_by_email(db: AsyncSession):
+async def test_get_user_by_email(db: AsyncSession) -> None:  # Added return type
     """Test retrieving a user by email"""
     # Create a user
     email = random_email()
@@ -83,7 +85,7 @@ async def test_get_user_by_email(db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_update_user(db: AsyncSession):
+async def test_update_user(db: AsyncSession) -> None:  # Added return type
     """Test updating a user"""
     # Create a user
     email = random_email()
@@ -116,7 +118,7 @@ async def test_update_user(db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_update_user_password(db: AsyncSession):
+async def test_update_user_password(db: AsyncSession) -> None:  # Added return type
     """Test updating a user's password"""
     # Create a user
     email = random_email()
@@ -139,12 +141,14 @@ async def test_update_user_password(db: AsyncSession):
     # Check that the password was updated correctly
     assert updated_user.id == user.id
     assert updated_user.email == user.email  # Email should remain unchanged
+    assert updated_user.password is not None  # Added assertion
     assert verify_password(new_password, updated_user.password)
+    assert user.password is not None  # Added assertion
     assert not verify_password(password, updated_user.password)  # Old password should not work
 
 
 @pytest.mark.asyncio
-async def test_authenticate_user(db: AsyncSession):
+async def test_authenticate_user(db: AsyncSession) -> None:  # Added return type
     """Test user authentication"""
     # Create a user
     email = random_email()
@@ -173,7 +177,7 @@ async def test_authenticate_user(db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_get_multi_users(db: AsyncSession):
+async def test_get_multi_users(db: AsyncSession) -> None:  # Added return type
     """Test retrieving multiple users with pagination"""
     # Create several users
     user_count = 10
@@ -198,7 +202,7 @@ async def test_get_multi_users(db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_delete_user(db: AsyncSession):
+async def test_delete_user(db: AsyncSession) -> None:  # Added return type
     """Test deleting a user"""
     # Create a user
     email = random_email()

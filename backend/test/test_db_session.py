@@ -1,3 +1,5 @@
+from typing import AsyncIterator, TypeVar
+
 import pytest
 from redis.asyncio import Redis
 from sqlmodel import select
@@ -6,9 +8,11 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.db.session import get_async_session, get_redis_client
 from app.models.user_model import User  # Import a model to test session
 
+_T = TypeVar("_T")
+
 
 @pytest.mark.asyncio
-async def test_get_async_session_yields_session():
+async def test_get_async_session_yields_session() -> None:
     """
     Test that get_async_session yields an AsyncSession instance.
     """
@@ -23,7 +27,7 @@ async def test_get_async_session_yields_session():
 
 
 @pytest.mark.asyncio
-async def test_async_session_usable():
+async def test_async_session_usable() -> None:
     """
     Test that the yielded session can execute queries using session.exec().
     """
@@ -39,7 +43,7 @@ async def test_async_session_usable():
 
 
 @pytest.mark.asyncio
-async def test_get_redis_client_yields_client():
+async def test_get_redis_client_yields_client() -> None:
     """
     Test that get_redis_client yields a Redis client instance.
     """
@@ -54,7 +58,7 @@ async def test_get_redis_client_yields_client():
 
 
 @pytest.mark.asyncio
-async def test_redis_client_usable():
+async def test_redis_client_usable() -> None:
     """
     Test that the yielded Redis client can connect and ping the server.
     """
@@ -65,5 +69,5 @@ async def test_redis_client_usable():
 
 
 # Helper to get the next item from an async generator
-async def anext(iterator):
+async def anext(iterator: AsyncIterator[_T]) -> _T:
     return await iterator.__anext__()

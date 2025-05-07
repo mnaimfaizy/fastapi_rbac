@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from pydantic import EmailStr
 from sqlmodel import Column, Field, Relationship, SQLModel, String
@@ -8,9 +8,9 @@ from app.models.base_uuid_model import BaseUUIDModel
 from app.models.user_role_model import UserRole
 
 if TYPE_CHECKING:
-    from app.models.role_model import Role
-    from app.models.permission_model import Permission
     from app.models.permission_group_model import PermissionGroup
+    from app.models.permission_model import Permission
+    from app.models.role_model import Role
 
 
 class UserBase(SQLModel):
@@ -23,7 +23,7 @@ class UserBase(SQLModel):
     needs_to_change_password: bool = True
     expiry_date: datetime | None
     contact_phone: str | None = None
-    last_changed_password_date: datetime | None
+    last_changed_password_date: datetime | None = None
     number_of_failed_attempts: int | None
     is_locked: bool = False
     locked_until: datetime | None = None
@@ -71,7 +71,7 @@ class User(BaseUUIDModel, UserBase, table=True):
         """Get list of role names for serialization"""
         return [role.name for role in self.roles] if self.roles else []
 
-    def model_dump(self, *args, **kwargs):
+    def model_dump(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
         """Override model_dump to customize role serialization"""
         data = super().model_dump(*args, **kwargs)
         # Always serialize roles as objects with id and name

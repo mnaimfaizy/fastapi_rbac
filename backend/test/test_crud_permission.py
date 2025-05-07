@@ -5,11 +5,12 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.crud.permission_crud import permission_crud
 from app.schemas.permission_schema import IPermissionCreate, IPermissionUpdate
-from app.tests.utils import random_lower_string
+
+from .utils import random_lower_string
 
 
 @pytest.mark.asyncio
-async def test_create_permission(db: AsyncSession):
+async def test_create_permission(db: AsyncSession) -> None:
     """Test creating a permission through CRUD operations"""
     # Create permission data
     name = f"test-permission-{random_lower_string(8)}"
@@ -28,7 +29,7 @@ async def test_create_permission(db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_get_permission(db: AsyncSession):
+async def test_get_permission(db: AsyncSession) -> None:
     """Test retrieving a permission by ID"""
     # Create a permission
     name = f"test-permission-{random_lower_string(8)}"
@@ -47,7 +48,7 @@ async def test_get_permission(db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_get_permission_by_name(db: AsyncSession):
+async def test_get_permission_by_name(db: AsyncSession) -> None:
     """Test retrieving a permission by name"""
     # Create a permission
     name = f"test-permission-{random_lower_string(8)}"
@@ -57,7 +58,7 @@ async def test_get_permission_by_name(db: AsyncSession):
     )
     permission = await permission_crud.create(obj_in=permission_in, db_session=db)
     # Get the permission by name
-    stored_permission = await permission_crud.get_group_by_name(name=name, db_session=db)
+    stored_permission = await permission_crud.get_permission_by_name(name=name, db_session=db)
     # Check that the retrieved permission matches
     assert stored_permission
     assert stored_permission.id == permission.id
@@ -66,7 +67,7 @@ async def test_get_permission_by_name(db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_update_permission(db: AsyncSession):
+async def test_update_permission(db: AsyncSession) -> None:
     """Test updating a permission"""
     # Create a permission
     name = f"test-permission-{random_lower_string(8)}"
@@ -88,7 +89,7 @@ async def test_update_permission(db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_update_permission_name(db: AsyncSession):
+async def test_update_permission_name(db: AsyncSession) -> None:
     """Test updating a permission's name"""
     # Create a permission
     name = f"test-permission-{random_lower_string(8)}"
@@ -108,13 +109,13 @@ async def test_update_permission_name(db: AsyncSession):
     assert updated_permission.name == new_name
     assert updated_permission.description == permission.description
     # Verify the update by getting the permission with the new name
-    stored_permission = await permission_crud.get_group_by_name(name=new_name, db_session=db)
+    stored_permission = await permission_crud.get_permission_by_name(name=new_name, db_session=db)
     assert stored_permission
     assert stored_permission.id == permission.id
 
 
 @pytest.mark.asyncio
-async def test_get_multi_permissions(db: AsyncSession):
+async def test_get_multi_permissions(db: AsyncSession) -> None:
     """Test retrieving multiple permissions with pagination"""
     # Create several permissions
     permission_count = 10
@@ -137,7 +138,7 @@ async def test_get_multi_permissions(db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_delete_permission(db: AsyncSession):
+async def test_delete_permission(db: AsyncSession) -> None:
     """Test deleting a permission"""
     # Create a permission
     name = f"test-permission-{random_lower_string(8)}"

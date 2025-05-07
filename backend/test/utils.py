@@ -19,7 +19,11 @@ def random_email() -> str:
 
 def random_uuid_str() -> str:
     """Generate a random UUID string format."""
-    return f"{random_lower_string(8)}-{random_lower_string(4)}-{random_lower_string(4)}-{random_lower_string(4)}-{random_lower_string(12)}"
+    return (
+        f"{random_lower_string(8)}-{random_lower_string(4)}-"
+        f"{random_lower_string(4)}-{random_lower_string(4)}-"
+        f"{random_lower_string(12)}"
+    )
 
 
 def get_superuser_token_headers(client: TestClient) -> Dict[str, str]:

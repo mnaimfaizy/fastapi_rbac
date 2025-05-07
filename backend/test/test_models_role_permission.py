@@ -8,11 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.permission_model import Permission
 from app.models.role_model import Role
 from app.models.role_permission_model import RolePermission
-from app.tests.utils import random_lower_string
+
+from .utils import random_lower_string
 
 
 @pytest.mark.asyncio
-async def test_create_role(db: AsyncSession):
+async def test_create_role(db: AsyncSession) -> None:
     """Test creating a role in the database"""
     # Create role data
     name = f"test-role-{random_lower_string(8)}"
@@ -39,7 +40,7 @@ async def test_create_role(db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_create_permission(db: AsyncSession):
+async def test_create_permission(db: AsyncSession) -> None:
     """Test creating a permission in the database"""
     # Create permission data
     name = f"test-permission-{random_lower_string(8)}"
@@ -66,7 +67,7 @@ async def test_create_permission(db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_role_with_permissions(db: AsyncSession):
+async def test_role_with_permissions(db: AsyncSession) -> None:
     """Test assigning permissions to a role"""
     # Create role
     role_name = f"test-role-{random_lower_string(8)}"
@@ -108,7 +109,7 @@ async def test_role_with_permissions(db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_role_unique_name_constraint(db: AsyncSession):
+async def test_role_unique_name_constraint(db: AsyncSession) -> None:
     """Test that roles must have unique names"""
     # Create first role
     name = f"unique-role-{random_lower_string(8)}"
@@ -129,7 +130,7 @@ async def test_role_unique_name_constraint(db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_permission_unique_name_constraint(db: AsyncSession):
+async def test_permission_unique_name_constraint(db: AsyncSession) -> None:
     """Test that permissions must have unique names"""
     # Create first permission
     name = f"unique-permission-{random_lower_string(8)}"
@@ -150,7 +151,7 @@ async def test_permission_unique_name_constraint(db: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_role_update(db: AsyncSession):
+async def test_role_update(db: AsyncSession) -> None:
     """Test updating role information"""
     # Create role
     name = f"update-role-{random_lower_string(8)}"
