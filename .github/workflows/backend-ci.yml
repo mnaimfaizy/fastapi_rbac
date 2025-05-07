@@ -121,6 +121,7 @@ jobs:
       - name: Run migrations
         run: |
           cd backend
+          export PYTHONPATH=.
           alembic upgrade head
 
       - name: Test with pytest and coverage
