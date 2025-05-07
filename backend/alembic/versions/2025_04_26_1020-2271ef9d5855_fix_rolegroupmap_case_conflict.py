@@ -22,6 +22,11 @@ depends_on: Union[str, Sequence[str], None] = None
 
 # Function to get appropriate UUID type based on dialect
 def get_uuid_type():
+    dialect = op.get_bind().dialect.name
+    if dialect == "postgresql":
+        from sqlalchemy.dialects import postgresql
+
+        return postgresql.UUID(as_uuid=True)
     # For SQLite (used in development), we'll use String to store UUIDs
     return sa.String(36)
 
@@ -35,6 +40,7 @@ def upgrade() -> None:
     # Get a connection to check if the table exists
     conn = op.get_bind()
     inspector = reflection.Inspector.from_engine(conn)
+    dialect = conn.dialect.name
 
     # Check if either table exists (case-insensitive check)
     tables = [t.lower() for t in inspector.get_table_names()]
@@ -47,28 +53,25 @@ def upgrade() -> None:
 
         # Add any missing columns
         if "id" not in column_names:
+            server_default_text = (
+                sa.text("gen_random_uuid()") if dialect == "postgresql" else sa.text("(hex(randomblob(16)))")
+            )
             op.add_column(
                 "rolegroupmap",
                 sa.Column(
                     "id",
                     get_uuid_type(),
                     nullable=False,
-                    server_default=sa.text("(hex(randomblob(16)))"),
+                    server_default=server_default_text,
                 ),
             )
-            op.create_index(
-                op.f("ix_rolegroupmap_id"), "rolegroupmap", ["id"], unique=False
-            )
+            op.create_index(op.f("ix_rolegroupmap_id"), "rolegroupmap", ["id"], unique=False)
 
         if "updated_at" not in column_names:
-            op.add_column(
-                "rolegroupmap", sa.Column("updated_at", sa.DateTime(), nullable=True)
-            )
+            op.add_column("rolegroupmap", sa.Column("updated_at", sa.DateTime(), nullable=True))
 
         if "created_at" not in column_names:
-            op.add_column(
-                "rolegroupmap", sa.Column("created_at", sa.DateTime(), nullable=True)
-            )
+            op.add_column("rolegroupmap", sa.Column("created_at", sa.DateTime(), nullable=True))
 
         # Update primary key if needed
         # This is tricky to do in SQLite, so we'll skip for now if not needed
