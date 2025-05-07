@@ -9,8 +9,7 @@ Create Date: 2025-04-27 20:30:00.000000
 from typing import Sequence, Union
 
 import sqlalchemy as sa
-import sqlmodel
-from sqlalchemy.dialects.postgresql import UUID as PostgresUUID
+from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
@@ -21,10 +20,19 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+# Function to get appropriate UUID type based on dialect
+def get_uuid_type():
+    dialect = op.get_context().dialect.name
+    if dialect == "postgresql":
+        return postgresql.UUID(as_uuid=True)
+    else:  # Default for SQLite or other non-PostgreSQL DBs
+        return sa.String(36)
+
+
 def upgrade() -> None:
     # For SQLite, we need to use batch operations for adding foreign key constraints
     with op.batch_alter_table("RoleGroup") as batch_op:
-        batch_op.add_column(sa.Column("parent_id", sa.String(36), nullable=True))
+        batch_op.add_column(sa.Column("parent_id", get_uuid_type(), nullable=True))
         batch_op.create_foreign_key(
             constraint_name="fk_rolegroup_parent_id",
             referent_table="RoleGroup",
