@@ -9,7 +9,6 @@ Create Date: 2025-04-27 15:23:00.000000
 from typing import Sequence, Union
 
 import sqlalchemy as sa
-import sqlmodel
 
 from alembic import op
 
@@ -24,7 +23,9 @@ def upgrade() -> None:
     op.create_table(
         "AuditLog",
         sa.Column("id", sa.UUID(), primary_key=True),
-        sa.Column("actor_id", sa.UUID(), sa.ForeignKey("users.id"), nullable=False),
+        sa.Column(
+            "actor_id", sa.UUID(), sa.ForeignKey("user.id"), nullable=False
+        ),  # Changed "users.id" to "user.id"
         sa.Column("action", sa.String(), nullable=False),
         sa.Column("resource_type", sa.String(), nullable=False),
         sa.Column("resource_id", sa.String(), nullable=False),
