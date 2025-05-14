@@ -90,3 +90,16 @@ ignore_errors = true
 [[tool.mypy.overrides]]
 module = 'app.db.*'
 ignore_errors = true
+
+[tool.poetry]
+name = "fastapi-rbac-backend"
+version = "0.1.0"
+description = "FastAPI RBAC backend for user management and authentication"
+authors = ["Naim Faizy <mnaim.faizy@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+# Add other dependencies here
+
+[tool.poetry.dev-dependencies]
+# Add development dependencies here
