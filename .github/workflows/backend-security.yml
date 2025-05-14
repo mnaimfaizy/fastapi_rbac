@@ -38,7 +38,7 @@ jobs:
       - name: Scan dependencies with Safety
         run: |
           cd backend
-          safety check -r requirements.txt
+          safety scan -r requirements.txt
 
       - name: Scan code with Bandit
         run: |
