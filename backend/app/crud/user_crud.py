@@ -69,13 +69,17 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
             db_obj.created_by_id = created_by_id
 
         try:
+            # First, add and commit the user to get an ID
             db_session.add(db_obj)
+            await db_session.flush()  # Ensure data is flushed to DB before commit
+            await db_session.commit()
+            await db_session.refresh(db_obj)
 
-            # Handle roles if role_ids were provided in IUserCreate
+            # After user is committed, handle roles if role_ids were provided
             if role_ids:
                 # Fetch Role objects based on the provided IDs
-                result = await db_session.execute(select(Role).where(Role.id.in_(role_ids)))
-                roles = result.scalars().all()
+                result = await db_session.exec(select(Role).where(Role.id.in_(role_ids)))
+                roles = result.all()
                 if len(roles) != len(role_ids):
                     # Handle error: some role IDs were not found
                     await db_session.rollback()
@@ -83,9 +87,11 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
                         status_code=404,
                         detail=f"One or more roles not found for IDs: {role_ids}",
                     )
-                db_obj.roles = roles  # Assign the fetched roles
 
-            await db_session.commit()
+                # Now that user has been committed, we can safely set relationships
+                db_obj.roles = roles
+                await db_session.commit()
+                await db_session.refresh(db_obj)
         except exc.IntegrityError as e:
             await db_session.rollback()
             # Check if it's a unique constraint violation (e.g., email)
@@ -110,8 +116,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
             # Log the exception e
             raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
 
-        await db_session.refresh(db_obj)
-        # Eagerly load roles after creation/refresh if needed for the return value
+        # Make sure roles are loaded for the return value
         await db_session.refresh(db_obj, attribute_names=["roles"])
         return db_obj
 
@@ -237,6 +242,10 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         # If the account was locked but the lock period has expired, unlock it
         if user.is_locked and user.locked_until and user.locked_until <= datetime.utcnow():
             await self.unlock_account(user=user, db_session=db_session)
+
+        # Check if the account is inactive
+        if not user.is_active:
+            return None
 
         # Verify password
         if not verify_password(password, user.password):

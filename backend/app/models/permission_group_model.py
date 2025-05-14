@@ -35,12 +35,12 @@ class PermissionGroup(BaseUUIDModel, PermissionGroupBase, table=True):
         )
     )
 
-    # Update the relationship to match the database schema
+    # Fixed the relationship - removed foreign() as it was causing the relationship loading issue
     permissions: List["Permission"] = Relationship(
         back_populates="group",
         sa_relationship_kwargs={
             "lazy": "selectin",
-            "primaryjoin": "foreign(Permission.group_id) == PermissionGroup.id",
+            "primaryjoin": "Permission.group_id == PermissionGroup.id",
         },
     )
 

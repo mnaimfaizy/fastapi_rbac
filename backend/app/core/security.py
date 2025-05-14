@@ -1,9 +1,10 @@
 import base64
 from datetime import datetime, timedelta
-from typing import Any, Union
+from typing import Any, Literal, Union
 
 import bcrypt
 from cryptography.fernet import Fernet
+from fastapi import HTTPException, status
 from jose import jwt
 
 from app.core.config import settings
@@ -49,12 +50,13 @@ def create_access_token(
         "iat": datetime.utcnow(),
         "iss": settings.TOKEN_ISSUER,
         "aud": settings.TOKEN_AUDIENCE,
+        "type": "access",  # Added token type
     }
 
     if email is not None:
         to_encode["email"] = str(email)
 
-    encoded_jwt = jwt.encode(to_encode, settings.ENCRYPT_KEY, algorithm=JWT_ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=JWT_ALGORITHM)
     return encoded_jwt
 
 
@@ -120,23 +122,60 @@ def create_verification_token(subject: Union[str, Any], expires_delta: timedelta
     return encoded_jwt
 
 
-def decode_token(token: str, token_type: str = "access") -> dict[str, Any]:
-    if token_type == "refresh":
-        key = settings.JWT_REFRESH_SECRET_KEY
-    elif token_type == "reset":
-        key = settings.JWT_RESET_SECRET_KEY
-    elif token_type == "verification":  # Add verification token type
-        key = settings.JWT_VERIFICATION_SECRET_KEY
-    else:
-        key = settings.ENCRYPT_KEY
+def decode_token(
+    token: str, *, token_type: Literal["access", "refresh", "reset", "verification"] = "access"
+) -> dict[str, Any]:
+    """
+    Decode and validate a JWT token.
 
-    return jwt.decode(
-        token=token,
-        key=key,
-        algorithms=[JWT_ALGORITHM],
-        audience=settings.TOKEN_AUDIENCE,
-        issuer=settings.TOKEN_ISSUER,
-    )
+    Args:
+        token: The JWT token to decode
+        token_type: The type of token to validate (access, refresh, reset, verification)
+
+    Returns:
+        The decoded token payload
+
+    Raises:
+        HTTPException: If token is invalid or expired
+    """
+    try:
+        if token_type == "access":
+            key = settings.SECRET_KEY
+        elif token_type == "refresh":
+            key = settings.JWT_REFRESH_SECRET_KEY
+        elif token_type == "reset":
+            key = settings.JWT_RESET_SECRET_KEY
+        else:  # verification
+            key = settings.JWT_VERIFICATION_SECRET_KEY
+
+        # First verify the token structure before decoding
+        if not token or "." not in token:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token format")
+
+        payload = jwt.decode(
+            token,
+            key,
+            algorithms=[settings.ALGORITHM],
+            audience=settings.TOKEN_AUDIENCE,
+            issuer=settings.TOKEN_ISSUER,
+        )
+
+        if payload.get("type") != token_type:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid token type. Expected {token_type} token.",
+            )
+
+        return payload
+
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token has expired")
+    except jwt.JWTClaimsError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token claims")
+    except jwt.JWTError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or malformed token")
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Could not validate token")
 
 
 def verify_password(plain_password: str | bytes, hashed_password: str | bytes) -> bool:

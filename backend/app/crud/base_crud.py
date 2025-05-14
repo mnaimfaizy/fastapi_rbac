@@ -180,7 +180,11 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         created_by_id: UUID | str | None = None,
         db_session: AsyncSession | None = None,
     ) -> ModelType:
-        db_session = db_session or self.db.session
+        if not db_session:
+            # This should ideally not happen if db_session is always provided.
+            # If it does, it means self.db.session (middleware-managed) would have been used.
+            raise ValueError("db_session must be provided to CRUD create method")
+
         db_obj = self.model.model_validate(obj_in)
 
         if created_by_id:
@@ -188,9 +192,10 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
         try:
             db_session.add(db_obj)
+            await db_session.flush()  # Ensure data is flushed before commit
             await db_session.commit()
         except exc.IntegrityError:
-            db_session.rollback()
+            await db_session.rollback()  # Corrected to await
             raise HTTPException(
                 status_code=409,
                 detail="Resource already exists",

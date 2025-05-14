@@ -1,8 +1,10 @@
 import pytest
+from fastapi import HTTPException
 from sqlmodel.ext.asyncio.session import AsyncSession  # Changed import
 
 from app.core.security import verify_password
 from app.crud.user_crud import user_crud
+from app.models.role_model import Role
 from app.schemas.user_schema import IUserCreate, IUserUpdate
 
 from .utils import random_email, random_lower_string
@@ -222,3 +224,81 @@ async def test_delete_user(db: AsyncSession) -> None:  # Added return type
     # Check that we can't retrieve the deleted user
     stored_user = await user_crud.get(id=user.id, db_session=db)
     assert stored_user is None
+
+
+@pytest.mark.asyncio
+async def test_create_user_with_duplicate_email(db: AsyncSession) -> None:
+    """Test creating a user with a duplicate email"""
+    email = random_email()
+    password = random_lower_string()
+    user_in = IUserCreate(email=email, password=password)
+    await user_crud.create(obj_in=user_in, db_session=db)
+
+    with pytest.raises(HTTPException, match="User with this email already exists"):
+        await user_crud.create(obj_in=user_in, db_session=db)
+
+
+@pytest.mark.asyncio
+async def test_password_history_enforcement(db: AsyncSession) -> None:
+    """Test that a user cannot reuse any of their last 5 passwords"""
+    email = random_email()
+    password = random_lower_string()
+    user_in = IUserCreate(email=email, password=password)
+    user = await user_crud.create(obj_in=user_in, db_session=db)
+
+    for _ in range(5):
+        new_password = random_lower_string()
+        await user_crud.update_password(user=user, new_password=new_password, db_session=db)
+
+    with pytest.raises(ValueError, match="Cannot reuse any of your last 5 passwords"):
+        await user_crud.update_password(user=user, new_password=password, db_session=db)
+
+
+@pytest.mark.asyncio
+async def test_inactive_user_behavior(db: AsyncSession) -> None:
+    """Test that inactive users cannot authenticate"""
+    email = random_email()
+    password = random_lower_string()
+    user_in = IUserCreate(email=email, password=password)
+    user = await user_crud.create(obj_in=user_in, db_session=db)
+
+    user.is_active = False
+    await db.commit()
+    await db.refresh(user)
+
+    authenticated_user = await user_crud.authenticate(email=email, password=password, db_session=db)
+    assert authenticated_user is None
+
+
+@pytest.mark.asyncio
+async def test_role_assignment_on_user_creation(db: AsyncSession) -> None:
+    """Test assigning roles to a user during creation"""
+    email = random_email()
+    password = random_lower_string()
+    role = Role(name="Test Role")
+    db.add(role)
+    await db.commit()
+    await db.refresh(role)
+
+    user_in = IUserCreate(email=email, password=password, role_id=[role.id])
+    user = await user_crud.create(obj_in=user_in, db_session=db)
+
+    assert len(user.roles) == 1
+    assert user.roles[0].id == role.id
+
+
+@pytest.mark.asyncio
+async def test_email_verification_workflow(db: AsyncSession) -> None:
+    """Test email verification workflow"""
+    email = random_email()
+    password = random_lower_string()
+    user_in = IUserCreate(email=email, password=password)
+    user = await user_crud.create(obj_in=user_in, db_session=db)
+
+    assert not user.verified
+
+    user.verified = True
+    await db.commit()
+    await db.refresh(user)
+
+    assert user.verified

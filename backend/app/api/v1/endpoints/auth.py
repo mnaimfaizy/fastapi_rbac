@@ -696,7 +696,7 @@ async def login_access_token(
             details={"email": form_data.username, "reason": "user_not_found"},
         )
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"field_name": "username", "message": "Incorrect email or password"},
         )
 
@@ -810,7 +810,7 @@ async def login_access_token(
                 message = f"{message}. {attempts_left} attempts remaining before " "account lockout."
 
             raise HTTPException(
-                status_code=400,
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail={"field_name": "username", "message": message},
             )
 

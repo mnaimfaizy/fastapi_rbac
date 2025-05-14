@@ -1,9 +1,9 @@
 from uuid import UUID
 
 import pytest
-from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
 
 from app.models.role_model import Role
 from app.models.user_model import User
@@ -70,16 +70,14 @@ async def test_user_with_roles(db: AsyncSession) -> None:
     user_role2 = UserRole(user_id=user.id, role_id=role2.id)
     db.add_all([user_role1, user_role2])
     await db.commit()
+    await db.refresh(user_role1)
+    await db.refresh(user_role2)
 
-    # Query to check if roles were assigned correctly
-    query = text(
-        """
-        SELECT r.name FROM Role r
-        JOIN UserRole ur ON r.id = ur.role_id
-        WHERE ur.user_id = :user_id
-    """
-    )
-    result = await db.execute(query, {"user_id": str(user.id)})
+    # Check that user has roles
+    stmt = select(Role.name).join(UserRole).where(UserRole.user_id == user.id)
+    result = await db.execute(stmt)  # Execute the query
+    # Fetch all results
+    result = result.fetchall()  # Fetch all results
     roles = [row[0] for row in result]
 
     # Check that the user has both roles

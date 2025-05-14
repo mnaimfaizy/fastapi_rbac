@@ -14,3 +14,8 @@ public/
 celerybeat-schedule
 docker-compose.override.yml
 logfile.log
+memory_test_db 
+dev.db-wal
+dev.db-shm
+*.bak
+*.log

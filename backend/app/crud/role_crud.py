@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.crud.base_crud import CRUDBase
+from app.models.permission_model import Permission  # Add this import
 from app.models.role_model import Role
 from app.models.role_permission_model import RolePermission
 from app.models.user_model import User
@@ -157,7 +158,9 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
         system_roles = ["admin", "system", "superuser"]
         return role.name.lower() in system_roles
 
-    async def invalidate_user_permission_caches(self, *, role_id: UUID, redis_client) -> None:
+    async def invalidate_user_permission_caches(
+        self, *, role_id: UUID, redis_client, db_session: AsyncSession | None = None
+    ) -> None:
         """
         Invalidate permission caches for all users that have this role assigned.
         This is called after role permissions are modified to ensure all users get updated permissions.
@@ -165,13 +168,21 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
         Args:
             role_id: The UUID of the role whose permissions were changed
             redis_client: Redis client for cache operations
+            db_session: Optional AsyncSession instance for database operations
         """
         try:
-            # Get the role with its users
-            db_session = super().get_db().session
+            # Use the provided db_session or get a new one
+            db_session = db_session or super().get_db().session
+            # Get the role with its users - make sure to request the users relationship
             role = await self.get(id=role_id, db_session=db_session)
 
-            if not role or not hasattr(role, "users") or not role.users:
+            # Ensure the users relationship is loaded
+            if role:
+                await db_session.refresh(role, ["users"])
+
+            if not role or not role.users:
+                # Just invalidate the wildcard pattern if no specific users
+                await redis_client.delete("user_permissions:*")
                 return
 
             # Invalidate user permission caches for all users with this role
@@ -192,6 +203,29 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
             import logging
 
             logging.error(f"Error invalidating user permission caches: {str(e)}")
+
+    async def get_permissions(
+        self, *, role_id: UUID, db_session: AsyncSession | None = None
+    ) -> List[Permission]:
+        """Get all permissions assigned to a role.
+
+        Args:
+            role_id: The UUID of the role
+            db_session: Optional AsyncSession instance for database operations
+
+        Returns:
+            List of Permission objects assigned to the role
+        """
+        db_session = db_session or super().get_db().session
+        role = await self.get(id=role_id, db_session=db_session)
+
+        if not role:
+            raise ResourceNotFoundException(Role, id=role_id)
+
+        # Make sure permissions are loaded
+        await db_session.refresh(role, ["permissions"])
+
+        return role.permissions
 
 
 role_crud = CRUDRole(Role)

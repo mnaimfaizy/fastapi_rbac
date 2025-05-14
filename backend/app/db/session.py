@@ -13,13 +13,23 @@ DB_POOL_SIZE = settings.DB_POOL_SIZE
 WEB_CONCURRENCY = settings.WEB_CONCURRENCY
 POOL_SIZE = max(DB_POOL_SIZE // WEB_CONCURRENCY, 5)
 
-engine = create_async_engine(
-    str(settings.ASYNC_DATABASE_URI),
-    echo=False,
-    poolclass=(NullPool if settings.MODE == ModeEnum.testing else AsyncAdaptedQueuePool),
-    pool_size=POOL_SIZE,
-    max_overflow=64,
-)
+# Create engine with different configurations based on mode
+if settings.MODE == ModeEnum.testing:
+    # For testing, use NullPool without pool sizing parameters
+    engine = create_async_engine(
+        str(settings.ASYNC_DATABASE_URI),
+        echo=False,
+        poolclass=NullPool,
+    )
+else:
+    # For development/production, use connection pooling
+    engine = create_async_engine(
+        str(settings.ASYNC_DATABASE_URI),
+        echo=False,
+        poolclass=AsyncAdaptedQueuePool,
+        pool_size=POOL_SIZE,
+        max_overflow=64,
+    )
 
 SessionLocal = sessionmaker(
     autocommit=False,
@@ -29,13 +39,25 @@ SessionLocal = sessionmaker(
     expire_on_commit=False,
 )
 
-engine_celery = create_async_engine(
-    str(settings.ASYNC_CELERY_BEAT_DATABASE_URI),
-    echo=False,
-    poolclass=(NullPool if settings.MODE == ModeEnum.testing else AsyncAdaptedQueuePool),
-    pool_size=POOL_SIZE,
-    max_overflow=64,
-)
+# Configure Celery database connection if needed
+# Use the main database URI as fallback if Celery-specific URI is not defined
+celery_db_uri = getattr(settings, "ASYNC_CELERY_DATABASE_URI", None) or settings.ASYNC_DATABASE_URI
+
+# Use separate engine to avoid conflicts with main connection pool
+if settings.MODE == ModeEnum.testing:
+    engine_celery = create_async_engine(
+        str(celery_db_uri),
+        echo=False,
+        poolclass=NullPool,
+    )
+else:
+    engine_celery = create_async_engine(
+        str(celery_db_uri),
+        echo=False,
+        poolclass=AsyncAdaptedQueuePool,
+        pool_size=POOL_SIZE,
+        max_overflow=64,
+    )
 
 SessionLocalCelery = sessionmaker(
     autocommit=False,

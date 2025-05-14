@@ -1,7 +1,7 @@
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from fastapi_pagination import Params
 from redis.asyncio import Redis
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -240,7 +240,10 @@ async def assign_permissions_to_role(
 @router.delete("/{role_id}/permissions")
 async def remove_permissions_from_role(
     role_id: UUID,
-    permissions: IRolePermissionUnassign,
+    permission_data: Optional[IRolePermissionUnassign] = None,
+    permission_ids: Optional[List[UUID]] = Query(
+        None, description="IDs of permissions to remove from the role"
+    ),
     current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin])),
     redis_client: Redis = Depends(get_redis_client),
     background_tasks: BackgroundTasks = BackgroundTasks(),
@@ -250,6 +253,10 @@ async def remove_permissions_from_role(
 
     Required roles:
     - admin
+
+    Can accept permission IDs either as:
+    1. Query parameters: /api/v1/role/{role_id}/permissions?permission_ids=uuid1&permission_ids=uuid2
+    2. JSON body: {"permission_ids": [uuid1, uuid2]}
     """
     # Check if it's a system role
     is_system_role = await crud.role.validate_system_role(role_id=role_id)
@@ -259,10 +266,20 @@ async def remove_permissions_from_role(
             detail="Cannot modify system role permissions",
         )
 
+    # Get permission IDs either from query parameters or request body
+    ids_to_remove = []
+
+    # If permission_data from request body has values, use those
+    if permission_data and permission_data.permission_ids:
+        ids_to_remove = permission_data.permission_ids
+    # Otherwise fall back to query parameters
+    elif permission_ids:
+        ids_to_remove = permission_ids
+
     try:
         role = await crud.role.remove_permissions(
             role_id=role_id,
-            permission_ids=permissions.permission_ids,
+            permission_ids=ids_to_remove,
             current_user=current_user,
         )
 

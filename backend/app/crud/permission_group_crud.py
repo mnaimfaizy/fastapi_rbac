@@ -9,7 +9,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.crud.base_crud import CRUDBase
 from app.models.permission_group_model import PermissionGroup
 from app.schemas.permission_group_schema import IPermissionGroupCreate, IPermissionGroupUpdate
-from app.schemas.response_schema import IPaginatedResponseBase
+from app.schemas.response_schema import IGetResponsePaginated
 
 
 class PermissionGroupData(TypedDict):
@@ -82,7 +82,7 @@ class CRUDPermissionGroup(CRUDBase[PermissionGroup, IPermissionGroupCreate, IPer
         query_filter: Any | None = None,
         db_session: AsyncSession | None = None,
         **kwargs: Any,
-    ) -> IPaginatedResponseBase[PermissionGroup]:
+    ) -> IGetResponsePaginated[PermissionGroup]:
         db_session = db_session or super().get_db().session
 
         # Start with the base query
@@ -106,3 +106,5 @@ class CRUDPermissionGroup(CRUDBase[PermissionGroup, IPermissionGroupCreate, IPer
 
 
 permission_group = CRUDPermissionGroup(PermissionGroup)
+# Add the alias with _crud suffix for consistency with other modules
+permission_group_crud = permission_group

@@ -1,0 +1,59 @@
+version: "3.8"
+
+services:
+  # PostgreSQL database for testing
+  postgres-test:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=test_db
+    ports:
+      - "5433:5432" # Use a different port to avoid conflicts with dev database
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis for testing
+  redis-test:
+    image: redis:7
+    ports:
+      - "6380:6379" # Use a different port to avoid conflicts with dev Redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Testing service
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+    environment:
+      - MODE=testing
+      - TEST_DB_TYPE=postgres # Use PostgreSQL for testing in Docker
+      - TEST_POSTGRES_USER=postgres
+      - TEST_POSTGRES_PASSWORD=postgres
+      - TEST_POSTGRES_HOST=postgres-test
+      - TEST_POSTGRES_PORT=5432
+      - TEST_POSTGRES_DB=test_db
+      - TEST_REDIS_HOST=redis-test
+      - TEST_REDIS_PORT=6379
+      - TEST_REDIS_USE_MOCK=false # Use actual Redis in Docker
+    volumes:
+      - .:/app
+    command: >
+      bash -c "
+        echo 'Waiting for dependencies...' &&
+        sleep 3 &&
+        echo 'Running tests...' &&
+        pytest -xvs
+      "

@@ -20,6 +20,8 @@ class PermissionBase(SQLModel):
 
 
 class Permission(BaseUUIDModel, PermissionBase, table=True):
+    __tablename__ = "Permission"
+
     created_by_id: UUID | None = Field(default=None, foreign_key="User.id")
     created_by: Optional["User"] = Relationship(
         back_populates="created_permissions",

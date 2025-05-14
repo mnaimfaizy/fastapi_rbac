@@ -2,9 +2,9 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Dict, List
 
 from pydantic import EmailStr
-from sqlmodel import Column, Field, Relationship, SQLModel, String
+from sqlmodel import Column, Field, Relationship, String
 
-from app.models.base_uuid_model import BaseUUIDModel
+from app.models.base_uuid_model import BaseUUIDModel, SQLModel
 from app.models.user_role_model import UserRole
 
 if TYPE_CHECKING:
@@ -32,6 +32,10 @@ class UserBase(SQLModel):
 
 
 class User(BaseUUIDModel, UserBase, table=True):
+    """User model for the application."""
+
+    __tablename__ = "User"
+
     first_name: str | None = Field(index=True)
     last_name: str | None = Field(index=True)
     password: str | None = Field(default=None)  # Store the hashed password

@@ -45,7 +45,7 @@ def test_access_token_generation() -> None:
     # Decode the token and verify its content
     decoded = jwt.decode(
         token,
-        settings.ENCRYPT_KEY,
+        settings.SECRET_KEY,  # Changed from settings.ENCRYPT_KEY
         algorithms=[settings.ALGORITHM],
         audience=settings.TOKEN_AUDIENCE,
         issuer=settings.TOKEN_ISSUER,
@@ -107,7 +107,7 @@ def test_token_expiration() -> None:
     with pytest.raises(jwt.ExpiredSignatureError):
         jwt.decode(
             token,
-            settings.ENCRYPT_KEY,
+            settings.SECRET_KEY,  # Changed from settings.ENCRYPT_KEY
             algorithms=[settings.ALGORITHM],
             audience=settings.TOKEN_AUDIENCE,
             issuer=settings.TOKEN_ISSUER,
