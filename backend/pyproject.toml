@@ -96,6 +96,9 @@ name = "fastapi-rbac-backend"
 version = "0.1.0"
 description = "FastAPI RBAC backend for user management and authentication"
 authors = ["Naim Faizy <mnaim.faizy@gmail.com>"]
+packages = [
+    { include = "app" }
+]
 
 [tool.poetry.dependencies]
 python = "^3.10"
