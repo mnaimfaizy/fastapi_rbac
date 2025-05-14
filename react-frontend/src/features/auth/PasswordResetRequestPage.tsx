@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
+import { Link } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import {
   requestPasswordReset,
@@ -18,7 +18,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "../../components/ui/card";
@@ -66,7 +65,7 @@ const PasswordResetRequestPage = () => {
     try {
       // Dispatch password reset request action
       await dispatch(requestPasswordReset(data.email)).unwrap();
-    } catch (_) {
+    } catch {
       // Error is handled by the auth slice
     }
   };

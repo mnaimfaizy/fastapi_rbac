@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -81,8 +81,9 @@ const ChangePasswordContent = () => {
           newPassword: data.newPassword,
         })
       ).unwrap();
-    } catch (_) {
+    } catch (error) {
       // Error is handled by the auth slice
+      console.error("Error changing password:", error);
     }
   };
 

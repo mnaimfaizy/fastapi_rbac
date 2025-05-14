@@ -1,6 +1,6 @@
 // Constants for token storage keys
-const ACCESS_TOKEN_KEY = "auth_access_token";
-const REFRESH_TOKEN_KEY = "auth_refresh_token";
+const REFRESH_TOKEN_KEY =
+  process.env.VITE_AUTH_REFRESH_TOKEN_NAME || "auth_refresh_token";
 
 /**
  * Securely stores the access token in memory (for security)

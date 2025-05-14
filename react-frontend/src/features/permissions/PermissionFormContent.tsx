@@ -18,7 +18,7 @@ export default function PermissionFormContent() {
         </p>
       </div>
       <div className="mt-6">
-        <PermissionForm id={id} isEdit={isEdit} />
+        <PermissionForm />
       </div>
     </div>
   );

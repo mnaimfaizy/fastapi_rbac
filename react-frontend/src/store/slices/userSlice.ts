@@ -139,15 +139,17 @@ const userSlice = createSlice({
         fetchUsers.fulfilled,
         (state, action: PayloadAction<PaginatedItems<User>>) => {
           state.loading = false;
-          // Ensure dates are properly formatted
+          // Ensure dates are properly formatted and handle nulls
           state.users = action.payload.items.map((user) => ({
             ...user,
-            created_at: user.created_at || null,
-            updated_at: user.updated_at || null,
-            expiry_date: user.expiry_date || null,
-            last_changed_password_date: user.last_changed_password_date || null,
-            locked_until: user.locked_until || null,
-          }));
+            created_at: user.created_at ? String(user.created_at) : null,
+            updated_at: user.updated_at ? String(user.updated_at) : null,
+            expiry_date: user.expiry_date ? String(user.expiry_date) : null,
+            last_changed_password_date: user.last_changed_password_date
+              ? String(user.last_changed_password_date)
+              : null,
+            locked_until: user.locked_until ? String(user.locked_until) : null,
+          })) as unknown as User[];
           state.pagination = {
             total: action.payload.total,
             page: action.payload.page,

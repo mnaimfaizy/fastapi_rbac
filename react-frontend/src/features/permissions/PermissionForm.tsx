@@ -28,15 +28,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft } from "lucide-react";
-import { RootState } from "../../store";
 import { PermissionGroup } from "../../models/permission";
 
 // Form validation schema
@@ -55,10 +48,10 @@ export default function PermissionForm() {
   const isEdit = !!id;
 
   const { currentPermission, isLoading: permissionLoading } = useAppSelector(
-    (state: RootState) => state.permission
+    (state) => state.permission
   );
   const { permissionGroups, isLoading: groupsLoading } = useAppSelector(
-    (state: RootState) => state.permissionGroup
+    (state) => state.permissionGroup
   );
 
   const form = useForm<FormValues>({

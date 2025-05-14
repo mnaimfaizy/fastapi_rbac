@@ -224,7 +224,7 @@ export const columns: ColumnDef<User>[] = [
       const date = row.getValue("updated_at");
       if (!date) return "-";
       try {
-        return formatDate(date);
+        return formatDate(String(date)); // Ensure date is a string
       } catch (error) {
         return "-";
       }

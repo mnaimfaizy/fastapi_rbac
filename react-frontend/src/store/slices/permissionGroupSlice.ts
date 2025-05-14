@@ -145,10 +145,10 @@ const permissionGroupSlice = createSlice({
       .addCase(fetchPermissionGroups.fulfilled, (state, action) => {
         state.isLoading = false;
         if (action.payload?.data) {
-          state.permissionGroups = action.payload.data.items || [];
+          state.permissionGroups = action.payload.data.data || [];
           state.totalItems = action.payload.data.total || 0;
           state.page = action.payload.data.page || 1;
-          state.pageSize = action.payload.data.size || 10;
+          state.pageSize = action.payload.data.limit || 10;
         }
       })
       .addCase(fetchPermissionGroups.rejected, (state, action) => {

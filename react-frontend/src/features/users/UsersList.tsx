@@ -102,7 +102,8 @@ const UsersList = () => {
       if (col.id === "actions") {
         return {
           ...col,
-          cell: ({ row }) => {
+          cell: ({ row }: { row: any }) => {
+            // Add explicit type for row
             const user = row.original;
             return (
               <DropdownMenu>

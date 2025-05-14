@@ -137,9 +137,10 @@ const permissionSlice = createSlice({
         state.isLoading = false;
         // Access data correctly based on PaginatedPermissionResponse type
         if (action.payload?.data) {
-          state.permissions = action.payload.data.items || [];
+          state.permissions = action.payload.data.data || [];
           state.totalItems = action.payload.data.total || 0;
           state.page = action.payload.data.page || 1;
+          state.pageSize = action.payload.data.limit || 10;
         }
       })
       .addCase(fetchPermissions.rejected, (state, action) => {
