@@ -29,7 +29,7 @@ if ($env:IMAGE_TAG) {
   } catch {
     $null
   }
-  
+
   if ($GitTag -and $LASTEXITCODE -eq 0) {
     $TAG = $GitTag.Trim() # Trim potential whitespace
     Write-Host "Using Git tag: $TAG" -ForegroundColor Cyan
