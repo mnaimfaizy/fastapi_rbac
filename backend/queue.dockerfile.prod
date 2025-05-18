@@ -78,7 +78,14 @@ RUN dos2unix -f ./scripts/*.sh && \
 COPY ./.docker/openssl.cnf /etc/ssl/openssl.cnf
 
 # Copy the rest of the application code
-COPY . .
+COPY app/ ./app/
+COPY alembic/ ./alembic/
+COPY alembic.ini ./alembic.ini
+COPY logging.ini ./logging.ini
+COPY scripts/ ./scripts/
+COPY init_data.py ./init_data.py
+COPY requirements.txt ./requirements.txt
+COPY certs/ ./certs/
 
 # Fix line endings for all shell scripts after copying all files
 RUN find /app -name "*.sh" -type f -exec dos2unix -f {} \; \
