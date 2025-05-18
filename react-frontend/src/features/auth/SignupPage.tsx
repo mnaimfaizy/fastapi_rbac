@@ -1,8 +1,8 @@
 import { Navigate, Link } from 'react-router-dom';
-import { GalleryVerticalEnd } from 'lucide-react'; // Assuming lucide-react is installed
+import { UserLock } from 'lucide-react';
 
 import { useAppSelector } from '../../store/hooks';
-import { SignupForm } from '../../components/auth/SignupForm'; // Adjusted path
+import { SignupForm } from '../../components/auth/SignupForm';
 
 export default function SignupPage() {
   const { isAuthenticated } = useAppSelector((state) => state.auth);
@@ -20,9 +20,9 @@ export default function SignupPage() {
           {' '}
           {/* Link to home/login */}
           <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <GalleryVerticalEnd className="size-4" />
+            <UserLock className="size-4" />
           </div>
-          Your App Name {/* TODO: Replace with actual app name/logo */}
+          FastApi RBAC
         </Link>
       </div>
       <div className="w-full max-w-sm">
