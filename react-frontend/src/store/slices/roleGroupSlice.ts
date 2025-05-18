@@ -1,13 +1,13 @@
-import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
+import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import {
   RoleGroup,
   RoleGroupCreate,
   RoleGroupUpdate,
   RoleGroupWithRoles,
-} from "../../models/roleGroup";
-import roleGroupService from "../../services/roleGroup.service";
-import { PaginationParams } from "../../models/pagination";
-import { RootState } from "..";
+} from '../../models/roleGroup';
+import roleGroupService from '../../services/roleGroup.service';
+import { PaginationParams } from '../../models/pagination';
+import { RootState } from '..';
 
 interface ApiError {
   response?: {
@@ -89,7 +89,7 @@ function buildRoleGroupHierarchy(flatGroups: RoleGroup[]): RoleGroup[] {
 
 // Async thunks for API operations
 export const fetchRoleGroups = createAsyncThunk(
-  "roleGroups/fetchRoleGroups",
+  'roleGroups/fetchRoleGroups',
   async (
     params: PaginationParams & { search_query?: string } = {
       page: 1,
@@ -106,14 +106,14 @@ export const fetchRoleGroups = createAsyncThunk(
     } catch (error) {
       const apiError = error as ApiError;
       return rejectWithValue(
-        apiError.response?.data?.message || "Failed to fetch role groups"
+        apiError.response?.data?.message || 'Failed to fetch role groups'
       );
     }
   }
 );
 
 export const fetchRoleGroupById = createAsyncThunk(
-  "roleGroups/fetchRoleGroupById",
+  'roleGroups/fetchRoleGroupById',
   async (groupId: string, { rejectWithValue }) => {
     try {
       const response = await roleGroupService.getRoleGroupById(groupId);
@@ -121,14 +121,14 @@ export const fetchRoleGroupById = createAsyncThunk(
     } catch (error) {
       const apiError = error as ApiError;
       return rejectWithValue(
-        apiError.response?.data?.message || "Failed to fetch role group"
+        apiError.response?.data?.message || 'Failed to fetch role group'
       );
     }
   }
 );
 
 export const createRoleGroup = createAsyncThunk(
-  "roleGroups/createRoleGroup",
+  'roleGroups/createRoleGroup',
   async (roleGroupData: RoleGroupCreate, { rejectWithValue }) => {
     try {
       const response = await roleGroupService.createRoleGroup(roleGroupData);
@@ -136,14 +136,14 @@ export const createRoleGroup = createAsyncThunk(
     } catch (error) {
       const apiError = error as ApiError;
       return rejectWithValue(
-        apiError.response?.data?.message || "Failed to create role group"
+        apiError.response?.data?.message || 'Failed to create role group'
       );
     }
   }
 );
 
 export const updateRoleGroup = createAsyncThunk(
-  "roleGroups/updateRoleGroup",
+  'roleGroups/updateRoleGroup',
   async (
     {
       groupId,
@@ -160,14 +160,14 @@ export const updateRoleGroup = createAsyncThunk(
     } catch (error) {
       const apiError = error as ApiError;
       return rejectWithValue(
-        apiError.response?.data?.message || "Failed to update role group"
+        apiError.response?.data?.message || 'Failed to update role group'
       );
     }
   }
 );
 
 export const deleteRoleGroup = createAsyncThunk(
-  "roleGroups/deleteRoleGroup",
+  'roleGroups/deleteRoleGroup',
   async (groupId: string, { rejectWithValue }) => {
     try {
       await roleGroupService.deleteRoleGroup(groupId);
@@ -175,14 +175,14 @@ export const deleteRoleGroup = createAsyncThunk(
     } catch (error) {
       const apiError = error as ApiError;
       return rejectWithValue(
-        apiError.response?.data?.message || "Failed to delete role group"
+        apiError.response?.data?.message || 'Failed to delete role group'
       );
     }
   }
 );
 
 export const addRolesToGroup = createAsyncThunk(
-  "roleGroups/addRolesToGroup",
+  'roleGroups/addRolesToGroup',
   async (
     { groupId, roleIds }: { groupId: string; roleIds: string[] },
     { rejectWithValue }
@@ -193,14 +193,14 @@ export const addRolesToGroup = createAsyncThunk(
     } catch (error) {
       const apiError = error as ApiError;
       return rejectWithValue(
-        apiError.response?.data?.message || "Failed to add roles to group"
+        apiError.response?.data?.message || 'Failed to add roles to group'
       );
     }
   }
 );
 
 export const removeRolesFromGroup = createAsyncThunk(
-  "roleGroups/removeRolesFromGroup",
+  'roleGroups/removeRolesFromGroup',
   async (
     { groupId, roleIds }: { groupId: string; roleIds: string[] },
     { rejectWithValue }
@@ -214,14 +214,14 @@ export const removeRolesFromGroup = createAsyncThunk(
     } catch (error) {
       const apiError = error as ApiError;
       return rejectWithValue(
-        apiError.response?.data?.message || "Failed to remove roles from group"
+        apiError.response?.data?.message || 'Failed to remove roles from group'
       );
     }
   }
 );
 
 export const moveToParent = createAsyncThunk(
-  "roleGroups/moveToParent",
+  'roleGroups/moveToParent',
   async (
     { groupId, parentId }: { groupId: string; parentId: string | null },
     { rejectWithValue }
@@ -232,7 +232,7 @@ export const moveToParent = createAsyncThunk(
     } catch (error) {
       const apiError = error as ApiError;
       return rejectWithValue(
-        apiError.response?.data?.message || "Failed to move role group"
+        apiError.response?.data?.message || 'Failed to move role group'
       );
     }
   }
@@ -308,7 +308,7 @@ export const selectCurrentRoleGroupWithUsers = (state: RootState) => {
 
 // Create the roleGroup slice
 const roleGroupSlice = createSlice({
-  name: "roleGroup",
+  name: 'roleGroup',
   initialState,
   reducers: {
     clearCurrentRoleGroup: (state) => {

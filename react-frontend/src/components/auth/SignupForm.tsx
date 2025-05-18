@@ -1,31 +1,31 @@
-import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { cn } from "../../lib/utils";
-import AuthService from "../../services/auth.service"; // Import AuthService
-import { AxiosError } from "axios"; // Import AxiosError
-import { ErrorDetail } from "../../services/api"; // Import ErrorDetail
+import { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { cn } from '../../lib/utils';
+import AuthService from '../../services/auth.service'; // Import AuthService
+import { AxiosError } from 'axios'; // Import AxiosError
+import { ErrorDetail } from '../../services/api'; // Import ErrorDetail
 
 // shadcn UI components
-import { Button } from "../ui/button";
-import { Input } from "../ui/input";
-import { Label } from "../ui/label";
-import { Alert, AlertDescription } from "../ui/alert";
-import { AlertTriangle } from "lucide-react"; // Assuming lucide-react is installed
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
+import { Alert, AlertDescription } from '../ui/alert';
+import { AlertTriangle } from 'lucide-react'; // Assuming lucide-react is installed
 
 // Define validation schema with Zod for Signup
 const signupSchema = z
   .object({
-    fullName: z.string().min(1, "Full name is required"), // Example field
-    email: z.string().email("Please enter a valid email address"),
-    password: z.string().min(8, "Password must be at least 8 characters"),
+    fullName: z.string().min(1, 'Full name is required'), // Example field
+    email: z.string().email('Please enter a valid email address'),
+    password: z.string().min(8, 'Password must be at least 8 characters'),
     confirmPassword: z.string(),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords don't match",
-    path: ["confirmPassword"], // path of error
+    path: ['confirmPassword'], // path of error
   });
 
 type SignupFormData = z.infer<typeof signupSchema>;
@@ -33,7 +33,7 @@ type SignupFormData = z.infer<typeof signupSchema>;
 export function SignupForm({
   className,
   ...props
-}: React.ComponentPropsWithoutRef<"form">) {
+}: React.ComponentPropsWithoutRef<'form'>) {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,10 +46,10 @@ export function SignupForm({
   } = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
-      fullName: "",
-      email: "",
-      password: "",
-      confirmPassword: "",
+      fullName: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
     },
   });
 
@@ -68,7 +68,7 @@ export function SignupForm({
       });
 
       // Redirect to a page indicating registration success and need for verification
-      navigate("/registration-success"); // Navigate to success/verification page
+      navigate('/registration-success'); // Navigate to success/verification page
     } catch (err) {
       const axiosError = err as AxiosError<{
         message?: string;
@@ -76,7 +76,7 @@ export function SignupForm({
       }>;
       const errorMessage =
         axiosError.response?.data?.message ||
-        "Registration failed. Please try again.";
+        'Registration failed. Please try again.';
       setError(errorMessage);
 
       // Handle field-specific errors from backend
@@ -85,14 +85,14 @@ export function SignupForm({
         axiosError.response.data.errors.forEach((e) => {
           if (e.field) {
             // Map backend field names to form field names if necessary
-            const fieldName = e.field === "full_name" ? "fullName" : e.field;
+            const fieldName = e.field === 'full_name' ? 'fullName' : e.field;
             backendFieldErrors[fieldName] = e.message;
           }
         });
         setFieldErrors(backendFieldErrors);
       }
 
-      console.error("Registration error:", err);
+      console.error('Registration error:', err);
     } finally {
       setIsLoading(false);
     }
@@ -101,7 +101,7 @@ export function SignupForm({
   return (
     <form
       onSubmit={handleSubmit(onSubmit)}
-      className={cn("flex flex-col gap-6", className)}
+      className={cn('flex flex-col gap-6', className)}
       {...props}
     >
       <div className="flex flex-col items-center gap-2 text-center">
@@ -127,9 +127,9 @@ export function SignupForm({
             type="text"
             placeholder="John Doe"
             required
-            {...register("fullName")}
+            {...register('fullName')}
             aria-invalid={
-              errors.fullName || fieldErrors.fullName ? "true" : "false"
+              errors.fullName || fieldErrors.fullName ? 'true' : 'false'
             }
           />
           {errors.fullName && (
@@ -147,8 +147,8 @@ export function SignupForm({
             placeholder="m@example.com"
             autoComplete="email"
             required
-            {...register("email")}
-            aria-invalid={errors.email || fieldErrors.email ? "true" : "false"}
+            {...register('email')}
+            aria-invalid={errors.email || fieldErrors.email ? 'true' : 'false'}
           />
           {errors.email && (
             <p className="text-sm text-red-600">{errors.email.message}</p>
@@ -165,9 +165,9 @@ export function SignupForm({
             placeholder="********"
             autoComplete="new-password"
             required
-            {...register("password")}
+            {...register('password')}
             aria-invalid={
-              errors.password || fieldErrors.password ? "true" : "false"
+              errors.password || fieldErrors.password ? 'true' : 'false'
             }
           />
           {errors.password && (
@@ -185,8 +185,8 @@ export function SignupForm({
             placeholder="********"
             autoComplete="new-password"
             required
-            {...register("confirmPassword")}
-            aria-invalid={errors.confirmPassword ? "true" : "false"}
+            {...register('confirmPassword')}
+            aria-invalid={errors.confirmPassword ? 'true' : 'false'}
           />
           {errors.confirmPassword && (
             <p className="text-sm text-red-600">
@@ -196,13 +196,13 @@ export function SignupForm({
           {/* No specific backend field error expected for confirmPassword, handled by frontend validation */}
         </div>
         <Button type="submit" className="w-full" disabled={isLoading}>
-          {isLoading ? "Creating account..." : "Create account"}
+          {isLoading ? 'Creating account...' : 'Create account'}
         </Button>
       </div>
       <div className="text-center text-sm">
-        Already have an account?{" "}
+        Already have an account?{' '}
         <Link to="/login" className="underline underline-offset-4">
-          {" "}
+          {' '}
           {/* Link to login page */}
           Login
         </Link>

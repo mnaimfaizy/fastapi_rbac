@@ -1,14 +1,14 @@
-import React from "react";
-import { useNavigate } from "react-router-dom";
-import PermissionsDataTable from "./PermissionsDataTable";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import PermissionsDataTable from './PermissionsDataTable';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 const PermissionsContent: React.FC = () => {
   const navigate = useNavigate();
 
   const handleCreatePermission = () => {
-    navigate("/dashboard/permissions/new");
+    navigate('/dashboard/permissions/new');
   };
 
   return (

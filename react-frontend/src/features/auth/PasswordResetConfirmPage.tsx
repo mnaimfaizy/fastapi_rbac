@@ -1,44 +1,44 @@
-import { useState, useEffect } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
-import { useAppDispatch, useAppSelector } from "../../store/hooks";
+import { useState, useEffect } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import {
   confirmPasswordReset,
   clearError,
   resetPasswordResetSuccess,
-} from "../../store/slices/authSlice";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
+} from '../../store/slices/authSlice';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
 
 // shadcn UI components
-import { Button } from "../../components/ui/button";
-import { Input } from "../../components/ui/input";
-import { Label } from "../../components/ui/label";
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { Label } from '../../components/ui/label';
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "../../components/ui/card";
-import { Alert, AlertDescription } from "../../components/ui/alert";
-import { AlertTriangle, CheckCircle } from "lucide-react";
+} from '../../components/ui/card';
+import { Alert, AlertDescription } from '../../components/ui/alert';
+import { AlertTriangle, CheckCircle } from 'lucide-react';
 
 // Define validation schema with Zod
 const resetPasswordSchema = z
   .object({
     password: z
       .string()
-      .min(8, "Password must be at least 8 characters")
+      .min(8, 'Password must be at least 8 characters')
       .regex(
         /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
-        "Password must contain at least one uppercase letter, one lowercase letter, one number and one special character"
+        'Password must contain at least one uppercase letter, one lowercase letter, one number and one special character'
       ),
-    confirmPassword: z.string().min(1, "Confirm password is required"),
+    confirmPassword: z.string().min(1, 'Confirm password is required'),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords don't match",
-    path: ["confirmPassword"],
+    path: ['confirmPassword'],
   });
 
 type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>;
@@ -56,13 +56,13 @@ const PasswordResetConfirmPage = () => {
   // Extract token from URL query parameters
   useEffect(() => {
     const queryParams = new URLSearchParams(location.search);
-    const tokenFromQuery = queryParams.get("token");
+    const tokenFromQuery = queryParams.get('token');
 
     if (tokenFromQuery) {
       setToken(tokenFromQuery);
     } else {
       // Redirect if no token is provided
-      navigate("/password-reset", { replace: true });
+      navigate('/password-reset', { replace: true });
     }
   }, [location.search, navigate]);
 
@@ -74,8 +74,8 @@ const PasswordResetConfirmPage = () => {
   } = useForm<ResetPasswordFormData>({
     resolver: zodResolver(resetPasswordSchema),
     defaultValues: {
-      password: "",
-      confirmPassword: "",
+      password: '',
+      confirmPassword: '',
     },
   });
 
@@ -114,8 +114,8 @@ const PasswordResetConfirmPage = () => {
           </CardTitle>
           <CardDescription>
             {passwordResetSuccess
-              ? "Your password has been reset successfully"
-              : "Enter your new password below"}
+              ? 'Your password has been reset successfully'
+              : 'Enter your new password below'}
           </CardDescription>
         </CardHeader>
 
@@ -149,7 +149,7 @@ const PasswordResetConfirmPage = () => {
                   id="password"
                   type="password"
                   placeholder="Enter new password"
-                  {...register("password")}
+                  {...register('password')}
                 />
                 {errors.password && (
                   <p className="text-sm text-red-600">
@@ -164,7 +164,7 @@ const PasswordResetConfirmPage = () => {
                   id="confirmPassword"
                   type="password"
                   placeholder="Confirm new password"
-                  {...register("confirmPassword")}
+                  {...register('confirmPassword')}
                 />
                 {errors.confirmPassword && (
                   <p className="text-sm text-red-600">
@@ -178,7 +178,7 @@ const PasswordResetConfirmPage = () => {
                 className="w-full"
                 disabled={isLoading || !token}
               >
-                {isLoading ? "Resetting..." : "Reset Password"}
+                {isLoading ? 'Resetting...' : 'Reset Password'}
               </Button>
 
               <div className="text-center">

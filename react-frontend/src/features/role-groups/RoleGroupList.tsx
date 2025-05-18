@@ -1,13 +1,13 @@
-import React, { useEffect, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
-import { AppDispatch, RootState } from "../../store";
+import React, { useEffect, useState } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { AppDispatch, RootState } from '../../store';
 import {
   fetchRoleGroups,
   deleteRoleGroup,
   moveToParent,
   selectRoleGroupsWithUsers,
-} from "../../store/slices/roleGroupSlice";
-import { Button } from "@/components/ui/button";
+} from '../../store/slices/roleGroupSlice';
+import { Button } from '@/components/ui/button';
 import {
   Table,
   TableBody,
@@ -15,8 +15,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { useNavigate } from "react-router-dom";
+} from '@/components/ui/table';
+import { useNavigate } from 'react-router-dom';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,7 +27,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+} from '@/components/ui/alert-dialog';
 import {
   ChevronDown,
   ChevronRight,
@@ -36,9 +36,9 @@ import {
   List,
   Info,
   MoreHorizontal,
-} from "lucide-react";
-import { formatDate } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
+} from 'lucide-react';
+import { formatDate } from '@/lib/utils';
+import { Input } from '@/components/ui/input';
 import {
   Pagination,
   PaginationContent,
@@ -47,10 +47,10 @@ import {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
-} from "@/components/ui/pagination";
-import { toast } from "sonner";
-import { cn } from "@/lib/utils";
-import { RoleGroup } from "@/models/roleGroup";
+} from '@/components/ui/pagination';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+import { RoleGroup } from '@/models/roleGroup';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -58,14 +58,14 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Badge } from "@/components/ui/badge";
+} from '@/components/ui/dropdown-menu';
+import { Badge } from '@/components/ui/badge';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from '@/components/ui/tooltip';
 
 interface RoleGroupRowProps {
   group: RoleGroup;
@@ -109,11 +109,11 @@ const RoleGroupRow: React.FC<
   const isExpandable = hasChildren; // Only expand if there are children
 
   // Generate vertical line styles based on nesting level
-  const verticalLineClass = level > 0 ? "relative" : "";
+  const verticalLineClass = level > 0 ? 'relative' : '';
 
   return (
     <>
-      <TableRow className={cn(level > 0 && "hover:bg-accent/30")}>
+      <TableRow className={cn(level > 0 && 'hover:bg-accent/30')}>
         <TableCell className="font-medium">
           <div className="flex items-center gap-2">
             <div
@@ -130,7 +130,7 @@ const RoleGroupRow: React.FC<
                         className="p-1 hover:bg-accent rounded-sm mr-1 focus:outline-none focus:ring-1 focus:ring-primary"
                         aria-expanded={isExpanded}
                         aria-label={
-                          isExpanded ? "Collapse group" : "Expand group"
+                          isExpanded ? 'Collapse group' : 'Expand group'
                         }
                       >
                         {isExpanded ? (
@@ -141,7 +141,7 @@ const RoleGroupRow: React.FC<
                       </button>
                     </TooltipTrigger>
                     <TooltipContent side="top">
-                      {isExpanded ? "Collapse" : "Expand"} child groups
+                      {isExpanded ? 'Collapse' : 'Expand'} child groups
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
@@ -177,8 +177,8 @@ const RoleGroupRow: React.FC<
                           </Badge>
                         </TooltipTrigger>
                         <TooltipContent side="top">
-                          {group.children?.length} child{" "}
-                          {group.children?.length === 1 ? "group" : "groups"}
+                          {group.children?.length} child{' '}
+                          {group.children?.length === 1 ? 'group' : 'groups'}
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
@@ -189,10 +189,10 @@ const RoleGroupRow: React.FC<
           </div>
         </TableCell>
         <TableCell>
-          {group.created_at ? formatDate(group.created_at) : "N/A"}
+          {group.created_at ? formatDate(group.created_at) : 'N/A'}
         </TableCell>
         <TableCell>
-          {group.updated_at ? formatDate(group.updated_at) : "N/A"}
+          {group.updated_at ? formatDate(group.updated_at) : 'N/A'}
         </TableCell>
         <TableCell>
           {group.creator ? (
@@ -213,7 +213,7 @@ const RoleGroupRow: React.FC<
               </Tooltip>
             </TooltipProvider>
           ) : (
-            "N/A"
+            'N/A'
           )}
         </TableCell>
         <TableCell className="text-right">
@@ -348,7 +348,7 @@ const RoleGroupList: React.FC = () => {
   const { pagination, loading, error } = useSelector(
     (state: RootState) => state.roleGroup
   );
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState('');
   const [expandAll, setExpandAll] = useState(true);
   const [deleteGroupId, setDeleteGroupId] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -378,13 +378,13 @@ const RoleGroupList: React.FC = () => {
   ) => {
     try {
       await dispatch(moveToParent({ groupId, parentId: newParentId })).unwrap();
-      toast.success("Role group moved successfully");
+      toast.success('Role group moved successfully');
       dispatch(
         fetchRoleGroups({ page: pagination.page, size: pagination.size })
       );
     } catch (error) {
-      console.error("Failed to move role group:", error);
-      toast.error("Failed to move role group");
+      console.error('Failed to move role group:', error);
+      toast.error('Failed to move role group');
     }
   };
 
@@ -406,7 +406,7 @@ const RoleGroupList: React.FC = () => {
 
     try {
       await dispatch(deleteRoleGroup(deleteGroupId)).unwrap();
-      toast.success("Role group deleted successfully");
+      toast.success('Role group deleted successfully');
       // Refresh the list after deletion
       dispatch(
         fetchRoleGroups({ page: pagination.page, size: pagination.size })
@@ -417,12 +417,12 @@ const RoleGroupList: React.FC = () => {
         error.response?.data?.detail ||
         (error instanceof Error
           ? error.message
-          : "Failed to delete role group");
+          : 'Failed to delete role group');
 
       // Use longer duration for conflict errors as they contain important instructions
       const duration =
-        errorMessage.includes("has child groups") ||
-        errorMessage.includes("has assigned roles")
+        errorMessage.includes('has child groups') ||
+        errorMessage.includes('has assigned roles')
           ? 8000
           : 5000;
 

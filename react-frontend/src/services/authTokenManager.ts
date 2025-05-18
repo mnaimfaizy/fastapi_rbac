@@ -1,5 +1,5 @@
-import { store } from "../store";
-import { logout } from "../store/slices/authSlice";
+import { store } from '../store';
+import { logout } from '../store/slices/authSlice';
 
 /**
  * Token expiration checker
@@ -39,7 +39,7 @@ class AuthTokenManager {
         }
       }
     } catch (error) {
-      console.error("Error setting token expiry timer:", error);
+      console.error('Error setting token expiry timer:', error);
     }
   }
 
@@ -60,23 +60,23 @@ class AuthTokenManager {
   private decodeJWT(token: string): any {
     try {
       // Split the token and get the payload part (second part)
-      const base64Url = token.split(".")[1];
-      const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
 
       // Decode the base64 string
       const jsonPayload = decodeURIComponent(
         window
           .atob(base64)
-          .split("")
+          .split('')
           .map(function (c) {
-            return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
           })
-          .join("")
+          .join('')
       );
 
       return JSON.parse(jsonPayload);
     } catch (error) {
-      console.error("Error decoding JWT token:", error);
+      console.error('Error decoding JWT token:', error);
       return null;
     }
   }

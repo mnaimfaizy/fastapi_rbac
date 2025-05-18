@@ -10,7 +10,7 @@ services:
     env_file:
       - .env.test
     ports:
-      - "80:80"
+      - '80:80'
     networks:
       - fastapi_rbac_network
 

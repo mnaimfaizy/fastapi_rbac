@@ -1,8 +1,8 @@
-import { ColumnDef } from "@tanstack/react-table";
-import { User } from "@/models/user";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { ColumnDef } from '@tanstack/react-table';
+import { User } from '@/models/user';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   MoreHorizontal,
   AlertTriangle,
@@ -10,7 +10,7 @@ import {
   Lock,
   CheckCircle,
   User as UserIcon,
-} from "lucide-react";
+} from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,28 +18,28 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Link } from "react-router-dom";
-import { DataTableColumnHeader } from "@/components/dashboard/users/data-table-column-header";
+} from '@/components/ui/dropdown-menu';
+import { Link } from 'react-router-dom';
+import { DataTableColumnHeader } from '@/components/dashboard/users/data-table-column-header';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { formatDate } from "@/lib/utils";
+} from '@/components/ui/tooltip';
+import { formatDate } from '@/lib/utils';
 
 export const columns: ColumnDef<User>[] = [
   {
-    accessorKey: "name",
+    accessorKey: 'name',
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Name" />
     ),
     cell: ({ row }) => {
       const fullName = `${row.original.first_name} ${row.original.last_name}`;
       const email = row.original.email;
-      const initials = `${row.original.first_name?.[0] || ""}${
-        row.original.last_name?.[0] || ""
+      const initials = `${row.original.first_name?.[0] || ''}${
+        row.original.last_name?.[0] || ''
       }`;
 
       return (
@@ -58,17 +58,17 @@ export const columns: ColumnDef<User>[] = [
     },
   },
   {
-    accessorKey: "status",
-    header: "Status",
+    accessorKey: 'status',
+    header: 'Status',
     cell: ({ row }) => {
       const user = row.original;
       return (
         <div className="flex flex-wrap gap-1">
           <Badge
-            variant={user.is_active ? "success" : "destructive"}
+            variant={user.is_active ? 'success' : 'destructive'}
             className="whitespace-nowrap"
           >
-            {user.is_active ? "Active" : "Inactive"}
+            {user.is_active ? 'Active' : 'Inactive'}
           </Badge>
           {user.is_locked && (
             <TooltipProvider>
@@ -82,7 +82,7 @@ export const columns: ColumnDef<User>[] = [
                 <TooltipContent>
                   {user.locked_until
                     ? `Locked until ${formatDate(user.locked_until)}`
-                    : "Account is locked"}
+                    : 'Account is locked'}
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -119,8 +119,8 @@ export const columns: ColumnDef<User>[] = [
     },
   },
   {
-    accessorKey: "roles",
-    header: "Roles",
+    accessorKey: 'roles',
+    header: 'Roles',
     cell: ({ row }) => {
       const roles = row.original.roles || [];
       return (
@@ -135,8 +135,8 @@ export const columns: ColumnDef<User>[] = [
     },
   },
   {
-    accessorKey: "contact",
-    header: "Contact Info",
+    accessorKey: 'contact',
+    header: 'Contact Info',
     cell: ({ row }) => {
       const user = row.original;
       return (
@@ -152,8 +152,8 @@ export const columns: ColumnDef<User>[] = [
     },
   },
   {
-    accessorKey: "security",
-    header: "Security Info",
+    accessorKey: 'security',
+    header: 'Security Info',
     cell: ({ row }) => {
       const user = row.original;
       return (
@@ -165,8 +165,8 @@ export const columns: ColumnDef<User>[] = [
                 <Badge
                   variant={
                     (user.number_of_failed_attempts || 0) > 3
-                      ? "destructive"
-                      : "secondary"
+                      ? 'destructive'
+                      : 'secondary'
                   }
                   className="ml-1"
                 >
@@ -186,8 +186,8 @@ export const columns: ColumnDef<User>[] = [
     },
   },
   {
-    accessorKey: "dates",
-    header: "Important Dates",
+    accessorKey: 'dates',
+    header: 'Important Dates',
     cell: ({ row }) => {
       const user = row.original;
       return (
@@ -201,8 +201,8 @@ export const columns: ColumnDef<User>[] = [
                   <Badge
                     variant={
                       new Date(user.expiry_date) < new Date()
-                        ? "destructive"
-                        : "secondary"
+                        ? 'destructive'
+                        : 'secondary'
                     }
                     className="ml-1"
                   >
@@ -218,20 +218,20 @@ export const columns: ColumnDef<User>[] = [
     },
   },
   {
-    accessorKey: "updated_at",
-    header: "Updated At",
+    accessorKey: 'updated_at',
+    header: 'Updated At',
     cell: ({ row }) => {
-      const date = row.getValue("updated_at");
-      if (!date) return "-";
+      const date = row.getValue('updated_at');
+      if (!date) return '-';
       try {
         return formatDate(String(date)); // Ensure date is a string
       } catch (error) {
-        return "-";
+        return '-';
       }
     },
   },
   {
-    id: "actions",
+    id: 'actions',
     cell: ({ row }) => {
       const user = row.original;
 

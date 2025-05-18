@@ -1,9 +1,9 @@
-import api from "./api";
-import { Role, RoleCreate, RoleResponse, RoleUpdate } from "../models/role";
-import { PaginatedDataResponse, PaginationParams } from "../models/pagination";
-import { ApiResponse } from "../models/user";
+import api from './api';
+import { Role, RoleCreate, RoleResponse, RoleUpdate } from '../models/role';
+import { PaginatedDataResponse, PaginationParams } from '../models/pagination';
+import { ApiResponse } from '../models/user';
 
-const API_URL = "/role";
+const API_URL = '/role';
 
 export const roleService = {
   // Fetch paginated roles
@@ -58,7 +58,7 @@ export const roleService = {
       );
       return response.data;
     } catch (error) {
-      console.error("Error assigning permissions to role:", error);
+      console.error('Error assigning permissions to role:', error);
       throw error;
     }
   },

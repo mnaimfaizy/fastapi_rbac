@@ -1,16 +1,16 @@
-import { useEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { useAppDispatch, useAppSelector } from "../../hooks/redux";
+import { useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { useAppDispatch, useAppSelector } from '../../hooks/redux';
 import {
   fetchPermissionById,
   createPermission,
   updatePermission,
-} from "../../store/slices/permissionSlice";
-import { fetchPermissionGroups } from "../../store/slices/permissionGroupSlice";
-import { Button } from "@/components/ui/button";
+} from '../../store/slices/permissionSlice';
+import { fetchPermissionGroups } from '../../store/slices/permissionGroupSlice';
+import { Button } from '@/components/ui/button';
 import {
   Form,
   FormControl,
@@ -18,25 +18,25 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft } from "lucide-react";
-import { PermissionGroup } from "../../models/permission";
+} from '@/components/ui/select';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ArrowLeft } from 'lucide-react';
+import { PermissionGroup } from '../../models/permission';
 
 // Form validation schema
 const formSchema = z.object({
-  name: z.string().min(1, "Name is required"),
+  name: z.string().min(1, 'Name is required'),
   description: z.string().optional(),
-  group_id: z.string().min(1, "Permission Group is required"),
+  group_id: z.string().min(1, 'Permission Group is required'),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -57,9 +57,9 @@ export default function PermissionForm() {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: "",
-      description: "",
-      group_id: "",
+      name: '',
+      description: '',
+      group_id: '',
     },
   });
 
@@ -77,8 +77,8 @@ export default function PermissionForm() {
     if (isEdit && currentPermission) {
       form.reset({
         name: currentPermission.name,
-        description: currentPermission.description || "",
-        group_id: currentPermission.group?.id || "", // Extract ID from group object
+        description: currentPermission.description || '',
+        group_id: currentPermission.group?.id || '', // Extract ID from group object
       });
     }
   }, [currentPermission, form, isEdit]);
@@ -103,14 +103,14 @@ export default function PermissionForm() {
       } else {
         await dispatch(createPermission(data)).unwrap();
       }
-      navigate("/dashboard/permissions");
+      navigate('/dashboard/permissions');
     } catch (error) {
-      console.error("Error saving permission:", error);
+      console.error('Error saving permission:', error);
     }
   };
 
   const handleCancel = () => {
-    navigate("/dashboard/permissions");
+    navigate('/dashboard/permissions');
   };
 
   const isLoading = permissionLoading || (isEdit && !currentPermission);
@@ -131,7 +131,7 @@ export default function PermissionForm() {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <CardTitle>
-          {isEdit ? "Edit Permission" : "Create Permission"}
+          {isEdit ? 'Edit Permission' : 'Create Permission'}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -212,7 +212,7 @@ export default function PermissionForm() {
                 Cancel
               </Button>
               <Button type="submit" disabled={isLoading}>
-                {isEdit ? "Update" : "Create"}
+                {isEdit ? 'Update' : 'Create'}
               </Button>
             </div>
           </form>

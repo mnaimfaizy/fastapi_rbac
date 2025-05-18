@@ -1,10 +1,10 @@
-import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
+import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import {
   PermissionGroup,
   PermissionGroupCreate,
   PermissionGroupUpdate,
-} from "../../models/permission";
-import permissionService from "../../services/permission.service";
+} from '../../models/permission';
+import permissionService from '../../services/permission.service';
 
 interface PermissionGroupState {
   permissionGroups: PermissionGroup[];
@@ -28,7 +28,7 @@ const initialState: PermissionGroupState = {
 
 // Async thunks
 export const fetchPermissionGroups = createAsyncThunk(
-  "permissionGroup/fetchPermissionGroups",
+  'permissionGroup/fetchPermissionGroups',
   async (
     { page = 1, pageSize = 10 }: { page?: number; pageSize?: number },
     { rejectWithValue }
@@ -43,14 +43,14 @@ export const fetchPermissionGroups = createAsyncThunk(
       const errorMessage =
         error instanceof Error
           ? error.message
-          : "Failed to fetch permission groups";
+          : 'Failed to fetch permission groups';
       return rejectWithValue(errorMessage);
     }
   }
 );
 
 export const fetchPermissionGroupById = createAsyncThunk(
-  "permissionGroup/fetchPermissionGroupById",
+  'permissionGroup/fetchPermissionGroupById',
   async (id: string, { rejectWithValue }) => {
     try {
       const response = await permissionService.getPermissionGroupById(id);
@@ -59,14 +59,14 @@ export const fetchPermissionGroupById = createAsyncThunk(
       const errorMessage =
         error instanceof Error
           ? error.message
-          : "Failed to fetch permission group";
+          : 'Failed to fetch permission group';
       return rejectWithValue(errorMessage);
     }
   }
 );
 
 export const createPermissionGroup = createAsyncThunk(
-  "permissionGroup/createPermissionGroup",
+  'permissionGroup/createPermissionGroup',
   async (groupData: PermissionGroupCreate, { rejectWithValue }) => {
     try {
       const response = await permissionService.createPermissionGroup(groupData);
@@ -75,14 +75,14 @@ export const createPermissionGroup = createAsyncThunk(
       const errorMessage =
         error instanceof Error
           ? error.message
-          : "Failed to create permission group";
+          : 'Failed to create permission group';
       return rejectWithValue(errorMessage);
     }
   }
 );
 
 export const updatePermissionGroup = createAsyncThunk(
-  "permissionGroup/updatePermissionGroup",
+  'permissionGroup/updatePermissionGroup',
   async (
     { id, groupData }: { id: string; groupData: PermissionGroupUpdate },
     { rejectWithValue }
@@ -97,14 +97,14 @@ export const updatePermissionGroup = createAsyncThunk(
       const errorMessage =
         error instanceof Error
           ? error.message
-          : "Failed to update permission group";
+          : 'Failed to update permission group';
       return rejectWithValue(errorMessage);
     }
   }
 );
 
 export const deletePermissionGroup = createAsyncThunk(
-  "permissionGroup/deletePermissionGroup",
+  'permissionGroup/deletePermissionGroup',
   async (id: string, { rejectWithValue }) => {
     try {
       const response = await permissionService.deletePermissionGroup(id);
@@ -113,13 +113,13 @@ export const deletePermissionGroup = createAsyncThunk(
       if (error instanceof Error) {
         return rejectWithValue(error.message);
       }
-      return rejectWithValue("Failed to delete permission group");
+      return rejectWithValue('Failed to delete permission group');
     }
   }
 );
 
 const permissionGroupSlice = createSlice({
-  name: "permissionGroup",
+  name: 'permissionGroup',
   initialState,
   reducers: {
     clearCurrentPermissionGroup: (state) => {

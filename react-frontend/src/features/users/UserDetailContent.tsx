@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
-import { useDispatch, useSelector } from "react-redux";
-import { AppDispatch, RootState } from "../../store";
-import { fetchUserById, deleteUser } from "../../store/slices/userSlice";
+import { useEffect, useState } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import { AppDispatch, RootState } from '../../store';
+import { fetchUserById, deleteUser } from '../../store/slices/userSlice';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -12,11 +12,11 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { toast } from "sonner";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns";
+} from '@/components/ui/alert-dialog';
+import { toast } from 'sonner';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { format } from 'date-fns';
 
 const UserDetailContent = () => {
   const { userId } = useParams<{ userId: string }>();
@@ -42,23 +42,23 @@ const UserDetailContent = () => {
 
     try {
       await dispatch(deleteUser(userId)).unwrap();
-      toast.success("User deleted successfully");
-      navigate("/dashboard/users");
+      toast.success('User deleted successfully');
+      navigate('/dashboard/users');
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error
           ? error.message
-          : typeof error === "object" &&
-            error &&
-            "response" in error &&
-            typeof error.response === "object" &&
-            error.response &&
-            "data" in error.response &&
-            typeof error.response.data === "object" &&
-            error.response.data &&
-            "detail" in error.response.data
-          ? String(error.response.data.detail)
-          : "Failed to delete user";
+          : typeof error === 'object' &&
+              error &&
+              'response' in error &&
+              typeof error.response === 'object' &&
+              error.response &&
+              'data' in error.response &&
+              typeof error.response.data === 'object' &&
+              error.response.data &&
+              'detail' in error.response.data
+            ? String(error.response.data.detail)
+            : 'Failed to delete user';
       toast.error(errorMessage);
     } finally {
       setIsDeleteDialogOpen(false);
@@ -126,22 +126,22 @@ const UserDetailContent = () => {
             </div>
             <div className="flex items-center justify-between">
               <span className="font-medium">Phone</span>
-              <span>{selectedUser.contact_phone || "Not provided"}</span>
+              <span>{selectedUser.contact_phone || 'Not provided'}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="font-medium">Created At</span>
               <span>
                 {selectedUser.created_at
-                  ? format(new Date(selectedUser.created_at), "PPpp")
-                  : "N/A"}
+                  ? format(new Date(selectedUser.created_at), 'PPpp')
+                  : 'N/A'}
               </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="font-medium">Last Updated</span>
               <span>
                 {selectedUser.updated_at
-                  ? format(new Date(selectedUser.updated_at), "PPpp")
-                  : "N/A"}
+                  ? format(new Date(selectedUser.updated_at), 'PPpp')
+                  : 'N/A'}
               </span>
             </div>
           </CardContent>
@@ -158,11 +158,11 @@ const UserDetailContent = () => {
               <Badge
                 className={`${
                   selectedUser.is_active
-                    ? "bg-green-100 text-green-800"
-                    : "bg-red-100 text-red-800"
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-red-100 text-red-800'
                 }`}
               >
-                {selectedUser.is_active ? "Active" : "Inactive"}
+                {selectedUser.is_active ? 'Active' : 'Inactive'}
               </Badge>
             </div>
             <div className="flex items-center justify-between">
@@ -170,11 +170,11 @@ const UserDetailContent = () => {
               <Badge
                 className={`${
                   selectedUser.is_superuser
-                    ? "bg-purple-100 text-purple-800"
-                    : "bg-blue-100 text-blue-800"
+                    ? 'bg-purple-100 text-purple-800'
+                    : 'bg-blue-100 text-blue-800'
                 }`}
               >
-                {selectedUser.is_superuser ? "Administrator" : "Regular User"}
+                {selectedUser.is_superuser ? 'Administrator' : 'Regular User'}
               </Badge>
             </div>
             <div className="flex items-center justify-between">
@@ -182,11 +182,11 @@ const UserDetailContent = () => {
               <Badge
                 className={`${
                   selectedUser.verified
-                    ? "bg-green-100 text-green-800"
-                    : "bg-yellow-100 text-yellow-800"
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-yellow-100 text-yellow-800'
                 }`}
               >
-                {selectedUser.verified ? "Verified" : "Unverified"}
+                {selectedUser.verified ? 'Verified' : 'Unverified'}
               </Badge>
             </div>
             <div className="flex items-center justify-between">
@@ -195,15 +195,15 @@ const UserDetailContent = () => {
                 <Badge
                   className={`${
                     selectedUser.is_locked
-                      ? "bg-red-100 text-red-800"
-                      : "bg-green-100 text-green-800"
+                      ? 'bg-red-100 text-red-800'
+                      : 'bg-green-100 text-green-800'
                   }`}
                 >
-                  {selectedUser.is_locked ? "Locked" : "Unlocked"}
+                  {selectedUser.is_locked ? 'Locked' : 'Unlocked'}
                 </Badge>
                 {selectedUser.is_locked && selectedUser.locked_until && (
                   <span className="text-sm text-gray-500 mt-1">
-                    Until {format(new Date(selectedUser.locked_until), "PPpp")}
+                    Until {format(new Date(selectedUser.locked_until), 'PPpp')}
                   </span>
                 )}
               </div>
@@ -213,8 +213,8 @@ const UserDetailContent = () => {
               <Badge
                 className={`${
                   (selectedUser.number_of_failed_attempts || 0) > 0
-                    ? "bg-yellow-100 text-yellow-800"
-                    : "bg-gray-100 text-gray-800"
+                    ? 'bg-yellow-100 text-yellow-800'
+                    : 'bg-gray-100 text-gray-800'
                 }`}
               >
                 {selectedUser.number_of_failed_attempts || 0}
@@ -234,13 +234,13 @@ const UserDetailContent = () => {
               <Badge
                 className={`${
                   selectedUser.needs_to_change_password
-                    ? "bg-yellow-100 text-yellow-800"
-                    : "bg-green-100 text-green-800"
+                    ? 'bg-yellow-100 text-yellow-800'
+                    : 'bg-green-100 text-green-800'
                 }`}
               >
                 {selectedUser.needs_to_change_password
-                  ? "Change Required"
-                  : "Up to Date"}
+                  ? 'Change Required'
+                  : 'Up to Date'}
               </Badge>
             </div>
             <div className="flex items-center justify-between">
@@ -249,17 +249,17 @@ const UserDetailContent = () => {
                 {selectedUser.last_changed_password_date
                   ? format(
                       new Date(selectedUser.last_changed_password_date),
-                      "PPpp"
+                      'PPpp'
                     )
-                  : "Never"}
+                  : 'Never'}
               </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="font-medium">Account Expiry</span>
               <span>
                 {selectedUser.expiry_date
-                  ? format(new Date(selectedUser.expiry_date), "PPpp")
-                  : "No expiry"}
+                  ? format(new Date(selectedUser.expiry_date), 'PPpp')
+                  : 'No expiry'}
               </span>
             </div>
           </CardContent>

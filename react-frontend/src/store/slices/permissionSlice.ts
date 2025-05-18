@@ -1,11 +1,11 @@
-import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
+import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import {
   Permission,
   PermissionCreate,
   PermissionUpdate,
   PaginatedPermissionResponse, // Use the correct response type from the model
-} from "../../models/permission";
-import permissionService from "../../services/permission.service";
+} from '../../models/permission';
+import permissionService from '../../services/permission.service';
 
 // Remove unused import: import { PaginatedDataResponse } from "../../models/pagination";
 
@@ -36,7 +36,7 @@ export const fetchPermissions = createAsyncThunk<
   { page?: number; pageSize?: number }, // Argument type
   { rejectValue: string } // Type for rejectWithValue
 >(
-  "permission/fetchPermissions",
+  'permission/fetchPermissions',
   async ({ page = 1, pageSize = 10 }, { rejectWithValue }) => {
     try {
       // Assuming permissionService.getPermissions returns PaginatedPermissionResponse
@@ -44,42 +44,42 @@ export const fetchPermissions = createAsyncThunk<
       return response;
     } catch (error: unknown) {
       const errorMessage =
-        error instanceof Error ? error.message : "Failed to fetch permissions";
+        error instanceof Error ? error.message : 'Failed to fetch permissions';
       return rejectWithValue(errorMessage);
     }
   }
 );
 
 export const fetchPermissionById = createAsyncThunk(
-  "permission/fetchPermissionById",
+  'permission/fetchPermissionById',
   async (id: string, { rejectWithValue }) => {
     try {
       const response = await permissionService.getPermissionById(id);
       return response;
     } catch (error: unknown) {
       const errorMessage =
-        error instanceof Error ? error.message : "Failed to fetch permission";
+        error instanceof Error ? error.message : 'Failed to fetch permission';
       return rejectWithValue(errorMessage);
     }
   }
 );
 
 export const createPermission = createAsyncThunk(
-  "permission/createPermission",
+  'permission/createPermission',
   async (permissionData: PermissionCreate, { rejectWithValue }) => {
     try {
       const response = await permissionService.createPermission(permissionData);
       return response;
     } catch (error: unknown) {
       const errorMessage =
-        error instanceof Error ? error.message : "Failed to create permission";
+        error instanceof Error ? error.message : 'Failed to create permission';
       return rejectWithValue(errorMessage);
     }
   }
 );
 
 export const updatePermission = createAsyncThunk(
-  "permission/updatePermission",
+  'permission/updatePermission',
   async (
     { id, permissionData }: { id: string; permissionData: PermissionUpdate },
     { rejectWithValue }
@@ -92,27 +92,27 @@ export const updatePermission = createAsyncThunk(
       return response;
     } catch (error: unknown) {
       const errorMessage =
-        error instanceof Error ? error.message : "Failed to update permission";
+        error instanceof Error ? error.message : 'Failed to update permission';
       return rejectWithValue(errorMessage);
     }
   }
 );
 
 export const deletePermission = createAsyncThunk(
-  "permission/deletePermission",
+  'permission/deletePermission',
   async (id: string, { rejectWithValue }) => {
     try {
       return await permissionService.deletePermission(id);
     } catch (error: unknown) {
       const errorMessage =
-        error instanceof Error ? error.message : "Failed to delete permission";
+        error instanceof Error ? error.message : 'Failed to delete permission';
       return rejectWithValue(errorMessage);
     }
   }
 );
 
 const permissionSlice = createSlice({
-  name: "permission",
+  name: 'permission',
   initialState,
   reducers: {
     clearCurrentPermission: (state) => {

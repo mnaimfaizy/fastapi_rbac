@@ -3,48 +3,48 @@ import {
   Route,
   Routes,
   Navigate,
-} from "react-router-dom";
-import { Provider, useSelector } from "react-redux";
-import { store, RootState } from "./store"; // Adjust path if needed
-import { useEffect } from "react";
-import { getStoredRefreshToken } from "./lib/tokenStorage";
-import { refreshAccessToken, getCurrentUser } from "./store/slices/authSlice";
-import { useAppDispatch } from "./store/hooks"; // Add this import for useAppDispatch
-import { Toaster } from "@/components/ui/sonner";
+} from 'react-router-dom';
+import { Provider, useSelector } from 'react-redux';
+import { store, RootState } from './store'; // Adjust path if needed
+import { useEffect } from 'react';
+import { getStoredRefreshToken } from './lib/tokenStorage';
+import { refreshAccessToken, getCurrentUser } from './store/slices/authSlice';
+import { useAppDispatch } from './store/hooks'; // Add this import for useAppDispatch
+import { Toaster } from '@/components/ui/sonner';
 
 // Layouts
-import MainLayout from "./components/layout/MainLayout";
+import MainLayout from './components/layout/MainLayout';
 
 // Pages & Components
-import { VerifyEmailPage } from "./features/auth/components/VerifyEmailPage";
-import { ResendVerificationEmailForm } from "./features/auth/components/ResendVerificationEmailForm";
-import AuthLayout from "./components/layout/AuthLayout";
-import LoginPage from "./features/auth/LoginPage";
-import DashboardPage from "./features/dashboard/DashboardPage";
-import NotFoundPage from "./pages/NotFoundPage";
-import { RegistrationSuccessPage } from "./features/auth/RegistrationSuccessPage";
-import PasswordResetRequestPage from "./features/auth/PasswordResetRequestPage";
-import PasswordResetPage from "./features/auth/PasswordResetPage";
-import PasswordResetConfirmPage from "./features/auth/PasswordResetConfirmPage";
-import SignupPage from "./features/auth/SignupPage";
-import DashboardOverview from "./features/dashboard/DashboardOverview";
-import ProfileContent from "./components/dashboard/ProfileContent";
-import ChangePasswordContent from "./components/dashboard/ChangePasswordContent";
-import UsersList from "./features/users/UsersList";
-import UserEditPage from "./features/users/UserEditPage";
-import UserDetailContent from "./features/users/UserDetailContent";
-import PermissionsContent from "./features/permissions/PermissionsContent";
-import PermissionFormContent from "./features/permissions/PermissionFormContent";
-import PermissionDetail from "./features/permissions/PermissionDetail";
-import PermissionGroupsContent from "./features/permission-groups/PermissionGroupsContent";
-import PermissionGroupFormContent from "./features/permission-groups/PermissionGroupFormContent";
-import PermissionGroupDetail from "./features/permission-groups/PermissionGroupDetail";
-import RolesContent from "./features/roles/RolesContent";
-import RoleFormContent from "./features/roles/RoleFormContent";
-import RoleDetail from "./features/roles/RoleDetail";
-import RoleGroupContent from "./features/role-groups/RoleGroupContent";
-import RoleGroupFormContent from "./features/role-groups/RoleGroupFormContent";
-import RoleGroupDetail from "./features/role-groups/RoleGroupDetail";
+import { VerifyEmailPage } from './features/auth/components/VerifyEmailPage';
+import { ResendVerificationEmailForm } from './features/auth/components/ResendVerificationEmailForm';
+import AuthLayout from './components/layout/AuthLayout';
+import LoginPage from './features/auth/LoginPage';
+import DashboardPage from './features/dashboard/DashboardPage';
+import NotFoundPage from './pages/NotFoundPage';
+import { RegistrationSuccessPage } from './features/auth/RegistrationSuccessPage';
+import PasswordResetRequestPage from './features/auth/PasswordResetRequestPage';
+import PasswordResetPage from './features/auth/PasswordResetPage';
+import PasswordResetConfirmPage from './features/auth/PasswordResetConfirmPage';
+import SignupPage from './features/auth/SignupPage';
+import DashboardOverview from './features/dashboard/DashboardOverview';
+import ProfileContent from './components/dashboard/ProfileContent';
+import ChangePasswordContent from './components/dashboard/ChangePasswordContent';
+import UsersList from './features/users/UsersList';
+import UserEditPage from './features/users/UserEditPage';
+import UserDetailContent from './features/users/UserDetailContent';
+import PermissionsContent from './features/permissions/PermissionsContent';
+import PermissionFormContent from './features/permissions/PermissionFormContent';
+import PermissionDetail from './features/permissions/PermissionDetail';
+import PermissionGroupsContent from './features/permission-groups/PermissionGroupsContent';
+import PermissionGroupFormContent from './features/permission-groups/PermissionGroupFormContent';
+import PermissionGroupDetail from './features/permission-groups/PermissionGroupDetail';
+import RolesContent from './features/roles/RolesContent';
+import RoleFormContent from './features/roles/RoleFormContent';
+import RoleDetail from './features/roles/RoleDetail';
+import RoleGroupContent from './features/role-groups/RoleGroupContent';
+import RoleGroupFormContent from './features/role-groups/RoleGroupFormContent';
+import RoleGroupDetail from './features/role-groups/RoleGroupDetail';
 
 // Example ProtectedRoute component (implement based on your auth state)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -74,7 +74,7 @@ const InitAuth = () => {
           dispatch(getCurrentUser());
         })
         .catch((error) => {
-          console.error("Failed to refresh token on application start:", error);
+          console.error('Failed to refresh token on application start:', error);
           // The refreshAccessToken action already handles logout if it fails
         });
     }
@@ -157,11 +157,11 @@ function App() {
             }
           >
             {/* Child routes rendered inside MainLayout's Outlet */}
-            <Route index element={<Navigate to="/dashboard" replace />} />{" "}
+            <Route index element={<Navigate to="/dashboard" replace />} />{' '}
             {/* Redirect / to /dashboard */}
             <Route path="dashboard" element={<DashboardPage />}>
               {/* Nested Dashboard Routes - Rendered inside Dashboard's Outlet */}
-              <Route index element={<DashboardOverview />} />{" "}
+              <Route index element={<DashboardOverview />} />{' '}
               <Route path="/dashboard/profile" element={<ProfileContent />} />
               <Route
                 path="/dashboard/change-password"
@@ -250,7 +250,7 @@ function App() {
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
         <Toaster position="top-right" expand={false} richColors closeButton />
-      </Router>{" "}
+      </Router>{' '}
       {/* Ensure Router is closed correctly */}
     </Provider>
   );

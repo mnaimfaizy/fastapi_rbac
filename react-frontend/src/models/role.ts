@@ -1,5 +1,5 @@
-import { Permission } from "./permission";
-import { User } from "./user"; // Assuming User model exists
+import { Permission } from './permission';
+import { User } from './user'; // Assuming User model exists
 
 export interface Role {
   id: string;

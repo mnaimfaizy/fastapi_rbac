@@ -1,7 +1,7 @@
-import React, { useEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { useDispatch, useSelector } from "react-redux";
-import { AppDispatch, RootState } from "../../store";
+import React, { useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import { AppDispatch, RootState } from '../../store';
 import {
   fetchRoleGroupById,
   createRoleGroup,
@@ -9,11 +9,11 @@ import {
   clearCurrentRoleGroup,
   clearRoleGroupErrors,
   fetchRoleGroups,
-} from "../../store/slices/roleGroupSlice";
-import { RoleGroupCreate, RoleGroupUpdate } from "../../models/roleGroup";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import RoleGroupForm from "./RoleGroupForm";
-import { toast } from "sonner";
+} from '../../store/slices/roleGroupSlice';
+import { RoleGroupCreate, RoleGroupUpdate } from '../../models/roleGroup';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import RoleGroupForm from './RoleGroupForm';
+import { toast } from 'sonner';
 
 const RoleGroupFormContent: React.FC = () => {
   const { groupId } = useParams<{ groupId: string }>();
@@ -51,16 +51,16 @@ const RoleGroupFormContent: React.FC = () => {
             roleGroupData: data as RoleGroupUpdate,
           })
         ).unwrap();
-        toast.success("Role group updated successfully");
+        toast.success('Role group updated successfully');
       } else {
         // Create new role group
         await dispatch(createRoleGroup(data as RoleGroupCreate)).unwrap();
-        toast.success("Role group created successfully");
+        toast.success('Role group created successfully');
       }
-      navigate("/dashboard/role-groups");
+      navigate('/dashboard/role-groups');
     } catch (err) {
-      console.error("Failed to save role group:", err);
-      toast.error("Failed to save role group");
+      console.error('Failed to save role group:', err);
+      toast.error('Failed to save role group');
     }
   };
 
@@ -76,7 +76,7 @@ const RoleGroupFormContent: React.FC = () => {
     <Card>
       <CardHeader>
         <CardTitle>
-          {isEditMode ? "Edit Role Group" : "Create Role Group"}
+          {isEditMode ? 'Edit Role Group' : 'Create Role Group'}
         </CardTitle>
       </CardHeader>
       <CardContent>

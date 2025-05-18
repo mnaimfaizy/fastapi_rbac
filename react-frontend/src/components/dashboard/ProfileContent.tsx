@@ -1,5 +1,5 @@
-import { useAppSelector } from "../../store/hooks";
-import { Avatar } from "@/components/ui/avatar";
+import { useAppSelector } from '../../store/hooks';
+import { Avatar } from '@/components/ui/avatar';
 
 const ProfileContent = () => {
   const { user } = useAppSelector((state) => state.auth);
@@ -12,8 +12,8 @@ const ProfileContent = () => {
 
   // Generate initials for avatar
   const getInitials = () => {
-    const firstInitial = user.first_name?.charAt(0) || "";
-    const lastInitial = user.last_name?.charAt(0) || "";
+    const firstInitial = user.first_name?.charAt(0) || '';
+    const lastInitial = user.last_name?.charAt(0) || '';
     return (firstInitial + lastInitial).toUpperCase();
   };
 
@@ -65,10 +65,10 @@ const ProfileContent = () => {
                 <div className="p-2 border border-gray-300 rounded-md bg-gray-50 flex items-center">
                   <span
                     className={`inline-block w-3 h-3 rounded-full mr-2 ${
-                      user.is_active ? "bg-green-500" : "bg-red-500"
+                      user.is_active ? 'bg-green-500' : 'bg-red-500'
                     }`}
                   ></span>
-                  {user.is_active ? "Active" : "Inactive"}
+                  {user.is_active ? 'Active' : 'Inactive'}
                 </div>
               </div>
 
@@ -77,7 +77,7 @@ const ProfileContent = () => {
                   Account Type
                 </label>
                 <div className="p-2 border border-gray-300 rounded-md bg-gray-50">
-                  {user.is_superuser ? "Administrator" : "Regular User"}
+                  {user.is_superuser ? 'Administrator' : 'Regular User'}
                 </div>
               </div>
             </div>

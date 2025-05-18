@@ -1,12 +1,12 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAppDispatch, useAppSelector } from "../../hooks/redux";
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAppDispatch, useAppSelector } from '../../hooks/redux';
 import {
   fetchPermissionGroups,
   deletePermissionGroup,
   setPage,
   setPageSize,
-} from "../../store/slices/permissionGroupSlice";
+} from '../../store/slices/permissionGroupSlice';
 import {
   Table,
   TableBody,
@@ -14,7 +14,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from '@/components/ui/table';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,7 +22,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from '@/components/ui/dropdown-menu';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,9 +32,9 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+} from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   MoreHorizontal,
   ChevronDown,
@@ -44,18 +44,18 @@ import {
   Pencil, // Added
   Eye, // Added
   Trash2, // Added
-} from "lucide-react";
-import { PermissionGroup } from "../../models/permission";
-import { RootState } from "../../store";
-import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
+} from 'lucide-react';
+import { PermissionGroup } from '../../models/permission';
+import { RootState } from '../../store';
+import { toast } from 'sonner';
+import { Badge } from '@/components/ui/badge';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
+} from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 
 interface PermissionGroupRowProps {
   group: PermissionGroup;
@@ -93,11 +93,11 @@ const PermissionGroupRow: React.FC<PermissionGroupRowProps> = ({
   const isExpandable = hasChildren || hasPermissions;
 
   // Generate vertical line styles based on nesting level
-  const verticalLineClass = level > 0 ? "relative" : "";
+  const verticalLineClass = level > 0 ? 'relative' : '';
 
   return (
     <>
-      <TableRow className={cn(level > 0 && "hover:bg-accent/30")}>
+      <TableRow className={cn(level > 0 && 'hover:bg-accent/30')}>
         <TableCell className="font-medium">
           <div className="flex items-center gap-2">
             <div
@@ -114,7 +114,7 @@ const PermissionGroupRow: React.FC<PermissionGroupRowProps> = ({
                         className="p-1 hover:bg-accent rounded-sm mr-1 focus:outline-none focus:ring-1 focus:ring-primary"
                         aria-expanded={isExpanded}
                         aria-label={
-                          isExpanded ? "Collapse group" : "Expand group"
+                          isExpanded ? 'Collapse group' : 'Expand group'
                         }
                       >
                         {isExpanded ? (
@@ -125,7 +125,7 @@ const PermissionGroupRow: React.FC<PermissionGroupRowProps> = ({
                       </button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      {isExpanded ? "Collapse" : "Expand"} group
+                      {isExpanded ? 'Collapse' : 'Expand'} group
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
@@ -163,8 +163,8 @@ const PermissionGroupRow: React.FC<PermissionGroupRowProps> = ({
                       </Badge>
                     </TooltipTrigger>
                     <TooltipContent side="top">
-                      {childGroups.length} child{" "}
-                      {childGroups.length === 1 ? "group" : "groups"}
+                      {childGroups.length} child{' '}
+                      {childGroups.length === 1 ? 'group' : 'groups'}
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
@@ -183,10 +183,10 @@ const PermissionGroupRow: React.FC<PermissionGroupRowProps> = ({
                       </Badge>
                     </TooltipTrigger>
                     <TooltipContent side="top">
-                      {group.permissions?.length} assigned{" "}
+                      {group.permissions?.length} assigned{' '}
                       {group.permissions?.length === 1
-                        ? "permission"
-                        : "permissions"}
+                        ? 'permission'
+                        : 'permissions'}
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
@@ -199,8 +199,8 @@ const PermissionGroupRow: React.FC<PermissionGroupRowProps> = ({
         <TableCell>
           {group.permission_group_id
             ? allGroups.find((g) => g.id === group.permission_group_id)?.name ||
-              "Unknown"
-            : "Root Level"}
+              'Unknown'
+            : 'Root Level'}
         </TableCell>
 
         <TableCell>{group.permissions?.length || 0}</TableCell>
@@ -260,14 +260,14 @@ export default function PermissionGroupsDataTable() {
   const { permissionGroups, isLoading, totalItems, page, pageSize } =
     useAppSelector((state: RootState) => state.permissionGroup);
 
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState('');
   const [expandAll, setExpandAll] = useState(true);
   const [sort, setSort] = useState<{
     column: string | null;
-    direction: "asc" | "desc";
+    direction: 'asc' | 'desc';
   }>({
     column: null,
-    direction: "asc",
+    direction: 'asc',
   });
   // Add state for delete confirmation dialog
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -281,7 +281,7 @@ export default function PermissionGroupsDataTable() {
     setSort((prev) => ({
       column,
       direction:
-        prev.column === column && prev.direction === "asc" ? "desc" : "asc",
+        prev.column === column && prev.direction === 'asc' ? 'desc' : 'asc',
     }));
   };
 
@@ -313,13 +313,13 @@ export default function PermissionGroupsDataTable() {
     try {
       await dispatch(deletePermissionGroup(deleteGroupId)).unwrap();
       dispatch(fetchPermissionGroups({ page, pageSize }));
-      toast.success("Permission group deleted successfully");
+      toast.success('Permission group deleted successfully');
     } catch (error: unknown) {
       // The error message is now properly propagated from the service through the Redux slice
-      let errorMessage = "An unknown error occurred";
+      let errorMessage = 'An unknown error occurred';
       if (error instanceof Error) {
         errorMessage = error.message;
-      } else if (typeof error === "string") {
+      } else if (typeof error === 'string') {
         errorMessage = error;
       }
       toast.error(errorMessage, {
@@ -363,8 +363,8 @@ export default function PermissionGroupsDataTable() {
     const aValue = a[sort.column as keyof PermissionGroup];
     const bValue = b[sort.column as keyof PermissionGroup];
 
-    if (typeof aValue === "string" && typeof bValue === "string") {
-      return sort.direction === "asc"
+    if (typeof aValue === 'string' && typeof bValue === 'string') {
+      return sort.direction === 'asc'
         ? aValue.localeCompare(bValue)
         : bValue.localeCompare(aValue);
     }
@@ -373,13 +373,13 @@ export default function PermissionGroupsDataTable() {
     if (aValue === undefined) return 1;
     if (bValue === undefined) return -1;
 
-    return sort.direction === "asc"
+    return sort.direction === 'asc'
       ? aValue < bValue
         ? -1
         : 1
       : aValue > bValue
-      ? -1
-      : 1;
+        ? -1
+        : 1;
   });
 
   // Calculate pagination values
@@ -426,14 +426,14 @@ export default function PermissionGroupsDataTable() {
               <TableHead className="w-[250px]">
                 <Button
                   variant="ghost"
-                  onClick={() => handleSort("name")}
+                  onClick={() => handleSort('name')}
                   className="flex items-center gap-1 p-0 hover:bg-transparent"
                 >
                   Name
-                  {sort.column === "name" && (
+                  {sort.column === 'name' && (
                     <ChevronDown
                       className={`h-4 w-4 transition-transform ${
-                        sort.direction === "desc" ? "rotate-180" : ""
+                        sort.direction === 'desc' ? 'rotate-180' : ''
                       }`}
                     />
                   )}
@@ -506,7 +506,7 @@ export default function PermissionGroupsDataTable() {
       {/* Pagination */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-gray-500">
-          Showing {totalItems > 0 ? startItem : 0} to {endItem} of {totalItems}{" "}
+          Showing {totalItems > 0 ? startItem : 0} to {endItem} of {totalItems}{' '}
           permission groups
         </div>
         <div className="flex items-center gap-2">
@@ -536,7 +536,7 @@ export default function PermissionGroupsDataTable() {
               .map((p) => (
                 <Button
                   key={p}
-                  variant={p === page ? "default" : "outline"}
+                  variant={p === page ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => handlePageChange(p)}
                 >

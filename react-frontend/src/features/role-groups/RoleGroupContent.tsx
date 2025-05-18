@@ -1,15 +1,15 @@
-import React from "react";
-import { useNavigate } from "react-router-dom";
-import RoleGroupList from "./RoleGroupList";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus } from "lucide-react";
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import RoleGroupList from './RoleGroupList';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Plus } from 'lucide-react';
 
 const RoleGroupContent: React.FC = () => {
   const navigate = useNavigate();
 
   const handleCreateRoleGroup = () => {
-    navigate("/dashboard/role-groups/new");
+    navigate('/dashboard/role-groups/new');
   };
 
   return (

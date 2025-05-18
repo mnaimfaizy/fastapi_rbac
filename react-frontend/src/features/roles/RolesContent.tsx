@@ -1,15 +1,15 @@
-import React from "react";
-import { useNavigate } from "react-router-dom";
-import RoleList from "./RoleList";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import RoleList from './RoleList';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 // Renamed from RolesPage
 const RolesContent: React.FC = () => {
   const navigate = useNavigate();
 
   const handleCreateRole = () => {
-    navigate("/dashboard/roles/new"); // Updated navigation path
+    navigate('/dashboard/roles/new'); // Updated navigation path
   };
 
   return (

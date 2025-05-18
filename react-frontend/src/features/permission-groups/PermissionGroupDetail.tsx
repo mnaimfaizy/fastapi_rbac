@@ -1,19 +1,19 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { useAppDispatch, useAppSelector } from "../../hooks/redux";
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useAppDispatch, useAppSelector } from '../../hooks/redux';
 import {
   fetchPermissionGroupById,
   deletePermissionGroup,
   fetchPermissionGroups,
-} from "../../store/slices/permissionGroupSlice";
-import { Button } from "@/components/ui/button";
+} from '../../store/slices/permissionGroupSlice';
+import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
   CardDescription,
-} from "@/components/ui/card";
+} from '@/components/ui/card';
 import {
   Pencil,
   Trash2,
@@ -24,7 +24,7 @@ import {
   Users,
   Plus,
   Eye,
-} from "lucide-react";
+} from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -32,19 +32,19 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
+} from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
-import { RootState } from "../../store";
-import { PermissionGroup } from "../../models/permission";
-import { toast } from "sonner";
+} from '@/components/ui/tooltip';
+import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
+import { RootState } from '../../store';
+import { PermissionGroup } from '../../models/permission';
+import { toast } from 'sonner';
 
 interface NestedPermissionGroupProps {
   group: PermissionGroup;
@@ -94,7 +94,7 @@ const NestedPermissionGroup: React.FC<NestedPermissionGroupProps> = ({
                     onClick={() => setIsExpanded(!isExpanded)}
                     className="p-1 hover:bg-accent rounded-sm focus:outline-none focus:ring-1 focus:ring-primary"
                     aria-expanded={isExpanded}
-                    aria-label={isExpanded ? "Collapse group" : "Expand group"}
+                    aria-label={isExpanded ? 'Collapse group' : 'Expand group'}
                   >
                     {isExpanded ? (
                       <ChevronDown className="h-4 w-4 text-primary" />
@@ -104,7 +104,7 @@ const NestedPermissionGroup: React.FC<NestedPermissionGroupProps> = ({
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="top">
-                  {isExpanded ? "Collapse" : "Expand"} section
+                  {isExpanded ? 'Collapse' : 'Expand'} section
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -113,7 +113,7 @@ const NestedPermissionGroup: React.FC<NestedPermissionGroupProps> = ({
           )}
 
           {/* Group name */}
-          <div className={cn("relative", level > 0 && "border-l-0")}>
+          <div className={cn('relative', level > 0 && 'border-l-0')}>
             {level > 0 && (
               <div className="absolute left-[-1rem] top-1/2 w-[0.75rem] h-px bg-border"></div>
             )}
@@ -162,8 +162,8 @@ const NestedPermissionGroup: React.FC<NestedPermissionGroupProps> = ({
                     </Badge>
                   </TooltipTrigger>
                   <TooltipContent side="top">
-                    {childGroups.length} child{" "}
-                    {childGroups.length === 1 ? "group" : "groups"}
+                    {childGroups.length} child{' '}
+                    {childGroups.length === 1 ? 'group' : 'groups'}
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -182,10 +182,10 @@ const NestedPermissionGroup: React.FC<NestedPermissionGroupProps> = ({
                     </Badge>
                   </TooltipTrigger>
                   <TooltipContent side="top">
-                    {group.permissions?.length} assigned{" "}
+                    {group.permissions?.length} assigned{' '}
                     {group.permissions?.length === 1
-                      ? "permission"
-                      : "permissions"}
+                      ? 'permission'
+                      : 'permissions'}
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -220,7 +220,7 @@ const NestedPermissionGroup: React.FC<NestedPermissionGroupProps> = ({
                         <TableCell className="font-medium">
                           {permission.name}
                         </TableCell>
-                        <TableCell>{permission.description || "N/A"}</TableCell>
+                        <TableCell>{permission.description || 'N/A'}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -276,7 +276,7 @@ export default function PermissionGroupDetail() {
     : null;
 
   useEffect(() => {
-    console.log("ID: ", groupId);
+    console.log('ID: ', groupId);
   }, [groupId]); // Debugging line to check the value of id
 
   useEffect(() => {
@@ -296,8 +296,8 @@ export default function PermissionGroupDetail() {
 
     try {
       await dispatch(deletePermissionGroup(groupId)).unwrap();
-      toast.success("Permission group deleted successfully");
-      navigate("/dashboard/permission-groups");
+      toast.success('Permission group deleted successfully');
+      navigate('/dashboard/permission-groups');
     } catch (error: any) {
       // The error message is now properly propagated from the service through the Redux slice
       const errorMessage = error.toString();
@@ -308,7 +308,7 @@ export default function PermissionGroupDetail() {
   };
 
   const handleBack = () => {
-    navigate("/dashboard/permission-groups");
+    navigate('/dashboard/permission-groups');
   };
 
   const handleViewGroup = (groupId: string) => {
@@ -353,11 +353,11 @@ export default function PermissionGroupDetail() {
           </h2>
           <p className="text-sm text-muted-foreground space-y-1">
             <span className="block">
-              Created:{" "}
+              Created:{' '}
               {new Date(currentPermissionGroup.created_at).toLocaleString()}
             </span>
             <span className="block">
-              Updated:{" "}
+              Updated:{' '}
               {new Date(currentPermissionGroup.updated_at).toLocaleString()}
             </span>
             {parentGroupName && (
@@ -440,7 +440,7 @@ export default function PermissionGroupDetail() {
       <div className="flex justify-start">
         <Button
           onClick={() =>
-            navigate("/dashboard/permission-groups/new", {
+            navigate('/dashboard/permission-groups/new', {
               state: { defaultParentId: groupId },
             })
           }

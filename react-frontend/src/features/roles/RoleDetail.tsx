@@ -1,23 +1,23 @@
-import React, { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { useDispatch, useSelector } from "react-redux";
-import { AppDispatch, RootState } from "../../store";
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import { AppDispatch, RootState } from '../../store';
 import {
   fetchRoleById,
   deleteRole,
   assignPermissionsToRole,
   removePermissionsFromRole,
-} from "../../store/slices/roleSlice";
-import { fetchPermissions } from "../../store/slices/permissionSlice";
-import { Button } from "@/components/ui/button";
+} from '../../store/slices/roleSlice';
+import { fetchPermissions } from '../../store/slices/permissionSlice';
+import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+} from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,7 +28,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+} from '@/components/ui/alert-dialog';
 import {
   Dialog,
   DialogContent,
@@ -37,7 +37,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
+} from '@/components/ui/dialog';
 import {
   Table,
   TableBody,
@@ -45,14 +45,14 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowLeft, Edit, Plus, Trash2, Users, Search } from "lucide-react";
-import { Link } from "react-router-dom";
-import { formatDate } from "@/lib/utils";
-import { toast } from "sonner";
-import { Permission } from "@/models/permission";
-import { Input } from "@/components/ui/input";
+} from '@/components/ui/table';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ArrowLeft, Edit, Plus, Trash2, Users, Search } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { formatDate } from '@/lib/utils';
+import { toast } from 'sonner';
+import { Permission } from '@/models/permission';
+import { Input } from '@/components/ui/input';
 
 const RoleDetail: React.FC = () => {
   const { roleId } = useParams<{ roleId: string }>();
@@ -66,7 +66,7 @@ const RoleDetail: React.FC = () => {
 
   const [isPermissionDialogOpen, setIsPermissionDialogOpen] = useState(false);
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
-  const [searchTerm, setSearchTerm] = useState<string>("");
+  const [searchTerm, setSearchTerm] = useState<string>('');
   const [filteredPermissions, setFilteredPermissions] = useState<Permission[]>(
     []
   );
@@ -89,7 +89,7 @@ const RoleDetail: React.FC = () => {
       const availablePerms = permissions.filter(
         (permission) =>
           !currentPermissionIds.includes(permission.id) &&
-          (searchTerm === "" ||
+          (searchTerm === '' ||
             permission.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             (permission.description &&
               permission.description
@@ -105,12 +105,12 @@ const RoleDetail: React.FC = () => {
     if (roleId) {
       try {
         await dispatch(deleteRole(roleId)).unwrap();
-        toast.success("Role deleted successfully");
-        navigate("/dashboard/roles");
+        toast.success('Role deleted successfully');
+        navigate('/dashboard/roles');
       } catch (error: any) {
         const errorMessage =
           error.response?.data?.detail ||
-          (error instanceof Error ? error.message : "Failed to delete role");
+          (error instanceof Error ? error.message : 'Failed to delete role');
 
         toast.error(errorMessage, {
           duration: 5000,
@@ -126,10 +126,10 @@ const RoleDetail: React.FC = () => {
           removePermissionsFromRole({ roleId, permissionIds: [permissionId] })
         ).unwrap();
         dispatch(fetchRoleById(roleId)); // Refresh role data
-        toast.success("Permission removed from role");
+        toast.success('Permission removed from role');
       } catch (error) {
-        console.error("Failed to remove permission:", error);
-        toast.error("Failed to remove permission");
+        console.error('Failed to remove permission:', error);
+        toast.error('Failed to remove permission');
       }
     }
   };
@@ -146,11 +146,11 @@ const RoleDetail: React.FC = () => {
     if (roleId && selectedPermissions.length > 0) {
       try {
         // Debug logs to verify what's being sent
-        console.log("Selected permissions to assign:", selectedPermissions);
-        console.log("Role ID:", roleId);
+        console.log('Selected permissions to assign:', selectedPermissions);
+        console.log('Role ID:', roleId);
 
         if (selectedPermissions.length === 0) {
-          toast.error("No valid permissions selected");
+          toast.error('No valid permissions selected');
           return;
         }
 
@@ -165,15 +165,15 @@ const RoleDetail: React.FC = () => {
         setIsPermissionDialogOpen(false);
         setSelectedPermissions([]);
         dispatch(fetchRoleById(roleId)); // Refresh role data
-        toast.success("Permissions assigned to role");
+        toast.success('Permissions assigned to role');
       } catch (error) {
-        console.error("Failed to assign permissions:", error);
-        toast.error("Failed to assign permissions");
+        console.error('Failed to assign permissions:', error);
+        toast.error('Failed to assign permissions');
       }
     } else {
       // Show an error message if attempting to add with no selections
       if (roleId && selectedPermissions.length === 0) {
-        toast.error("Please select at least one permission to assign");
+        toast.error('Please select at least one permission to assign');
       }
     }
   };
@@ -221,7 +221,7 @@ const RoleDetail: React.FC = () => {
           </h2>
           <p className="text-sm text-muted-foreground space-y-1">
             <span className="block">
-              Description: {currentRole.description || "No description"}
+              Description: {currentRole.description || 'No description'}
             </span>
             <span className="block">
               Created: {formatDate(currentRole.created_at)}
@@ -326,8 +326,8 @@ const RoleDetail: React.FC = () => {
                 {filteredPermissions.length === 0 ? (
                   <p className="text-center text-muted-foreground py-4">
                     {permissions.length === 0
-                      ? "No permissions available in the system"
-                      : "No available permissions to assign"}
+                      ? 'No permissions available in the system'
+                      : 'No available permissions to assign'}
                   </p>
                 ) : (
                   <div className="space-y-4">
@@ -402,9 +402,9 @@ const RoleDetail: React.FC = () => {
                       <TableCell className="font-medium">
                         {permission.name}
                       </TableCell>
-                      <TableCell>{permission.description || "N/A"}</TableCell>
+                      <TableCell>{permission.description || 'N/A'}</TableCell>
                       <TableCell>
-                        {permission.group?.name || "No group"}
+                        {permission.group?.name || 'No group'}
                       </TableCell>
                       <TableCell className="text-right">
                         <Button

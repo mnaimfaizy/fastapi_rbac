@@ -1,7 +1,7 @@
-import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
-import { roleService } from "../../services/role.service";
-import { Role, RoleCreate, RoleUpdate } from "../../models/role";
-import { PaginatedResponse, PaginationParams } from "../../models/pagination";
+import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
+import { roleService } from '../../services/role.service';
+import { Role, RoleCreate, RoleUpdate } from '../../models/role';
+import { PaginatedResponse, PaginationParams } from '../../models/pagination';
 
 interface RoleState {
   roles: Role[];
@@ -28,7 +28,7 @@ const initialState: RoleState = {
 
 // Async Thunks
 export const fetchRoles = createAsyncThunk(
-  "roles/fetchRoles",
+  'roles/fetchRoles',
   async (
     params: PaginationParams = { page: 1, size: 10 },
     { rejectWithValue }
@@ -43,7 +43,7 @@ export const fetchRoles = createAsyncThunk(
 );
 
 export const fetchRoleById = createAsyncThunk(
-  "roles/fetchRoleById",
+  'roles/fetchRoleById',
   async (roleId: string, { rejectWithValue }) => {
     try {
       const response = await roleService.getRoleById(roleId);
@@ -55,7 +55,7 @@ export const fetchRoleById = createAsyncThunk(
 );
 
 export const createRole = createAsyncThunk(
-  "roles/createRole",
+  'roles/createRole',
   async (roleData: RoleCreate, { rejectWithValue }) => {
     try {
       const response = await roleService.createRole(roleData);
@@ -67,7 +67,7 @@ export const createRole = createAsyncThunk(
 );
 
 export const updateRole = createAsyncThunk(
-  "roles/updateRole",
+  'roles/updateRole',
   async (
     { roleId, roleData }: { roleId: string; roleData: RoleUpdate },
     { rejectWithValue }
@@ -82,7 +82,7 @@ export const updateRole = createAsyncThunk(
 );
 
 export const deleteRole = createAsyncThunk(
-  "roles/deleteRole",
+  'roles/deleteRole',
   async (roleId: string, { rejectWithValue }) => {
     try {
       await roleService.deleteRole(roleId);
@@ -95,7 +95,7 @@ export const deleteRole = createAsyncThunk(
 
 // New thunks for permission management
 export const assignPermissionsToRole = createAsyncThunk(
-  "roles/assignPermissions",
+  'roles/assignPermissions',
   async (
     { roleId, permissionIds }: { roleId: string; permissionIds: string[] },
     { rejectWithValue }
@@ -113,7 +113,7 @@ export const assignPermissionsToRole = createAsyncThunk(
 );
 
 export const removePermissionsFromRole = createAsyncThunk(
-  "roles/removePermissions",
+  'roles/removePermissions',
   async (
     { roleId, permissionIds }: { roleId: string; permissionIds: string[] },
     { rejectWithValue }
@@ -132,7 +132,7 @@ export const removePermissionsFromRole = createAsyncThunk(
 
 // New Thunk to fetch all roles
 export const fetchAllRoles = createAsyncThunk(
-  "roles/fetchAllRoles",
+  'roles/fetchAllRoles',
   async (_, { rejectWithValue }) => {
     try {
       const response = await roleService.getAllRoles();
@@ -146,7 +146,7 @@ export const fetchAllRoles = createAsyncThunk(
 
 // Slice Definition
 const roleSlice = createSlice({
-  name: "roles",
+  name: 'roles',
   initialState,
   reducers: {
     clearRoleError: (state) => {

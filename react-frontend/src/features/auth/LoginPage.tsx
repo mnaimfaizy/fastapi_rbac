@@ -1,15 +1,15 @@
-import { Navigate, useLocation } from "react-router-dom";
-import { GalleryVerticalEnd } from "lucide-react"; // Assuming lucide-react is installed
+import { Navigate, useLocation } from 'react-router-dom';
+import { GalleryVerticalEnd } from 'lucide-react'; // Assuming lucide-react is installed
 
-import { useAppSelector } from "../../store/hooks";
-import { LoginForm } from "../../components/auth/LoginForm"; // Adjusted path
+import { useAppSelector } from '../../store/hooks';
+import { LoginForm } from '../../components/auth/LoginForm'; // Adjusted path
 
 export default function LoginPage() {
   const { isAuthenticated } = useAppSelector((state) => state.auth);
   const location = useLocation();
 
   // Get the page user was trying to access before being redirected to login
-  const from = location.state?.from?.pathname || "/dashboard";
+  const from = location.state?.from?.pathname || '/dashboard';
 
   // If user is already authenticated, redirect
   if (isAuthenticated) {

@@ -1,12 +1,12 @@
-import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
-import { useNavigate } from "react-router-dom";
-import AuthService from "../../../services/auth.service";
-import { Button } from "../../../components/ui/button";
-import { Input } from "../../../components/ui/input";
-import { Label } from "../../../components/ui/label";
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { useNavigate } from 'react-router-dom';
+import AuthService from '../../../services/auth.service';
+import { Button } from '../../../components/ui/button';
+import { Input } from '../../../components/ui/input';
+import { Label } from '../../../components/ui/label';
 import {
   Card,
   CardContent,
@@ -14,20 +14,20 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "../../../components/ui/card";
+} from '../../../components/ui/card';
 import {
   Alert,
   AlertDescription,
   AlertTitle,
-} from "../../../components/ui/alert";
-import { AxiosError } from "axios";
-import { ErrorDetail } from "../../../services/api"; // Import ErrorDetail
+} from '../../../components/ui/alert';
+import { AxiosError } from 'axios';
+import { ErrorDetail } from '../../../services/api'; // Import ErrorDetail
 
 const registerSchema = z.object({
-  email: z.string().email({ message: "Invalid email address" }),
+  email: z.string().email({ message: 'Invalid email address' }),
   password: z
     .string()
-    .min(8, { message: "Password must be at least 8 characters" }),
+    .min(8, { message: 'Password must be at least 8 characters' }),
   full_name: z.string().optional().nullable(),
 });
 
@@ -57,7 +57,7 @@ export function RegisterForm() {
       await AuthService.register(data);
 
       // Redirect to a page indicating registration success and need for verification
-      navigate("/registration-success"); // Navigate to success/verification page
+      navigate('/registration-success'); // Navigate to success/verification page
     } catch (err) {
       const axiosError = err as AxiosError<{
         message?: string;
@@ -65,7 +65,7 @@ export function RegisterForm() {
       }>;
       const errorMessage =
         axiosError.response?.data?.message ||
-        "Registration failed. Please try again.";
+        'Registration failed. Please try again.';
       setError(errorMessage);
 
       // Handle field-specific errors from backend
@@ -79,7 +79,7 @@ export function RegisterForm() {
         setFieldErrors(backendFieldErrors);
       }
 
-      console.error("Registration error:", err);
+      console.error('Registration error:', err);
     } finally {
       setIsLoading(false);
     }
@@ -105,9 +105,9 @@ export function RegisterForm() {
               id="email"
               type="email"
               placeholder="m@example.com"
-              {...register("email")}
+              {...register('email')}
               aria-invalid={
-                errors.email || fieldErrors.email ? "true" : "false"
+                errors.email || fieldErrors.email ? 'true' : 'false'
               }
             />
             {errors.email && (
@@ -122,9 +122,9 @@ export function RegisterForm() {
             <Input
               id="password"
               type="password"
-              {...register("password")}
+              {...register('password')}
               aria-invalid={
-                errors.password || fieldErrors.password ? "true" : "false"
+                errors.password || fieldErrors.password ? 'true' : 'false'
               }
             />
             {errors.password && (
@@ -140,23 +140,23 @@ export function RegisterForm() {
               id="full_name"
               type="text"
               placeholder="John Doe"
-              {...register("full_name")}
-              aria-invalid={errors.full_name ? "true" : "false"}
+              {...register('full_name')}
+              aria-invalid={errors.full_name ? 'true' : 'false'}
             />
             {errors.full_name && (
               <p className="text-sm text-red-600">{errors.full_name.message}</p>
             )}
           </div>
           <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading ? "Registering..." : "Register"}
+            {isLoading ? 'Registering...' : 'Register'}
           </Button>
         </form>
       </CardContent>
       <CardFooter className="text-center text-sm">
-        Already have an account?{" "}
+        Already have an account?{' '}
         <Button
           variant="link"
-          onClick={() => navigate("/login")}
+          onClick={() => navigate('/login')}
           className="p-0 h-auto"
         >
           Login

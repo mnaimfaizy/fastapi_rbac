@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
-import { AppDispatch, RootState } from "../../store";
-import { fetchRoles, deleteRole } from "../../store/slices/roleSlice";
-import { fetchRoleGroups } from "../../store/slices/roleGroupSlice";
-import { Button } from "@/components/ui/button";
+import React, { useEffect, useState } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { AppDispatch, RootState } from '../../store';
+import { fetchRoles, deleteRole } from '../../store/slices/roleSlice';
+import { fetchRoleGroups } from '../../store/slices/roleGroupSlice';
+import { Button } from '@/components/ui/button';
 import {
   Table,
   TableBody,
@@ -11,9 +11,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { useNavigate } from "react-router-dom";
-import { Role } from "@/models/role";
+} from '@/components/ui/table';
+import { useNavigate } from 'react-router-dom';
+import { Role } from '@/models/role';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,10 +24,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { toast } from "sonner";
-import { Eye, Edit, Trash2, AlertCircle } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // Added Alert imports
+} from '@/components/ui/alert-dialog';
+import { toast } from 'sonner';
+import { Eye, Edit, Trash2, AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'; // Added Alert imports
 
 const RoleList: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -60,11 +60,11 @@ const RoleList: React.FC = () => {
   const handleDelete = async (roleId: string) => {
     try {
       await dispatch(deleteRole(roleId)).unwrap();
-      toast.success("Role deleted successfully");
+      toast.success('Role deleted successfully');
       dispatch(fetchRoles({ page: currentPage, size: pageSize }));
     } catch (error: unknown) {
-      toast.error("Failed to delete role");
-      console.error("Failed to delete role:", error);
+      toast.error('Failed to delete role');
+      console.error('Failed to delete role:', error);
     }
   };
 
@@ -79,17 +79,17 @@ const RoleList: React.FC = () => {
   };
 
   const formatDate = (dateString: string | undefined) => {
-    if (!dateString) return "-";
+    if (!dateString) return '-';
     const date = new Date(dateString);
     return !isNaN(date.getTime())
       ? date.toLocaleDateString(undefined, {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
         })
-      : "-";
+      : '-';
   };
 
   return (
@@ -127,14 +127,14 @@ const RoleList: React.FC = () => {
             ? roles.map((role: Role) => (
                 <TableRow key={role.id}>
                   <TableCell className="font-medium">{role.name}</TableCell>
-                  <TableCell>{role.description || "-"}</TableCell>
+                  <TableCell>{role.description || '-'}</TableCell>
                   <TableCell>
                     {role.role_group_id ? (
                       <button
                         onClick={() => navigateToRoleGroup(role.role_group_id!)}
                         className="text-primary hover:underline focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-sm"
                       >
-                        {getRoleGroupName(role.role_group_id) || "View Group"}
+                        {getRoleGroupName(role.role_group_id) || 'View Group'}
                       </button>
                     ) : (
                       <span className="text-muted-foreground">No group</span>

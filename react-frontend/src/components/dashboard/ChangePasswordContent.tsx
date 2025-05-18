@@ -1,33 +1,33 @@
-import { useEffect } from "react";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useAppDispatch, useAppSelector } from "../../store/hooks";
+import { useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import {
   changePassword,
   clearError,
   resetPasswordChangeSuccess,
-} from "../../store/slices/authSlice";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { CheckCircle, AlertCircle } from "lucide-react";
+} from '../../store/slices/authSlice';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { CheckCircle, AlertCircle } from 'lucide-react';
 
 // Define validation schema with Zod
 const passwordChangeSchema = z
   .object({
-    currentPassword: z.string().min(1, "Current password is required"),
+    currentPassword: z.string().min(1, 'Current password is required'),
     newPassword: z
       .string()
-      .min(8, "Password must be at least 8 characters")
+      .min(8, 'Password must be at least 8 characters')
       .regex(
         /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
-        "Password must contain at least one uppercase letter, one lowercase letter, one number and one special character"
+        'Password must contain at least one uppercase letter, one lowercase letter, one number and one special character'
       ),
-    confirmPassword: z.string().min(1, "Confirm password is required"),
+    confirmPassword: z.string().min(1, 'Confirm password is required'),
   })
   .refine((data) => data.newPassword === data.confirmPassword, {
     message: "Passwords don't match",
-    path: ["confirmPassword"],
+    path: ['confirmPassword'],
   });
 
 type PasswordChangeFormData = z.infer<typeof passwordChangeSchema>;
@@ -47,9 +47,9 @@ const ChangePasswordContent = () => {
   } = useForm<PasswordChangeFormData>({
     resolver: zodResolver(passwordChangeSchema),
     defaultValues: {
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: "",
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: '',
     },
   });
 
@@ -83,7 +83,7 @@ const ChangePasswordContent = () => {
       ).unwrap();
     } catch (error) {
       // Error is handled by the auth slice
-      console.error("Error changing password:", error);
+      console.error('Error changing password:', error);
     }
   };
 
@@ -119,7 +119,7 @@ const ChangePasswordContent = () => {
             <input
               id="currentPassword"
               type="password"
-              {...register("currentPassword")}
+              {...register('currentPassword')}
               className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
             />
             {errors.currentPassword && (
@@ -139,7 +139,7 @@ const ChangePasswordContent = () => {
             <input
               id="newPassword"
               type="password"
-              {...register("newPassword")}
+              {...register('newPassword')}
               className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
             />
             {errors.newPassword && (
@@ -159,7 +159,7 @@ const ChangePasswordContent = () => {
             <input
               id="confirmPassword"
               type="password"
-              {...register("confirmPassword")}
+              {...register('confirmPassword')}
               className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
             />
             {errors.confirmPassword && (
@@ -171,7 +171,7 @@ const ChangePasswordContent = () => {
 
           <div>
             <Button type="submit" disabled={isLoading} className="w-full">
-              {isLoading ? "Updating..." : "Change Password"}
+              {isLoading ? 'Updating...' : 'Change Password'}
             </Button>
           </div>
         </form>

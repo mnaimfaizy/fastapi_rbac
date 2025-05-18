@@ -4,7 +4,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from '@/components/ui/card';
 import {
   AreaChart,
   Area,
@@ -13,7 +13,7 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-} from "recharts";
+} from 'recharts';
 
 // Example data structure
 interface OverviewChartData {
@@ -54,8 +54,8 @@ export function OverviewChart({
             <YAxis className="text-xs" />
             <Tooltip
               contentStyle={{
-                backgroundColor: "var(--background)",
-                borderColor: "var(--border)",
+                backgroundColor: 'var(--background)',
+                borderColor: 'var(--border)',
               }}
             />
             <Area

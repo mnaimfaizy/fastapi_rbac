@@ -1,69 +1,69 @@
-import { StatsCard } from "../../components/dashboard/stats-card";
-import { OverviewChart } from "../../components/dashboard/overview-chart";
-import { DataTable } from "../../components/dashboard/data-table";
-import { Users, ShieldCheck, UserCheck, BarChart } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { StatsCard } from '../../components/dashboard/stats-card';
+import { OverviewChart } from '../../components/dashboard/overview-chart';
+import { DataTable } from '../../components/dashboard/data-table';
+import { Users, ShieldCheck, UserCheck, BarChart } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
+} from '@/components/ui/card';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 
 // Sample data
 const chartData = [
-  { name: "Jan", total: 1200 },
-  { name: "Feb", total: 2100 },
-  { name: "Mar", total: 1800 },
-  { name: "Apr", total: 2400 },
-  { name: "May", total: 2800 },
-  { name: "Jun", total: 2600 },
-  { name: "Jul", total: 3200 },
+  { name: 'Jan', total: 1200 },
+  { name: 'Feb', total: 2100 },
+  { name: 'Mar', total: 1800 },
+  { name: 'Apr', total: 2400 },
+  { name: 'May', total: 2800 },
+  { name: 'Jun', total: 2600 },
+  { name: 'Jul', total: 3200 },
 ];
 
 const sampleUsers = [
   {
-    id: "1",
-    name: "John Smith",
-    email: "john.smith@example.com",
-    role: "Admin",
-    status: "active" as const,
-    lastActive: "Just now",
+    id: '1',
+    name: 'John Smith',
+    email: 'john.smith@example.com',
+    role: 'Admin',
+    status: 'active' as const,
+    lastActive: 'Just now',
   },
   {
-    id: "2",
-    name: "Alice Johnson",
-    email: "alice.johnson@example.com",
-    role: "Editor",
-    status: "active" as const,
-    lastActive: "2 hours ago",
+    id: '2',
+    name: 'Alice Johnson',
+    email: 'alice.johnson@example.com',
+    role: 'Editor',
+    status: 'active' as const,
+    lastActive: '2 hours ago',
   },
   {
-    id: "3",
-    name: "Robert Brown",
-    email: "robert.brown@example.com",
-    role: "Viewer",
-    status: "inactive" as const,
-    lastActive: "3 days ago",
+    id: '3',
+    name: 'Robert Brown',
+    email: 'robert.brown@example.com',
+    role: 'Viewer',
+    status: 'inactive' as const,
+    lastActive: '3 days ago',
   },
   {
-    id: "4",
-    name: "Emma Wilson",
-    email: "emma.wilson@example.com",
-    role: "Editor",
-    status: "pending" as const,
-    lastActive: "1 hour ago",
+    id: '4',
+    name: 'Emma Wilson',
+    email: 'emma.wilson@example.com',
+    role: 'Editor',
+    status: 'pending' as const,
+    lastActive: '1 hour ago',
   },
   {
-    id: "5",
-    name: "Michael Davis",
-    email: "michael.davis@example.com",
-    role: "Viewer",
-    status: "active" as const,
-    lastActive: "5 hours ago",
+    id: '5',
+    name: 'Michael Davis',
+    email: 'michael.davis@example.com',
+    role: 'Viewer',
+    status: 'active' as const,
+    lastActive: '5 hours ago',
   },
 ];
 
@@ -123,9 +123,9 @@ const DashboardOverview = () => {
                     <Avatar className="h-9 w-9">
                       <AvatarFallback>
                         {user.name
-                          .split(" ")
+                          .split(' ')
                           .map((n) => n[0])
-                          .join("")}
+                          .join('')}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 space-y-1">
@@ -138,8 +138,8 @@ const DashboardOverview = () => {
                       <Badge
                         variant="outline"
                         className={cn(
-                          user.status === "active" &&
-                            "bg-green-100 text-green-800"
+                          user.status === 'active' &&
+                            'bg-green-100 text-green-800'
                         )}
                       >
                         {user.lastActive}

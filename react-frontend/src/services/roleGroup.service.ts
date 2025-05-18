@@ -1,14 +1,14 @@
-import api from "./api";
+import api from './api';
 import {
   RoleGroup,
   RoleGroupCreate,
   RoleGroupResponse,
   RoleGroupUpdate,
   RoleGroupWithRolesResponse,
-} from "../models/roleGroup";
-import { PaginatedDataResponse, PaginationParams } from "../models/pagination";
+} from '../models/roleGroup';
+import { PaginatedDataResponse, PaginationParams } from '../models/pagination';
 
-const API_URL = "/role-groups";
+const API_URL = '/role-groups';
 
 const roleGroupService = {
   // Fetch paginated role groups with hierarchy

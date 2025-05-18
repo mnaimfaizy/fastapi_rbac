@@ -1,12 +1,12 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAppDispatch, useAppSelector } from "../../hooks/redux";
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAppDispatch, useAppSelector } from '../../hooks/redux';
 import {
   fetchPermissions,
   deletePermission,
   setPage,
   setPageSize,
-} from "../../store/slices/permissionSlice";
+} from '../../store/slices/permissionSlice';
 import {
   Table,
   TableBody,
@@ -14,7 +14,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from '@/components/ui/table';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,7 +22,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from '@/components/ui/dropdown-menu';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,17 +32,17 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { MoreHorizontal, ChevronDown, Eye, Pencil, Trash2 } from "lucide-react";
-import { Permission } from "../../models/permission";
-import { RootState } from "../../store";
-import { toast } from "sonner";
+} from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { MoreHorizontal, ChevronDown, Eye, Pencil, Trash2 } from 'lucide-react';
+import { Permission } from '../../models/permission';
+import { RootState } from '../../store';
+import { toast } from 'sonner';
 
 interface SortState {
   column: string | null;
-  direction: "asc" | "desc";
+  direction: 'asc' | 'desc';
 }
 
 export default function PermissionsDataTable() {
@@ -52,10 +52,10 @@ export default function PermissionsDataTable() {
     (state: RootState) => state.permission
   );
 
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState('');
   const [sort, setSort] = useState<SortState>({
     column: null,
-    direction: "asc",
+    direction: 'asc',
   });
   // Add state for delete confirmation dialog
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -69,7 +69,7 @@ export default function PermissionsDataTable() {
     setSort((prev) => ({
       column,
       direction:
-        prev.column === column && prev.direction === "asc" ? "desc" : "asc",
+        prev.column === column && prev.direction === 'asc' ? 'desc' : 'asc',
     }));
   };
 
@@ -100,14 +100,14 @@ export default function PermissionsDataTable() {
 
     try {
       await dispatch(deletePermission(deleteItemId)).unwrap();
-      toast.success("Permission deleted successfully");
+      toast.success('Permission deleted successfully');
       dispatch(fetchPermissions({ page, pageSize }));
     } catch (error: any) {
       const errorMessage =
         error?.response?.data?.detail ||
         (error instanceof Error
           ? error.message
-          : "Failed to delete permission");
+          : 'Failed to delete permission');
       toast.error(errorMessage);
     } finally {
       setIsDeleteDialogOpen(false);
@@ -136,7 +136,7 @@ export default function PermissionsDataTable() {
     let bValue: string | undefined | null;
 
     // Handle sorting by group name
-    if (sort.column === "group") {
+    if (sort.column === 'group') {
       aValue = a.group?.name?.toLowerCase();
       bValue = b.group?.name?.toLowerCase();
     } else {
@@ -144,19 +144,19 @@ export default function PermissionsDataTable() {
       const key = sort.column as keyof Permission;
       const rawA = a[key];
       const rawB = b[key];
-      aValue = typeof rawA === "string" ? rawA.toLowerCase() : null;
-      bValue = typeof rawB === "string" ? rawB.toLowerCase() : null;
+      aValue = typeof rawA === 'string' ? rawA.toLowerCase() : null;
+      bValue = typeof rawB === 'string' ? rawB.toLowerCase() : null;
     }
 
     // Comparison logic (handles null/undefined)
     if (aValue === bValue) return 0;
     if (aValue === null || aValue === undefined)
-      return sort.direction === "asc" ? 1 : -1;
+      return sort.direction === 'asc' ? 1 : -1;
     if (bValue === null || bValue === undefined)
-      return sort.direction === "asc" ? -1 : 1;
+      return sort.direction === 'asc' ? -1 : 1;
 
     // String comparison
-    return sort.direction === "asc"
+    return sort.direction === 'asc'
       ? aValue.localeCompare(bValue)
       : bValue.localeCompare(aValue);
   });
@@ -186,14 +186,14 @@ export default function PermissionsDataTable() {
               <TableHead className="w-[250px]">
                 <Button
                   variant="ghost"
-                  onClick={() => handleSort("name")}
+                  onClick={() => handleSort('name')}
                   className="flex items-center gap-1 p-0 hover:bg-transparent"
                 >
                   Name
-                  {sort.column === "name" && (
+                  {sort.column === 'name' && (
                     <ChevronDown
                       className={`h-4 w-4 transition-transform ${
-                        sort.direction === "desc" ? "rotate-180" : ""
+                        sort.direction === 'desc' ? 'rotate-180' : ''
                       }`}
                     />
                   )}
@@ -203,14 +203,14 @@ export default function PermissionsDataTable() {
               <TableHead>
                 <Button
                   variant="ghost"
-                  onClick={() => handleSort("group")}
+                  onClick={() => handleSort('group')}
                   className="flex items-center gap-1 p-0 hover:bg-transparent"
                 >
                   Group Name
-                  {sort.column === "group" && (
+                  {sort.column === 'group' && (
                     <ChevronDown
                       className={`h-4 w-4 transition-transform ${
-                        sort.direction === "desc" ? "rotate-180" : ""
+                        sort.direction === 'desc' ? 'rotate-180' : ''
                       }`}
                     />
                   )}
@@ -233,7 +233,7 @@ export default function PermissionsDataTable() {
                     {permission.name}
                   </TableCell>
                   <TableCell>{permission.description}</TableCell>
-                  <TableCell>{permission.group?.name ?? "N/A"}</TableCell>
+                  <TableCell>{permission.group?.name ?? 'N/A'}</TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -309,7 +309,7 @@ export default function PermissionsDataTable() {
       {/* Pagination */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-gray-500">
-          Showing {totalItems > 0 ? startItem : 0} to {endItem} of {totalItems}{" "}
+          Showing {totalItems > 0 ? startItem : 0} to {endItem} of {totalItems}{' '}
           permissions
         </div>
         <div className="flex items-center gap-2">
@@ -339,7 +339,7 @@ export default function PermissionsDataTable() {
               .map((p) => (
                 <Button
                   key={p}
-                  variant={p === page ? "default" : "outline"}
+                  variant={p === page ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => handlePageChange(p)}
                 >

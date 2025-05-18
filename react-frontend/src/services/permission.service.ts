@@ -1,4 +1,4 @@
-import api from "./api";
+import api from './api';
 import {
   PermissionCreate,
   PermissionGroupCreate,
@@ -8,7 +8,7 @@ import {
   PermissionUpdate,
   PaginatedPermissionResponse,
   PaginatedPermissionGroupResponse,
-} from "../models/permission";
+} from '../models/permission';
 
 class PermissionService {
   // Permission endpoints
@@ -26,7 +26,7 @@ class PermissionService {
 
   async createPermission(permission: PermissionCreate) {
     const response = await api.post<PermissionResponse>(
-      "/permission",
+      '/permission',
       permission
     );
     return response.data;
@@ -76,7 +76,7 @@ class PermissionService {
 
   async createPermissionGroup(group: PermissionGroupCreate) {
     const response = await api.post<PermissionGroupResponse>(
-      "/permission_group",
+      '/permission_group',
       group
     );
     return response.data;
@@ -105,7 +105,7 @@ class PermissionService {
           throw new Error(error.response.data.message);
         }
       }
-      throw new Error("Failed to delete permission group");
+      throw new Error('Failed to delete permission group');
     }
   }
 }

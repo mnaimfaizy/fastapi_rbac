@@ -1,7 +1,7 @@
-import { useEffect } from "react";
-import { useAppSelector, useAppDispatch } from "../store/hooks";
-import { getStoredRefreshToken } from "../lib/tokenStorage";
-import { refreshAccessToken, getCurrentUser } from "../store/slices/authSlice";
+import { useEffect } from 'react';
+import { useAppSelector, useAppDispatch } from '../store/hooks';
+import { getStoredRefreshToken } from '../lib/tokenStorage';
+import { refreshAccessToken, getCurrentUser } from '../store/slices/authSlice';
 
 /**
  * Custom hook for authentication management

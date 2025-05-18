@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState } from 'react';
 import {
   Table,
   TableBody,
@@ -6,8 +6,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
+} from '@/components/ui/table';
+import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,18 +15,18 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { MoreHorizontal, ChevronDown } from "lucide-react";
+} from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { MoreHorizontal, ChevronDown } from 'lucide-react';
 
 interface User {
   id: string;
   name: string;
   email: string;
   role: string;
-  status: "active" | "inactive" | "pending";
+  status: 'active' | 'inactive' | 'pending';
   lastActive: string;
 }
 
@@ -35,9 +35,9 @@ interface DataTableProps {
 }
 
 export function DataTable({ data }: DataTableProps) {
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState('');
   const [sortColumn, setSortColumn] = useState<keyof User | null>(null);
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   // Filter data based on search term
   const filteredData = data.filter(
@@ -54,7 +54,7 @@ export function DataTable({ data }: DataTableProps) {
     const aValue = a[sortColumn];
     const bValue = b[sortColumn];
 
-    if (sortDirection === "asc") {
+    if (sortDirection === 'asc') {
       return aValue < bValue ? -1 : 1;
     } else {
       return aValue > bValue ? -1 : 1;
@@ -64,33 +64,33 @@ export function DataTable({ data }: DataTableProps) {
   // Handle sort
   const handleSort = (column: keyof User) => {
     if (sortColumn === column) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
       setSortColumn(column);
-      setSortDirection("asc");
+      setSortDirection('asc');
     }
   };
 
   // Status badge color
-  const getStatusColor = (status: User["status"]) => {
+  const getStatusColor = (status: User['status']) => {
     switch (status) {
-      case "active":
-        return "bg-green-100 text-green-800 hover:bg-green-200";
-      case "inactive":
-        return "bg-gray-100 text-gray-800 hover:bg-gray-200";
-      case "pending":
-        return "bg-yellow-100 text-yellow-800 hover:bg-yellow-200";
+      case 'active':
+        return 'bg-green-100 text-green-800 hover:bg-green-200';
+      case 'inactive':
+        return 'bg-gray-100 text-gray-800 hover:bg-gray-200';
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200';
       default:
-        return "";
+        return '';
     }
   };
 
   // Get initials from name for avatar fallback
   const getInitials = (name: string) => {
     return name
-      .split(" ")
+      .split(' ')
       .map((n) => n[0])
-      .join("")
+      .join('')
       .toUpperCase();
   };
 
@@ -111,14 +111,14 @@ export function DataTable({ data }: DataTableProps) {
               <TableHead className="w-[300px]">
                 <Button
                   variant="ghost"
-                  onClick={() => handleSort("name")}
+                  onClick={() => handleSort('name')}
                   className="flex items-center gap-1 p-0 hover:bg-transparent"
                 >
                   Name
-                  {sortColumn === "name" && (
+                  {sortColumn === 'name' && (
                     <ChevronDown
                       className={`h-4 w-4 transition-transform ${
-                        sortDirection === "desc" ? "rotate-180" : ""
+                        sortDirection === 'desc' ? 'rotate-180' : ''
                       }`}
                     />
                   )}
@@ -127,14 +127,14 @@ export function DataTable({ data }: DataTableProps) {
               <TableHead>
                 <Button
                   variant="ghost"
-                  onClick={() => handleSort("role")}
+                  onClick={() => handleSort('role')}
                   className="flex items-center gap-1 p-0 hover:bg-transparent"
                 >
                   Role
-                  {sortColumn === "role" && (
+                  {sortColumn === 'role' && (
                     <ChevronDown
                       className={`h-4 w-4 transition-transform ${
-                        sortDirection === "desc" ? "rotate-180" : ""
+                        sortDirection === 'desc' ? 'rotate-180' : ''
                       }`}
                     />
                   )}
@@ -144,14 +144,14 @@ export function DataTable({ data }: DataTableProps) {
               <TableHead>
                 <Button
                   variant="ghost"
-                  onClick={() => handleSort("lastActive")}
+                  onClick={() => handleSort('lastActive')}
                   className="flex items-center gap-1 p-0 hover:bg-transparent"
                 >
                   Last Active
-                  {sortColumn === "lastActive" && (
+                  {sortColumn === 'lastActive' && (
                     <ChevronDown
                       className={`h-4 w-4 transition-transform ${
-                        sortDirection === "desc" ? "rotate-180" : ""
+                        sortDirection === 'desc' ? 'rotate-180' : ''
                       }`}
                     />
                   )}

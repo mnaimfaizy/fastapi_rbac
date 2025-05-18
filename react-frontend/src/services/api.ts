@@ -1,11 +1,11 @@
-import axios, { AxiosError } from "axios";
+import axios, { AxiosError } from 'axios';
 import {
   getStoredRefreshToken,
   getStoredAccessToken,
   setStoredAccessToken,
-} from "../lib/tokenStorage";
-import { store } from "../store";
-import { refreshAccessToken, logout } from "../store/slices/authSlice";
+} from '../lib/tokenStorage';
+import { store } from '../store';
+import { refreshAccessToken, logout } from '../store/slices/authSlice';
 
 // Define error response interface to match backend format
 export interface ErrorDetail {
@@ -35,9 +35,9 @@ export interface SuccessResponse<T> {
 }
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1",
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1',
   headers: {
-    "Content-Type": "application/json",
+    'Content-Type': 'application/json',
   },
 });
 
@@ -66,21 +66,21 @@ api.interceptors.response.use(
       const responseData = error.response.data as ErrorResponseData;
 
       // If it's already in our format, keep it
-      if (responseData.status === "error" && responseData.message) {
+      if (responseData.status === 'error' && responseData.message) {
         // Keep as is
       }
       // Handle structured error format from backend
       else if (responseData.detail) {
-        let errorMessage = "";
+        let errorMessage = '';
         if (
-          typeof responseData.detail === "object" &&
+          typeof responseData.detail === 'object' &&
           responseData.detail.field_name &&
           responseData.detail.message
         ) {
           // Handle field-specific errors
           errorMessage = responseData.detail.message;
           error.response.data = {
-            status: "error",
+            status: 'error',
             message: errorMessage,
             errors: [
               {
@@ -89,11 +89,11 @@ api.interceptors.response.use(
               },
             ],
           };
-        } else if (typeof responseData.detail === "string") {
+        } else if (typeof responseData.detail === 'string') {
           // Handle string error messages
           errorMessage = responseData.detail;
           error.response.data = {
-            status: "error",
+            status: 'error',
             message: errorMessage,
             errors: [
               {
@@ -103,9 +103,9 @@ api.interceptors.response.use(
           };
         } else {
           // Generic error handling
-          errorMessage = "An unexpected error occurred";
+          errorMessage = 'An unexpected error occurred';
           error.response.data = {
-            status: "error",
+            status: 'error',
             message: errorMessage,
             detail: responseData,
           };
@@ -139,7 +139,7 @@ api.interceptors.response.use(
           store.dispatch(logout());
           return Promise.reject(error);
         } catch (refreshError) {
-          console.error("Token refresh failed:", refreshError);
+          console.error('Token refresh failed:', refreshError);
           store.dispatch(logout());
           return Promise.reject(error);
         }
@@ -150,11 +150,11 @@ api.interceptors.response.use(
     if (error.response?.status === 403) {
       const responseData = error.response.data as ErrorResponseData;
       if (
-        (typeof responseData === "object" &&
-          responseData?.message?.toLowerCase().includes("token")) ||
+        (typeof responseData === 'object' &&
+          responseData?.message?.toLowerCase().includes('token')) ||
         (responseData?.detail &&
-          typeof responseData.detail === "object" &&
-          responseData.detail?.message?.toLowerCase().includes("token"))
+          typeof responseData.detail === 'object' &&
+          responseData.detail?.message?.toLowerCase().includes('token'))
       ) {
         store.dispatch(logout());
       }

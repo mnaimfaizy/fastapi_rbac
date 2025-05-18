@@ -1,10 +1,10 @@
-import React, { useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-import { useAppDispatch } from "../../hooks/redux";
-import { fetchPermissionGroups } from "../../store/slices/permissionGroupSlice";
-import PermissionGroupsDataTable from "./PermissionGroupsDataTable";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useAppDispatch } from '../../hooks/redux';
+import { fetchPermissionGroups } from '../../store/slices/permissionGroupSlice';
+import PermissionGroupsDataTable from './PermissionGroupsDataTable';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 const PermissionGroupsContent: React.FC = () => {
   const navigate = useNavigate();
@@ -17,7 +17,7 @@ const PermissionGroupsContent: React.FC = () => {
   }, [dispatch, location.pathname]);
 
   const handleCreatePermissionGroup = () => {
-    navigate("/dashboard/permission-groups/new");
+    navigate('/dashboard/permission-groups/new');
   };
 
   return (

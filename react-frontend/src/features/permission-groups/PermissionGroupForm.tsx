@@ -1,9 +1,9 @@
-import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { useAppDispatch, useAppSelector } from "../../hooks/redux";
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { useAppDispatch, useAppSelector } from '../../hooks/redux';
 import {
   fetchPermissionGroupById,
   createPermissionGroup,
@@ -11,8 +11,8 @@ import {
   fetchPermissionGroups,
   clearCurrentPermissionGroup,
   clearPermissionGroupErrors,
-} from "../../store/slices/permissionGroupSlice";
-import { Button } from "@/components/ui/button";
+} from '../../store/slices/permissionGroupSlice';
+import { Button } from '@/components/ui/button';
 import {
   Form,
   FormControl,
@@ -20,24 +20,24 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft } from "lucide-react";
-import { RootState } from "../../store";
-import { PermissionGroup } from "../../models/permission";
-import { toast } from "sonner";
+} from '@/components/ui/select';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ArrowLeft } from 'lucide-react';
+import { RootState } from '../../store';
+import { PermissionGroup } from '../../models/permission';
+import { toast } from 'sonner';
 
 // Form validation schema
 const formSchema = z.object({
-  name: z.string().min(1, "Name is required"),
+  name: z.string().min(1, 'Name is required'),
   permission_group_id: z.string().optional(),
 });
 
@@ -66,8 +66,8 @@ export default function PermissionGroupForm({
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: "",
-      permission_group_id: "",
+      name: '',
+      permission_group_id: '',
     },
   });
 
@@ -91,7 +91,7 @@ export default function PermissionGroupForm({
     if (isEdit && currentPermissionGroup) {
       form.reset({
         name: currentPermissionGroup.name,
-        permission_group_id: currentPermissionGroup.permission_group_id || "",
+        permission_group_id: currentPermissionGroup.permission_group_id || '',
       });
     }
   }, [currentPermissionGroup, form, isEdit]);
@@ -102,7 +102,7 @@ export default function PermissionGroupForm({
       const submissionData = {
         ...data,
         permission_group_id:
-          data.permission_group_id === "none"
+          data.permission_group_id === 'none'
             ? null
             : data.permission_group_id || null,
       };
@@ -114,20 +114,20 @@ export default function PermissionGroupForm({
             groupData: submissionData,
           })
         ).unwrap();
-        toast.success("Permission group updated successfully");
+        toast.success('Permission group updated successfully');
       } else {
         await dispatch(createPermissionGroup(submissionData)).unwrap();
-        toast.success("Permission group created successfully");
+        toast.success('Permission group created successfully');
       }
-      navigate("/dashboard/permission-groups");
+      navigate('/dashboard/permission-groups');
     } catch (error: any) {
-      console.error("Error saving permission group:", error);
-      toast.error(error?.message || "Failed to save permission group");
+      console.error('Error saving permission group:', error);
+      toast.error(error?.message || 'Failed to save permission group');
     }
   };
 
   const handleCancel = () => {
-    navigate("/dashboard/permission-groups");
+    navigate('/dashboard/permission-groups');
   };
 
   if (isEdit && isLoading && !currentPermissionGroup) {
@@ -147,7 +147,7 @@ export default function PermissionGroupForm({
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <CardTitle>
-          {isEdit ? "Edit Permission Group" : "Create Permission Group"}
+          {isEdit ? 'Edit Permission Group' : 'Create Permission Group'}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -184,8 +184,8 @@ export default function PermissionGroupForm({
                   <FormLabel>Parent Group (Optional)</FormLabel>
                   <Select
                     onValueChange={field.onChange}
-                    defaultValue={field.value || "none"}
-                    value={field.value || "none"}
+                    defaultValue={field.value || 'none'}
+                    value={field.value || 'none'}
                   >
                     <FormControl>
                       <SelectTrigger>
@@ -223,7 +223,7 @@ export default function PermissionGroupForm({
                 Cancel
               </Button>
               <Button type="submit" disabled={isLoading}>
-                {isEdit ? "Update" : "Create"}
+                {isEdit ? 'Update' : 'Create'}
               </Button>
             </div>
           </form>

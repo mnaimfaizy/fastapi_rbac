@@ -1,11 +1,11 @@
-import { useEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { useAppDispatch, useAppSelector } from "../../hooks/redux";
+import { useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useAppDispatch, useAppSelector } from '../../hooks/redux';
 import {
   fetchPermissionById,
   deletePermission,
-} from "../../store/slices/permissionSlice";
-import { Button } from "@/components/ui/button";
+} from '../../store/slices/permissionSlice';
+import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
@@ -13,9 +13,9 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Pencil, Trash2, ArrowLeft } from "lucide-react";
-import { RootState } from "../../store";
+} from '@/components/ui/card';
+import { Pencil, Trash2, ArrowLeft } from 'lucide-react';
+import { RootState } from '../../store';
 
 export default function PermissionDetail() {
   const { id } = useParams<{ id: string }>();
@@ -27,7 +27,7 @@ export default function PermissionDetail() {
   );
 
   // Get permission group name directly from the currentPermission object
-  const permissionGroupName = currentPermission?.group?.name || "N/A";
+  const permissionGroupName = currentPermission?.group?.name || 'N/A';
 
   useEffect(() => {
     if (id) {
@@ -42,18 +42,18 @@ export default function PermissionDetail() {
   const handleDelete = async () => {
     if (!id) return;
 
-    if (window.confirm("Are you sure you want to delete this permission?")) {
+    if (window.confirm('Are you sure you want to delete this permission?')) {
       try {
         await dispatch(deletePermission(id)).unwrap();
-        navigate("/dashboard/permissions");
+        navigate('/dashboard/permissions');
       } catch (error) {
-        console.error("Error deleting permission:", error);
+        console.error('Error deleting permission:', error);
       }
     }
   };
 
   const handleBack = () => {
-    navigate("/dashboard/permissions");
+    navigate('/dashboard/permissions');
   };
 
   if (isLoading) {

@@ -1,9 +1,9 @@
-import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
-import { User, PaginatedItems } from "../../models/user";
+import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
+import { User, PaginatedItems } from '../../models/user';
 import userService, {
   UserCreatePayload,
   UserUpdatePayload,
-} from "../../services/user.service";
+} from '../../services/user.service';
 
 // Define the initial state interface
 interface UserState {
@@ -39,7 +39,7 @@ const initialState: UserState = {
 
 // Async thunks for API operations
 export const fetchUsers = createAsyncThunk(
-  "user/fetchUsers",
+  'user/fetchUsers',
   async (
     {
       page = 1,
@@ -57,7 +57,7 @@ export const fetchUsers = createAsyncThunk(
 );
 
 export const fetchUserById = createAsyncThunk(
-  "user/fetchUserById",
+  'user/fetchUserById',
   async (userId: string, { rejectWithValue }) => {
     try {
       return await userService.getUserById(userId);
@@ -68,7 +68,7 @@ export const fetchUserById = createAsyncThunk(
 );
 
 export const createUser = createAsyncThunk(
-  "user/createUser",
+  'user/createUser',
   async (userData: UserCreatePayload, { rejectWithValue }) => {
     try {
       const newUser = await userService.createUser(userData);
@@ -78,14 +78,14 @@ export const createUser = createAsyncThunk(
         return rejectWithValue(error.message);
       }
       return rejectWithValue(
-        "An unexpected error occurred while creating the user"
+        'An unexpected error occurred while creating the user'
       );
     }
   }
 );
 
 export const updateUser = createAsyncThunk(
-  "user/updateUser",
+  'user/updateUser',
   async (
     { userId, userData }: { userId: string; userData: UserUpdatePayload },
     { rejectWithValue }
@@ -98,14 +98,14 @@ export const updateUser = createAsyncThunk(
         return rejectWithValue(error.message);
       }
       return rejectWithValue(
-        "An unexpected error occurred while updating the user"
+        'An unexpected error occurred while updating the user'
       );
     }
   }
 );
 
 export const deleteUser = createAsyncThunk(
-  "user/deleteUser",
+  'user/deleteUser',
   async (userId: string, { rejectWithValue }) => {
     try {
       await userService.deleteUser(userId);
@@ -118,7 +118,7 @@ export const deleteUser = createAsyncThunk(
 
 // Create the user slice
 const userSlice = createSlice({
-  name: "user",
+  name: 'user',
   initialState,
   reducers: {
     clearSelectedUser: (state) => {

@@ -1,10 +1,10 @@
-import { configureStore } from "@reduxjs/toolkit";
-import authReducer from "./slices/authSlice";
-import userReducer from "./slices/userSlice";
-import permissionReducer from "./slices/permissionSlice";
-import permissionGroupReducer from "./slices/permissionGroupSlice";
-import roleReducer from "./slices/roleSlice";
-import roleGroupReducer from "./slices/roleGroupSlice"; // Import the new role group reducer
+import { configureStore } from '@reduxjs/toolkit';
+import authReducer from './slices/authSlice';
+import userReducer from './slices/userSlice';
+import permissionReducer from './slices/permissionSlice';
+import permissionGroupReducer from './slices/permissionGroupSlice';
+import roleReducer from './slices/roleSlice';
+import roleGroupReducer from './slices/roleGroupSlice'; // Import the new role group reducer
 
 // Configure the Redux store
 export const store = configureStore({
@@ -21,9 +21,9 @@ export const store = configureStore({
     getDefaultMiddleware({
       serializableCheck: {
         // Ignore these action types for serialization checks
-        ignoredActions: ["auth/login/fulfilled", "auth/refreshToken/fulfilled"],
+        ignoredActions: ['auth/login/fulfilled', 'auth/refreshToken/fulfilled'],
         // Ignore these field paths in state for serialization checks
-        ignoredPaths: ["auth.user"],
+        ignoredPaths: ['auth.user'],
       },
     }),
 });

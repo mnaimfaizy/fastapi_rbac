@@ -1,13 +1,13 @@
-import { useState } from "react";
-import { Link, useNavigate, Outlet } from "react-router-dom";
-import { useAppDispatch, useAppSelector } from "../../store/hooks";
-import { logout } from "../../store/slices/authSlice";
-import { Sidebar } from "../dashboard/sidebar";
-import { Button } from "@/components/ui/button";
-import { Menu, User } from "lucide-react";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { useMediaQuery } from "@/hooks/use-media-query";
-import { cn } from "@/lib/utils";
+import { useState } from 'react';
+import { Link, useNavigate, Outlet } from 'react-router-dom';
+import { useAppDispatch, useAppSelector } from '../../store/hooks';
+import { logout } from '../../store/slices/authSlice';
+import { Sidebar } from '../dashboard/sidebar';
+import { Button } from '@/components/ui/button';
+import { Menu, User } from 'lucide-react';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { useMediaQuery } from '@/hooks/use-media-query';
+import { cn } from '@/lib/utils';
 
 const MainLayout = () => {
   const { user } = useAppSelector((state) => state.auth);
@@ -15,11 +15,11 @@ const MainLayout = () => {
   const navigate = useNavigate();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const isDesktop = useMediaQuery("(min-width: 1024px)");
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
 
   const handleLogout = () => {
     dispatch(logout());
-    navigate("/login");
+    navigate('/login');
   };
 
   const toggleUserMenu = () => {
@@ -32,8 +32,8 @@ const MainLayout = () => {
       {isDesktop ? (
         <div
           className={cn(
-            "border-r bg-background",
-            isCollapsed ? "w-[80px]" : "w-[250px]"
+            'border-r bg-background',
+            isCollapsed ? 'w-[80px]' : 'w-[250px]'
           )}
         >
           <div className="flex h-16 items-center justify-between border-b px-4">
@@ -44,8 +44,8 @@ const MainLayout = () => {
               variant="ghost"
               size="icon"
               onClick={() => setIsCollapsed(!isCollapsed)}
-              className={cn("ml-auto", !isCollapsed && "rotate-180")}
-              aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              className={cn('ml-auto', !isCollapsed && 'rotate-180')}
+              aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
               <Menu className="h-4 w-4" />
             </Button>
@@ -86,7 +86,7 @@ const MainLayout = () => {
                 {user?.first_name} {user?.last_name}
                 <svg
                   className={`w-4 h-4 transition-transform ${
-                    isUserMenuOpen ? "rotate-180" : ""
+                    isUserMenuOpen ? 'rotate-180' : ''
                   }`}
                   fill="none"
                   stroke="currentColor"

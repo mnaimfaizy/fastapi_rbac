@@ -1,10 +1,10 @@
-import React from "react";
-import { useForm, SubmitHandler } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import React from 'react';
+import { useForm, SubmitHandler } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Form,
   FormControl,
@@ -12,20 +12,20 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
+} from '@/components/ui/form';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Role } from "@/models/role";
-import { RoleGroup } from "@/models/roleGroup";
+} from '@/components/ui/select';
+import { Role } from '@/models/role';
+import { RoleGroup } from '@/models/roleGroup';
 
 // Zod schema for validation
 const roleSchema = z.object({
-  name: z.string().min(1, { message: "Role name is required" }),
+  name: z.string().min(1, { message: 'Role name is required' }),
   description: z.string().optional(),
   role_group_id: z.string().optional(),
 });
@@ -48,8 +48,8 @@ const RoleForm: React.FC<RoleFormProps> = ({
   const form = useForm<RoleFormData>({
     resolver: zodResolver(roleSchema),
     defaultValues: {
-      name: initialData?.name || "",
-      description: initialData?.description || "",
+      name: initialData?.name || '',
+      description: initialData?.description || '',
       role_group_id: initialData?.role_group_id || undefined,
     },
   });
@@ -59,7 +59,7 @@ const RoleForm: React.FC<RoleFormProps> = ({
     if (initialData) {
       form.reset({
         name: initialData.name,
-        description: initialData.description || "",
+        description: initialData.description || '',
         role_group_id: initialData.role_group_id,
       });
     }
@@ -127,10 +127,10 @@ const RoleForm: React.FC<RoleFormProps> = ({
 
         <Button type="submit" disabled={isLoading}>
           {isLoading
-            ? "Saving..."
+            ? 'Saving...'
             : initialData
-            ? "Update Role"
-            : "Create Role"}
+              ? 'Update Role'
+              : 'Create Role'}
         </Button>
       </form>
     </Form>

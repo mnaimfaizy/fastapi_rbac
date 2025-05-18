@@ -1,32 +1,32 @@
-import { useEffect } from "react";
-import { Link } from "react-router-dom";
-import { useAppDispatch, useAppSelector } from "../../store/hooks";
+import { useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import {
   requestPasswordReset,
   clearError,
   resetPasswordResetRequested,
-} from "../../store/slices/authSlice";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
+} from '../../store/slices/authSlice';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
 
 // shadcn UI components
-import { Button } from "../../components/ui/button";
-import { Input } from "../../components/ui/input";
-import { Label } from "../../components/ui/label";
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { Label } from '../../components/ui/label';
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "../../components/ui/card";
-import { Alert, AlertDescription } from "../../components/ui/alert";
-import { AlertTriangle, CheckCircle } from "lucide-react";
+} from '../../components/ui/card';
+import { Alert, AlertDescription } from '../../components/ui/alert';
+import { AlertTriangle, CheckCircle } from 'lucide-react';
 
 // Define validation schema with Zod
 const resetRequestSchema = z.object({
-  email: z.string().email("Please enter a valid email address"),
+  email: z.string().email('Please enter a valid email address'),
 });
 
 type ResetRequestFormData = z.infer<typeof resetRequestSchema>;
@@ -45,7 +45,7 @@ const PasswordResetRequestPage = () => {
   } = useForm<ResetRequestFormData>({
     resolver: zodResolver(resetRequestSchema),
     defaultValues: {
-      email: "",
+      email: '',
     },
   });
 
@@ -79,8 +79,8 @@ const PasswordResetRequestPage = () => {
           </CardTitle>
           <CardDescription>
             {passwordResetRequested
-              ? "Check your email for password reset instructions"
-              : "Enter your email to receive password reset instructions"}
+              ? 'Check your email for password reset instructions'
+              : 'Enter your email to receive password reset instructions'}
           </CardDescription>
         </CardHeader>
 
@@ -115,7 +115,7 @@ const PasswordResetRequestPage = () => {
                   type="email"
                   placeholder="Email address"
                   autoComplete="email"
-                  {...register("email")}
+                  {...register('email')}
                 />
                 {errors.email && (
                   <p className="text-sm text-red-600">{errors.email.message}</p>
@@ -123,7 +123,7 @@ const PasswordResetRequestPage = () => {
               </div>
 
               <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? "Sending..." : "Send Reset Link"}
+                {isLoading ? 'Sending...' : 'Send Reset Link'}
               </Button>
 
               <div className="text-center">

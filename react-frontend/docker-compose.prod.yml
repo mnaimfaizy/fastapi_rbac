@@ -9,7 +9,7 @@ services:
     env_file:
       - .env.production
     ports:
-      - "80:80"
+      - '80:80'
     container_name: react_frontend
     restart: always
     networks:

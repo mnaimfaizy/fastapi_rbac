@@ -1,4 +1,4 @@
-import { Role } from "./role";
+import { Role } from './role';
 
 // Basic user information for creator details
 export interface UserBasic {

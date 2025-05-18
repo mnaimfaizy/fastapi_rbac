@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { Link } from "react-router-dom";
-import { useDispatch, useSelector } from "react-redux";
-import { AppDispatch, RootState } from "../../store";
-import { deleteUser, fetchUsers } from "../../store/slices/userSlice";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PlusCircle, MoreHorizontal } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import { AppDispatch, RootState } from '../../store';
+import { deleteUser, fetchUsers } from '../../store/slices/userSlice';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { PlusCircle, MoreHorizontal } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,7 +15,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from '@/components/ui/alert-dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,10 +23,10 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { toast } from "sonner";
-import { DataTable } from "@/components/dashboard/users/data-table";
-import { columns as baseColumns } from "@/features/users/user-table-columns";
+} from '@/components/ui/dropdown-menu';
+import { toast } from 'sonner';
+import { DataTable } from '@/components/dashboard/users/data-table';
+import { columns as baseColumns } from '@/features/users/user-table-columns';
 
 const UsersList = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -67,7 +67,7 @@ const UsersList = () => {
 
     try {
       await dispatch(deleteUser(deleteUserId)).unwrap();
-      toast.success("User deleted successfully");
+      toast.success('User deleted successfully');
       dispatch(
         fetchUsers({
           page: pagination?.page || 1,
@@ -78,17 +78,17 @@ const UsersList = () => {
       const errorMessage =
         error instanceof Error
           ? error.message
-          : typeof error === "object" &&
-            error &&
-            "response" in error &&
-            typeof error.response === "object" &&
-            error.response &&
-            "data" in error.response &&
-            typeof error.response.data === "object" &&
-            error.response.data &&
-            "detail" in error.response.data
-          ? String(error.response.data.detail)
-          : "Failed to delete user";
+          : typeof error === 'object' &&
+              error &&
+              'response' in error &&
+              typeof error.response === 'object' &&
+              error.response &&
+              'data' in error.response &&
+              typeof error.response.data === 'object' &&
+              error.response.data &&
+              'detail' in error.response.data
+            ? String(error.response.data.detail)
+            : 'Failed to delete user';
       toast.error(errorMessage);
     } finally {
       setIsDeleteDialogOpen(false);
@@ -99,7 +99,7 @@ const UsersList = () => {
   // Create columns with delete handler
   const columns = useMemo(() => {
     return baseColumns.map((col) => {
-      if (col.id === "actions") {
+      if (col.id === 'actions') {
         return {
           ...col,
           cell: ({ row }: { row: any }) => {

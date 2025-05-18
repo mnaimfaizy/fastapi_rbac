@@ -1,19 +1,19 @@
-import { useState, useEffect, useMemo } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import userService from "../../services/user.service";
-import { useNavigate } from "react-router-dom";
-import { useDispatch, useSelector } from "react-redux";
-import { AppDispatch, RootState } from "../../store";
-import { fetchAllRoles } from "../../store/slices/roleSlice";
-import { updateUser, createUser } from "../../store/slices/userSlice";
-import { toast } from "sonner";
+import { useState, useEffect, useMemo } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import userService from '../../services/user.service';
+import { useNavigate } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import { AppDispatch, RootState } from '../../store';
+import { fetchAllRoles } from '../../store/slices/roleSlice';
+import { updateUser, createUser } from '../../store/slices/userSlice';
+import { toast } from 'sonner';
 
 // Import ShadCN UI Components
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import {
   Form,
   FormControl,
@@ -21,7 +21,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
+} from '@/components/ui/form';
 import {
   Command,
   CommandEmpty,
@@ -29,16 +29,16 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from "@/components/ui/command";
+} from '@/components/ui/command';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover";
-import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertTriangle, CheckCircle } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+} from '@/components/ui/popover';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertTriangle, CheckCircle } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 // Define props interface
 interface UserEditFormProps {
@@ -48,17 +48,17 @@ interface UserEditFormProps {
 
 // Define validation schema with Zod
 const userEditSchema = z.object({
-  first_name: z.string().min(1, "First name is required"),
-  last_name: z.string().min(1, "Last name is required"),
-  email: z.string().email("Please enter a valid email address"),
+  first_name: z.string().min(1, 'First name is required'),
+  last_name: z.string().min(1, 'Last name is required'),
+  email: z.string().email('Please enter a valid email address'),
   is_active: z.boolean().optional(),
   is_superuser: z.boolean().optional(),
   contact_phone: z.string().optional(), // Changed from nullable to optional
   password: z
     .string()
-    .min(8, "Password must be at least 8 characters")
+    .min(8, 'Password must be at least 8 characters')
     .optional()
-    .or(z.literal("")),
+    .or(z.literal('')),
   role_id: z.array(z.string()).optional(), // Add role_id field
 });
 
@@ -118,13 +118,13 @@ const UserEditForm = ({ userId, onSuccess }: UserEditFormProps) => {
   const form = useForm<UserEditFormData>({
     resolver: zodResolver(userEditSchema),
     defaultValues: {
-      first_name: "",
-      last_name: "",
-      email: "",
+      first_name: '',
+      last_name: '',
+      email: '',
       is_active: true,
       is_superuser: false,
-      contact_phone: "", // Change to empty string instead of null
-      password: "",
+      contact_phone: '', // Change to empty string instead of null
+      password: '',
       role_id: [], // Initialize role_id as empty array
     },
   });
@@ -135,7 +135,7 @@ const UserEditForm = ({ userId, onSuccess }: UserEditFormProps) => {
   useEffect(() => {
     // Subscribe to role_id field changes
     const subscription = form.watch((value, { name }) => {
-      if (name === "role_id") {
+      if (name === 'role_id') {
         const roleIds = value.role_id as string[] | undefined;
         setSelectedRoleIds(
           roleIds?.filter((id): id is string => id !== undefined) || []
@@ -144,13 +144,13 @@ const UserEditForm = ({ userId, onSuccess }: UserEditFormProps) => {
     });
 
     // Set initial value
-    const initialRoles = form.getValues("role_id");
+    const initialRoles = form.getValues('role_id');
     setSelectedRoleIds(
       initialRoles?.filter((id): id is string => id !== undefined) || []
     );
 
     return () => {
-      if (subscription && typeof subscription.unsubscribe === "function") {
+      if (subscription && typeof subscription.unsubscribe === 'function') {
         subscription.unsubscribe();
       }
     };
@@ -191,13 +191,13 @@ const UserEditForm = ({ userId, onSuccess }: UserEditFormProps) => {
           email: userData.email,
           is_active: userData.is_active,
           is_superuser: userData.is_superuser,
-          contact_phone: userData.contact_phone || "", // Convert null to empty string
-          password: "", // Don't pre-fill the password field
+          contact_phone: userData.contact_phone || '', // Convert null to empty string
+          password: '', // Don't pre-fill the password field
           role_id: userData.roles?.map((role) => role.id) || [], // Pre-fill role IDs
         });
       } catch (error: unknown) {
         const errorMessage =
-          error instanceof Error ? error.message : "Failed to load user data";
+          error instanceof Error ? error.message : 'Failed to load user data';
         setError(errorMessage);
         toast.error(errorMessage);
       } finally {
@@ -223,7 +223,7 @@ const UserEditForm = ({ userId, onSuccess }: UserEditFormProps) => {
       };
 
       // Remove empty password from data if provided
-      if (payload.password === "") {
+      if (payload.password === '') {
         delete payload.password;
       }
 
@@ -235,13 +235,13 @@ const UserEditForm = ({ userId, onSuccess }: UserEditFormProps) => {
 
         if (updateUser.fulfilled.match(resultAction)) {
           setSuccess(true);
-          toast.success("User updated successfully");
+          toast.success('User updated successfully');
           // Navigate after a short delay to show the success message
           setTimeout(() => {
             if (onSuccess) {
               onSuccess();
             } else {
-              navigate("/dashboard/users");
+              navigate('/dashboard/users');
             }
           }, 1500);
         } else if (updateUser.rejected.match(resultAction)) {
@@ -250,10 +250,10 @@ const UserEditForm = ({ userId, onSuccess }: UserEditFormProps) => {
       } else {
         // Create new user
         if (!payload.password) {
-          form.setError("password", {
-            message: "Password is required for new users",
+          form.setError('password', {
+            message: 'Password is required for new users',
           });
-          toast.error("Password is required for new users");
+          toast.error('Password is required for new users');
           setIsLoading(false);
           return;
         }
@@ -261,13 +261,13 @@ const UserEditForm = ({ userId, onSuccess }: UserEditFormProps) => {
         const resultAction = await dispatch(createUser(payload));
         if (createUser.fulfilled.match(resultAction)) {
           setSuccess(true);
-          toast.success("User created successfully");
+          toast.success('User created successfully');
           // Navigate after a short delay to show the success message
           setTimeout(() => {
             if (onSuccess) {
               onSuccess();
             } else {
-              navigate("/dashboard/users");
+              navigate('/dashboard/users');
             }
           }, 1500);
         } else if (createUser.rejected.match(resultAction)) {
@@ -287,14 +287,14 @@ const UserEditForm = ({ userId, onSuccess }: UserEditFormProps) => {
   };
 
   const handleApiError = (error: unknown) => {
-    let errorMessage = "An unexpected error occurred";
+    let errorMessage = 'An unexpected error occurred';
 
-    if (typeof error === "string") {
+    if (typeof error === 'string') {
       errorMessage = error;
     } else if (
       error &&
-      typeof error === "object" &&
-      "response" in error &&
+      typeof error === 'object' &&
+      'response' in error &&
       error.response
     ) {
       const responseData = error.response as { data?: ApiResponse };
@@ -309,7 +309,7 @@ const UserEditForm = ({ userId, onSuccess }: UserEditFormProps) => {
               form.setError(field as FormFields, { message: err.msg });
             }
           });
-          errorMessage = "Please fix the validation errors";
+          errorMessage = 'Please fix the validation errors';
         } else {
           errorMessage = responseData.data.detail;
         }
@@ -324,7 +324,7 @@ const UserEditForm = ({ userId, onSuccess }: UserEditFormProps) => {
             form.setError(err.field as FormFields, { message: err.message });
           }
         });
-        errorMessage = responseData.data.message || "Failed to save user";
+        errorMessage = responseData.data.message || 'Failed to save user';
       }
       // Handle generic error messages
       else if (responseData.data?.message) {
@@ -338,7 +338,7 @@ const UserEditForm = ({ userId, onSuccess }: UserEditFormProps) => {
     // Scroll to the error message
     const errorAlert = document.querySelector('[role="alert"]');
     if (errorAlert) {
-      errorAlert.scrollIntoView({ behavior: "smooth", block: "start" });
+      errorAlert.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   };
 
@@ -346,7 +346,7 @@ const UserEditForm = ({ userId, onSuccess }: UserEditFormProps) => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{userId ? "Edit User" : "Create User"}</CardTitle>
+        <CardTitle>{userId ? 'Edit User' : 'Create User'}</CardTitle>
       </CardHeader>
       <CardContent>
         {error && (
@@ -425,7 +425,7 @@ const UserEditForm = ({ userId, onSuccess }: UserEditFormProps) => {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>
-                    Password {userId && "(leave blank to keep current)"}
+                    Password {userId && '(leave blank to keep current)'}
                   </FormLabel>
                   <FormControl>
                     <Input
@@ -433,8 +433,8 @@ const UserEditForm = ({ userId, onSuccess }: UserEditFormProps) => {
                       type="password"
                       placeholder={
                         userId
-                          ? "Leave blank to keep current password"
-                          : "Password"
+                          ? 'Leave blank to keep current password'
+                          : 'Password'
                       }
                       disabled={isLoading}
                     />
@@ -531,8 +531,8 @@ const UserEditForm = ({ userId, onSuccess }: UserEditFormProps) => {
                                   {selectedRoles.length > 0
                                     ? selectedRoles
                                         .map((role) => role.name)
-                                        .join(", ")
-                                    : "Select roles..."}
+                                        .join(', ')
+                                    : 'Select roles...'}
                                 </span>
                                 <svg
                                   xmlns="http://www.w3.org/2000/svg"
@@ -626,11 +626,11 @@ const UserEditForm = ({ userId, onSuccess }: UserEditFormProps) => {
               <Button type="submit" disabled={isLoading}>
                 {isLoading
                   ? userId
-                    ? "Updating..."
-                    : "Creating..."
+                    ? 'Updating...'
+                    : 'Creating...'
                   : userId
-                  ? "Update User"
-                  : "Create User"}
+                    ? 'Update User'
+                    : 'Create User'}
               </Button>
             </div>
           </form>

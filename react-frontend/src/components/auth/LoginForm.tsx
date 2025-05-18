@@ -1,22 +1,22 @@
-import { useNavigate, useLocation, Link } from "react-router-dom";
-import { useAppDispatch, useAppSelector } from "../../store/hooks";
-import { loginUser, clearError } from "../../store/slices/authSlice";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { cn } from "../../lib/utils"; // Assuming utils file exists
+import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useAppDispatch, useAppSelector } from '../../store/hooks';
+import { loginUser, clearError } from '../../store/slices/authSlice';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { cn } from '../../lib/utils'; // Assuming utils file exists
 
 // shadcn UI components
-import { Button } from "../ui/button";
-import { Input } from "../ui/input";
-import { Label } from "../ui/label";
-import { Alert, AlertDescription } from "../ui/alert";
-import { AlertTriangle } from "lucide-react"; // Assuming lucide-react is installed
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
+import { Alert, AlertDescription } from '../ui/alert';
+import { AlertTriangle } from 'lucide-react'; // Assuming lucide-react is installed
 
 // Define validation schema with Zod
 const loginSchema = z.object({
-  email: z.string().email("Please enter a valid email address"),
-  password: z.string().min(1, "Password cannot be empty"), // Adjusted message
+  email: z.string().email('Please enter a valid email address'),
+  password: z.string().min(1, 'Password cannot be empty'), // Adjusted message
 });
 
 type LoginFormData = z.infer<typeof loginSchema>;
@@ -24,7 +24,7 @@ type LoginFormData = z.infer<typeof loginSchema>;
 export function LoginForm({
   className,
   ...props
-}: React.ComponentPropsWithoutRef<"form">) {
+}: React.ComponentPropsWithoutRef<'form'>) {
   const { isLoading, error } = useAppSelector((state) => state.auth);
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
@@ -37,12 +37,12 @@ export function LoginForm({
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: "",
-      password: "",
+      email: '',
+      password: '',
     },
   });
 
-  const from = location.state?.from?.pathname || "/dashboard";
+  const from = location.state?.from?.pathname || '/dashboard';
 
   const onSubmit = async (data: LoginFormData) => {
     if (isLoading) return;
@@ -53,7 +53,7 @@ export function LoginForm({
       ).unwrap();
       navigate(from, { replace: true });
     } catch (err) {
-      console.error("Login failed:", err);
+      console.error('Login failed:', err);
       // Error state is handled by the slice and displayed below
     }
   };
@@ -61,7 +61,7 @@ export function LoginForm({
   return (
     <form
       onSubmit={handleSubmit(onSubmit)}
-      className={cn("flex flex-col gap-6", className)}
+      className={cn('flex flex-col gap-6', className)}
       {...props}
     >
       <div className="flex flex-col items-center gap-2 text-center">
@@ -79,7 +79,7 @@ export function LoginForm({
       )}
 
       <div className="grid gap-4">
-        {" "}
+        {' '}
         {/* Adjusted gap */}
         <div className="grid gap-2">
           <Label htmlFor="email">Email</Label>
@@ -89,7 +89,7 @@ export function LoginForm({
             placeholder="m@example.com"
             autoComplete="email"
             required
-            {...register("email")}
+            {...register('email')}
           />
           {errors.email && (
             <p className="text-sm text-red-600">{errors.email.message}</p>
@@ -111,14 +111,14 @@ export function LoginForm({
             placeholder="Password"
             autoComplete="current-password"
             required
-            {...register("password")}
+            {...register('password')}
           />
           {errors.password && (
             <p className="text-sm text-red-600">{errors.password.message}</p>
           )}
         </div>
         <Button type="submit" className="w-full" disabled={isLoading}>
-          {isLoading ? "Logging in..." : "Login"}
+          {isLoading ? 'Logging in...' : 'Login'}
         </Button>
         {/* Optional: "Or continue with" section */}
         {/* <div className="relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t after:border-border">
@@ -137,9 +137,9 @@ export function LoginForm({
         </Button> */}
       </div>
       <div className="text-center text-sm">
-        Don&apos;t have an account?{" "}
+        Don&apos;t have an account?{' '}
         <Link to="/register" className="underline underline-offset-4">
-          {" "}
+          {' '}
           {/* Link to register page */}
           Sign up
         </Link>

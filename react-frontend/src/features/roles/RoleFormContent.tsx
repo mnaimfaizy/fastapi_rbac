@@ -1,19 +1,19 @@
-import React, { useEffect } from "react";
-import { useDispatch, useSelector } from "react-redux";
-import { useNavigate, useParams } from "react-router-dom";
-import { AppDispatch, RootState } from "../../store";
+import React, { useEffect } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { useNavigate, useParams } from 'react-router-dom';
+import { AppDispatch, RootState } from '../../store';
 import {
   createRole,
   fetchRoleById,
   updateRole,
   clearRoleError,
   setCurrentRole,
-} from "../../store/slices/roleSlice";
-import { fetchRoleGroups } from "../../store/slices/roleGroupSlice";
-import RoleForm, { RoleFormData } from "./RoleForm";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { toast } from "sonner";
-import { Skeleton } from "@/components/ui/skeleton";
+} from '../../store/slices/roleSlice';
+import { fetchRoleGroups } from '../../store/slices/roleGroupSlice';
+import RoleForm, { RoleFormData } from './RoleForm';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { toast } from 'sonner';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const RoleFormContent: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -45,14 +45,14 @@ const RoleFormContent: React.FC = () => {
     try {
       if (isEditMode && roleId) {
         await dispatch(updateRole({ roleId, roleData: data })).unwrap();
-        toast("Role updated successfully.");
+        toast('Role updated successfully.');
       } else {
         await dispatch(createRole(data)).unwrap();
-        toast("Role created successfully.");
+        toast('Role created successfully.');
       }
-      navigate("/dashboard/roles");
+      navigate('/dashboard/roles');
     } catch (err: any) {
-      const actionType = isEditMode ? "update" : "create";
+      const actionType = isEditMode ? 'update' : 'create';
       toast.error(err || `Failed to ${actionType} role.`);
       console.error(`Failed to ${actionType} role:`, err);
     }
@@ -87,7 +87,7 @@ const RoleFormContent: React.FC = () => {
     <Card>
       <CardHeader>
         <CardTitle>
-          {isEditMode ? `Edit Role: ${currentRole?.name}` : "Create New Role"}
+          {isEditMode ? `Edit Role: ${currentRole?.name}` : 'Create New Role'}
         </CardTitle>
       </CardHeader>
       <CardContent>

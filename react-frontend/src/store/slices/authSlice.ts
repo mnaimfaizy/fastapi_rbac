@@ -1,12 +1,12 @@
-import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import { AuthState, LoginCredentials } from "../../models/auth";
-import authService from "../../services/auth.service";
-import authTokenManager from "../../services/authTokenManager";
+import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { AuthState, LoginCredentials } from '../../models/auth';
+import authService from '../../services/auth.service';
+import authTokenManager from '../../services/authTokenManager';
 import {
   setStoredAccessToken,
   setStoredRefreshToken,
   clearAuthTokens,
-} from "../../lib/tokenStorage";
+} from '../../lib/tokenStorage';
 
 // Initial state
 const initialState: AuthState = {
@@ -23,13 +23,13 @@ const initialState: AuthState = {
 
 // Async thunks for authentication actions
 export const loginUser = createAsyncThunk(
-  "auth/login",
+  'auth/login',
   async (credentials: LoginCredentials, { rejectWithValue }) => {
     try {
       const response = await authService.login(credentials);
       return response;
     } catch (error) {
-      if (error && typeof error === "object" && "response" in error) {
+      if (error && typeof error === 'object' && 'response' in error) {
         const err = error as {
           response?: {
             data?: { errors?: Array<{ message: string }>; message?: string };
@@ -38,15 +38,15 @@ export const loginUser = createAsyncThunk(
         if (err.response?.data?.errors?.[0]) {
           return rejectWithValue(err.response.data.errors[0].message);
         }
-        return rejectWithValue(err.response?.data?.message || "Login failed");
+        return rejectWithValue(err.response?.data?.message || 'Login failed');
       }
-      return rejectWithValue("Login failed");
+      return rejectWithValue('Login failed');
     }
   }
 );
 
 export const refreshAccessToken = createAsyncThunk(
-  "auth/refreshToken",
+  'auth/refreshToken',
   async (refreshToken: string, { rejectWithValue, dispatch }) => {
     try {
       const response = await authService.refreshToken(refreshToken);
@@ -56,7 +56,7 @@ export const refreshAccessToken = createAsyncThunk(
       // This ensures users with expired/invalid refresh tokens don't get stuck
       dispatch(logout());
 
-      if (error && typeof error === "object" && "response" in error) {
+      if (error && typeof error === 'object' && 'response' in error) {
         const err = error as {
           response?: {
             status?: number;
@@ -66,7 +66,7 @@ export const refreshAccessToken = createAsyncThunk(
 
         // Handle specific error cases
         if (err.response?.status === 403) {
-          return rejectWithValue("Session expired. Please log in again.");
+          return rejectWithValue('Session expired. Please log in again.');
         }
 
         if (err.response?.data?.errors?.[0]) {
@@ -75,22 +75,22 @@ export const refreshAccessToken = createAsyncThunk(
 
         return rejectWithValue(
           err.response?.data?.message ||
-            "Failed to refresh token. Please log in again."
+            'Failed to refresh token. Please log in again.'
         );
       }
-      return rejectWithValue("Authentication failed. Please log in again.");
+      return rejectWithValue('Authentication failed. Please log in again.');
     }
   }
 );
 
 export const getCurrentUser = createAsyncThunk(
-  "auth/getCurrentUser",
+  'auth/getCurrentUser',
   async (_, { rejectWithValue }) => {
     try {
       const user = await authService.getCurrentUser();
       return user;
     } catch (error) {
-      if (error && typeof error === "object" && "response" in error) {
+      if (error && typeof error === 'object' && 'response' in error) {
         const err = error as {
           response?: {
             data?: { errors?: Array<{ message: string }>; message?: string };
@@ -100,16 +100,16 @@ export const getCurrentUser = createAsyncThunk(
           return rejectWithValue(err.response.data.errors[0].message);
         }
         return rejectWithValue(
-          err.response?.data?.message || "Failed to fetch user data"
+          err.response?.data?.message || 'Failed to fetch user data'
         );
       }
-      return rejectWithValue("Failed to fetch user data");
+      return rejectWithValue('Failed to fetch user data');
     }
   }
 );
 
 export const changePassword = createAsyncThunk(
-  "auth/changePassword",
+  'auth/changePassword',
   async (
     {
       currentPassword,
@@ -124,7 +124,7 @@ export const changePassword = createAsyncThunk(
       );
       return response;
     } catch (error) {
-      if (error && typeof error === "object" && "response" in error) {
+      if (error && typeof error === 'object' && 'response' in error) {
         const err = error as {
           response?: {
             data?: { errors?: Array<{ message: string }>; message?: string };
@@ -134,23 +134,23 @@ export const changePassword = createAsyncThunk(
           return rejectWithValue(err.response.data.errors[0].message);
         }
         return rejectWithValue(
-          err.response?.data?.message || "Failed to change password"
+          err.response?.data?.message || 'Failed to change password'
         );
       }
-      return rejectWithValue("Failed to change password");
+      return rejectWithValue('Failed to change password');
     }
   }
 );
 
 // New thunks for password reset functionality
 export const requestPasswordReset = createAsyncThunk(
-  "auth/requestPasswordReset",
+  'auth/requestPasswordReset',
   async (email: string, { rejectWithValue }) => {
     try {
       await authService.requestPasswordReset(email);
       return true;
     } catch (error) {
-      if (error && typeof error === "object" && "response" in error) {
+      if (error && typeof error === 'object' && 'response' in error) {
         const err = error as {
           response?: {
             data?: { errors?: Array<{ message: string }>; message?: string };
@@ -160,16 +160,16 @@ export const requestPasswordReset = createAsyncThunk(
           return rejectWithValue(err.response.data.errors[0].message);
         }
         return rejectWithValue(
-          err.response?.data?.message || "Failed to request password reset"
+          err.response?.data?.message || 'Failed to request password reset'
         );
       }
-      return rejectWithValue("Failed to request password reset");
+      return rejectWithValue('Failed to request password reset');
     }
   }
 );
 
 export const confirmPasswordReset = createAsyncThunk(
-  "auth/confirmPasswordReset",
+  'auth/confirmPasswordReset',
   async (
     { token, newPassword }: { token: string; newPassword: string },
     { rejectWithValue }
@@ -178,7 +178,7 @@ export const confirmPasswordReset = createAsyncThunk(
       await authService.confirmPasswordReset(token, newPassword);
       return true;
     } catch (error) {
-      if (error && typeof error === "object" && "response" in error) {
+      if (error && typeof error === 'object' && 'response' in error) {
         const err = error as {
           response?: {
             data?: { errors?: Array<{ message: string }>; message?: string };
@@ -188,22 +188,22 @@ export const confirmPasswordReset = createAsyncThunk(
           return rejectWithValue(err.response.data.errors[0].message);
         }
         return rejectWithValue(
-          err.response?.data?.message || "Failed to reset password"
+          err.response?.data?.message || 'Failed to reset password'
         );
       }
-      return rejectWithValue("Failed to reset password");
+      return rejectWithValue('Failed to reset password');
     }
   }
 );
 
 // Updated logout thunk to call the backend logout endpoint
 export const logoutUser = createAsyncThunk(
-  "auth/logout",
+  'auth/logout',
   async (_, { dispatch }) => {
     try {
       await authService.logout();
     } catch (error) {
-      console.error("Error during logout:", error);
+      console.error('Error during logout:', error);
     } finally {
       // Even if the API call fails, we still want to clear local state
       dispatch(logout());
@@ -213,7 +213,7 @@ export const logoutUser = createAsyncThunk(
 
 // Create the auth slice
 const authSlice = createSlice({
-  name: "auth",
+  name: 'auth',
   initialState,
   reducers: {
     // Logout user by clearing state and tokens
@@ -262,7 +262,7 @@ const authSlice = createSlice({
           // Setup token expiry timer
           authTokenManager.setupTokenExpiryTimer(action.payload.access_token);
         } catch (error) {
-          console.error("Error storing auth tokens:", error);
+          console.error('Error storing auth tokens:', error);
         }
       })
       .addCase(loginUser.rejected, (state, action) => {
@@ -284,7 +284,7 @@ const authSlice = createSlice({
           // Setup token expiry timer with new access token
           authTokenManager.setupTokenExpiryTimer(action.payload.access_token);
         } catch (error) {
-          console.error("Error storing refreshed access token:", error);
+          console.error('Error storing refreshed access token:', error);
         }
       })
       .addCase(refreshAccessToken.rejected, (state, action) => {

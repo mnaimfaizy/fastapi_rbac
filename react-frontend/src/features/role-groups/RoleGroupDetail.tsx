@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { useDispatch, useSelector } from "react-redux";
-import { AppDispatch, RootState } from "../../store";
-import { Role } from "@/models/role";
-import { RoleGroupWithRoles } from "@/models/roleGroup";
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import { AppDispatch, RootState } from '../../store';
+import { Role } from '@/models/role';
+import { RoleGroupWithRoles } from '@/models/roleGroup';
 import {
   fetchRoleGroupById,
   deleteRoleGroup,
@@ -12,17 +12,17 @@ import {
   moveToParent,
   fetchRoleGroups,
   selectCurrentRoleGroupWithUsers,
-} from "../../store/slices/roleGroupSlice";
-import { fetchRoles } from "../../store/slices/roleSlice";
-import { Button } from "@/components/ui/button";
+} from '../../store/slices/roleGroupSlice';
+import { fetchRoles } from '../../store/slices/roleSlice';
+import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+} from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,7 +33,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+} from '@/components/ui/alert-dialog';
 import {
   Dialog,
   DialogContent,
@@ -42,7 +42,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
+} from '@/components/ui/dialog';
 import {
   Table,
   TableBody,
@@ -50,14 +50,14 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from '@/components/ui/table';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from '@/components/ui/select';
 import {
   ArrowLeft,
   Edit,
@@ -69,19 +69,19 @@ import {
   List,
   Users,
   Eye,
-} from "lucide-react";
-import { Link } from "react-router-dom";
-import { formatDate } from "@/lib/utils";
-import { Checkbox } from "@/components/ui/checkbox";
-import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+} from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { formatDate } from '@/lib/utils';
+import { Checkbox } from '@/components/ui/checkbox';
+import { toast } from 'sonner';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from '@/components/ui/tooltip';
 
 interface NestedRoleGroupProps {
   group: RoleGroupWithRoles;
@@ -127,7 +127,7 @@ const NestedRoleGroup: React.FC<NestedRoleGroupProps> = ({
                     onClick={() => setIsExpanded(!isExpanded)}
                     className="p-1 hover:bg-accent rounded-sm focus:outline-none focus:ring-1 focus:ring-primary"
                     aria-expanded={isExpanded}
-                    aria-label={isExpanded ? "Collapse group" : "Expand group"}
+                    aria-label={isExpanded ? 'Collapse group' : 'Expand group'}
                   >
                     {isExpanded ? (
                       <ChevronDown className="h-4 w-4 text-primary" />
@@ -137,7 +137,7 @@ const NestedRoleGroup: React.FC<NestedRoleGroupProps> = ({
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="top">
-                  {isExpanded ? "Collapse" : "Expand"} section
+                  {isExpanded ? 'Collapse' : 'Expand'} section
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -146,7 +146,7 @@ const NestedRoleGroup: React.FC<NestedRoleGroupProps> = ({
           )}
 
           {/* Group name */}
-          <div className={cn("relative", level > 0 && "border-l-0")}>
+          <div className={cn('relative', level > 0 && 'border-l-0')}>
             {level > 0 && (
               <div className="absolute left-[-1rem] top-1/2 w-[0.75rem] h-px bg-border"></div>
             )}
@@ -195,8 +195,8 @@ const NestedRoleGroup: React.FC<NestedRoleGroupProps> = ({
                     </Badge>
                   </TooltipTrigger>
                   <TooltipContent side="top">
-                    {group.children?.length} child{" "}
-                    {group.children?.length === 1 ? "group" : "groups"}
+                    {group.children?.length} child{' '}
+                    {group.children?.length === 1 ? 'group' : 'groups'}
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -215,8 +215,8 @@ const NestedRoleGroup: React.FC<NestedRoleGroupProps> = ({
                     </Badge>
                   </TooltipTrigger>
                   <TooltipContent side="top">
-                    {group.roles?.length} assigned{" "}
-                    {group.roles?.length === 1 ? "role" : "roles"}
+                    {group.roles?.length} assigned{' '}
+                    {group.roles?.length === 1 ? 'role' : 'roles'}
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -252,7 +252,7 @@ const NestedRoleGroup: React.FC<NestedRoleGroupProps> = ({
                         <TableCell className="font-medium">
                           {role.name}
                         </TableCell>
-                        <TableCell>{role.description || "N/A"}</TableCell>
+                        <TableCell>{role.description || 'N/A'}</TableCell>
                         <TableCell className="text-right">
                           <TooltipProvider>
                             <Tooltip>
@@ -352,20 +352,20 @@ const RoleGroupDetail: React.FC = () => {
     if (groupId) {
       try {
         await dispatch(deleteRoleGroup(groupId)).unwrap();
-        toast.success("Role group deleted successfully");
-        navigate("/dashboard/role-groups");
+        toast.success('Role group deleted successfully');
+        navigate('/dashboard/role-groups');
       } catch (error: any) {
         // Extract the most specific error message from the error response
         const errorMessage =
           error.response?.data?.detail ||
           (error instanceof Error
             ? error.message
-            : "Failed to delete role group");
+            : 'Failed to delete role group');
 
         // Use longer duration for conflict errors as they contain important instructions
         const duration =
-          errorMessage.includes("has child groups") ||
-          errorMessage.includes("has assigned roles")
+          errorMessage.includes('has child groups') ||
+          errorMessage.includes('has assigned roles')
             ? 8000
             : 5000;
 
@@ -383,10 +383,10 @@ const RoleGroupDetail: React.FC = () => {
           removeRolesFromGroup({ groupId, roleIds: [roleId] })
         ).unwrap();
         dispatch(fetchRoleGroupById(groupId));
-        toast.success("Role removed from group");
+        toast.success('Role removed from group');
       } catch (error) {
-        console.error("Failed to remove role:", error);
-        toast.error("Failed to remove role");
+        console.error('Failed to remove role:', error);
+        toast.error('Failed to remove role');
       }
     }
   };
@@ -404,10 +404,10 @@ const RoleGroupDetail: React.FC = () => {
         setIsRoleDialogOpen(false);
         setSelectedRoles([]);
         dispatch(fetchRoleGroupById(groupId));
-        toast.success("Roles added to group");
+        toast.success('Roles added to group');
       } catch (error) {
-        console.error("Failed to add roles:", error);
-        toast.error("Failed to add roles");
+        console.error('Failed to add roles:', error);
+        toast.error('Failed to add roles');
       }
     }
   };
@@ -418,15 +418,15 @@ const RoleGroupDetail: React.FC = () => {
         await dispatch(
           moveToParent({
             groupId,
-            parentId: newParentId === "root" ? null : newParentId,
+            parentId: newParentId === 'root' ? null : newParentId,
           })
         ).unwrap();
         setIsMoveDialogOpen(false);
         dispatch(fetchRoleGroupById(groupId));
-        toast.success("Role group moved successfully");
+        toast.success('Role group moved successfully');
       } catch (error) {
-        console.error("Failed to move role group:", error);
-        toast.error("Failed to move role group");
+        console.error('Failed to move role group:', error);
+        toast.error('Failed to move role group');
       }
     }
   };
@@ -487,19 +487,19 @@ const RoleGroupDetail: React.FC = () => {
           </h2>
           <p className="text-sm text-muted-foreground space-y-1">
             <span className="block">
-              Created: {formatDate(currentRoleGroupWithUsers.created_at || "")}
+              Created: {formatDate(currentRoleGroupWithUsers.created_at || '')}
             </span>
             <span className="block">
-              Updated: {formatDate(currentRoleGroupWithUsers.updated_at || "")}
+              Updated: {formatDate(currentRoleGroupWithUsers.updated_at || '')}
             </span>
             <span className="block">
-              Created by:{" "}
+              Created by:{' '}
               {currentRoleGroupWithUsers.creator
                 ? currentRoleGroupWithUsers.creator.first_name &&
                   currentRoleGroupWithUsers.creator.last_name
                   ? `${currentRoleGroupWithUsers.creator.first_name} ${currentRoleGroupWithUsers.creator.last_name}`
                   : currentRoleGroupWithUsers.creator.email
-                : "Unknown"}
+                : 'Unknown'}
             </span>
             {currentRoleGroupWithUsers.parent && (
               <span className="block">
@@ -609,7 +609,7 @@ const RoleGroupDetail: React.FC = () => {
                 size="sm"
                 variant="outline"
                 onClick={() =>
-                  navigate("/dashboard/role-groups/new", {
+                  navigate('/dashboard/role-groups/new', {
                     state: { defaultParentId: groupId },
                   })
                 }
@@ -641,7 +641,7 @@ const RoleGroupDetail: React.FC = () => {
                         </button>
                       </TableCell>
                       <TableCell>
-                        {formatDate(child.created_at || "")}
+                        {formatDate(child.created_at || '')}
                       </TableCell>
                       <TableCell className="text-right">
                         <Button

@@ -1,6 +1,6 @@
-import React from "react";
-import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button"; // ShadCN Button component
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button'; // ShadCN Button component
 
 const NotFoundPage: React.FC = () => {
   return (

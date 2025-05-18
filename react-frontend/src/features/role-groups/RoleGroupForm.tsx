@@ -1,8 +1,8 @@
-import React, { useEffect } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { Button } from "@/components/ui/button";
+import React, { useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Button } from '@/components/ui/button';
 import {
   Form,
   FormControl,
@@ -10,22 +10,22 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { RoleGroup } from "@/models/roleGroup";
-import { Link } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { RoleGroup } from '@/models/roleGroup';
+import { Link } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from '@/components/ui/select';
 
 // Define form schema with Zod
 const roleGroupSchema = z.object({
-  name: z.string().min(1, "Name is required"),
+  name: z.string().min(1, 'Name is required'),
   parent_id: z.string().optional(),
 });
 
@@ -51,7 +51,7 @@ const RoleGroupForm: React.FC<RoleGroupFormProps> = ({
   const form = useForm<RoleGroupFormValues>({
     resolver: zodResolver(roleGroupSchema),
     defaultValues: {
-      name: initialData?.name || "",
+      name: initialData?.name || '',
       parent_id: initialData?.parent_id || undefined,
     },
   });
@@ -113,9 +113,9 @@ const RoleGroupForm: React.FC<RoleGroupFormProps> = ({
                 <FormLabel>Parent Group (Optional)</FormLabel>
                 <Select
                   onValueChange={(value) =>
-                    field.onChange(value === "root" ? undefined : value)
+                    field.onChange(value === 'root' ? undefined : value)
                   }
-                  defaultValue={field.value || "root"}
+                  defaultValue={field.value || 'root'}
                 >
                   <FormControl>
                     <SelectTrigger>
@@ -144,10 +144,10 @@ const RoleGroupForm: React.FC<RoleGroupFormProps> = ({
             </Link>
             <Button type="submit" disabled={isLoading}>
               {isLoading
-                ? "Saving..."
+                ? 'Saving...'
                 : initialData
-                ? "Update Role Group"
-                : "Create Role Group"}
+                  ? 'Update Role Group'
+                  : 'Create Role Group'}
             </Button>
           </div>
         </form>
