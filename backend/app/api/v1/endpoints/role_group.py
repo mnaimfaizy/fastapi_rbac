@@ -223,6 +223,7 @@ async def get_role_group_by_id(
 async def create_role_group(
     group: IRoleGroupCreate,
     current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
+    db_session: AsyncSession = Depends(deps.get_async_db),
 ) -> IPostResponseBase[IRoleGroupRead]:
     """
     Creates a new role group
@@ -231,10 +232,12 @@ async def create_role_group(
     - admin
     - manager
     """
-    role_group_current = await crud.role_group.get_group_by_name(name=group.name)
+    role_group_current = await crud.role_group.get_group_by_name(name=group.name, db_session=db_session)
     if role_group_current:
         raise NameExistException(RoleGroup, name=group.name)
-    new_group = await crud.role_group.create(obj_in=group, created_by_id=current_user.id)
+    new_group = await crud.role_group.create(
+        obj_in=group, created_by_id=current_user.id, db_session=db_session
+    )
     return create_response(data=new_group)
 
 
@@ -243,6 +246,7 @@ async def update_role_group(
     group: IRoleGroupUpdate,
     current_group: RoleGroup = Depends(role_group_deps.get_group_by_id),
     current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
+    db_session: AsyncSession = Depends(deps.get_async_db),
 ) -> IPutResponseBase[IRoleGroupRead]:
     """
     Updates a group by its id
@@ -251,7 +255,9 @@ async def update_role_group(
     - admin
     - manager
     """
-    group_updated = await crud.role_group.update(obj_current=current_group, obj_new=group)
+    group_updated = await crud.role_group.update(
+        obj_current=current_group, obj_new=group, db_session=db_session
+    )
     return create_response(data=group_updated)
 
 

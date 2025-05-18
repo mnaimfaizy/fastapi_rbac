@@ -32,7 +32,7 @@ class UserBase(SQLModel):
 
     @validator("expiry_date", "last_changed_password_date", "locked_until", pre=True)
     def convert_null_string_to_none(cls, v: Any) -> Any:
-        if isinstance(v, str) and v.upper() == "(NULL)":  # Made case-insensitive
+        if isinstance(v, str) and v.upper() == "(NULL)":
             return None
         return v
 
@@ -47,6 +47,8 @@ class User(BaseUUIDModel, UserBase, table=True):
     password: str | None = Field(default=None)  # Store the hashed password
     expiry_date: datetime | None = Field(default_factory=lambda: datetime.now(timezone.utc))
     last_changed_password_date: datetime | None = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    # Roles
     roles: List["Role"] = Relationship(
         back_populates="users",
         link_model=UserRole,
@@ -55,6 +57,7 @@ class User(BaseUUIDModel, UserBase, table=True):
         },  # Changed from 'joined' to 'selectin' for better performance
     )
 
+    # Created Permissions
     created_permissions: List["Permission"] = Relationship(
         back_populates="created_by",
         sa_relationship_kwargs={
@@ -64,6 +67,7 @@ class User(BaseUUIDModel, UserBase, table=True):
         },
     )
 
+    # Created Permission Groups
     created_permission_groups: List["PermissionGroup"] = Relationship(
         back_populates="creator",
         sa_relationship_kwargs={

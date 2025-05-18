@@ -61,7 +61,7 @@ async def get_roles(
 @router.get("/list", response_model=IGetResponseBase[List[IRoleRead]])
 async def get_all_roles_list(
     current_user: User = Depends(deps.get_current_user()),  # Ensure user is authenticated
-    db_session: AsyncSession = Depends(deps.get_db),  # Get DB session
+    db_session: AsyncSession = Depends(deps.get_db),
 ) -> IGetResponseBase[List[IRoleRead]]:
     """
     Gets a list of all roles (no pagination).
@@ -85,6 +85,7 @@ async def get_role_by_id(
 async def create_role(
     role: IRoleCreate,
     current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin])),
+    db_session: AsyncSession = Depends(deps.get_db),
 ) -> IPostResponseBase[IRoleRead]:
     """
     Create a new role
@@ -92,11 +93,11 @@ async def create_role(
     Required roles:
     - admin
     """
-    role_current = await crud.role.get_role_by_name(name=role.name)
+    role_current = await crud.role.get_role_by_name(name=role.name, db_session=db_session)
     if role_current:
         raise NameExistException(Role, name=role_current.name)
 
-    new_role = await crud.role.create(obj_in=role, created_by_id=current_user.id)
+    new_role = await crud.role.create(obj_in=role, created_by_id=current_user.id, db_session=db_session)
     return create_response(data=new_role)
 
 
