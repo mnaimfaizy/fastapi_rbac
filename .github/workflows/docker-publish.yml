@@ -53,3 +53,30 @@ jobs:
           chmod +x ./push-to-dockerhub.sh
           ./push-to-dockerhub.sh
         working-directory: ./ # Ensures script is run from the repo root where it's located
+
+      - name: Update Docker Hub Description for Backend
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-backend # Or your direct image name if username is part of it
+          readme-filepath: ./backend/README.dockerhub.md
+          short-description: "Backend service for FastAPI RBAC project."
+
+      - name: Update Docker Hub Description for Frontend
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-frontend
+          readme-filepath: ./react-frontend/README.dockerhub.md
+          short-description: "React frontend for FastAPI RBAC project."
+
+      - name: Update Docker Hub Description for Worker
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-worker
+          readme-filepath: ./backend/README.worker.dockerhub.md # Assuming worker README is in backend folder
+          short-description: "Celery worker for FastAPI RBAC project."
