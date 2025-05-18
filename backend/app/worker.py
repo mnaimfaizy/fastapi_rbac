@@ -87,12 +87,15 @@ def process_account_lockout_task(user_id: str, lock_duration_hours: int = 24) ->
     from uuid import UUID
 
     async def async_process_lockout(user_id_str: str, lock_duration_hours: int) -> None:
+        from sqlmodel.ext.asyncio.session import AsyncSession  # Ensure correct import
+
         from app import crud
         from app.db.session import get_async_session
 
         user_id_obj = UUID(user_id_str)
 
         async for db_session in get_async_session():
+            assert isinstance(db_session, AsyncSession)
             user = await crud.user.get(id=user_id_obj, db_session=db_session)
             if user:
                 # Create a dict with the updates to use as obj_new

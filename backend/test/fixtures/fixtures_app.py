@@ -44,7 +44,7 @@ async def client(app: FastAPI) -> AsyncGenerator[AsyncClient, None]:
     def mock_get_current_user(*args: Any, **kwargs: Any) -> Callable[..., Any]:
         """Mock the get_current_user dependency"""
 
-        async def get_current_user():
+        async def get_current_user() -> None:
             return None
 
         return get_current_user

@@ -8,7 +8,7 @@ print(f"Configuring CORS with allowed origins: {allowed_origins}")
 """
 
 
-def debug_cors():
+def debug_cors() -> list:
     """
     Add this function to your main.py file and call it before adding CORS middleware
     """

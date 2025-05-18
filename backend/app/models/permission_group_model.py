@@ -19,7 +19,7 @@ class PermissionGroupBase(SQLModel):
 class PermissionGroup(BaseUUIDModel, PermissionGroupBase, table=True):
     """PermissionGroup model for the application."""
 
-    __tablename__ = "PermissionGroup"
+    __tablename__ = "PermissionGroup"  # type: ignore[assignment]
 
     created_by_id: UUID | None = Field(
         default=None, foreign_key="User.id"

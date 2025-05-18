@@ -2,7 +2,7 @@ from datetime import datetime
 from uuid import UUID
 
 import pytest
-from sqlalchemy import asc
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -82,7 +82,10 @@ async def test_retrieve_audit_logs(db: AsyncSession) -> None:
     await db.commit()
 
     # Retrieve all logs for this actor
-    stmt = select(AuditLog).where(AuditLog.actor_id == user.id).order_by(asc(AuditLog.timestamp))
+    # stmt = select(AuditLog).where(AuditLog.actor_id == user.id).order_by(asc(AuditLog.timestamp))
+    stmt = text("SELECT * FROM AuditLog WHERE actor_id = :actor_id ORDER BY timestamp ASC").params(
+        actor_id=user.id
+    )
     result = await db.execute(stmt)
     retrieved_logs = result.scalars().all()
 

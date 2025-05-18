@@ -31,7 +31,7 @@ class BaseUUIDModel(SQLModel):
 
     @field_validator("created_at", "updated_at", mode="before")  # Updated to use field_validator
     @classmethod  # Required for class methods in Pydantic V2
-    def fix_null_string_for_datetime(cls, v: str | None) -> datetime:  # Added type hint for v and return
+    def fix_null_string_for_datetime(cls, v: str | None | datetime) -> datetime:  # Changed type hint for v
         if isinstance(v, str) and v.upper() == "(NULL)":  # Make check case-insensitive
             return datetime.now(timezone.utc)
         if v is None:  # If it's already None (e.g. from DB NULL), and field is non-nullable, provide default
@@ -44,4 +44,5 @@ class BaseUUIDModel(SQLModel):
                 return datetime.fromisoformat(v.replace("Z", "+00:00"))
             except ValueError:
                 return datetime.now(timezone.utc)
-        return v  # Fallback, though ideally v should be str, None, or datetime
+        # If v is not str, None, or datetime, it's an unexpected type
+        raise TypeError(f"Unexpected type for v: {type(v)}. Expected str, None, or datetime.")

@@ -355,7 +355,7 @@ async def test_assign_permissions_to_role(db: AsyncSession) -> None:
     )
 
     # Verify that the permissions were assigned to the role
-    stmt = select(RolePermission).where((RolePermission.role_id == role.id))
+    stmt = select(RolePermission).filter_by(role_id=role.id)  # Changed from where()
     result = await db.execute(stmt)
     role_permissions = result.scalars().all()
 
@@ -439,7 +439,7 @@ async def test_remove_permissions_from_role(db: AsyncSession) -> None:
     )
 
     # Verify that the permissions were removed
-    stmt = select(RolePermission).where((RolePermission.role_id == role.id))
+    stmt = select(RolePermission).filter_by(role_id=role.id)  # Changed from where()
     result = await db.execute(stmt)
     role_permissions = result.scalars().all()
 

@@ -3,7 +3,7 @@ User-related model factories for testing.
 """
 
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional, Sequence
+from typing import Any, Optional, Sequence, cast
 
 import factory
 from factory import Faker
@@ -19,9 +19,12 @@ from app.utils.uuid6 import uuid7
 class UserFactory(SQLAlchemyModelFactory):
     """Factory for creating User model instances."""
 
+    _sa_session: Session
+
     class Meta:
         model = User
         sqlalchemy_session_persistence = "commit"  # Save to database
+        sqlalchemy_session: Optional[Session] = None
 
     id = factory.LazyFunction(uuid7)
     email = Faker("email")
@@ -51,8 +54,11 @@ class UserFactory(SQLAlchemyModelFactory):
         if hasattr(self, "user_roles") and hasattr(extracted, "__iter__"):
             from app.models.user_role_model import UserRole
 
+            # typing.cast is already imported in the file from previous usage
             # Use the SQLAlchemy session provided by Factory Boy
-            session: Session = self._sa_session
+            # self is the User instance here. _sa_session is dynamically added by factory_boy.
+            # Mypy may not know about _sa_session, so we use getattr and cast.
+            session: Session = cast(Session, getattr(self, "_sa_session"))
             for role in extracted:
                 user_role = UserRole(user_id=self.id, role_id=role.id)
                 session.add(user_role)
@@ -61,20 +67,24 @@ class UserFactory(SQLAlchemyModelFactory):
     @classmethod
     def admin(cls, **kwargs: Any) -> User:
         """Create a superuser/admin."""
-        return cls.create(is_superuser=True, email=kwargs.pop("email", "admin@example.com"), **kwargs)
+        email = kwargs.pop("email", "admin@example.com")
+        return cast(User, cls.create(is_superuser=True, email=email, **kwargs))
 
     @classmethod
     def locked(cls, **kwargs: Any) -> User:
         """Create a locked user."""
         now = datetime.now(timezone.utc)
-        return cls.create(
-            is_locked=True, number_of_failed_attempts=5, locked_until=now + timedelta(hours=1), **kwargs
+        return cast(
+            User,
+            cls.create(
+                is_locked=True, number_of_failed_attempts=5, locked_until=now + timedelta(hours=1), **kwargs
+            ),
         )
 
     @classmethod
     def expired_password(cls, **kwargs: Any) -> User:
         """Create a user that needs to change password."""
-        return cls.create(needs_to_change_password=True, **kwargs)
+        return cast(User, cls.create(needs_to_change_password=True, **kwargs))
 
     @classmethod
     def unverified(cls, **kwargs: Any) -> User:
@@ -83,4 +93,4 @@ class UserFactory(SQLAlchemyModelFactory):
         import string
 
         verification_code = "".join(random.choices(string.digits, k=6))
-        return cls.create(verified=False, verification_code=verification_code, **kwargs)
+        return cast(User, cls.create(verified=False, verification_code=verification_code, **kwargs))

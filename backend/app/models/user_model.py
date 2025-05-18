@@ -40,7 +40,7 @@ class UserBase(SQLModel):
 class User(BaseUUIDModel, UserBase, table=True):
     """User model for the application."""
 
-    __tablename__ = "User"
+    __tablename__ = "User"  # type: ignore[assignment]
 
     first_name: str | None = Field(default=None, index=True)
     last_name: str | None = Field(default=None, index=True)
@@ -79,7 +79,10 @@ class User(BaseUUIDModel, UserBase, table=True):
     @property
     def role_names(self) -> list[str]:
         """Get list of role names for serialization"""
-        return [role.name for role in self.roles] if self.roles else []
+        if not self.roles:
+            return []
+        # Filter out None names, though ideally role.name should not be None
+        return [role.name for role in self.roles if role.name is not None]
 
     def model_dump(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
         """Override model_dump to customize role serialization"""

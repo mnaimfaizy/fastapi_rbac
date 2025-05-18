@@ -1,8 +1,8 @@
 from uuid import UUID
 
 import pytest
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select
 
 from app.models.role_model import Role
 from app.models.user_model import User
@@ -87,7 +87,8 @@ async def test_retrieve_roles_for_user(db: AsyncSession) -> None:
     await db.commit()
 
     # Retrieve all roles for this user
-    stmt = select(Role).join(UserRole, Role.id == UserRole.role_id).where(UserRole.user_id == user.id)
+    stmt = text("SELECT * FROM role WHERE id IN (SELECT role_id FROM UserRole WHERE user_id = :user_id)")
+    stmt = stmt.bindparams(user_id=user.id)
     result = await db.execute(stmt)
     retrieved_roles = result.scalars().all()
 
@@ -136,7 +137,8 @@ async def test_retrieve_users_with_role(db: AsyncSession) -> None:
     await db.commit()
 
     # Retrieve all users with this role
-    stmt = select(User).join(UserRole, User.id == UserRole.user_id).where(UserRole.role_id == role.id)
+    stmt = text("SELECT * FROM user WHERE id IN (SELECT user_id FROM UserRole WHERE role_id = :role_id)")
+    stmt = stmt.bindparams(role_id=role.id)
     result = await db.execute(stmt)
     retrieved_users = result.scalars().all()
 

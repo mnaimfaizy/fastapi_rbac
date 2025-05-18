@@ -100,13 +100,13 @@ def wait_for_redis() -> None:
             logger.info("Development mode: Using local Redis without SSL.")
         elif settings.MODE == ModeEnum.testing:
             # Use configured Redis for testing (likely Docker)
-            redis_host = os.getenv("REDIS_HOST", redis_host_from_settings)
+            redis_host = os.getenv("REDIS_HOST", str(redis_host_from_settings))
             redis_port_str = os.getenv("REDIS_PORT", str(redis_port_from_settings))
             redis_ssl = os.getenv("REDIS_SSL", "").lower() == "true"
             logger.info("Testing mode: Using configured Redis (Docker/settings).")
         else:  # Production or other modes
             # Default to environment variables or settings
-            redis_host = os.getenv("REDIS_HOST", redis_host_from_settings)
+            redis_host = os.getenv("REDIS_HOST", str(redis_host_from_settings))
             redis_port_str = os.getenv("REDIS_PORT", str(redis_port_from_settings))
             # In production, get SSL setting from environment or default to True
             redis_ssl = os.getenv("REDIS_SSL", "true").lower() == "true"
@@ -122,7 +122,7 @@ def wait_for_redis() -> None:
             redis_port = default_redis_port
 
         if redis_host is None:
-            logger.warning("REDIS_HOST is not set. Defaulting to 'localhost'.")
+            logger.warning("REDIS_HOST is not set. Defaulting to 'localhost'.")  # type: ignore
             redis_host = "localhost"
 
         redis_password = os.getenv("REDIS_PASSWORD", settings.REDIS_PASSWORD)
@@ -188,7 +188,10 @@ def wait_for_redis() -> None:
                 port=redis_port,
                 password=redis_password if redis_password else None,
                 db=0,
-                **ssl_kwargs,
+                credential_provider=None,
+                health_check_interval=0,  # Corrected name and using default value
+                cache_config=None,  # Corrected name
+                cache=None,  # Added for CacheInterface | None
             )
         elif redis_password:
             logger.info("Connecting to Redis with a password (no SSL).")

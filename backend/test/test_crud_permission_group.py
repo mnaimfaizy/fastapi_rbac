@@ -1,13 +1,12 @@
 from uuid import UUID
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import text
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.crud.permission_crud import permission_crud
 from app.crud.permission_group_crud import permission_group_crud
 from app.models.permission_group_model import PermissionGroup
-from app.models.permission_model import Permission
 from app.schemas.permission_group_schema import IPermissionGroupCreate, IPermissionGroupUpdate
 from app.schemas.permission_schema import IPermissionCreate
 
@@ -144,7 +143,7 @@ async def test_add_permissions_to_group(db: AsyncSession) -> None:
     # Create a permission group
     group_name = f"test-group-with-perms-{random_lower_string(8)}"
     group_in = IPermissionGroupCreate(name=group_name)
-    group = await permission_group_crud.create(obj_in=group_in, db_session=db)
+    group: PermissionGroup = await permission_group_crud.create(obj_in=group_in, db_session=db)
 
     # Create permissions in this group
     permission_count = 5
@@ -159,7 +158,8 @@ async def test_add_permissions_to_group(db: AsyncSession) -> None:
         permission_ids.append(permission.id)
 
     # Verify permissions were created with the correct group_id using a direct query
-    direct_query = select(Permission).where(Permission.__table__.c.group_id == group.id)
+    direct_query = text("SELECT * FROM permissions WHERE group_id = :group_id")
+    direct_query = direct_query.bindparams(group_id=group.id)
     result = await db.execute(direct_query)
     permissions = result.scalars().all()
 
@@ -198,7 +198,8 @@ async def test_permission_group_with_subgroups(db: AsyncSession) -> None:
 
         # Associate child with parent (would need custom method or direct DB interaction)
         # This is a simplification as the actual relationship needs to be established
-        stmt = select(PermissionGroup).where(PermissionGroup.__table__.c.id == child_group.id)
+        stmt = text("SELECT * FROM PermissionGroup WHERE id = :id")
+        stmt = stmt.bindparams(id=child_group.id)
         result = await db.execute(stmt)
         result.scalar_one()
 
@@ -241,13 +242,15 @@ async def test_permission_count_by_group(db: AsyncSession) -> None:
         await permission_crud.create(obj_in=permission_in, db_session=db)
 
     # Count permissions in group 1
-    stmt = select(func.count()).select_from(Permission).where(Permission.__table__.c.group_id == group1.id)
+    stmt = text("SELECT COUNT(*) FROM Permission WHERE group_id = :group_id")
+    stmt = stmt.bindparams(group_id=group1.id)
     result = await db.execute(stmt)
     count_group1 = result.scalar()
     assert count_group1 == 3
 
     # Count permissions in group 2
-    stmt = select(func.count()).select_from(Permission).where(Permission.__table__.c.group_id == group2.id)
+    stmt = text("SELECT COUNT(*) FROM Permission WHERE group_id = :group_id")
+    stmt = stmt.bindparams(group_id=group2.id)
     result = await db.execute(stmt)
     count_group2 = result.scalar()
     assert count_group2 == 5

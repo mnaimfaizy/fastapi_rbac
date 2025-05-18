@@ -18,7 +18,7 @@ class RoleGroupBase(SQLModel):
 
 
 class RoleGroup(BaseUUIDModel, RoleGroupBase, table=True):
-    __tablename__ = "RoleGroup"
+    __tablename__ = "RoleGroup"  # type: ignore[assignment]
 
     name: str | None = Field(String(250), nullable=True, index=True)
     created_by_id: UUID | None = Field(default=None, foreign_key="User.id")

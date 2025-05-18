@@ -7,7 +7,8 @@ from typing import Any, Optional, Sequence, cast
 from uuid import UUID
 
 import factory
-from factory import Faker, LazyFunction
+
+# from factory import Faker, LazyFunction
 from factory.alchemy import SQLAlchemyModelFactory
 from sqlalchemy.orm import Session
 
@@ -21,45 +22,45 @@ from app.utils.uuid6 import uuid7
 class BaseFactory(SQLAlchemyModelFactory):
     """Base factory with common functionality."""
 
-    class Meta:
+    class Meta:  # type: ignore
         abstract = True
 
     @classmethod
     def get_session(cls) -> Session:
         """Get the SQLAlchemy session from the factory's meta."""
-        return cls._meta.sqlalchemy_session
+        return cls._meta.sqlalchemy_session  # type: ignore[attr-defined]
 
 
 class PermissionGroupFactory(BaseFactory):
     """Factory for creating PermissionGroup model instances."""
 
-    class Meta:
+    class Meta:  # type: ignore
         model = PermissionGroup
         sqlalchemy_session_persistence = "commit"
 
-    id = factory.LazyFunction(uuid7)
-    name = factory.Sequence(lambda n: f"permission-group-{n}")
-    description = Faker("sentence")
-    created_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
-    updated_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
+    id = factory.LazyFunction(uuid7)  # type: ignore[assignment]
+    name = factory.Sequence(lambda n: f"permission-group-{n}")  # type: ignore[assignment]
+    description = factory.Faker("sentence")  # type: ignore[assignment]
+    created_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))  # type: ignore[assignment]
+    updated_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))  # type: ignore[assignment]
     created_by_id = None  # Will be set by tests if needed
 
 
 class PermissionFactory(BaseFactory):
     """Factory for creating Permission model instances."""
 
-    class Meta:
+    class Meta:  # type: ignore
         model = Permission
         sqlalchemy_session_persistence = "commit"
 
-    id = LazyFunction(uuid7)
-    name = factory.Sequence(lambda n: f"permission_{n}")
-    description = Faker("sentence")
-    created_at = LazyFunction(lambda: datetime.now(timezone.utc))
-    updated_at = LazyFunction(lambda: datetime.now(timezone.utc))
+    id = factory.LazyFunction(uuid7)  # type: ignore[assignment]
+    name = factory.Sequence(lambda n: f"permission_{n}")  # type: ignore[assignment]
+    description = factory.Faker("sentence")  # type: ignore[assignment]
+    created_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))  # type: ignore[assignment]
+    updated_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))  # type: ignore[assignment]
 
     # Each permission needs to belong to a group
-    @factory.lazy_attribute
+    @factory.lazy_attribute  # type: ignore
     def group_id(self) -> UUID:
         """Generate a group ID, creating a new group if necessary."""
         if not hasattr(self, "_group"):
@@ -78,33 +79,33 @@ class PermissionFactory(BaseFactory):
 class RoleGroupFactory(BaseFactory):
     """Factory for creating RoleGroup model instances."""
 
-    class Meta:
+    class Meta:  # type: ignore
         model = RoleGroup
         sqlalchemy_session_persistence = "commit"
 
-    id = factory.LazyFunction(uuid7)
-    name = factory.Sequence(lambda n: f"role-group-{n}")
-    description = Faker("sentence")
-    created_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
-    updated_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
+    id = factory.LazyFunction(uuid7)  # type: ignore[assignment]
+    name = factory.Sequence(lambda n: f"role-group-{n}")  # type: ignore[assignment]
+    description = factory.Faker("sentence")  # type: ignore[assignment]
+    created_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))  # type: ignore[assignment]
+    updated_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))  # type: ignore[assignment]
     parent_id = None  # No parent by default
 
 
 class RoleFactory(BaseFactory):
     """Factory for creating Role model instances."""
 
-    class Meta:
+    class Meta:  # type: ignore
         model = Role
         sqlalchemy_session_persistence = "commit"
 
-    id = LazyFunction(uuid7)
-    name = factory.Sequence(lambda n: f"role-{n}")
-    description = Faker("sentence")
-    created_at = LazyFunction(lambda: datetime.now(timezone.utc))
-    updated_at = LazyFunction(lambda: datetime.now(timezone.utc))
+    id = factory.LazyFunction(uuid7)  # type: ignore[assignment]
+    name = factory.Sequence(lambda n: f"role-{n}")  # type: ignore[assignment]
+    description = factory.Faker("sentence")  # type: ignore[assignment]
+    created_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))  # type: ignore[assignment]
+    updated_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))  # type: ignore[assignment]
     role_group_id = None  # Optional role group
 
-    @factory.post_generation
+    @factory.post_generation  # type: ignore
     def permissions(self, create: bool, extracted: Optional[Sequence[Permission]], **kwargs: Any) -> None:
         """Add permissions to the role if provided."""
         if not create or not extracted:
@@ -117,7 +118,7 @@ class RoleFactory(BaseFactory):
             session = self.get_session()
 
             for permission in extracted:
-                role_permission = RolePermission(role_id=self.id, permission_id=permission.id)
+                role_permission = RolePermission(role_id=self.id, permission_id=permission.id)  # type: ignore
                 session.add(role_permission)
                 session.flush()
 

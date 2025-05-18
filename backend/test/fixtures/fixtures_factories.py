@@ -11,7 +11,7 @@ from test.factories.rbac_factory import (
     RoleGroupFactory,
 )
 from test.factories.user_factory import UserFactory
-from typing import Any, AsyncGenerator, Callable, Dict, List, Optional
+from typing import Any, AsyncGenerator, Callable, Dict, List, Optional, Protocol
 
 import pytest
 import pytest_asyncio
@@ -21,7 +21,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 # Type aliases for better readability
 FactoryCallable = Callable[..., Any]
-HeadersCallable = Callable[[Optional[str], bool, ...], Dict[str, str]]
+
+
+class HeadersCallable(Protocol):
+    def __call__(
+        self, user_id: Optional[str] = None, is_superuser: bool = False, **token_kwargs: Any
+    ) -> Dict[str, str]: ...
 
 
 @pytest_asyncio.fixture(scope="function")
