@@ -7,18 +7,29 @@ from typing import Any, Dict, List, Optional, Union
 from pydantic import AnyHttpUrl, EmailStr, PostgresDsn, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Get the path of the directory containing the current script (config.py)
-current_dir = os.path.dirname(os.path.abspath(__file__))
+# Add these imports for settings sources
+from pydantic_settings.sources import DotEnvSettingsSource, PydanticBaseSettingsSource
 
-# Navigate two directories up to reach the project root directory
-project_root = os.path.dirname(os.path.dirname(current_dir))
+
+def get_project_root() -> str:
+    """Get the project root path based on environment"""
+    if os.getenv("FASTAPI_ENV") == "production":
+        return "/app"
+
+    # For development and testing
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    return os.path.dirname(os.path.dirname(current_dir))
+
+
+# Get project root path
+project_root = get_project_root()
 
 # Create paths to environment files
 env_development_file = os.path.join(project_root, ".env.development")
 env_test_file = os.path.join(project_root, ".env.test")
 env_production_file = os.path.join(project_root, ".env.production")
 env_local_file = os.path.join(project_root, ".env.local")
-env_file = os.path.join(project_root, "backend.env")  # Legacy env file
+env_file_legacy = os.path.join(project_root, "backend.env")
 
 
 class ModeEnum(str, Enum):
@@ -37,7 +48,7 @@ class Settings(BaseSettings):
     MODE: ModeEnum = ModeEnum.development
     API_VERSION: str = "v1"
     API_V1_STR: str = f"/api/{API_VERSION}"
-    PROJECT_NAME: str
+    PROJECT_NAME: Optional[str] = "FastAPI RBAC"
     SECRET_KEY: str = secrets.token_urlsafe(32)
     DEBUG: bool = False
 
@@ -50,8 +61,8 @@ class Settings(BaseSettings):
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
     PASSWORD_RESET_URL: str = "http://localhost:3000/reset-password"
     ALGORITHM: str = "HS256"
-    TOKEN_ISSUER: str
-    TOKEN_AUDIENCE: str
+    TOKEN_ISSUER: Optional[str] = "http://localhost:8000"
+    TOKEN_AUDIENCE: Optional[str] = None  # This will be set in the .env file or environment variables
 
     # Email Settings
     EMAILS_ENABLED: bool = True
@@ -72,29 +83,34 @@ class Settings(BaseSettings):
     DATABASE_NAME: str = "fastapi_db"
     DATABASE_CELERY_NAME: str = "celery_schedule_jobs"
     SQLITE_DB_PATH: Optional[str] = None
-    REDIS_HOST: str
-    REDIS_PORT: str
+    POSTGRES_URL: Optional[str] = None
+    SUPABASE_URL: Optional[str] = None
+    SUPABASE_JWT_SECRET: Optional[str] = None
     DB_POOL_SIZE: int = 83
     WEB_CONCURRENCY: int = 9
     POOL_SIZE: int = max(DB_POOL_SIZE // WEB_CONCURRENCY, 5)
     ASYNC_DATABASE_URI: PostgresDsn | str = ""
 
+    # Redis Settings
+    REDIS_HOST: Optional[str] = None
+    REDIS_PORT: Optional[str] = None
+    REDIS_PASSWORD: Optional[str] = None
+    REDIS_SSL: bool = False
+
     # PgAdmin settings
     PGADMIN_DEFAULT_EMAIL: EmailStr = "admin@example.com"
-    PGADMIN_DEFAULT_PASSWORD: str = "admin"
-
-    # User Settings
-    FIRST_SUPERUSER_EMAIL: EmailStr
-    FIRST_SUPERUSER_PASSWORD: str
-    USER_CHANGED_PASSWORD_DATE: str
+    PGADMIN_DEFAULT_PASSWORD: str = "admin"  # User Settings
+    FIRST_SUPERUSER_EMAIL: EmailStr = "admin@example.com"
+    FIRST_SUPERUSER_PASSWORD: str = "admin123"
+    USER_CHANGED_PASSWORD_DATE: Optional[str] = None
     USERS_OPEN_REGISTRATION: bool = False
 
     # Security Settings
-    JWT_REFRESH_SECRET_KEY: str
-    JWT_RESET_SECRET_KEY: str  # Secret key for password reset tokens
-    JWT_VERIFICATION_SECRET_KEY: str = secrets.token_urlsafe(32)  # Secret key for email verification tokens
-    ENCRYPT_KEY: str
-    BACKEND_CORS_ORIGINS: List[Union[str, AnyHttpUrl]] = ["http://localhost:3000"]
+    JWT_REFRESH_SECRET_KEY: Optional[str] = None
+    JWT_RESET_SECRET_KEY: Optional[str] = None
+    JWT_VERIFICATION_SECRET_KEY: str = secrets.token_urlsafe(32)
+    ENCRYPT_KEY: Optional[str] = None
+    BACKEND_CORS_ORIGINS: List[Union[str, AnyHttpUrl]] = ["http://localhost:3000", "http://localhost:80"]
 
     # Email Verification Settings
     EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
@@ -109,12 +125,68 @@ class Settings(BaseSettings):
     ACCOUNT_LOCKOUT_MINUTES: int = 60 * 24  # 24 hours
     PASSWORD_HISTORY_SIZE: int = 5  # Number of previous passwords to remember
 
+    # Celery Configuration
+    CELERY_BROKER_URL: str = "redis://{REDIS_HOST}:{REDIS_PORT}/0"
+    CELERY_RESULT_BACKEND: str = "redis://{REDIS_HOST}:{REDIS_PORT}/0"
+
+    # Celery Task Settings
+    CELERY_TASK_SERIALIZER: str = "json"
+    CELERY_RESULT_SERIALIZER: str = "json"
+    CELERY_ACCEPT_CONTENT: List[str] = ["json"]
+    CELERY_TIMEZONE: str = "UTC"
+
+    # Celery Beat Settings
+    CELERY_BEAT_SCHEDULER: str = "django_celery_beat.schedulers:DatabaseScheduler"
+    CELERY_BEAT_MAX_LOOP_INTERVAL: int = 5
+
+    # Task Queue Settings
+    CELERY_TASK_DEFAULT_QUEUE: str = "default"
+    CELERY_TASK_DEFAULT_EXCHANGE: str = "default"
+    CELERY_TASK_DEFAULT_ROUTING_KEY: str = "default"
+
+    # Task Execution Settings
+    CELERY_TASK_TIME_LIMIT: int = 5 * 60  # 5 minutes
+    CELERY_TASK_SOFT_TIME_LIMIT: int = 60  # 1 minute
+    CELERY_WORKER_PREFETCH_MULTIPLIER: int = 1
+
+    # Task Routing Configuration
+    CELERY_TASK_ROUTES: Dict[str, Dict[str, str]] = {
+        "app.tasks.high_priority.*": {
+            "queue": "high_priority",
+            "routing_key": "high_priority",
+        },
+        "app.tasks.low_priority.*": {
+            "queue": "low_priority",
+            "routing_key": "low_priority",
+        },
+    }
+
+    CELERY_TASK_QUEUES: List[Dict[str, Any]] = [
+        {
+            "name": "default",
+            "exchange": "default",
+            "routing_key": "default",
+        },
+        {
+            "name": "high_priority",
+            "exchange": "high_priority",
+            "routing_key": "high_priority",
+        },
+        {
+            "name": "low_priority",
+            "exchange": "low_priority",
+            "routing_key": "low_priority",
+        },
+    ]
+
     @field_validator("BACKEND_CORS_ORIGINS")
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
         if isinstance(v, str) and not v.startswith("["):
             return [i.strip() for i in v.split(",")]
-        elif isinstance(v, (list, str)):
+        elif isinstance(v, list):
             return v
+        elif isinstance(v, str):
+            return [v]
         raise ValueError(v)
 
     @field_validator("SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD")
@@ -148,7 +220,13 @@ class Settings(BaseSettings):
                     sqlite_path = os.path.join(project_root, "app.db")
                 return f"sqlite+aiosqlite:///{sqlite_path}"
             else:
-                # PostgreSQL connection
+                # Check if we have a full Postgres URL (Supabase style)
+                postgres_url = info.data.get("POSTGRES_URL")
+                if postgres_url:
+                    # Parse the existing URL and modify it to use asyncpg
+                    return postgres_url.replace("postgres://", "postgresql+asyncpg://")
+
+                # Fallback to building the URL from components
                 return PostgresDsn.build(
                     scheme="postgresql+asyncpg",
                     username=info.data.get("DATABASE_USER"),
@@ -240,6 +318,24 @@ class Settings(BaseSettings):
                 )
         return v
 
+    def get_celery_redis_url(self) -> str:
+        """Build Redis URL for Celery broker and backend"""
+        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/0"
+
+    @field_validator("CELERY_BROKER_URL", "CELERY_RESULT_BACKEND", mode="after")
+    def assemble_redis_urls(cls, v: str, info: ValidationInfo) -> str:
+        if isinstance(v, str) and "{" in v:  # If it's a template string
+            redis_host = info.data.get("REDIS_HOST", "localhost")
+            redis_port = info.data.get("REDIS_PORT", "6379")
+
+            scheme = "redis"
+            if info.data.get("MODE") == ModeEnum.production:
+                # If in production, assume SSL is used based on celery_config.py modifications
+                scheme = "rediss"
+
+            return f"{scheme}://{redis_host}:{redis_port}/0"
+        return v
+
     @model_validator(mode="after")
     def validate_production_settings(self) -> "Settings":
         """Validate that critical settings are properly set in production mode"""
@@ -254,26 +350,72 @@ class Settings(BaseSettings):
 
             # Validate security settings
             assert (
+                self.JWT_REFRESH_SECRET_KEY is not None
+            ), "JWT_REFRESH_SECRET_KEY must be set in .env for production mode"
+            assert (
                 len(self.JWT_REFRESH_SECRET_KEY) >= 32
-            ), "JWT_REFRESH_SECRET_KEY should be longer in production"
-            assert len(self.JWT_RESET_SECRET_KEY) >= 32, "JWT_RESET_SECRET_KEY should be longer in production"
-            assert len(self.ENCRYPT_KEY) >= 32, "ENCRYPT_KEY should be longer in production"
+            ), "JWT_REFRESH_SECRET_KEY should be at least 32 characters in production"
+
+            assert (
+                self.JWT_RESET_SECRET_KEY is not None
+            ), "JWT_RESET_SECRET_KEY must be set in .env for production mode"
+            assert (
+                len(self.JWT_RESET_SECRET_KEY) >= 32
+            ), "JWT_RESET_SECRET_KEY should be at least 32 characters in production"
+
+            assert self.ENCRYPT_KEY is not None, "ENCRYPT_KEY must be set in .env for production mode"
+            assert len(self.ENCRYPT_KEY) >= 32, "ENCRYPT_KEY should be at least 32 characters in production"
+        return self
+
+    @model_validator(mode="after")
+    def ensure_required_fields_are_loaded(self) -> "Settings":
+        # These fields must be loaded from the environment (env vars or .env files)
+        # and should not be None after initialization.
+        # This validation runs after all sources (model_config, init_kwargs, env_vars,
+        # dotenv_files, secrets_dir)
+        required_fields_from_env = {
+            "PROJECT_NAME",
+            "TOKEN_ISSUER",
+            "TOKEN_AUDIENCE",
+            "REDIS_HOST",
+            "REDIS_PORT",
+            "FIRST_SUPERUSER_EMAIL",
+            "FIRST_SUPERUSER_PASSWORD",
+            "USER_CHANGED_PASSWORD_DATE",
+            "JWT_REFRESH_SECRET_KEY",
+            "JWT_RESET_SECRET_KEY",
+            "ENCRYPT_KEY",
+        }
+
+        missing_fields = []
+        for field_name in required_fields_from_env:
+            if getattr(self, field_name) is None:
+                missing_fields.append(field_name)
+
+        if missing_fields:
+            raise ValueError(
+                f"Missing required environment settings: {', '.join(missing_fields)}. "
+                "Please ensure they are set in your .env file or environment variables."
+            )
         return self
 
     def get_environment_specific_settings(self) -> Dict[str, Any]:
         """Return a dictionary of settings that vary by environment"""
-        mode = self.MODE
-
-        # Different settings based on environment
+        mode = self.MODE  # Different settings based on environment
+        base_settings = {}
         if mode == ModeEnum.development:
-            return {
+            base_settings = {
                 "DEBUG": True,
                 "LOG_LEVEL": "DEBUG",
                 "PASSWORD_RESET_URL": "http://localhost:3000/reset-password",
                 "DATABASE_TYPE": DatabaseTypeEnum.sqlite,
+                # Development Celery settings
+                "CELERY_TASK_ALWAYS_EAGER": True,  # Run tasks synchronously
+                "CELERY_TASK_EAGER_PROPAGATES": True,
+                "CELERY_WORKER_PREFETCH_MULTIPLIER": 1,
             }
         elif mode == ModeEnum.testing:
-            return {
+            base_settings = {
                 "DEBUG": True,
                 "LOG_LEVEL": "DEBUG",
                 "TESTING": True,
@@ -281,86 +423,109 @@ class Settings(BaseSettings):
                 "USERS_OPEN_REGISTRATION": True,
                 "DB_POOL_SIZE": 5,
                 "WEB_CONCURRENCY": 1,
+                # Testing Celery settings
+                "CELERY_TASK_ALWAYS_EAGER": True,
+                "CELERY_TASK_EAGER_PROPAGATES": True,
             }
         elif mode == ModeEnum.production:
-            return {
+            base_settings = {
                 "DEBUG": False,
                 "LOG_LEVEL": "INFO",
                 "PASSWORD_RESET_URL": f"https://{self.TOKEN_AUDIENCE}/reset-password",
                 "USERS_OPEN_REGISTRATION": False,
                 "DATABASE_TYPE": DatabaseTypeEnum.postgresql,
+                # Production Celery settings
+                "CELERY_TASK_ALWAYS_EAGER": False,
+                "CELERY_WORKER_PREFETCH_MULTIPLIER": 4,
+                "CELERY_TASK_TIME_LIMIT": 30 * 60,  # 30 minutes
+                "CELERY_TASK_SOFT_TIME_LIMIT": 15 * 60,  # 15 minutes
             }
+
+        return base_settings
 
     # This configuration uses the new SettingsConfigDict style in Pydantic v2
     model_config = SettingsConfigDict(
         case_sensitive=True,
         env_file_encoding="utf-8",
-        extra="ignore",  # Allow and ignore extra fields from env file
+        extra="ignore",
+        # env_file is now handled by settings_customise_sources
     )
 
-    # Dynamically select the appropriate env file based on MODE
     @classmethod
     def settings_customise_sources(
         cls,
-        settings_cls,
-        init_settings,
-        env_settings,
-        dotenv_settings,
-        file_secret_settings,
-    ):
-        # Get MODE from environment or default to development
-        mode = os.getenv("MODE", ModeEnum.development)
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        # Determine mode for .env file selection
+        # The MODE field itself will be loaded by env_settings or init_settings first if set.
+        # If not set, it defaults to development as per the field definition.
+        # We can get an early read of MODE from environment variables if needed for file selection.
+        mode_str = os.getenv("MODE", cls.model_fields["MODE"].default.value)
+        mode = ModeEnum(mode_str)
 
-        # Select appropriate env files based on mode
-        env_files = []
+        selected_env_files: List[str] = []
 
-        # Add default backend.env file if it exists (for backward compatibility)
-        if os.path.isfile(env_file):
-            env_files.append(env_file)
+        # 1. Add default backend.env file if it exists (lowest priority among .env files)
+        if os.path.isfile(env_file_legacy):
+            selected_env_files.append(env_file_legacy)
 
-        # Add mode-specific env file if it exists
+        # 2. Add mode-specific .env file if it exists (e.g., .env.development)
+        #    These will be inserted at the beginning of the list to take precedence over backend.env
+        mode_specific_env_file: Optional[str] = None
         if mode == ModeEnum.development and os.path.isfile(env_development_file):
-            env_files.insert(0, env_development_file)
+            mode_specific_env_file = env_development_file
         elif mode == ModeEnum.testing and os.path.isfile(env_test_file):
-            env_files.insert(0, env_test_file)
+            mode_specific_env_file = env_test_file
         elif mode == ModeEnum.production and os.path.isfile(env_production_file):
-            env_files.insert(0, env_production_file)
+            mode_specific_env_file = env_production_file
 
-        # Add local env file if it exists (highest priority)
+        if mode_specific_env_file:
+            if env_file_legacy in selected_env_files:
+                legacy_idx = selected_env_files.index(env_file_legacy)
+                selected_env_files.insert(legacy_idx, mode_specific_env_file)
+            else:
+                selected_env_files.append(mode_specific_env_file)
+
+        # 3. Add local .env file if it exists (highest priority among .env files)
         if os.path.isfile(env_local_file):
-            env_files.insert(0, env_local_file)
+            selected_env_files.insert(0, env_local_file)
 
-        # Ensure we have at least one env file
-        if not env_files:
-            env_files = [env_file]  # Use legacy file as fallback
+        # Deduplicate while preserving order (last occurrence wins for insert(0,...))
+        # For .env files, earlier in the list means higher priority.
+        # os.path.abspath can normalize paths if needed, but simple strings are fine.
+        ordered_unique_files = list(dict.fromkeys(selected_env_files))
 
-        # In Pydantic v2, we need to create a new dotenv settings instance
-        # Pass the settings_cls parameter which is required in Pydantic v2
-        new_dotenv = dotenv_settings.__class__(
-            settings_cls=settings_cls,
-            env_file=env_files,
-            env_file_encoding="utf-8",
-            env_nested_delimiter=None,
-        )
+        final_env_files_paths: Optional[tuple[str, ...]] = None
+        if ordered_unique_files:
+            final_env_files_paths = tuple(ordered_unique_files)
+            print(f"Loading .env files in order: {final_env_files_paths}")
+
+        # Safely access model_config values with defaults if not present
+        env_file_encoding = settings_cls.model_config.get("env_file_encoding", "utf-8")
+        case_sensitive = settings_cls.model_config.get("case_sensitive", True)
 
         return (
             init_settings,
             env_settings,
-            new_dotenv,
+            DotEnvSettingsSource(
+                settings_cls=settings_cls,
+                env_file=final_env_files_paths,
+                env_file_encoding=env_file_encoding,
+                case_sensitive=case_sensitive,
+            ),
             file_secret_settings,
         )
 
 
 @lru_cache()
 def get_settings() -> Settings:
-    """
-    Get cached settings instance.
-
-    This function returns a cached instance of the Settings class to avoid
-    reloading environment variables on every call, improving performance.
-    The caching is especially important in production environments where
-    performance is critical.
-    """
+    """Retrieve and cache application settings."""
+    # The settings object will now automatically use the customized sources
+    # defined in settings_customise_sources.
     return Settings()
 
 

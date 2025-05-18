@@ -12,12 +12,15 @@ if TYPE_CHECKING:
 
 
 class PermissionGroupBase(SQLModel):
-    name: str | None = None
+    name: str | None = Field(String(250), nullable=True, index=True)
     permission_group_id: UUID | None = None
 
 
 class PermissionGroup(BaseUUIDModel, PermissionGroupBase, table=True):
-    name: str | None = Field(String(250), nullable=True, index=True)
+    """PermissionGroup model for the application."""
+
+    __tablename__ = "PermissionGroup"
+
     created_by_id: UUID | None = Field(
         default=None, foreign_key="User.id"
     )  # Fixed case: User instead of user

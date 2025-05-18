@@ -11,8 +11,8 @@ from app.utils.uuid6 import uuid7
 
 # id: implements proposal uuid7 draft4
 class SQLModel(_SQLModel):
-    @declared_attr
-    def __tablename__(cls) -> str:
+    @declared_attr  # type: ignore
+    def __tablename__(cls) -> str:  # type: ignore
         return cls.__name__
 
 
@@ -24,14 +24,24 @@ class BaseUUIDModel(SQLModel):
         nullable=False,
     )
     updated_at: datetime = Field(  # Made non-nullable
-        default_factory=lambda: datetime.now(timezone.utc),
-        sa_column_kwargs={"onupdate": lambda: datetime.now(timezone.utc)},
+        default_factory=datetime.utcnow,
+        sa_column_kwargs={"onupdate": datetime.utcnow},
     )
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))  # Made non-nullable
+    created_at: datetime = Field(default_factory=datetime.utcnow)  # Made non-nullable
 
     @field_validator("created_at", "updated_at", mode="before")  # Updated to use field_validator
     @classmethod  # Required for class methods in Pydantic V2
-    def fix_null_string_for_datetime(cls, v):
-        if v == "(NULL)" or v is None:
-            return datetime.now(timezone.utc)  # Default to current time instead of None
-        return v
+    def fix_null_string_for_datetime(cls, v: str | None) -> datetime:  # Added type hint for v and return
+        if isinstance(v, str) and v.upper() == "(NULL)":  # Make check case-insensitive
+            return datetime.now(timezone.utc)
+        if v is None:  # If it's already None (e.g. from DB NULL), and field is non-nullable, provide default
+            return datetime.now(timezone.utc)
+        if isinstance(v, datetime):
+            return v
+        if isinstance(v, str):
+            try:
+                # Attempt to parse if it's a string but not "(NULL)"
+                return datetime.fromisoformat(v.replace("Z", "+00:00"))
+            except ValueError:
+                return datetime.now(timezone.utc)
+        return v  # Fallback, though ideally v should be str, None, or datetime

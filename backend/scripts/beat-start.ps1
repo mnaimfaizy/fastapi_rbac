@@ -3,13 +3,22 @@
 
 $ErrorActionPreference = 'Stop'
 
+# Change to the backend directory
+$backendPath = Split-Path $PSScriptRoot -Parent
+Set-Location $backendPath
+
+# Activate virtual environment if it exists
+if (Test-Path ".venv\Scripts\Activate.ps1") {
+    . .\.venv\Scripts\Activate.ps1
+}
+
+# Add backend directory to PYTHONPATH
+$env:PYTHONPATH = $backendPath
+
 Write-Host "Running pre-start tasks..."
-# Execute the Python pre-start script
-# Assuming python is in PATH and script path is relative to container root
-python -m app.backend_pre_start
+# Execute the Python pre-start script using relative path
+python .\app\backend_pre_start.py
 
 Write-Host "Starting Celery beat scheduler..."
-# Start the Celery beat process
-# Ensure celery command is available in the environment's PATH
-# Use Invoke-Expression to run the command string
-Invoke-Expression "celery -A app.celery_app beat --loglevel=info -s ./celerybeat-schedule.db"
+# Start the Celery beat process with SQLite scheduler instead of Django
+Invoke-Expression "celery -A app.celery_app beat --loglevel=info -s ./celerybeat-schedule.db --scheduler=celery.beat.PersistentScheduler"

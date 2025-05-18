@@ -1,0 +1,98 @@
+# FastAPI RBAC Queue Worker Production Dockerfile
+# Multi-stage build for Celery workers, beat, and flower in production
+
+# BUILD STAGE
+FROM python:3.10-slim-bullseye as builder
+
+# Set work directory
+WORKDIR /app
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install build dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    gcc \
+    python3-dev \
+    libpq-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN rm -rf /app/wheels && mkdir /app/wheels && \
+    pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.txt && \
+    echo "Contents of /app/wheels:" && \
+    ls -l /app/wheels
+
+# FINAL STAGE
+FROM python:3.10-slim-bullseye
+
+# Create a non-root user
+RUN useradd -m -u 1000 appuser
+
+# Set work directory
+WORKDIR /app
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    ENVIRONMENT=prod \
+    TESTING=0 \
+    FASTAPI_ENV=production \
+    PYTHONPATH=/app \
+    TZ=UTC
+
+# Install runtime dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    curl \
+    dos2unix \
+    tzdata \
+    postgresql-client \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy Python wheels from builder stage and install dependencies
+COPY --from=builder /app/wheels /wheels
+RUN pip install --no-cache-dir /wheels/*
+
+# Create necessary directories
+RUN mkdir -p /app/logs /app/celerybeat-schedule
+RUN chown -R appuser:appuser /app
+
+# Copy scripts first
+COPY scripts/worker-start.sh scripts/beat-start.sh scripts/flower-start.sh ./scripts/
+
+# Fix line endings for scripts
+RUN dos2unix -f ./scripts/*.sh && \
+    chmod +x ./scripts/*.sh
+
+# Copy openssl config if needed
+COPY ./.docker/openssl.cnf /etc/ssl/openssl.cnf
+
+# Copy the rest of the application code
+COPY . .
+
+# Fix line endings for all shell scripts after copying all files
+RUN find /app -name "*.sh" -type f -exec dos2unix -f {} \; \
+    && find /app -name "*.sh" -type f -exec chmod +x {} \;
+
+# Create needed directories with proper permissions
+RUN chown -R appuser:appuser /app
+
+# Switch to non-root user
+USER appuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD celery -A app.celery_app inspect ping || exit 1
+
+# The actual command will be specified in docker-compose
+CMD ["/bin/bash", "/app/scripts/worker-start.sh"]

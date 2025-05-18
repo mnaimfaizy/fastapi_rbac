@@ -2,6 +2,7 @@ import logging
 import os
 
 import tenacity
+from redis.exceptions import AuthenticationError  # Import AuthenticationError directly
 from sqlalchemy import create_engine, text
 
 from app.core.config import ModeEnum, settings
@@ -84,31 +85,128 @@ def wait_for_redis() -> None:
     try:
         import redis
 
+        default_redis_port = 6379
+        redis_host_from_settings = settings.REDIS_HOST
+        redis_port_from_settings = settings.REDIS_PORT
+
+        # Check if running in a container environment (useful for Docker)
+        in_container = os.getenv("CONTAINER_MODE", "").lower() == "true"
+
         # Get Redis connection details based on environment mode
         if settings.MODE == ModeEnum.development:
             redis_host = "localhost"  # Use local Redis for development
-            redis_port = 6379
-            logger.info("Development mode: Using local Redis.")
+            redis_port_str = str(default_redis_port)  # Ensure it's a string for consistency
+            redis_ssl = False
+            logger.info("Development mode: Using local Redis without SSL.")
         elif settings.MODE == ModeEnum.testing:
             # Use configured Redis for testing (likely Docker)
-            redis_host = os.getenv("REDIS_HOST", settings.REDIS_HOST)
-            redis_port = int(os.getenv("REDIS_PORT", settings.REDIS_PORT))
+            redis_host = os.getenv("REDIS_HOST", redis_host_from_settings)
+            redis_port_str = os.getenv("REDIS_PORT", str(redis_port_from_settings))
+            redis_ssl = os.getenv("REDIS_SSL", "").lower() == "true"
             logger.info("Testing mode: Using configured Redis (Docker/settings).")
         else:  # Production or other modes
             # Default to environment variables or settings
-            redis_host = os.getenv("REDIS_HOST", settings.REDIS_HOST)
-            redis_port = int(os.getenv("REDIS_PORT", settings.REDIS_PORT))
-            logger.info(f"{settings.MODE.value} mode: Using configured Redis.")
+            redis_host = os.getenv("REDIS_HOST", redis_host_from_settings)
+            redis_port_str = os.getenv("REDIS_PORT", str(redis_port_from_settings))
+            # In production, get SSL setting from environment or default to True
+            redis_ssl = os.getenv("REDIS_SSL", "true").lower() == "true"
+            logger.info(f"{settings.MODE.value} mode: Using configured Redis with SSL={redis_ssl}.")
 
-        logger.info(f"Connecting to Redis at {redis_host}:{redis_port}")
-        redis_client = redis.Redis(
-            host=redis_host,
-            port=redis_port,
-            db=0,
-            socket_connect_timeout=1,
-        )
-        redis_client.ping()
+        # Convert port to int, with a default if None or invalid
+        try:
+            redis_port = int(redis_port_str) if redis_port_str is not None else default_redis_port
+        except (ValueError, TypeError):
+            logger.warning(
+                f"Invalid REDIS_PORT value '{redis_port_str}'. Defaulting to {default_redis_port}."
+            )
+            redis_port = default_redis_port
+
+        if redis_host is None:
+            logger.warning("REDIS_HOST is not set. Defaulting to 'localhost'.")
+            redis_host = "localhost"
+
+        redis_password = os.getenv("REDIS_PASSWORD", settings.REDIS_PASSWORD)
+
+        # Get SSL certificate paths when SSL is enabled
+        ssl_ca_certs = None
+        ssl_certfile = None
+        ssl_keyfile = None
+
+        if redis_ssl:
+            # Path to the certificate files (adjust for container paths)
+            base_cert_path = os.getenv("REDIS_CERT_PATH", "/certs")
+
+            # For local development or when running outside container
+            if not os.path.exists(base_cert_path):
+                base_cert_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "certs")
+                logger.info(f"Certificate path not found at {base_cert_path}, using local certs directory")
+
+            ssl_ca_certs = os.path.join(base_cert_path, "ca.crt")
+            ssl_certfile = os.path.join(base_cert_path, "redis.crt")
+            ssl_keyfile = os.path.join(base_cert_path, "redis.key")
+
+            # Verify certificates exist
+            if not os.path.exists(ssl_ca_certs):
+                logger.warning(f"CA certificate not found at {ssl_ca_certs}, SSL might not work properly")
+            if not os.path.exists(ssl_certfile):
+                logger.warning(f"Certificate not found at {ssl_certfile}, SSL might not work properly")
+            if not os.path.exists(ssl_keyfile):
+                logger.warning(f"Key not found at {ssl_keyfile}, SSL might not work properly")
+
+            logger.info(f"Using SSL certificates at {base_cert_path}")
+
+        logger.info(f"Attempting to connect to Redis at {redis_host}:{redis_port} with SSL={redis_ssl}")
+
+        # Create connection configuration based on whether SSL is enabled
+        if redis_ssl:
+            logger.info("Connecting to Redis with SSL and password.")
+            ssl_kwargs = {
+                "ssl": True,
+                "ssl_cert_reqs": "required",
+            }
+
+            # Only add certificate paths if files exist and not None
+            if ssl_ca_certs and os.path.exists(ssl_ca_certs):
+                ssl_kwargs["ssl_ca_certs"] = ssl_ca_certs
+            if ssl_certfile and os.path.exists(ssl_certfile):
+                ssl_kwargs["ssl_certfile"] = ssl_certfile
+            if ssl_keyfile and os.path.exists(ssl_keyfile):
+                ssl_kwargs["ssl_keyfile"] = ssl_keyfile
+
+            # In Docker environment, hostnames might be different
+            # In production Docker, hostname verification often needs to be disabled
+            if in_container or settings.MODE == ModeEnum.production:
+                # In container mode, hostname verification might need to be disabled
+                # or the hostname might need to match the cert's CN
+                ssl_kwargs["ssl_check_hostname"] = False
+
+            # Log the SSL settings being used
+            logger.info(f"Redis SSL configuration: {ssl_kwargs}")
+
+            r = redis.Redis(
+                host=redis_host,
+                port=redis_port,
+                password=redis_password if redis_password else None,
+                db=0,
+                **ssl_kwargs,
+            )
+        elif redis_password:
+            logger.info("Connecting to Redis with a password (no SSL).")
+            r = redis.Redis(
+                host=redis_host,
+                port=redis_port,
+                password=redis_password if redis_password else None,
+                db=0,
+            )
+        else:
+            logger.info("Connecting to Redis without a password and without SSL.")
+            r = redis.Redis(host=redis_host, port=redis_port, db=0)
+
+        r.ping()
         logger.info("Redis is ready")
+    except AuthenticationError as e:  # Use the directly imported AuthenticationError
+        logger.error(f"Redis authentication failed: {e}")
+        raise
     except Exception as e:
         logger.error(f"Redis is not ready: {e}")
         raise

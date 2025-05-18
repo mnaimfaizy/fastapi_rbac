@@ -7,7 +7,6 @@ from collections.abc import AsyncGenerator
 from typing import Callable
 from uuid import UUID  # Import UUID
 
-import redis.asyncio as aioredis
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt import DecodeError, ExpiredSignatureError, MissingRequiredClaimError
@@ -17,27 +16,12 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app import crud
 from app.core.config import settings
 from app.core.security import decode_token
-from app.core.service_config import service_settings
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, get_redis_client
 from app.models.user_model import User
 from app.schemas.common_schema import TokenType
 from app.utils.token import get_valid_tokens
 
 reusable_oauth2 = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/login/access-token")
-
-
-async def get_redis_client() -> AsyncGenerator[Redis, None]:
-    """
-    Get Redis client with environment-specific configuration.
-    This function returns an async generator that yields a Redis client.
-    """
-    redis_client = await aioredis.from_url(
-        service_settings.redis_url, encoding="utf-8", decode_responses=True
-    )
-    try:
-        yield redis_client
-    finally:
-        await redis_client.aclose()  # Changed close() to aclose()
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

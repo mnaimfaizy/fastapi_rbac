@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List
 
-from pydantic import EmailStr
+from pydantic import EmailStr, validator  # Modified import
 from sqlmodel import Column, Field, Relationship, String
 
 from app.models.base_uuid_model import BaseUUIDModel, SQLModel
@@ -19,16 +19,22 @@ class UserBase(SQLModel):
     email: EmailStr = Field(sa_column=Column(String, unique=True, index=True))
     is_active: bool = True
     is_superuser: bool = False
-    last_updated_by: int | None = None
+    last_updated_by: int | None = None  # Assuming str or UUID, keeping as int for now.
     needs_to_change_password: bool = True
-    expiry_date: datetime | None
+    expiry_date: datetime | None = None
     contact_phone: str | None = None
     last_changed_password_date: datetime | None = None
-    number_of_failed_attempts: int | None
+    number_of_failed_attempts: int | None = None
     is_locked: bool = False
     locked_until: datetime | None = None
     verified: bool = False
     verification_code: str | None = None
+
+    @validator("expiry_date", "last_changed_password_date", "locked_until", pre=True)
+    def convert_null_string_to_none(cls, v: Any) -> Any:
+        if isinstance(v, str) and v.upper() == "(NULL)":  # Made case-insensitive
+            return None
+        return v
 
 
 class User(BaseUUIDModel, UserBase, table=True):
@@ -36,11 +42,11 @@ class User(BaseUUIDModel, UserBase, table=True):
 
     __tablename__ = "User"
 
-    first_name: str | None = Field(index=True)
-    last_name: str | None = Field(index=True)
+    first_name: str | None = Field(default=None, index=True)
+    last_name: str | None = Field(default=None, index=True)
     password: str | None = Field(default=None)  # Store the hashed password
-    expiry_date: datetime | None = Field(default_factory=datetime.utcnow)
-    last_changed_password_date: datetime | None = Field(default_factory=datetime.utcnow)
+    expiry_date: datetime | None = Field(default_factory=lambda: datetime.now(timezone.utc))
+    last_changed_password_date: datetime | None = Field(default_factory=lambda: datetime.now(timezone.utc))
     roles: List["Role"] = Relationship(
         back_populates="users",
         link_model=UserRole,

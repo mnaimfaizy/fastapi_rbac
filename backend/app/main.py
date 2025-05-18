@@ -121,7 +121,7 @@ async def lifespan(fastapi_instance: FastAPI) -> AsyncGenerator[None, None]:
 
 # Core Application Instance
 fastapi_app = FastAPI(
-    title=settings.PROJECT_NAME,
+    title=settings.PROJECT_NAME or "FastAPI RBAC",
     version=settings.API_VERSION,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     description=("FastAPI RBAC system with comprehensive " "authentication and authorization features"),
@@ -144,9 +144,13 @@ fastapi_app.add_middleware(GlobalsMiddleware)
 
 # Set all CORS origins enabled
 if settings.BACKEND_CORS_ORIGINS:
+    # Convert and print CORS origins for debugging
+    allowed_origins = [str(origin) for origin in settings.BACKEND_CORS_ORIGINS]
+    print(f"Configuring CORS with allowed origins: {allowed_origins}")
+
     fastapi_app.add_middleware(
         CORSMiddleware,
-        allow_origins=[str(origin) for origin in settings.BACKEND_CORS_ORIGINS],
+        allow_origins=allowed_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

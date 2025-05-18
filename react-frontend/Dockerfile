@@ -1,4 +1,4 @@
-FROM node:18-alpine as build
+FROM node:18-alpine
 
 WORKDIR /app
 
@@ -11,20 +11,11 @@ RUN npm ci
 # Copy app files
 COPY . .
 
-# Create production build
-RUN npm run build
+# Use the build stage as the final stage for development
+# This allows for hot-reloading and development features
 
-# Production stage
-FROM nginx:alpine
+# Expose the development server port
+EXPOSE 5173
 
-# Copy built assets from builder stage
-COPY --from=build /app/dist /usr/share/nginx/html
-
-# Copy nginx config
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-# Expose port 80
-EXPOSE 80
-
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Start the development server
+CMD ["npm", "run", "dev", "--", "--host"]

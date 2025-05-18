@@ -1,0 +1,20 @@
+services:
+  react_frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    image: react_frontend:prod
+    environment:
+      - VITE_API_BASE_URL=/api/v1
+    env_file:
+      - .env.production
+    ports:
+      - "80:80"
+    container_name: react_frontend
+    restart: always
+    networks:
+      - fastapi_rbac_network
+
+networks:
+  fastapi_rbac_network:
+    driver: bridge

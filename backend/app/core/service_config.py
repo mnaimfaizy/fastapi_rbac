@@ -36,8 +36,8 @@ class ServiceSettings:
             # For testing, use an in-memory mock or a test-specific Redis
             return "redis://localhost:6379/1"  # Use DB 1 for testing
         else:
-            # For production, use the Docker container's Redis service
-            return f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/0"
+            # For production, use the Docker container's Redis service with TLS
+            return f"rediss://{settings.REDIS_HOST}:{settings.REDIS_PORT}/0?ssl_cert_reqs=none"
 
     @property
     def celery_broker_url(self) -> str:

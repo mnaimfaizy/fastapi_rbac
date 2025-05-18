@@ -1,6 +1,6 @@
 // Constants for token storage keys
 const REFRESH_TOKEN_KEY =
-  process.env.VITE_AUTH_REFRESH_TOKEN_NAME || "auth_refresh_token";
+  import.meta.env.VITE_AUTH_REFRESH_TOKEN_NAME || "auth_refresh_token";
 
 /**
  * Securely stores the access token in memory (for security)

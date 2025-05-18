@@ -1,6 +1,6 @@
-import datetime
+from datetime import datetime
 
-from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlalchemy.ext.asyncio.session import AsyncSession
 
 from app import crud
 from app.core.config import settings
@@ -12,6 +12,8 @@ from app.schemas.user_schema import IUserCreate
 #     IRoleCreate(name="user", description="User role"),
 # ]
 
+current_date = datetime.utcnow()
+
 users: list[dict[str, str | IUserCreate]] = [
     {
         "data": IUserCreate(
@@ -21,8 +23,8 @@ users: list[dict[str, str | IUserCreate]] = [
             email=settings.FIRST_SUPERUSER_EMAIL,
             is_superuser=True,
             is_active=True,
-            last_changed_password_date=datetime.datetime.utcnow(),
-            expirty_date=datetime.datetime.utcnow(),
+            last_changed_password_date=current_date,
+            expiry_date=current_date,
             needs_to_change_password=False,
             roles=[],
         )
@@ -35,8 +37,8 @@ users: list[dict[str, str | IUserCreate]] = [
             email="manager@example.com",
             is_superuser=False,
             is_active=True,
-            last_changed_password_date=datetime.datetime.utcnow(),
-            expirty_date=datetime.datetime.utcnow(),
+            last_changed_password_date=current_date,
+            expiry_date=current_date,
             needs_to_change_password=False,
             roles=[],
         )
@@ -49,8 +51,8 @@ users: list[dict[str, str | IUserCreate]] = [
             email="user@example.com",
             is_superuser=False,
             is_active=True,
-            last_changed_password_date=datetime.datetime.utcnow(),
-            expirty_date=datetime.datetime.utcnow(),
+            last_changed_password_date=current_date,
+            expiry_date=current_date,
             needs_to_change_password=False,
             roles=[],
         )

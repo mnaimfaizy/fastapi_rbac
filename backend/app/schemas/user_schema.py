@@ -18,8 +18,9 @@ class IUserCreate(UserBase):
     password: str
     last_changed_password_date: datetime | None = None
     expiry_date: datetime | None = None
-    number_of_failed_attempts: int = 0  # Adding the missing field with default value
+    number_of_failed_attempts: int | None = 0  # Adding the missing field with default value
     verified: bool = False  # Add verified field, default to False
+    roles: list[dict[str, Any]] | None = None  # Adding roles field
 
 
 # Properties for user registration

@@ -1,7 +1,12 @@
 import asyncio
+import sys
+from pathlib import Path
 
-from app.db.init_db import init_db
-from app.db.session import SessionLocal
+# Add the project root directory to Python path
+sys.path.append(str(Path(__file__).parent.parent))
+
+from app.db.init_db import init_db  # noqa: E402
+from app.db.session import SessionLocal  # noqa: E402
 
 
 async def create_init_data() -> None:

@@ -1,0 +1,61 @@
+# React Frontend Production Dockerfile
+# Multi-stage build for a production-ready React application
+
+# BUILD STAGE
+FROM node:18-alpine as builder
+
+# Set working directory
+WORKDIR /app
+
+# Add package.json files
+COPY package*.json ./
+
+# Install dependencies with clean install
+# This ensures we use exactly what's in package-lock.json
+RUN npm ci --silent
+
+# Copy source code
+COPY . .
+
+# Create optimized production build
+RUN npm run build
+
+# FINAL STAGE - Nginx to serve static files
+FROM nginx:alpine
+
+# Install additional required packages
+RUN apk add --no-cache shadow curl
+
+# Copy nginx configuration
+COPY nginx.conf /etc/nginx/nginx.conf
+
+# Copy static assets from builder stage
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Create necessary directories and set permissions - use /tmp directories for non-root operation
+RUN mkdir -p /tmp/nginx/cache \
+        /tmp/nginx/run \
+        /tmp/nginx/log \
+        /tmp/nginx/client_temp \
+        /tmp/nginx/proxy_temp \
+        /tmp/nginx/fastcgi_temp \
+        /tmp/nginx/uwsgi_temp \
+        /tmp/nginx/scgi_temp && \
+    chown -R nginx:nginx /usr/share/nginx/html && \
+    chown -R nginx:nginx /tmp/nginx && \
+    chmod -R 755 /tmp/nginx && \
+    # Remove setuid bit from all executables
+    find / -perm /6000 -type f -exec chmod a-s {} \; || true
+
+# Switch to non-root nginx user
+USER nginx
+
+# Expose port for web access
+EXPOSE 80
+
+# Health check - using curl instead of wget and using 127.0.0.1 instead of localhost
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+    CMD curl -f http://127.0.0.1:80/ || exit 1
+
+# Start Nginx server
+CMD ["nginx", "-g", "daemon off;"]

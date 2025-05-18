@@ -1,11 +1,9 @@
 # https://stackoverflow.com/questions/75252097/fastapi-testing-runtimeerror-task-attached-to-a-different-loop/75444607#75444607
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 
 import redis.asyncio as aioredis
-from sqlalchemy.ext.asyncio import create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
-from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import ModeEnum, settings
 
@@ -31,11 +29,10 @@ else:
         max_overflow=64,
     )
 
-SessionLocal = sessionmaker(
+SessionLocal = async_sessionmaker(
+    bind=engine,
     autocommit=False,
     autoflush=False,
-    bind=engine,
-    class_=AsyncSession,
     expire_on_commit=False,
 )
 
@@ -59,16 +56,15 @@ else:
         max_overflow=64,
     )
 
-SessionLocalCelery = sessionmaker(
+SessionLocalCelery = async_sessionmaker(
+    bind=engine_celery,
     autocommit=False,
     autoflush=False,
-    bind=engine_celery,
-    class_=AsyncSession,
     expire_on_commit=False,
 )
 
 
-async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
+async def get_async_session() -> AsyncGenerator[AsyncSession, Any]:
     """
     Create and get async database session.
     This function yields an AsyncSession for
@@ -81,16 +77,37 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
-async def get_redis_client() -> AsyncGenerator[aioredis.Redis, None]:
+async def get_redis_client() -> AsyncGenerator[aioredis.Redis, Any]:
     """
     Get Redis client instance as an async generator.
     Yields a Redis client configured to connect
     to the Redis server specified in settings.
     This function implements the async iterator pattern
     to be compatible with 'async for' usage.
+
+    The connection uses service_settings.redis_url which automatically
+    handles protocol selection (redis:// vs rediss://) based on environment.
     """
-    redis_url = f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}"
-    redis_client = aioredis.from_url(redis_url, decode_responses=True)
+    from app.core.service_config import service_settings
+
+    # The URL from service_settings has the correct scheme (redis:// or rediss://) and optional parameters
+    redis_url = service_settings.redis_url
+
+    # Standard connection parameters used in all modes
+    connection_params = {
+        "decode_responses": True,
+        "password": settings.REDIS_PASSWORD,
+    }
+
+    # For production environments with SSL enabled Redis
+    if settings.MODE != ModeEnum.development and "rediss://" in redis_url:
+        # When using rediss:// protocol, the SSL options are already included in the URL
+        # Don't add SSL parameters explicitly as they're handled by the URL scheme
+        connection_params["username"] = "default"
+
+    # Create Redis client with appropriate parameters
+    redis_client = aioredis.from_url(redis_url, **connection_params)
+
     try:
         yield redis_client
     finally:

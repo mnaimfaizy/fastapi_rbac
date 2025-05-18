@@ -1,0 +1,207 @@
+services:
+  # Shared Infrastructure Services
+  fastapi_rbac_db:
+    image: postgres:15-alpine
+    container_name: fastapi_rbac_db
+    restart: always
+    environment:
+      - POSTGRES_USER=${DATABASE_USER:-postgres}
+      - POSTGRES_PASSWORD=${DATABASE_PASSWORD:-postgres}
+      - POSTGRES_DB=${DATABASE_NAME:-postgres}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
+    user: root
+    env_file:
+      - .env.production
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fastapi_rbac_network
+    expose:
+      - "5432:5432"
+
+  fastapi_rbac_redis:
+    image: redis:alpine
+    container_name: fastapi_rbac_redis # Command to run Redis with TLS, using generated certificates
+    command: >
+      redis-server
+      --tls-port 6379
+      --port 0
+      --tls-cert-file /certs/redis.crt
+      --tls-key-file /certs/redis.key
+      --tls-ca-cert-file /certs/ca.crt
+      --tls-auth-clients optional
+      --requirepass ${REDIS_PASSWORD:-redis}
+      --appendonly yes
+    restart: always
+    ports:
+      - "6379:6379" # Publish Redis port to host machine
+    expose:
+      - 6379
+    volumes:
+      # Mount the certs directory into the container
+      - ./certs:/certs:ro
+      - redis_data:/data # Persist Redis data
+    healthcheck:
+      test: [
+          "CMD",
+          "redis-cli",
+          "-h",
+          "fastapi_rbac_redis", # Use the service name, which matches the cert CN
+          "--tls",
+          "--cacert",
+          "/certs/ca.crt",
+          "--insecure", # Skip certificate verification
+          "-a",
+          "${REDIS_PASSWORD:-redis}",
+          "ping",
+        ]
+      interval: 10s # Increased interval for TLS handshake
+      timeout: 10s # Increased timeout
+      retries: 5
+    networks:
+      - fastapi_rbac_network
+  fastapi_rbac:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    image: fastapi_rbac:prod
+    environment:
+      MODE: production
+      FASTAPI_ENV: production
+      DATABASE_TYPE: postgresql
+      DATABASE_HOST: ${DATABASE_HOST:-fastapi_rbac_db}
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      DATABASE_USER: ${DATABASE_USER:-postgres}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-postgres}
+      DATABASE_NAME: ${DATABASE_NAME:-fastapi_db}
+      REDIS_HOST: ${REDIS_HOST:-fastapi_rbac_redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis}
+      # Update REDIS_URL to use rediss:// for TLS
+      REDIS_URL: rediss://default:${REDIS_PASSWORD:-redis}@${REDIS_HOST:-fastapi_rbac_redis}:${REDIS_PORT:-6379}/0?ssl_cert_reqs=none&ssl_ca_certs=/certs/ca.crt
+      # Update Celery URLs to use rediss:// for TLS
+      CELERY_BROKER_URL: rediss://default:${REDIS_PASSWORD:-redis}@${REDIS_HOST:-fastapi_rbac_redis}:${REDIS_PORT:-6379}/0?ssl_cert_reqs=none&ssl_ca_certs=/certs/ca.crt
+      CELERY_RESULT_BACKEND: rediss://default:${REDIS_PASSWORD:-redis}@${REDIS_HOST:-fastapi_rbac_redis}:${REDIS_PORT:-6379}/0?ssl_cert_reqs=none&ssl_ca_certs=/certs/ca.crt
+      # Remove explicit SSL disable for Celery, as we are now using TLS
+      # CELERY_BROKER_USE_SSL: "false"
+      # CELERY_REDIS_BACKEND_USE_SSL: "false"
+      PYTHONPATH: /app
+      PYTHONUNBUFFERED: 1
+    env_file:
+      - .env.production
+    # Add volume mount for certs
+    volumes:
+      - ./certs:/certs:ro
+    ports:
+      - "8000:8000" # Publish FastAPI port to host machine
+    expose:
+      - 8000
+    container_name: fastapi_rbac
+    restart: always
+    depends_on:
+      fastapi_rbac_db:
+        condition: service_healthy
+      fastapi_rbac_redis:
+        condition: service_healthy
+    networks:
+      - fastapi_rbac_network
+  fastapi_rbac_worker:
+    build:
+      context: .
+      dockerfile: queue.dockerfile.prod
+    image: fastapi_rbac_worker:prod
+    environment:
+      MODE: production
+      DATABASE_TYPE: postgresql
+      DATABASE_HOST: ${DATABASE_HOST:-fastapi_rbac_db}
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      DATABASE_USER: ${DATABASE_USER:-postgres}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-postgres}
+      DATABASE_NAME: ${DATABASE_NAME:-fastapi_db}
+      REDIS_HOST: ${REDIS_HOST:-fastapi_rbac_redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis}
+      # Update REDIS_URL to use rediss:// for TLS
+      REDIS_URL: rediss://default:${REDIS_PASSWORD:-redis}@${REDIS_HOST:-fastapi_rbac_redis}:${REDIS_PORT:-6379}/0?ssl_cert_reqs=none&ssl_ca_certs=/certs/ca.crt
+      # Update Celery URLs to use rediss:// for TLS
+      CELERY_BROKER_URL: rediss://default:${REDIS_PASSWORD:-redis}@${REDIS_HOST:-fastapi_rbac_redis}:${REDIS_PORT:-6379}/0?ssl_cert_reqs=none&ssl_ca_certs=/certs/ca.crt
+      CELERY_RESULT_BACKEND: rediss://default:${REDIS_PASSWORD:-redis}@${REDIS_HOST:-fastapi_rbac_redis}:${REDIS_PORT:-6379}/0?ssl_cert_reqs=none&ssl_ca_certs=/certs/ca.crt
+      # Remove explicit SSL disable for Celery, as we are now using TLS
+      # CELERY_BROKER_USE_SSL: "false"
+      # CELERY_REDIS_BACKEND_USE_SSL: "false"
+      PYTHONPATH: /app
+      PYTHONUNBUFFERED: 1
+      SQLALCHEMY_DATABASE_URI: postgresql://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres}@${DATABASE_HOST:-fastapi_rbac_db}:${DATABASE_PORT:-5432}/${DATABASE_NAME:-fastapi_db}
+    env_file:
+      - .env.production
+    # Add volume mount for certs
+    volumes:
+      - ./certs:/certs:ro
+    command: ["/bin/bash", "/app/scripts/worker-start.sh"]
+    container_name: fastapi_rbac_worker
+    restart: always
+    depends_on:
+      fastapi_rbac_db:
+        condition: service_healthy
+      fastapi_rbac_redis:
+        condition: service_healthy
+    networks:
+      - fastapi_rbac_network
+  fastapi_rbac_beat:
+    build:
+      context: .
+      dockerfile: queue.dockerfile.prod
+    image: fastapi_rbac_worker:prod
+    environment:
+      MODE: production
+      DATABASE_TYPE: postgresql
+      DATABASE_HOST: ${DATABASE_HOST:-fastapi_rbac_db}
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      DATABASE_USER: ${DATABASE_USER:-postgres}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-postgres}
+      DATABASE_NAME: ${DATABASE_NAME:-fastapi_db}
+      REDIS_HOST: ${REDIS_HOST:-fastapi_rbac_redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis}
+      # Update REDIS_URL to use rediss:// for TLS
+      REDIS_URL: rediss://default:${REDIS_PASSWORD:-redis}@${REDIS_HOST:-fastapi_rbac_redis}:${REDIS_PORT:-6379}/0?ssl_cert_reqs=none&ssl_ca_certs=/certs/ca.crt
+      # Update Celery URLs to use rediss:// for TLS (using a different DB for beat)
+      CELERY_BROKER_URL: rediss://default:${REDIS_PASSWORD:-redis}@${REDIS_HOST:-fastapi_rbac_redis}:${REDIS_PORT:-6379}/1?ssl_cert_reqs=none&ssl_ca_certs=/certs/ca.crt
+      CELERY_RESULT_BACKEND: rediss://default:${REDIS_PASSWORD:-redis}@${REDIS_HOST:-fastapi_rbac_redis}:${REDIS_PORT:-6379}/1?ssl_cert_reqs=none&ssl_ca_certs=/certs/ca.crt
+      # Remove explicit SSL disable for Celery, as we are now using TLS
+      # CELERY_BROKER_USE_SSL: "false"
+      # CELERY_REDIS_BACKEND_USE_SSL: "false"
+    env_file:
+      - .env.production
+    container_name: fastapi_rbac_beat
+    restart: always
+    # Add volume mount for certs (in addition to existing celery_beat_data)
+    volumes:
+      - ./certs:/certs:ro
+      - celery_beat_data:/app/celerybeat-schedule
+    depends_on:
+      fastapi_rbac_db:
+        condition: service_healthy
+      fastapi_rbac_redis:
+        condition: service_healthy
+      fastapi_rbac_worker:
+        condition: service_started
+    networks:
+      - fastapi_rbac_network
+    command: ["/bin/bash", "/app/scripts/beat-start.sh"]
+
+volumes:
+  postgres_data:
+  celery_beat_data:
+  redis_data:
+
+networks:
+  fastapi_rbac_network:
+    name: fastapi_rbac_network

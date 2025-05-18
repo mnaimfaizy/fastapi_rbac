@@ -5,13 +5,13 @@ from uuid import UUID
 from fastapi import HTTPException
 from pydantic import EmailStr
 from sqlalchemy import exc
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
-from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.security import get_password_hash, verify_password
 from app.crud.base_crud import CRUDBase
 from app.models.password_history_model import UserPasswordHistory
-from app.models.role_model import Role  # Import Role model
+from app.models.role_model import Role
 from app.models.user_model import User
 from app.schemas.user_schema import IUserCreate, IUserUpdate
 
