@@ -28,6 +28,10 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Create production .env file for backend
+        run: cp backend/production.env.example backend/.env.production
+        shell: bash
+
       - name: Set IMAGE_TAG for the script
         run: |
           if [[ "${{ github.ref_type }}" == "tag" ]]; then
