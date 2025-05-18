@@ -1,0 +1,53 @@
+name: React Frontend CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "react-frontend/**"
+      - ".github/workflows/react-frontend-ci.yml" # Trigger if this workflow file changes
+  pull_request:
+    branches: [main]
+    paths:
+      - "react-frontend/**"
+      - ".github/workflows/react-frontend-ci.yml" # Trigger if this workflow file changes
+
+defaults:
+  run:
+    working-directory: ./react-frontend
+
+jobs:
+  lint-format-build:
+    name: Lint, Format Check & Build
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [20.x] # You can specify other versions if needed
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+          cache-dependency-path: react-frontend/package-lock.json # or react-frontend/yarn.lock
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linter
+        run: npm run lint
+
+      - name: Check formatting
+        run: npm run format -- --check # Assuming your format script uses Prettier. If not, adjust accordingly.
+        # If your package.json format script is just "prettier --write .",
+        # you can directly use "npx prettier --check ."
+        # For the provided package.json, the format script is "prettier --write ."
+        # So, we'll use "npx prettier --check ." for CI to avoid writing changes.
+
+      - name: Build project
+        run: npm run build
