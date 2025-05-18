@@ -57,6 +57,7 @@ class AuthTokenManager {
    * Decode JWT token to get payload
    * @param token JWT token string
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private decodeJWT(token: string): any {
     try {
       // Split the token and get the payload part (second part)

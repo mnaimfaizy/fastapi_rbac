@@ -107,6 +107,7 @@ const RoleDetail: React.FC = () => {
         await dispatch(deleteRole(roleId)).unwrap();
         toast.success('Role deleted successfully');
         navigate('/dashboard/roles');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (error: any) {
         const errorMessage =
           error.response?.data?.detail ||
@@ -427,7 +428,8 @@ const RoleDetail: React.FC = () => {
               <Users className="h-10 w-10 mx-auto opacity-20 mb-2" />
               <p>No permissions assigned to this role</p>
               <p className="text-sm mt-1">
-                Click "Add Permissions" to assign permissions to this role.
+                Click &quot;Add Permissions&quot; to assign permissions to this
+                role.
               </p>
             </div>
           )}

@@ -75,7 +75,7 @@ const PermissionGroupRow: React.FC<PermissionGroupRowProps> = ({
   onDelete,
   onEdit,
   onView,
-}) => {
+}: PermissionGroupRowProps) => {
   // State for expand/collapse functionality
   const [isExpanded, setIsExpanded] = useState(true);
 

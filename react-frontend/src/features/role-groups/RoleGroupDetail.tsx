@@ -354,6 +354,7 @@ const RoleGroupDetail: React.FC = () => {
         await dispatch(deleteRoleGroup(groupId)).unwrap();
         toast.success('Role group deleted successfully');
         navigate('/dashboard/role-groups');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (error: any) {
         // Extract the most specific error message from the error response
         const errorMessage =

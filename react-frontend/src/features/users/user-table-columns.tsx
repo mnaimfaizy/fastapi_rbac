@@ -226,6 +226,7 @@ export const columns: ColumnDef<User>[] = [
       try {
         return formatDate(String(date)); // Ensure date is a string
       } catch (error) {
+        console.error('Error formatting date:', error);
         return '-';
       }
     },

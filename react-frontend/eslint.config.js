@@ -7,6 +7,7 @@ import prettierPlugin from 'eslint-plugin-prettier';
 import reactHooksPlugin from 'eslint-plugin-react-hooks';
 
 export default [
+  { ignores: ['node_modules/', 'dist/'] }, // Added to ignore node_modules and dist
   { languageOptions: { globals: globals.browser } },
   pluginJs.configs.recommended,
   ...tseslint.configs.recommended,

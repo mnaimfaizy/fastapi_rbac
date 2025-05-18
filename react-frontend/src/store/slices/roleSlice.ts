@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { roleService } from '../../services/role.service';
 import { Role, RoleCreate, RoleUpdate } from '../../models/role';

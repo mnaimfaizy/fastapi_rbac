@@ -60,7 +60,7 @@ const NestedPermissionGroup: React.FC<NestedPermissionGroupProps> = ({
   allGroups,
   expandAllState,
   onViewGroup,
-}) => {
+}: NestedPermissionGroupProps) => {
   const [isExpanded, setIsExpanded] = useState(true);
 
   // Sync with expandAllState from parent when it changes
@@ -298,9 +298,14 @@ export default function PermissionGroupDetail() {
       await dispatch(deletePermissionGroup(groupId)).unwrap();
       toast.success('Permission group deleted successfully');
       navigate('/dashboard/permission-groups');
-    } catch (error: any) {
+    } catch (error: unknown) {
       // The error message is now properly propagated from the service through the Redux slice
-      const errorMessage = error.toString();
+      let errorMessage = 'An error occurred';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
       toast.error(errorMessage, {
         duration: 5000,
       });

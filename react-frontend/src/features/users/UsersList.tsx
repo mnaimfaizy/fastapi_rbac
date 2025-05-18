@@ -102,6 +102,7 @@ const UsersList = () => {
       if (col.id === 'actions') {
         return {
           ...col,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           cell: ({ row }: { row: any }) => {
             // Add explicit type for row
             const user = row.original;

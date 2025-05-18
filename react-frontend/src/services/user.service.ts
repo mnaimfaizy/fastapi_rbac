@@ -64,6 +64,7 @@ class UserService {
       }
       const response = await api.post<ApiResponse<User>>('/user', payload);
       return response.data.data;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       const apiError = error.response?.data as ApiError;
       throw new Error(
@@ -92,6 +93,7 @@ class UserService {
         payload
       );
       return response.data.data;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       const apiError = error.response?.data as ApiError;
       throw new Error(
@@ -108,6 +110,7 @@ class UserService {
   async deleteUser(userId: string): Promise<void> {
     try {
       await api.delete(`/user/${userId}`);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       const apiError = error.response?.data as ApiError;
       throw new Error(

@@ -174,7 +174,7 @@ const RoleList: React.FC = () => {
                           </AlertDialogTitle>
                           <AlertDialogDescription>
                             This action cannot be undone. This will permanently
-                            delete the role "{role.name}".
+                            delete the role &quot;{role.name}&quot;.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>

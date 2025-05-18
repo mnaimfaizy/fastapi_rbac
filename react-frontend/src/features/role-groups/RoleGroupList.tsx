@@ -411,6 +411,7 @@ const RoleGroupList: React.FC = () => {
       dispatch(
         fetchRoleGroups({ page: pagination.page, size: pagination.size })
       );
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       // Extract the most specific error message from the error response
       const errorMessage =

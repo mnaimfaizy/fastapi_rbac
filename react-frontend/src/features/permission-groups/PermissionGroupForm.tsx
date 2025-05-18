@@ -120,6 +120,7 @@ export default function PermissionGroupForm({
         toast.success('Permission group created successfully');
       }
       navigate('/dashboard/permission-groups');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error('Error saving permission group:', error);
       toast.error(error?.message || 'Failed to save permission group');

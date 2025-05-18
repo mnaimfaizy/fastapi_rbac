@@ -100,8 +100,9 @@ const PasswordResetConfirmPage = () => {
           newPassword: data.password,
         })
       ).unwrap();
-    } catch (_) {
+    } catch (error) {
       // Error is handled by the auth slice
+      console.log('Error during password reset:', error);
     }
   };
 

@@ -44,6 +44,7 @@ class PermissionService {
     try {
       await api.delete(`/permission/${id}`);
       return { success: true };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       if (error.response?.data) {
         // Use the detail field directly if it exists
@@ -94,6 +95,7 @@ class PermissionService {
     try {
       await api.delete(`/permission_group/${id}`);
       return { success: true };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       if (error.response?.data) {
         // Use the detail field directly if it exists

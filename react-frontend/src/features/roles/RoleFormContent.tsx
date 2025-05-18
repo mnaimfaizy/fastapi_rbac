@@ -51,6 +51,7 @@ const RoleFormContent: React.FC = () => {
         toast('Role created successfully.');
       }
       navigate('/dashboard/roles');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       const actionType = isEditMode ? 'update' : 'create';
       toast.error(err || `Failed to ${actionType} role.`);

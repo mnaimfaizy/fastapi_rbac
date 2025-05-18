@@ -26,12 +26,14 @@ export function RegistrationSuccessPage() {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-gray-600">
-            If you haven't received the verification email within a few minutes,
-            please check your spam folder.
+            If you haven&apos;t received the verification email within a few
+            minutes, please check your spam folder.
           </p>
         </CardContent>
         <CardFooter className="flex flex-col items-center space-y-2">
-          <p className="text-sm text-gray-600">Didn't receive the email?</p>
+          <p className="text-sm text-gray-600">
+            Didn&apos;t receive the email?
+          </p>
           <Button variant="link" asChild className="p-0 h-auto">
             <Link to="/resend-verification-email">
               Resend Verification Email

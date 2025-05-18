@@ -102,6 +102,7 @@ export default function PermissionsDataTable() {
       await dispatch(deletePermission(deleteItemId)).unwrap();
       toast.success('Permission deleted successfully');
       dispatch(fetchPermissions({ page, pageSize }));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       const errorMessage =
         error?.response?.data?.detail ||
