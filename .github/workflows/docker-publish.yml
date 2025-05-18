@@ -1,0 +1,51 @@
+name: Docker Publish
+
+on:
+  push:
+    branches:
+      - main # Adjust this if your main branch is named differently (e.g., master)
+    tags:
+      - "v*" # Trigger on version tags like v1.0, v1.1.2, etc.
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # Needed to checkout the repository
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetches all history and tags, useful if script falls back to git describe
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set IMAGE_TAG for the script
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            echo "IMAGE_TAG=${{ github.ref_name }}" >> $GITHUB_ENV
+            echo "Workflow: Using Git tag as IMAGE_TAG: ${{ github.ref_name }}"
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then # Adjust 'main' if your default branch is different
+            echo "IMAGE_TAG=latest" >> $GITHUB_ENV
+            echo "Workflow: Push to main branch, using IMAGE_TAG=latest"
+          else
+            # This case should ideally not be reached with the current 'on' triggers.
+            # If it is, the script will use its own fallback (git describe or 'latest').
+            echo "Workflow: Not a 'v*' tag or main branch push. IMAGE_TAG not set by workflow. Script will use its fallback logic."
+          fi
+        shell: bash
+
+      - name: Run push script
+        # The IMAGE_TAG environment variable is now available to the script
+        run: |
+          chmod +x ./push-to-dockerhub.sh
+          ./push-to-dockerhub.sh
+        working-directory: ./ # Ensures script is run from the repo root where it's located
