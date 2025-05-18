@@ -31,11 +31,11 @@ echo -e "\\033[33mUsing tag: ${TAG}\\033[0m"
 
 # Stop any running containers
 echo -e "\\033[32mStopping any running containers...\\033[0m"
-docker compose -f docker-compose.prod.yml down --remove-orphans
+docker compose -f docker-compose.prod-test.yml down --remove-orphans
 
 # Build the production images
 echo -e "\\033[32mBuilding production Docker images...\\033[0m"
-docker compose -f docker-compose.prod.yml build
+docker compose -f docker-compose.prod-test.yml build
 
 # Tag images for DockerHub
 echo -e "\\033[32mTagging images for DockerHub with tag ${TAG}...\\033[0m"
