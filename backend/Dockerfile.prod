@@ -63,7 +63,14 @@ RUN pip install --no-cache-dir /wheels/* && \
 COPY .env.production .env.production
 
 # Copy source code
-COPY . .
+COPY app/ ./app/
+COPY alembic/ ./alembic/
+COPY alembic.ini ./alembic.ini
+COPY logging.ini ./logging.ini
+COPY scripts/ ./scripts/
+COPY init_data.py ./init_data.py
+COPY requirements.txt ./requirements.txt
+COPY certs/ ./certs/
 
 # Fix line endings & execute permissions
 RUN find /app -name '*.sh' -exec dos2unix {} \; && \
