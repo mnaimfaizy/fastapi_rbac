@@ -65,10 +65,20 @@ export interface PaginatedPermissionResponse {
   meta: Record<string, unknown>;
 }
 
+export interface PaginatedData<T> {
+  items: T[];
+  total: number;
+  page: number;
+  size: number;
+  pages: number;
+  next_page: number | null;
+  previous_page: number | null;
+}
+
 export interface PaginatedPermissionGroupResponse {
-  data: PaginatedResponse<PermissionGroup>;
   message: string;
   meta: Record<string, unknown>;
+  data: PaginatedData<PermissionGroup>;
 }
 
 export interface PermissionGroupWithPermissions extends PermissionGroup {

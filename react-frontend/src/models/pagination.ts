@@ -4,11 +4,13 @@ export interface PaginationParams {
 }
 
 export interface PaginatedResponse<T> {
-  items: T[];
+  items: Array<T>;
   total: number;
   page: number;
   size: number;
   pages: number;
+  next_page: number | null;
+  previous_page: number | null;
 }
 
 // For API responses that return paginated data

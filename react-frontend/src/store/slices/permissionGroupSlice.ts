@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import {
+  PaginatedPermissionGroupResponse,
   PermissionGroup,
   PermissionGroupCreate,
   PermissionGroupUpdate,
@@ -27,12 +28,13 @@ const initialState: PermissionGroupState = {
 };
 
 // Async thunks
-export const fetchPermissionGroups = createAsyncThunk(
+export const fetchPermissionGroups = createAsyncThunk<
+  PaginatedPermissionGroupResponse, // Return type on success
+  { page?: number; pageSize?: number }, // Argument type
+  { rejectValue: string } // Type for rejectWithValue
+>(
   'permissionGroup/fetchPermissionGroups',
-  async (
-    { page = 1, pageSize = 10 }: { page?: number; pageSize?: number },
-    { rejectWithValue }
-  ) => {
+  async ({ page = 1, pageSize = 10 }, { rejectWithValue }) => {
     try {
       const response = await permissionService.getPermissionGroups(
         page,
@@ -145,10 +147,10 @@ const permissionGroupSlice = createSlice({
       .addCase(fetchPermissionGroups.fulfilled, (state, action) => {
         state.isLoading = false;
         if (action.payload?.data) {
-          state.permissionGroups = action.payload.data.data || [];
+          state.permissionGroups = action.payload.data.items;
           state.totalItems = action.payload.data.total || 0;
           state.page = action.payload.data.page || 1;
-          state.pageSize = action.payload.data.limit || 10;
+          state.pageSize = action.payload.data.size || 10;
         }
       })
       .addCase(fetchPermissionGroups.rejected, (state, action) => {

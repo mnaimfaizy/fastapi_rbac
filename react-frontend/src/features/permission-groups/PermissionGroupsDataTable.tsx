@@ -41,9 +41,9 @@ import {
   ChevronRight,
   List,
   Users,
-  Pencil, // Added
-  Eye, // Added
-  Trash2, // Added
+  Pencil,
+  Eye,
+  Trash2,
 } from 'lucide-react';
 import { PermissionGroup } from '../../models/permission';
 import { RootState } from '../../store';
@@ -277,6 +277,10 @@ export default function PermissionGroupsDataTable() {
     dispatch(fetchPermissionGroups({ page, pageSize }));
   }, [dispatch, page, pageSize]);
 
+  useEffect(() => {
+    console.log('Permission Groups:', permissionGroups);
+  }, [permissionGroups]);
+
   const handleSort = (column: string) => {
     setSort((prev) => ({
       column,
@@ -484,7 +488,7 @@ export default function PermissionGroupsDataTable() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Permission Group</AlertDialogTitle>
+            <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete this permission group? This action
               cannot be undone. Any contained permissions will need to be
