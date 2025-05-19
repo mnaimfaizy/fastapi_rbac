@@ -14,7 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Pencil, Trash2, ArrowLeft } from 'lucide-react';
+import { Trash2, ArrowLeft } from 'lucide-react';
 import { RootState } from '../../store';
 
 export default function PermissionDetail() {
@@ -34,10 +34,6 @@ export default function PermissionDetail() {
       dispatch(fetchPermissionById(id));
     }
   }, [dispatch, id]);
-
-  const handleEdit = () => {
-    navigate(`/dashboard/permissions/edit/${id}`);
-  };
 
   const handleDelete = async () => {
     if (!id) return;
@@ -109,14 +105,6 @@ export default function PermissionDetail() {
         </div>
       </CardContent>
       <CardFooter className="flex justify-end space-x-2 border-t p-4">
-        <Button
-          variant="outline"
-          onClick={handleEdit}
-          className="flex items-center"
-        >
-          <Pencil className="mr-2 h-4 w-4" />
-          Edit
-        </Button>
         <Button
           variant="destructive"
           onClick={handleDelete}

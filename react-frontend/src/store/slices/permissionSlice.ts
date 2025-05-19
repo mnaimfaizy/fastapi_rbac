@@ -2,12 +2,9 @@ import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import {
   Permission,
   PermissionCreate,
-  PermissionUpdate,
-  PaginatedPermissionResponse, // Use the correct response type from the model
+  PaginatedPermissionResponse,
 } from '../../models/permission';
 import permissionService from '../../services/permission.service';
-
-// Remove unused import: import { PaginatedDataResponse } from "../../models/pagination";
 
 interface PermissionState {
   permissions: Permission[];
@@ -29,17 +26,14 @@ const initialState: PermissionState = {
   pageSize: 10,
 };
 
-// Async thunks
-// Adjust return type to match the actual service response (PaginatedPermissionResponse)
 export const fetchPermissions = createAsyncThunk<
-  PaginatedPermissionResponse, // Return type on success
-  { page?: number; pageSize?: number }, // Argument type
-  { rejectValue: string } // Type for rejectWithValue
+  PaginatedPermissionResponse,
+  { page?: number; pageSize?: number },
+  { rejectValue: string }
 >(
   'permission/fetchPermissions',
   async ({ page = 1, pageSize = 10 }, { rejectWithValue }) => {
     try {
-      // Assuming permissionService.getPermissions returns PaginatedPermissionResponse
       const response = await permissionService.getPermissions(page, pageSize);
       return response;
     } catch (error: unknown) {
@@ -73,26 +67,6 @@ export const createPermission = createAsyncThunk(
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to create permission';
-      return rejectWithValue(errorMessage);
-    }
-  }
-);
-
-export const updatePermission = createAsyncThunk(
-  'permission/updatePermission',
-  async (
-    { id, permissionData }: { id: string; permissionData: PermissionUpdate },
-    { rejectWithValue }
-  ) => {
-    try {
-      const response = await permissionService.updatePermission(
-        id,
-        permissionData
-      );
-      return response;
-    } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Failed to update permission';
       return rejectWithValue(errorMessage);
     }
   }
@@ -132,20 +106,18 @@ const permissionSlice = createSlice({
         state.isLoading = true;
         state.error = null;
       })
-      // Action type is now correctly inferred as PaginatedPermissionResponse
       .addCase(fetchPermissions.fulfilled, (state, action) => {
         state.isLoading = false;
-        // Access data correctly based on PaginatedPermissionResponse type
         if (action.payload?.data) {
-          state.permissions = action.payload.data.data || [];
+          state.permissions = action.payload.data.items || [];
           state.totalItems = action.payload.data.total || 0;
           state.page = action.payload.data.page || 1;
-          state.pageSize = action.payload.data.limit || 10;
+          state.pageSize = action.payload.data.size || 10;
         }
       })
       .addCase(fetchPermissions.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload as string; // Cast payload to string
+        state.error = action.payload as string;
       })
 
       // Fetch permission by id
@@ -173,25 +145,6 @@ const permissionSlice = createSlice({
         state.isLoading = false;
       })
       .addCase(createPermission.rejected, (state, action) => {
-        state.isLoading = false;
-        state.error = action.payload as string;
-      })
-
-      // Update permission
-      .addCase(updatePermission.pending, (state) => {
-        state.isLoading = true;
-        state.error = null;
-      })
-      .addCase(updatePermission.fulfilled, (state, action) => {
-        state.isLoading = false;
-        if (
-          state.currentPermission &&
-          action.payload?.data?.id === state.currentPermission.id
-        ) {
-          state.currentPermission = action.payload.data;
-        }
-      })
-      .addCase(updatePermission.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload as string;
       })

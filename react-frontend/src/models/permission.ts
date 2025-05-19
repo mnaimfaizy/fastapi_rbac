@@ -1,5 +1,3 @@
-import { PaginatedResponse } from './common';
-
 export interface Permission {
   id: string;
   name: string;
@@ -21,18 +19,9 @@ export interface PermissionGroup {
   groups?: PermissionGroup[];
 }
 
-// Create/Update interfaces
 export interface PermissionCreate {
   name: string;
   description?: string;
-  group_id: string;
-}
-
-export interface PermissionUpdate {
-  name?: string;
-  description?: string;
-  // While TypeScript marks this as optional, the backend database requires it
-  // Always include this field in update requests
   group_id: string;
 }
 
@@ -41,12 +30,12 @@ export interface PermissionGroupCreate {
   permission_group_id?: string | null;
 }
 
+// Keeping PermissionGroupUpdate for permission groups functionality
 export interface PermissionGroupUpdate {
   name?: string;
   permission_group_id?: string | null;
 }
 
-// API response interfaces
 export interface PermissionResponse {
   data: Permission;
   message: string;
@@ -60,7 +49,7 @@ export interface PermissionGroupResponse {
 }
 
 export interface PaginatedPermissionResponse {
-  data: PaginatedResponse<Permission>;
+  data: PaginatedData<Permission>;
   message: string;
   meta: Record<string, unknown>;
 }

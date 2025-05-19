@@ -35,7 +35,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { MoreHorizontal, ChevronDown, Eye, Pencil, Trash2 } from 'lucide-react';
+import { MoreHorizontal, ChevronDown, Eye, Trash2 } from 'lucide-react';
 import { Permission } from '../../models/permission';
 import { RootState } from '../../store';
 import { toast } from 'sonner';
@@ -80,10 +80,6 @@ export default function PermissionsDataTable() {
   const handlePageSizeChange = (newSize: number) => {
     dispatch(setPageSize(newSize));
     dispatch(setPage(1)); // Reset to first page when changing page size
-  };
-
-  const handleEdit = (id: string) => {
-    navigate(`/dashboard/permissions/edit/${id}`);
   };
 
   const handleView = (id: string) => {
@@ -246,12 +242,6 @@ export default function PermissionsDataTable() {
                       <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={() => handleEdit(permission.id)}
-                        >
-                          <Pencil className="mr-2 h-4 w-4" />
-                          Edit
-                        </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => handleView(permission.id)}
                         >

@@ -2,27 +2,23 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi_pagination import Params
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app import crud
 from app.api import deps
 from app.deps import permission_deps
 from app.models.permission_model import Permission
 from app.models.user_model import User
-from app.schemas.permission_schema import IPermissionCreate, IPermissionRead, IPermissionUpdate
+from app.schemas.permission_schema import IPermissionCreate, IPermissionRead
 from app.schemas.response_schema import (
     IDeleteResponseBase,
     IGetResponseBase,
     IGetResponsePaginated,
     IPostResponseBase,
-    IPutResponseBase,
     create_response,
 )
 from app.schemas.role_schema import IRoleEnum
-from app.utils.exceptions.common_exception import (
-    ContentNoChangeException,
-    IdNotFoundException,
-    NameExistException,
-)
+from app.utils.exceptions.common_exception import IdNotFoundException, NameExistException
 from app.utils.string_utils import format_permission_name
 
 router = APIRouter()
@@ -57,6 +53,7 @@ async def get_permission_by_id(
 async def create_permission(
     permission: IPermissionCreate,
     current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
+    db_session: AsyncSession = Depends(deps.get_async_db),
 ) -> IPostResponseBase[IPermissionRead]:
     """
     Creates a new role permission
@@ -87,63 +84,10 @@ async def create_permission(
     if permission_current:
         raise NameExistException(Permission, name=formatted_permission.name)
 
-    new_permission = await crud.permission.create(obj_in=formatted_permission, created_by_id=current_user.id)
-    return create_response(data=new_permission)
-
-
-@router.put("/{permission_id}")
-async def update_permission(
-    permission_update: IPermissionUpdate,
-    current_permission: Permission = Depends(permission_deps.get_permission_by_id),
-    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
-) -> IPutResponseBase[IPermissionRead]:
-    """
-    Updates a permission by its id
-
-    Required roles:
-    - admin
-    - manager
-    """
-    # If name is being updated, format it properly
-    if permission_update.name:
-        # Get the permission group for formatting
-        if permission_update.group_id:
-            permission_group = await crud.permission_group.get(id=permission_update.group_id)
-        else:
-            permission_group = await crud.permission_group.get(id=current_permission.group_id)
-
-        # Format the name
-        if permission_group:
-            formatted_name = format_permission_name(permission_update.name, permission_group.name)
-        else:
-            formatted_name = format_permission_name(permission_update.name)
-
-        # Create a copy with the formatted name
-        update_dict = permission_update.model_dump(exclude_unset=True)
-        update_dict["name"] = formatted_name
-        permission_update = IPermissionUpdate(**update_dict)
-
-    # Check if there are any actual changes
-    current_name = current_permission.name
-    update_name = permission_update.name or current_permission.name
-
-    if (
-        current_name == update_name
-        and current_permission.description == permission_update.description
-        and current_permission.group_id == permission_update.group_id
-    ):
-        raise ContentNoChangeException()
-
-    # Check if the new name conflicts with an existing permission (excluding itself)
-    if permission_update.name and permission_update.name != current_permission.name:
-        existing_permission = await crud.permission.get_permission_by_name(name=permission_update.name)
-        if existing_permission and existing_permission.id != current_permission.id:
-            raise NameExistException(Permission, name=permission_update.name)
-
-    permission_updated = await crud.permission.update(
-        obj_current=current_permission, obj_new=permission_update
+    new_permission = await crud.permission.create(
+        obj_in=formatted_permission, created_by_id=current_user.id, db_session=db_session
     )
-    return create_response(data=permission_updated)
+    return create_response(data=new_permission)
 
 
 @router.delete("/{permission_id}")

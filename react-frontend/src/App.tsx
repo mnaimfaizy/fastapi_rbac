@@ -191,10 +191,6 @@ function App() {
                 path="/dashboard/permissions/:id"
                 element={<PermissionDetail />}
               />
-              <Route
-                path="/dashboard/permissions/edit/:id"
-                element={<PermissionFormContent />}
-              />
               {/* Permission Group routes */}
               <Route
                 path="/dashboard/permission-groups"
