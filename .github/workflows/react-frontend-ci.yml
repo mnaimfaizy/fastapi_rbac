@@ -17,14 +17,12 @@ defaults:
     working-directory: ./react-frontend
 
 jobs:
-  lint-format-build:
-    name: Lint, Format Check & Build
+  install_dependencies:
+    name: Install Dependencies
     runs-on: ubuntu-latest
-
     strategy:
       matrix:
-        node-version: [20.x] # You can specify other versions if needed
-
+        node-version: [20.x]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -34,20 +32,95 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: "npm"
-          cache-dependency-path: react-frontend/package-lock.json # or react-frontend/yarn.lock
+          cache-dependency-path: react-frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
 
+      - name: Upload node_modules
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-modules-${{ matrix.node-version }}
+          path: react-frontend/node_modules # Path relative to workspace root
+          retention-days: 1
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    needs: install_dependencies
+    strategy:
+      matrix:
+        node-version: [20.x] # Should match install_dependencies
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+          cache-dependency-path: react-frontend/package-lock.json
+
+      - name: Download node_modules
+        uses: actions/download-artifact@v4
+        with:
+          name: node-modules-${{ matrix.node-version }}
+          path: react-frontend # Download to the react-frontend directory
+
       - name: Run linter
         run: npm run lint
 
+  format_check:
+    name: Format Check
+    runs-on: ubuntu-latest
+    needs: install_dependencies
+    strategy:
+      matrix:
+        node-version: [20.x] # Should match install_dependencies
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+          cache-dependency-path: react-frontend/package-lock.json
+
+      - name: Download node_modules
+        uses: actions/download-artifact@v4
+        with:
+          name: node-modules-${{ matrix.node-version }}
+          path: react-frontend # Download to the react-frontend directory
+
       - name: Check formatting
-        run: npm run format -- --check # Assuming your format script uses Prettier. If not, adjust accordingly.
-        # If your package.json format script is just "prettier --write .",
-        # you can directly use "npx prettier --check ."
-        # For the provided package.json, the format script is "prettier --write ."
-        # So, we'll use "npx prettier --check ." for CI to avoid writing changes.
+        run: npm run format -- --check
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [lint, format_check] # These jobs already depend on install_dependencies
+    strategy:
+      matrix:
+        node-version: [20.x] # Should match install_dependencies
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+          cache-dependency-path: react-frontend/package-lock.json
+
+      - name: Download node_modules
+        uses: actions/download-artifact@v4
+        with:
+          name: node-modules-${{ matrix.node-version }}
+          path: react-frontend # Download to the react-frontend directory
 
       - name: Build project
         run: npm run build

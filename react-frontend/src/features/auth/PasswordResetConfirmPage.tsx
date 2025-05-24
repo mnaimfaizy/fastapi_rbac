@@ -23,6 +23,7 @@ import {
 } from '../../components/ui/card';
 import { Alert, AlertDescription } from '../../components/ui/alert';
 import { AlertTriangle, CheckCircle } from 'lucide-react';
+import { ErrorResponse } from '@/models/auth';
 
 // Define validation schema with Zod
 const resetPasswordSchema = z
@@ -140,7 +141,11 @@ const PasswordResetConfirmPage = () => {
               {error && (
                 <Alert variant="destructive">
                   <AlertTriangle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
+                  <AlertDescription>
+                    {typeof error === 'object'
+                      ? (error as ErrorResponse)?.message
+                      : error}
+                  </AlertDescription>
                 </Alert>
               )}
 
