@@ -26,7 +26,6 @@ from app.schemas.role_group_schema import (
     IRoleGroupUpdate,
     IRoleGroupWithRoles,
 )
-from app.schemas.role_schema import IRoleEnum
 from app.utils.exceptions.common_exception import (
     CircularDependencyException,
     NameExistException,
@@ -39,7 +38,7 @@ router = APIRouter()
 @router.get("")
 async def get_role_groups(
     params: Params = Depends(),
-    current_user: User = Depends(deps.get_current_user()),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["role_group.read"])),
     db_session: AsyncSession = Depends(deps.get_async_db),
 ) -> IGetResponsePaginated[IRoleGroupRead]:
     """
@@ -76,7 +75,7 @@ async def get_role_groups(
 async def get_role_group_by_id(
     group_id: UUID,
     include_nested_roles: bool = False,
-    current_user: User = Depends(deps.get_current_user()),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["role_group.read"])),
     db_session: AsyncSession = Depends(deps.get_async_db),
 ) -> IGetResponseBase[IRoleGroupWithRoles]:
     """
@@ -222,7 +221,7 @@ async def get_role_group_by_id(
 @router.post("")
 async def create_role_group(
     group: IRoleGroupCreate,
-    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["role_group.create"])),
     db_session: AsyncSession = Depends(deps.get_async_db),
 ) -> IPostResponseBase[IRoleGroupRead]:
     """
@@ -245,7 +244,7 @@ async def create_role_group(
 async def update_role_group(
     group: IRoleGroupUpdate,
     current_group: RoleGroup = Depends(role_group_deps.get_group_by_id),
-    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["role_group.update"])),
     db_session: AsyncSession = Depends(deps.get_async_db),
 ) -> IPutResponseBase[IRoleGroupRead]:
     """
@@ -264,7 +263,7 @@ async def update_role_group(
 @router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_role_group(
     group: RoleGroup = Depends(role_group_deps.get_group_by_id),
-    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["role_group.delete"])),
     db_session: AsyncSession = Depends(deps.get_async_db),
 ) -> None:
     """
@@ -311,7 +310,7 @@ async def delete_role_group(
 @router.post("/bulk")
 async def bulk_create_role_groups(
     groups: List[IRoleGroupCreate],
-    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["role_group.create"])),
     redis_client: Redis = Depends(get_redis_client),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ) -> IPostResponseBase[List[IRoleGroupRead]]:
@@ -341,7 +340,7 @@ async def bulk_create_role_groups(
 @router.delete("/bulk")
 async def bulk_delete_role_groups(
     group_ids: List[UUID],
-    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["role_group.delete"])),
     redis_client: Redis = Depends(get_redis_client),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ) -> IPostResponseBase:
@@ -377,7 +376,7 @@ async def bulk_delete_role_groups(
 async def add_roles_to_group(
     group_id: UUID,
     role_ids: dict,
-    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["role_group.update"])),
     redis_client: Redis = Depends(get_redis_client),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ) -> IPostResponseBase[IRoleGroupWithRoles]:
@@ -454,7 +453,7 @@ async def add_roles_to_group(
 async def remove_roles_from_group(
     group_id: UUID,
     role_ids: dict,
-    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["role_group.update"])),
     redis_client: Redis = Depends(get_redis_client),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ) -> IPostResponseBase[IRoleGroupWithRoles]:
@@ -523,7 +522,7 @@ async def remove_roles_from_group(
 async def clone_role_group(
     group_id: UUID,
     new_name: str,
-    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["role_group.create"])),
     redis_client: Redis = Depends(get_redis_client),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ) -> IPostResponseBase[IRoleGroupWithRoles]:
@@ -589,7 +588,7 @@ async def clone_role_group(
 
 @router.post("/sync-roles")
 async def sync_role_group_mappings(
-    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin])),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["role_group.update"])),
     redis_client: Redis = Depends(get_redis_client),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ) -> IPostResponseBase:

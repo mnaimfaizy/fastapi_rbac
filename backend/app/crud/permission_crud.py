@@ -247,6 +247,25 @@ class CRUDPermission(CRUDBase[Permission, IPermissionCreate, IPermissionUpdate])
         await db_session.execute(stmt)
         await db_session.commit()
 
+    async def is_permission_in_use(
+        self, *, permission_id: UUID, db_session: AsyncSession | None = None
+    ) -> bool:
+        """
+        Check if a permission is currently assigned to any role.
+
+        Args:
+            permission_id: The ID of the permission to check.
+            db_session: Optional database session.
+
+        Returns:
+            True if the permission is in use by at least one role, False otherwise.
+        """
+        db_session = db_session or super().get_db().session
+        stmt = select(func.count(RolePermission.role_id)).where(RolePermission.permission_id == permission_id)
+        result = await db_session.execute(stmt)
+        count = result.scalar_one()
+        return count > 0
+
 
 permission_crud = CRUDPermission(Permission)
 # Keep the original name for backward compatibility

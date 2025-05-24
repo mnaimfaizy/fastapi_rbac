@@ -15,7 +15,6 @@ from app.schemas.response_schema import (
     IPostResponseBase,
     create_response,
 )
-from app.schemas.role_schema import IRoleEnum
 from app.schemas.user_schema import IUserCreate, IUserRead, IUserUpdate
 from app.utils.exceptions.user_exceptions import UserSelfDeleteException
 from app.utils.user_utils import serialize_user
@@ -26,7 +25,7 @@ router = APIRouter()
 @router.get("/list")
 async def read_users_list(
     params: Params = Depends(),
-    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["users.read"])),
 ) -> IGetResponsePaginated[Any]:
     """
     Retrieve users. Requires admin or manager role
@@ -51,7 +50,7 @@ async def read_users_list(
 @router.get("/order_by_created_at")
 async def get_user_list_order_by_created_at(
     params: Params = Depends(),
-    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["users.read"])),
 ) -> IGetResponsePaginated[Any]:
     """
     Gets a paginated list of users ordered by created datetime
@@ -76,7 +75,7 @@ async def get_user_list_order_by_created_at(
 @router.get("/{user_id}")
 async def get_user_by_id(
     user: User = Depends(user_deps.is_valid_user),
-    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["users.read"])),
 ) -> IGetResponseBase[IUserRead]:
     """
     Gets a user by his/her id
@@ -101,7 +100,7 @@ async def get_my_data(
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_user(
     new_user: IUserCreate = Depends(user_deps.user_exists),
-    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin])),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["users.create"])),
 ) -> IPostResponseBase[IUserRead]:
     """
     Creates a new user
@@ -117,7 +116,7 @@ async def create_user(
 async def update_user(
     user_update: IUserUpdate,
     user: User = Depends(user_deps.is_valid_user),
-    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin])),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["users.update"])),
 ) -> IPostResponseBase[IUserRead]:
     """
     Updates a user by id
@@ -145,7 +144,7 @@ async def update_user(
 @router.delete("/{user_id}")
 async def remove_user(
     user_id: UUID = Depends(user_deps.is_valid_user_id),
-    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin])),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["users.delete"])),
 ) -> IDeleteResponseBase[IUserRead]:
     """
     Deletes a user by his/her id

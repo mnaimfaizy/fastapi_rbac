@@ -17,7 +17,6 @@ from app.schemas.response_schema import (
     IPostResponseBase,
     create_response,
 )
-from app.schemas.role_schema import IRoleEnum
 from app.utils.exceptions.common_exception import IdNotFoundException, NameExistException
 from app.utils.string_utils import format_permission_name
 
@@ -26,7 +25,8 @@ router = APIRouter()
 
 @router.get("")
 async def get_permissions(
-    params: Params = Depends(), current_user: User = Depends(deps.get_current_user())
+    params: Params = Depends(),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["permission.read"])),
 ) -> IGetResponsePaginated[IPermissionRead]:
     """
     Gets a paginated list of permission
@@ -37,7 +37,8 @@ async def get_permissions(
 
 @router.get("/{permission_id}", response_model=IGetResponseBase[IPermissionRead])
 async def get_permission_by_id(
-    permission_id: UUID, current_user: User = Depends(deps.get_current_user())
+    permission_id: UUID,
+    current_user: User = Depends(deps.get_current_user(required_permissions=["permission.read"])),
 ) -> IGetResponseBase[IPermissionRead]:
     """
     Gets a permission by its ID
@@ -52,7 +53,7 @@ async def get_permission_by_id(
 @router.post("")
 async def create_permission(
     permission: IPermissionCreate,
-    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["permission.create"])),
     db_session: AsyncSession = Depends(deps.get_async_db),
 ) -> IPostResponseBase[IPermissionRead]:
     """
@@ -93,7 +94,7 @@ async def create_permission(
 @router.delete("/{permission_id}")
 async def delete_permission(
     permission: Permission = Depends(permission_deps.get_permission_by_id),
-    current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin, IRoleEnum.manager])),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["permission.delete"])),
 ) -> IDeleteResponseBase[IPermissionRead]:
     """
     Deletes a permission by its id
@@ -105,16 +106,15 @@ async def delete_permission(
     try:
         # Check if permission is currently used by any roles
         # This check is optional but recommended to prevent orphaned references
-        # Uncomment if you want to prevent deletion of permissions in use
-        # is_in_use = await crud.permission.is_permission_in_use(permission_id=permission.id)
-        # if is_in_use:
-        #     raise HTTPException(
-        #         status_code=status.HTTP_409_CONFLICT,
-        #         detail=(
-        #             f"Permission '{permission.name}' is currently in use by one or more roles "
-        #             "and cannot be deleted."
-        #         ),
-        #     )
+        is_in_use = await crud.permission.is_permission_in_use(permission_id=permission.id)
+        if is_in_use:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"Permission '{permission.name}' is currently in use by one or more roles "
+                    "and cannot be deleted."
+                ),
+            )
 
         deleted_permission = await crud.permission.remove(id=permission.id)
         return create_response(data=deleted_permission, message="Permission deleted successfully")

@@ -21,6 +21,11 @@ from app.models.user_model import User
 from app.schemas.common_schema import TokenType
 from app.utils.token import get_valid_tokens
 
+# Ensure Permission model and relationship attributes are correctly imported/handled
+# from app.models.permission_model import Permission # If direct import is needed
+# from app.schemas.role_schema import IRoleEnum # If still used elsewhere or for default roles
+
+
 reusable_oauth2 = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/access-token")
 
 
@@ -44,7 +49,10 @@ def get_settings_dependency() -> Settings:
 get_async_db = get_db
 
 
-def get_current_user(required_roles: list[str] | None = None) -> Callable[..., Coroutine[Any, Any, User]]:
+# Modify the function signature and logic
+def get_current_user(
+    required_permissions: list[str] | None = None,
+) -> Callable[..., Coroutine[Any, Any, User]]:
     async def current_user(
         access_token: str = Depends(reusable_oauth2),
         redis_client: Redis = Depends(get_redis_client),
@@ -65,7 +73,7 @@ def get_current_user(required_roles: list[str] | None = None) -> Callable[..., C
         except MissingRequiredClaimError:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="There is no required field in your token. " "Please contact the administrator.",
+                detail="There is no required field in your token. Please contact the administrator.",
             )
 
         user_id_str = payload.get("sub")
@@ -75,9 +83,8 @@ def get_current_user(required_roles: list[str] | None = None) -> Callable[..., C
                 detail="User identifier not found in token.",
             )
         try:
-            user_id = UUID(user_id_str)  # Convert string to UUID
+            user_id = UUID(user_id_str)
         except ValueError:
-            # Handle cases where the 'sub' claim is not a valid UUID string
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Invalid user identifier in token.",
@@ -87,30 +94,38 @@ def get_current_user(required_roles: list[str] | None = None) -> Callable[..., C
         if valid_access_tokens and access_token not in valid_access_tokens:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Could not validate credentials",
+                detail="Could not validate credentials, token invalid or revoked.",
             )
 
         user_from_db = await crud.user.get(id=user_id, db_session=db_session)
+
         if not user_from_db:
-            raise HTTPException(status_code=404, detail="User not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
 
         if not user_from_db.is_active:
-            raise HTTPException(status_code=400, detail="Inactive user")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user.")
 
-        # if required_roles:
-        #     is_valid_role = False
-        #     # Ensure user.roles is loaded and is a list of Role objects
-        #     user_roles_names = [role.name for role in user_from_db.roles if hasattr(role, 'name')]
-        #     for role_name in required_roles:
-        #         if role_name in user_roles_names:
-        #             is_valid_role = True
-        #             break
-        #
-        #     if not is_valid_role:
-        #         raise HTTPException(
-        #             status_code=status.HTTP_403_FORBIDDEN,
-        #             detail=f"Role(s) {required_roles} are required for this action",
-        #         )
+        if hasattr(user_from_db, "is_super_user") and user_from_db.is_superuser:
+            return user_from_db
+
+        if required_permissions:
+            user_perms_set: set[str] = set()
+            if hasattr(user_from_db, "roles") and user_from_db.roles:
+                for role in user_from_db.roles:
+                    # Ensure role.permissions is loaded (might require eager loading in CRUD)
+                    if hasattr(role, "permissions") and role.permissions:
+                        for perm in role.permissions:
+                            if hasattr(perm, "name"):
+                                user_perms_set.add(perm.name)
+
+            missing_perms = [p_name for p_name in required_permissions if p_name not in user_perms_set]
+
+            if missing_perms:
+                detail_msg = f"Insufficient permissions. Missing: {', '.join(missing_perms)}"
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=detail_msg,
+                )
 
         return user_from_db
 
