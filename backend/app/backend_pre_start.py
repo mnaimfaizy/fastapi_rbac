@@ -1,11 +1,19 @@
 import logging
 import os
+import sys
+from pathlib import Path
 
 import tenacity
 from redis.exceptions import AuthenticationError  # Import AuthenticationError directly
 from sqlalchemy import create_engine, text
 
-from app.core.config import ModeEnum, settings
+# Add the 'backend' directory (parent of 'app') to sys.path
+# Path(__file__) is d:\Projects\fastapi_rbac\backend\app\backend_pre_start.py
+# Path(__file__).resolve().parent is d:\Projects\fastapi_rbac\backend\app
+# Path(__file__).resolve().parent.parent is d:\Projects\fastapi_rbac\backend
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from app.core.config import ModeEnum, settings  # noqa: E402
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

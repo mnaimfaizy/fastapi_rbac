@@ -1,5 +1,17 @@
 import { User } from './user';
 
+export interface ErrorResponse {
+  message: string;
+  code?: string;
+}
+
+export interface ErrorResponseWithErrors extends ErrorResponse {
+  detail?: {
+    errors?: string[];
+    message?: string;
+  };
+}
+
 export interface Token {
   access_token: string;
   token_type: string;
@@ -48,7 +60,7 @@ export interface AuthState {
   refreshToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  error: string | null;
+  error: string | ErrorResponse | ErrorResponseWithErrors | null;
   passwordChangeSuccess: boolean;
   passwordResetRequested: boolean;
   passwordResetSuccess: boolean;

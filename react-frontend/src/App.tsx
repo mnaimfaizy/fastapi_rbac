@@ -107,7 +107,7 @@ function App() {
                 </PublicOnlyRoute>
               }
             />
-            <Route path="/verify-email/:token" element={<VerifyEmailPage />} />
+            <Route path="/verify-email" element={<VerifyEmailPage />} />
             <Route
               path="/resend-verification-email"
               element={
@@ -130,7 +130,7 @@ function App() {
               }
             />
             <Route
-              path="/reset-password/:token"
+              path="/reset-password"
               element={
                 <PublicOnlyRoute>
                   <PasswordResetPage />

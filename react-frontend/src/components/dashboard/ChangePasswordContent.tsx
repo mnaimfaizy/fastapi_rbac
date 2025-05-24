@@ -11,18 +11,13 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, AlertCircle } from 'lucide-react';
+import { ErrorResponse, ErrorResponseWithErrors } from '@/models/auth';
 
 // Define validation schema with Zod
 const passwordChangeSchema = z
   .object({
     currentPassword: z.string().min(1, 'Current password is required'),
-    newPassword: z
-      .string()
-      .min(8, 'Password must be at least 8 characters')
-      .regex(
-        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
-        'Password must contain at least one uppercase letter, one lowercase letter, one number and one special character'
-      ),
+    newPassword: z.string(),
     confirmPassword: z.string().min(1, 'Confirm password is required'),
   })
   .refine((data) => data.newPassword === data.confirmPassword, {
@@ -104,7 +99,32 @@ const ChangePasswordContent = () => {
         {error && (
           <Alert className="mb-6 bg-red-50 border-red-200 text-red-800">
             <AlertCircle className="h-4 w-4 text-red-500 mr-2" />
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription>
+              {typeof error === 'object' &&
+              Object.keys(error).includes('detail') ? (
+                <>
+                  <span>
+                    {(error as ErrorResponseWithErrors)?.detail?.message}
+                  </span>
+                  <ul>
+                    {(
+                      (error as ErrorResponseWithErrors)?.detail?.errors ?? []
+                    ).map((err: string, index) => (
+                      <li
+                        key={err + index}
+                        className="text-xs text-red-600 pl-2"
+                      >
+                        {`-> ${err}`}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : typeof error === 'object' ? (
+                <span>{(error as ErrorResponse)?.message}</span>
+              ) : (
+                <span>{error as string}</span>
+              )}
+            </AlertDescription>
           </Alert>
         )}
 

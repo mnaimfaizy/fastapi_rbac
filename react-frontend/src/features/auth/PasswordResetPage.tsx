@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import {
-  confirmPasswordReset, // Corrected import name
+  confirmPasswordReset,
   clearError,
   resetPasswordResetSuccess,
 } from '../../store/slices/authSlice';
@@ -23,17 +23,16 @@ import {
 } from '../../components/ui/card';
 import { Alert, AlertDescription } from '../../components/ui/alert';
 import { AlertTriangle, CheckCircle } from 'lucide-react';
+import { ErrorResponse, ErrorResponseWithErrors } from '@/models/auth';
 
 // Define validation schema with Zod
 const resetPasswordSchema = z
   .object({
-    password: z
-      .string()
-      .min(8, 'Password must be at least 8 characters')
-      .regex(
-        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
-        'Password must contain at least one uppercase letter, one lowercase letter, one number and one special character'
-      ),
+    password: z.string().min(8, 'Password must be at least 8 characters'),
+    // .regex(
+    //   /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
+    //   'Password must contain at least one uppercase letter, one lowercase letter, one number and one special character'
+    // ),
     confirmPassword: z.string().min(1, 'Confirm password is required'),
   })
   .refine((data) => data.password === data.confirmPassword, {
@@ -58,6 +57,10 @@ const PasswordResetPage = () => {
       navigate('/password-reset-request', { replace: true });
     }
   }, [token, navigate]);
+
+  useEffect(() => {
+    console.log('Error:', error);
+  }, [error]);
 
   // Initialize React Hook Form with Zod validation
   const {
@@ -100,9 +103,9 @@ const PasswordResetPage = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
+    <div className="flex h-full w-full flex-col items-center justify-center gap-4">
+      <Card className="w-full max-w-s flex items-center justify-center">
+        <CardHeader className="text-center w-full">
           <CardTitle className="text-3xl font-extrabold">
             Reset Your Password
           </CardTitle>
@@ -113,7 +116,7 @@ const PasswordResetPage = () => {
           </CardDescription>
         </CardHeader>
 
-        <CardContent>
+        <CardContent className="w-full">
           {passwordResetSuccess ? (
             <div className="space-y-6">
               <Alert className="border-green-500 bg-green-50 text-green-700">
@@ -133,7 +136,33 @@ const PasswordResetPage = () => {
               {error && (
                 <Alert variant="destructive">
                   <AlertTriangle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
+                  <AlertDescription>
+                    {typeof error === 'object' &&
+                    Object.keys(error).includes('detail') ? (
+                      <>
+                        <span>
+                          {(error as ErrorResponseWithErrors)?.detail?.message}
+                        </span>
+                        <ul>
+                          {(
+                            (error as ErrorResponseWithErrors)?.detail
+                              ?.errors ?? []
+                          ).map((err: string, index) => (
+                            <li
+                              key={err + index}
+                              className="text-xs text-red-600 pl-2"
+                            >
+                              {`-> ${err}`}
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    ) : typeof error === 'object' ? (
+                      <span>{(error as ErrorResponse)?.message}</span>
+                    ) : (
+                      <span>{error as string}</span>
+                    )}
+                  </AlertDescription>
                 </Alert>
               )}
 

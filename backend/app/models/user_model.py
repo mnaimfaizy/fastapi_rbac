@@ -45,6 +45,7 @@ class User(BaseUUIDModel, UserBase, table=True):
     first_name: str | None = Field(default=None, index=True)
     last_name: str | None = Field(default=None, index=True)
     password: str | None = Field(default=None)  # Store the hashed password
+    password_version: int = Field(default=1)  # Track password changes for token invalidation
     expiry_date: datetime | None = Field(default_factory=lambda: datetime.now(timezone.utc))
     last_changed_password_date: datetime | None = Field(default_factory=lambda: datetime.now(timezone.utc))
 

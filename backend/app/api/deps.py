@@ -3,8 +3,8 @@ This module contains the dependency injection utilities
 used across the FastAPI application.
 """
 
-from collections.abc import AsyncGenerator
-from typing import Callable
+from collections.abc import AsyncGenerator, Coroutine
+from typing import Any, Callable
 from uuid import UUID  # Import UUID
 
 from fastapi import Depends, HTTPException, status
@@ -14,14 +14,14 @@ from redis.asyncio import Redis
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app import crud
-from app.core.config import settings
+from app.core.config import Settings, settings
 from app.core.security import decode_token
 from app.db.session import SessionLocal, get_redis_client
 from app.models.user_model import User
 from app.schemas.common_schema import TokenType
 from app.utils.token import get_valid_tokens
 
-reusable_oauth2 = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/login/access-token")
+reusable_oauth2 = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/access-token")
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -36,15 +36,19 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
+def get_settings_dependency() -> Settings:
+    return settings
+
+
 # Alias for get_db to maintain consistent naming
 get_async_db = get_db
 
 
-def get_current_user(required_roles: list[str] = None) -> Callable[[], User]:
+def get_current_user(required_roles: list[str] | None = None) -> Callable[..., Coroutine[Any, Any, User]]:
     async def current_user(
         access_token: str = Depends(reusable_oauth2),
         redis_client: Redis = Depends(get_redis_client),
-        db_session: AsyncSession = Depends(get_db),  # Make sure to use session from DI
+        db_session: AsyncSession = Depends(get_db),
     ) -> User:
         try:
             payload = decode_token(access_token)
@@ -64,7 +68,12 @@ def get_current_user(required_roles: list[str] = None) -> Callable[[], User]:
                 detail="There is no required field in your token. " "Please contact the administrator.",
             )
 
-        user_id_str = payload["sub"]
+        user_id_str = payload.get("sub")
+        if not user_id_str:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User identifier not found in token.",
+            )
         try:
             user_id = UUID(user_id_str)  # Convert string to UUID
         except ValueError:
@@ -80,26 +89,29 @@ def get_current_user(required_roles: list[str] = None) -> Callable[[], User]:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Could not validate credentials",
             )
-        # Use the session from dependency injection
-        user: User = await crud.user.get(id=user_id, db_session=db_session)
-        if not user:
+
+        user_from_db = await crud.user.get(id=user_id, db_session=db_session)
+        if not user_from_db:
             raise HTTPException(status_code=404, detail="User not found")
 
-        if not user.is_active:
+        if not user_from_db.is_active:
             raise HTTPException(status_code=400, detail="Inactive user")
 
         # if required_roles:
         #     is_valid_role = False
-        #     for role in required_roles:
-        #         if role == user.roles.name:
+        #     # Ensure user.roles is loaded and is a list of Role objects
+        #     user_roles_names = [role.name for role in user_from_db.roles if hasattr(role, 'name')]
+        #     for role_name in required_roles:
+        #         if role_name in user_roles_names:
         #             is_valid_role = True
+        #             break
         #
         #     if not is_valid_role:
         #         raise HTTPException(
-        #             status_code=403,
-        #             detail=f"""Role "{required_roles}" is required for this action""",
+        #             status_code=status.HTTP_403_FORBIDDEN,
+        #             detail=f"Role(s) {required_roles} are required for this action",
         #         )
 
-        return user
+        return user_from_db
 
     return current_user

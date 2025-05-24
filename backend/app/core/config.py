@@ -4,7 +4,15 @@ from enum import Enum
 from functools import lru_cache
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import AnyHttpUrl, EmailStr, PostgresDsn, ValidationInfo, field_validator, model_validator
+from pydantic import (
+    AnyHttpUrl,
+    EmailStr,
+    Field,
+    PostgresDsn,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Add these imports for settings sources
@@ -49,8 +57,21 @@ class Settings(BaseSettings):
     API_VERSION: str = "v1"
     API_V1_STR: str = f"/api/{API_VERSION}"
     PROJECT_NAME: Optional[str] = "FastAPI RBAC"
-    SECRET_KEY: str = secrets.token_urlsafe(32)
     DEBUG: bool = False
+
+    # Security Settings
+    SECRET_KEY: str = secrets.token_urlsafe(32)
+    JWT_SECRET_KEY: str = secrets.token_urlsafe(32)
+    JWT_REFRESH_SECRET_KEY: str = secrets.token_urlsafe(32)
+    JWT_RESET_SECRET_KEY: str = secrets.token_urlsafe(32)
+    JWT_VERIFICATION_SECRET_KEY: str = secrets.token_urlsafe(32)
+    ENCRYPT_KEY: str = secrets.token_urlsafe(32)
+    ALGORITHM: str = "HS256"  # Added JWT Algorithm
+    BACKEND_CORS_ORIGINS: List[Union[str, AnyHttpUrl]] = ["http://localhost:3000", "http://localhost:80"]
+
+    # Frontend URL
+    FRONTEND_URL: str = "http://localhost:5173"
+    PASSWORD_RESET_URL: str = f"{FRONTEND_URL}/reset-password"
 
     # Database Type Setting
     DATABASE_TYPE: DatabaseTypeEnum = DatabaseTypeEnum.postgresql
@@ -58,14 +79,19 @@ class Settings(BaseSettings):
     # Token Settings
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 1  # 1 hour
     REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 100  # 100 days
-    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
-    PASSWORD_RESET_URL: str = "http://localhost:3000/reset-password"
-    ALGORITHM: str = "HS256"
-    TOKEN_ISSUER: Optional[str] = "http://localhost:8000"
-    TOKEN_AUDIENCE: Optional[str] = None  # This will be set in the .env file or environment variables
+    REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7)
+    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = Field(default=30)
+    VERIFICATION_TOKEN_EXPIRE_MINUTES: int = Field(default=1440)  # 24 hours
+    UNVERIFIED_ACCOUNT_CLEANUP_HOURS: int = Field(default=72)  # 3 days
+    MAX_LOGIN_ATTEMPTS: int = Field(default=5)
+    LOCKOUT_DURATION_MINUTES: int = Field(default=15)
+    PASSWORD_HISTORY_SIZE: int = Field(default=5)  # Number of old passwords to store
+    PREVENT_PASSWORD_REUSE: int = Field(default=5)  # Number of recent passwords to check against
+    TOKEN_ISSUER: Optional[str] = None  # Added
+    TOKEN_AUDIENCE: Optional[str] = None  # Added
 
-    # Email Settings
-    EMAILS_ENABLED: bool = True
+    # Email settings
+    EMAILS_ENABLED: bool = Field(default=False)
     SMTP_TLS: bool = True
     SMTP_HOST: str | None = None
     SMTP_PORT: int | None = None
@@ -105,25 +131,91 @@ class Settings(BaseSettings):
     USER_CHANGED_PASSWORD_DATE: Optional[str] = None
     USERS_OPEN_REGISTRATION: bool = False
 
-    # Security Settings
-    JWT_REFRESH_SECRET_KEY: Optional[str] = None
-    JWT_RESET_SECRET_KEY: Optional[str] = None
-    JWT_VERIFICATION_SECRET_KEY: str = secrets.token_urlsafe(32)
-    ENCRYPT_KEY: Optional[str] = None
-    BACKEND_CORS_ORIGINS: List[Union[str, AnyHttpUrl]] = ["http://localhost:3000", "http://localhost:80"]
-
     # Email Verification Settings
     EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
-    EMAIL_VERIFICATION_URL: str = "http://localhost:3000/verify-email"
+    EMAIL_VERIFICATION_URL: str = FRONTEND_URL + "/verify-email"
 
     # Logging settings
     LOG_LEVEL: str = "INFO"
 
     # Feature Flags
     ENABLE_ACCOUNT_LOCKOUT: bool = True
-    MAX_LOGIN_ATTEMPTS: int = 3
     ACCOUNT_LOCKOUT_MINUTES: int = 60 * 24  # 24 hours
-    PASSWORD_HISTORY_SIZE: int = 5  # Number of previous passwords to remember
+
+    # Registration Security Settings
+    MAX_REGISTRATION_ATTEMPTS_PER_HOUR: int = 5
+    MAX_REGISTRATION_ATTEMPTS_PER_EMAIL: int = 3
+    UNVERIFIED_ACCOUNT_CLEANUP_DELAY_HOURS: int = 24  # ADDED to match auth.py usage
+    EMAIL_DOMAIN_BLACKLIST: List[str] = []
+    EMAIL_DOMAIN_ALLOWLIST: List[str] = []  # Empty means all domains allowed
+
+    # Enhanced Security Settings
+    PASSWORD_MIN_LENGTH: int = 12  # NIST recommends at least 8, we use 12
+    PASSWORD_MAX_LENGTH: int = 128  # Reasonable maximum length
+    PASSWORD_REQUIRE_UPPERCASE: bool = True  # At least one uppercase letter
+    PASSWORD_REQUIRE_LOWERCASE: bool = True  # At least one lowercase letter
+    PASSWORD_REQUIRE_DIGITS: bool = True  # At least one digit
+    PASSWORD_REQUIRE_SPECIAL: bool = True  # At least one special character
+    PASSWORD_SPECIAL_CHARS: str = "!@#$%^&*()_+-=[]{}|;:,.<>?"
+    PASSWORD_HASHING_ITERATIONS: int = 12  # bcrypt work factor (12 is good balance)
+    PASSWORD_PREVENT_REUSE: bool = True  # Prevent reuse of recent passwords
+    COMMON_PASSWORDS: List[str] = [  # List of commonly used passwords to prevent
+        "password",
+        "123456",
+        "qwerty",
+        "abc123",
+        "letmein",
+        "admin",
+        "welcome",
+        "monkey",
+        "password1",
+        "123456789",
+        "football",
+        "000000",
+        "qwerty123",
+        "1234567",
+        "123123",
+        "12345678",
+        "dragon",
+        "baseball",
+        "abc123",
+        "football",
+        "monkey",
+        "letmein",
+        "shadow",
+        "master",
+        "666666",
+        "qwertyuiop",
+        "123321",
+        "mustang",
+        "123456",
+        "michael",
+        "superman",
+        "princess",
+        "password1",
+        "123qwe",
+        "password123",
+    ]
+    PREVENT_COMMON_PASSWORDS: bool = True  # Prevent use of common passwords
+    PREVENT_SEQUENTIAL_CHARS: bool = True  # Prevent use of sequential characters (e.g., abc, 123)
+    PASSWORD_PEPPER: Optional[str] = None  # Optional pepper for password hashing
+    PREVENT_REPEATED_CHARS: bool = True  # Prevent use of too many repeated characters
+
+    # Account Security Settings
+    MAX_PASSWORD_CHANGE_ATTEMPTS: int = 3  # Maximum password change attempts per hour
+    ACCOUNT_LOCKOUT_DURATION: int = 1800  # 30 minutes lockout
+    REQUIRE_PASSWORD_CHANGE_DAYS: int = 90  # Force password change every 90 days
+    ENABLE_BRUTE_FORCE_PROTECTION: bool = True
+    BRUTE_FORCE_TIME_WINDOW: int = 3600  # 1 hour window for attempt counting
+    PASSWORD_MIN_AGE_HOURS: int = 24  # Minimum time between password changes
+    LOGIN_HISTORY_DAYS: int = 90  # Keep login history for 90 days
+
+    # Session Security
+    SESSION_MAX_AGE: int = 3600  # 1 hour
+    SESSION_EXTEND_ON_ACTIVITY: bool = True  # Reset timer on activity
+    REQUIRE_MFA_AFTER_INACTIVITY: bool = True
+    INACTIVITY_TIMEOUT: int = 1800  # 30 minutes of inactivity
+    CONCURRENT_SESSION_LIMIT: int = 5  # Maximum concurrent sessions
 
     # Celery Configuration
     CELERY_BROKER_URL: str = "redis://{REDIS_HOST}:{REDIS_PORT}/0"
@@ -178,6 +270,35 @@ class Settings(BaseSettings):
             "routing_key": "low_priority",
         },
     ]
+
+    # Rate Limiting and Security Settings
+    MAX_VERIFICATION_ATTEMPTS_PER_HOUR: int = 5
+    VERIFICATION_COOLDOWN_SECONDS: int = 300  # 5 minutes between attempts
+    RATE_LIMIT_PERIOD_SECONDS: int = 3600  # 1 hour for rate limiting window
+    # ADDED missing settings for resend verification email rate limits
+    MAX_RESEND_VERIFICATION_ATTEMPTS_PER_HOUR: int = 3
+    RATE_LIMIT_PERIOD_RESEND_VERIFICATION_SECONDS: int = 3600
+
+    # Token Security
+    ACCESS_TOKEN_ENTROPY_BITS: int = 256  # Entropy for token generation
+    VERIFY_TOKEN_ON_EVERY_REQUEST: bool = True
+    TOKEN_VERSION_ON_PASSWORD_CHANGE: bool = True  # Invalidate tokens on password change
+    VALIDATE_TOKEN_IP: bool = True  # Validate token against original IP
+    TOKEN_BLACKLIST_ON_LOGOUT: bool = True  # Add tokens to blacklist on logout
+    TOKEN_BLACKLIST_EXPIRY: int = 86400  # Keep blacklisted tokens for 24 hours
+
+    # Rate Limiting and Security Settings
+    # MAX_VERIFICATION_ATTEMPTS_PER_HOUR: int = 5
+    # VERIFICATION_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
+    # VERIFICATION_COOLDOWN_SECONDS: int = 300  # 5 minutes between attempts
+    # RATE_LIMIT_PERIOD_SECONDS: int = 3600  # 1 hour for rate limiting window
+
+    # Registration Security Settings
+    # MAX_REGISTRATION_ATTEMPTS_PER_HOUR: int = 5
+    # MAX_REGISTRATION_ATTEMPTS_PER_EMAIL: int = 3
+    # UNVERIFIED_ACCOUNT_CLEANUP_HOURS: int = 24
+    # EMAIL_DOMAIN_BLACKLIST: List[str] = []
+    # EMAIL_DOMAIN_ALLOWLIST: List[str] = []
 
     @field_validator("BACKEND_CORS_ORIGINS")
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:

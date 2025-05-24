@@ -1,7 +1,9 @@
 import gc
 import logging
+import os
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator, Dict, Optional
+from logging.config import fileConfig
+from typing import AsyncGenerator, Dict, Optional
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -13,7 +15,6 @@ from fastapi_limiter import FastAPILimiter
 from jwt import DecodeError, ExpiredSignatureError, MissingRequiredClaimError
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.pool import NullPool
-from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
 
 # Import Celery beat schedule to ensure it's registered
@@ -32,12 +33,25 @@ from app.schemas.response_schema import ErrorDetail, create_error_response
 from app.utils.exceptions.user_exceptions import UserSelfDeleteException
 from app.utils.fastapi_globals import GlobalsMiddleware, g
 
-# Configure logger
+# Configure logger from the logging.ini file
+try:
+    config_file = os.path.join(os.path.dirname(__file__), "..", "logging.ini")
+    if os.path.exists(config_file):
+        fileConfig(config_file, disable_existing_loggers=False)
+    else:
+        # Fallback configuration if logging.ini is not found
+        logger = logging.getLogger("fastapi_rbac")
+        logger.setLevel(logging.DEBUG)
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+        logger.addHandler(handler)
+except Exception as e:
+    print(f"Error loading logging configuration: {e}")
+    # Setup basic logging as fallback
+    logging.basicConfig(level=logging.DEBUG)
+
+# Get logger for this module
 logger = logging.getLogger("fastapi_rbac")
-logger.setLevel(logging.DEBUG)
-handler = logging.StreamHandler()
-handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-logger.addHandler(handler)
 
 
 # Flag to indicate whether Celery is available based on environment
@@ -212,34 +226,43 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 
-@fastapi_app.exception_handler(StarletteHTTPException)
-async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
-    """
-    Handle HTTP exceptions with standardized format for frontend consumption
-    """
-    # Extract field-specific errors from detail if it's a dict
-    errors: list[ErrorDetail] = []
-
-    detail: Any = exc.detail
-
-    if isinstance(detail, dict) and "field_name" in detail:
-        errors.append(
-            ErrorDetail(
-                field=detail.get("field_name"),
-                message=detail.get("message", "An error occurred"),
-                code=str(exc.status_code),
-            )
-        )
-        message = "Request error"
-    else:
-        message = detail if isinstance(detail, str) else "Request error"
-
+@fastapi_app.exception_handler(SQLAlchemyError)
+async def database_exception_handler(request: Request, exc: SQLAlchemyError) -> JSONResponse:
+    """Handle database errors and log them."""
+    error_detail = {
+        "error_type": "database_error",
+        "location": request.url.path,
+        "error_description": str(exc),
+        "error_class": exc.__class__.__name__,
+    }
+    logger.error(f"Database error occurred: {exc}", extra=error_detail)
     return JSONResponse(
-        status_code=exc.status_code,
-        content=create_error_response(
-            message=message,
-            errors=errors,
-        ).model_dump(),
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "message": "An internal server error occurred",
+            "meta": {"type": "database_error"},
+            "data": None,
+        },
+    )
+
+
+@fastapi_app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Handle all unhandled exceptions and log them."""
+    error_detail = {
+        "error_type": "unhandled_error",
+        "location": request.url.path,
+        "error_class": exc.__class__.__name__,
+        "error_description": str(exc),
+    }
+    logger.error(f"Unhandled error occurred: {exc}", extra=error_detail)
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "message": "An internal server error occurred",
+            "meta": {"type": "unhandled_error"},
+            "data": None,
+        },
     )
 
 

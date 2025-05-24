@@ -121,9 +121,19 @@ class IUserPasswordReset(BaseModel):
     expiry_date: datetime | None = None
 
 
+class INewPassword(BaseModel):
+    password: str = Field(..., min_length=8, description="New password to set")
+    token: str = Field(..., description="Reset token received via email")
+
+
 class IUserStatus(str, Enum):
     active = "active"
     inactive = "inactive"
+
+
+class IVerifyEmail(BaseModel):
+    token: str = Field(..., description="Verification token received via email")
+    email: EmailStr = Field(..., description="Email address of the user to verify")
 
 
 # Schemas for password reset functionality

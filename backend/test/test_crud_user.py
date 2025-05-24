@@ -2,7 +2,7 @@ import pytest
 from fastapi import HTTPException
 from sqlmodel.ext.asyncio.session import AsyncSession  # Changed import
 
-from app.core.security import verify_password
+from app.core.security import PasswordValidator
 from app.crud.user_crud import user_crud
 from app.models.role_model import Role
 from app.schemas.user_schema import IUserCreate, IUserUpdate
@@ -39,7 +39,7 @@ async def test_create_user(db: AsyncSession) -> None:  # Added return type
     assert hasattr(user, "password")
     assert user.password is not None  # Added assertion
     assert user.password != password  # Password should be hashed
-    assert verify_password(password, user.password)  # Verify password hashing worked
+    assert PasswordValidator.verify_password(password, user.password)  # Verify password hashing worked
 
 
 @pytest.mark.asyncio
@@ -104,6 +104,8 @@ async def test_update_user(db: AsyncSession) -> None:  # Added return type
     new_first_name = "Updated"
     new_last_name = "UserName"
     user_update = IUserUpdate(
+        email=email,  # use existing email
+        password=password,  # use existing password
         first_name=new_first_name,
         last_name=new_last_name,
     )
@@ -134,6 +136,7 @@ async def test_update_user_password(db: AsyncSession) -> None:  # Added return t
     # Create update data with new password
     new_password = random_lower_string()
     user_update = IUserUpdate(
+        email=email,  # use existing email
         password=new_password,
     )
 
@@ -144,9 +147,11 @@ async def test_update_user_password(db: AsyncSession) -> None:  # Added return t
     assert updated_user.id == user.id
     assert updated_user.email == user.email  # Email should remain unchanged
     assert updated_user.password is not None  # Added assertion
-    assert verify_password(new_password, updated_user.password)
+    assert PasswordValidator.verify_password(new_password, updated_user.password)
     assert user.password is not None  # Added assertion
-    assert not verify_password(password, updated_user.password)  # Old password should not work
+    assert not PasswordValidator.verify_password(
+        password, updated_user.password
+    )  # Old password should not work
 
 
 @pytest.mark.asyncio

@@ -2,31 +2,26 @@ from datetime import timedelta
 
 import pytest
 from jose import jwt
+from jose.exceptions import ExpiredSignatureError  # Added import
 
 from app.core.config import settings
-from app.core.security import (
-    create_access_token,
-    create_refresh_token,
-    decode_token,
-    get_password_hash,
-    verify_password,
-)
+from app.core.security import PasswordValidator, create_access_token, create_refresh_token, decode_token
 
 
 def test_password_hashing() -> None:
     """Test password hashing and verification"""
     # Test that hashing works
     password = "test-password"
-    hashed_password = get_password_hash(password)
+    hashed_password = PasswordValidator.get_password_hash(password)
 
     # Hashed password should be different from the original
     assert password != hashed_password
 
     # Verification should work
-    assert verify_password(password, hashed_password)
+    assert PasswordValidator.verify_password(password, hashed_password)
 
     # Verification should fail for wrong password
-    assert not verify_password("wrong-password", hashed_password)
+    assert not PasswordValidator.verify_password("wrong-password", hashed_password)
 
 
 def test_access_token_generation() -> None:
@@ -104,7 +99,7 @@ def test_token_expiration() -> None:
     token = create_access_token(user_id, expires_delta=expires_delta)
 
     # Decoding should fail with an expired token
-    with pytest.raises(jwt.ExpiredSignatureError):
+    with pytest.raises(ExpiredSignatureError):  # Changed from jwt.ExpiredSignatureError
         jwt.decode(
             token,
             settings.SECRET_KEY,  # Changed from settings.ENCRYPT_KEY

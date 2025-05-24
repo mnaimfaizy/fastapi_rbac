@@ -50,5 +50,21 @@ alembic upgrade head
 python ./app/initial_data.py
 
 echo "Starting FastAPI development server with auto-reload..."
-# Use FastAPI CLI dev mode for development
-fastapi dev app/main.py --host ${HOST:-127.0.0.1} --port ${PORT:-8000}
+
+# Define exclude patterns for auto-reload
+EXCLUDE_PATTERNS=(
+    '*/logs/*'          # Exclude all files in logs directory
+    '*.log'             # Exclude all log files
+    '*/__pycache__/*'   # Exclude Python cache
+    '*.pyc'             # Exclude Python compiled files
+    '*/.pytest_cache/*' # Exclude pytest cache
+    '*/.mypy_cache/*'   # Exclude mypy cache
+)
+
+# Join patterns with comma for uvicorn, handling potential empty array if no patterns
+IFS=','
+EXCLUDE_STR="${EXCLUDE_PATTERNS[*]}"
+
+echo "Starting uvicorn with watch patterns excluded: $EXCLUDE_STR"
+# Use uvicorn directly for more control over reload excludes, similar to the PowerShell script
+uvicorn app.main:fastapi_app --reload --reload-exclude="$EXCLUDE_STR" --host "${HOST:-0.0.0.0}" --port "${PORT:-8000}"

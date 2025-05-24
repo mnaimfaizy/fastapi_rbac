@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import AuthService from '../../../services/auth.service';
 import {
   Alert,
@@ -16,7 +16,8 @@ import {
 import { AxiosError } from 'axios';
 
 export function VerifyEmailPage() {
-  const { token } = useParams<{ token: string }>();
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get('token');
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -69,16 +70,20 @@ export function VerifyEmailPage() {
           )}
 
           {success && (
-            <Alert variant="default">
+            <Alert variant="default" className="w-full">
               {' '}
               {/* Changed variant to default */}
               <AlertTitle>Verification Successful</AlertTitle>
               <AlertDescription>
                 Your email has been verified successfully. You can now log in.
+                <Button
+                  onClick={() => navigate('/login')}
+                  variant="default"
+                  className="mt-4 w-full"
+                >
+                  Go to Login
+                </Button>
               </AlertDescription>
-              <Button onClick={() => navigate('/login')} className="mt-4">
-                Go to Login
-              </Button>
             </Alert>
           )}
 

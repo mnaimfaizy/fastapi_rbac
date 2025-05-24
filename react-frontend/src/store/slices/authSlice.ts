@@ -127,17 +127,38 @@ export const changePassword = createAsyncThunk(
       if (error && typeof error === 'object' && 'response' in error) {
         const err = error as {
           response?: {
-            data?: { errors?: Array<{ message: string }>; message?: string };
+            data?: {
+              detail?: string | { message?: string; errors?: string[] };
+              errors?: Array<{ message: string }>;
+              message?: string;
+            };
           };
         };
-        if (err.response?.data?.errors?.[0]) {
-          return rejectWithValue(err.response.data.errors[0].message);
+        // Handle the new structured error response
+        if (
+          err.response?.data?.detail &&
+          typeof err.response.data.detail === 'object'
+        ) {
+          return rejectWithValue(err.response.data.detail);
         }
-        return rejectWithValue(
-          err.response?.data?.message || 'Failed to change password'
-        );
+        // Handle if detail is a simple string
+        if (
+          err.response?.data?.detail &&
+          typeof err.response.data.detail === 'string'
+        ) {
+          return rejectWithValue({ message: err.response.data.detail });
+        }
+        // Fallback to existing error handling
+        if (err.response?.data?.errors?.[0]) {
+          return rejectWithValue({
+            message: err.response.data.errors[0].message,
+          });
+        }
+        return rejectWithValue({
+          message: err.response?.data?.message || 'Failed to change password',
+        });
       }
-      return rejectWithValue('Failed to change password');
+      return rejectWithValue({ message: 'Failed to change password' });
     }
   }
 );
@@ -181,17 +202,39 @@ export const confirmPasswordReset = createAsyncThunk(
       if (error && typeof error === 'object' && 'response' in error) {
         const err = error as {
           response?: {
-            data?: { errors?: Array<{ message: string }>; message?: string };
+            data?: {
+              detail?: string | { message?: string; errors?: string[] };
+              // Keep existing error structures for broader compatibility
+              errors?: Array<{ message: string }>;
+              message?: string;
+            };
           };
         };
-        if (err.response?.data?.errors?.[0]) {
-          return rejectWithValue(err.response.data.errors[0].message);
+        // Handle the new structured error response
+        if (
+          err.response?.data?.detail &&
+          typeof err.response.data.detail === 'object'
+        ) {
+          return rejectWithValue(err.response.data.detail);
         }
-        return rejectWithValue(
-          err.response?.data?.message || 'Failed to reset password'
-        );
+        // Handle if detail is a simple string
+        if (
+          err.response?.data?.detail &&
+          typeof err.response.data.detail === 'string'
+        ) {
+          return rejectWithValue({ message: err.response.data.detail });
+        }
+        // Fallback to existing error handling
+        if (err.response?.data?.errors?.[0]) {
+          return rejectWithValue({
+            message: err.response.data.errors[0].message,
+          });
+        }
+        return rejectWithValue({
+          message: err.response?.data?.message || 'Failed to reset password',
+        });
       }
-      return rejectWithValue('Failed to reset password');
+      return rejectWithValue({ message: 'Failed to reset password' });
     }
   }
 );

@@ -70,9 +70,24 @@ alembic upgrade head
 # Run initial data seeding script
 python ./app/initial_data.py
 
+function Start-UvicornServer {
+    $excludePatterns = @(
+        '*/logs/*',          # Exclude all files in logs directory
+        '*.log',             # Exclude all log files
+        '*/__pycache__/*',   # Exclude Python cache
+        '*.pyc',             # Exclude Python compiled files
+        '*/.pytest_cache/*',  # Exclude pytest cache
+        '*/.mypy_cache/*'    # Exclude mypy cache
+    )
+
+    # Join patterns with comma for uvicorn
+    $excludeStr = $excludePatterns -join ','
+
+    Write-Host "Starting uvicorn with watch patterns excluded: $excludeStr"
+    uvicorn app.main:fastapi_app --reload --reload-exclude="$excludeStr" --host 0.0.0.0 --port 8000
+}
+
 Write-Host "Starting FastAPI development server with auto-reload..."
-# Determine host and port, using defaults if environment variables are not set
-$HostAddr = if ($env:HOST) { $env:HOST } else { "127.0.0.1" }
-$AppPort = if ($env:PORT) { $env:PORT } else { "8000" }
-# Start FastAPI in development mode using Invoke-Expression
-Invoke-Expression "fastapi dev app/main.py --host $HostAddr --port $AppPort"
+
+# Start the uvicorn server with our configured watch settings
+Start-UvicornServer

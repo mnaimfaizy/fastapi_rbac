@@ -71,73 +71,77 @@ const PasswordResetRequestPage = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-3xl font-extrabold">
-            Reset Your Password
-          </CardTitle>
-          <CardDescription>
-            {passwordResetRequested
-              ? 'Check your email for password reset instructions'
-              : 'Enter your email to receive password reset instructions'}
-          </CardDescription>
-        </CardHeader>
+    <div className="flex h-full w-full flex-col items-center justify-center gap-4">
+      <div className="w-full max-w-s flex items-center justify-center ">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <CardTitle className="text-3xl font-extrabold">
+              Reset Your Password
+            </CardTitle>
+            <CardDescription>
+              {passwordResetRequested
+                ? 'Check your email for password reset instructions'
+                : 'Enter your email to receive password reset instructions'}
+            </CardDescription>
+          </CardHeader>
 
-        <CardContent>
-          {passwordResetRequested ? (
-            <div className="space-y-6">
-              <Alert className="border-green-500 bg-green-50 text-green-700">
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <AlertDescription>
-                  If the email exists in our system, we have sent a password
-                  reset link to that address. Please check your inbox.
-                </AlertDescription>
-              </Alert>
-
-              <Button asChild className="w-full">
-                <Link to="/login">Back to Login</Link>
-              </Button>
-            </div>
-          ) : (
-            <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
-              {error && (
-                <Alert variant="destructive">
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
+          <CardContent>
+            {passwordResetRequested ? (
+              <div className="space-y-6">
+                <Alert className="border-green-500 bg-green-50 text-green-700">
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                  <AlertDescription>
+                    If the email exists in our system, we have sent a password
+                    reset link to that address. Please check your inbox.
+                  </AlertDescription>
                 </Alert>
-              )}
 
-              <div className="space-y-2">
-                <Label htmlFor="email">Email Address</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="Email address"
-                  autoComplete="email"
-                  {...register('email')}
-                />
-                {errors.email && (
-                  <p className="text-sm text-red-600">{errors.email.message}</p>
+                <Button asChild className="w-full">
+                  <Link to="/login">Back to Login</Link>
+                </Button>
+              </div>
+            ) : (
+              <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
+                {error && (
+                  <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
                 )}
-              </div>
 
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? 'Sending...' : 'Send Reset Link'}
-              </Button>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email Address</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="Email address"
+                    autoComplete="email"
+                    {...register('email')}
+                  />
+                  {errors.email && (
+                    <p className="text-sm text-red-600">
+                      {errors.email.message}
+                    </p>
+                  )}
+                </div>
 
-              <div className="text-center">
-                <Link
-                  to="/login"
-                  className="text-sm font-medium text-primary hover:underline"
-                >
-                  Back to login
-                </Link>
-              </div>
-            </form>
-          )}
-        </CardContent>
-      </Card>
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading ? 'Sending...' : 'Send Reset Link'}
+                </Button>
+
+                <div className="text-center">
+                  <Link
+                    to="/login"
+                    className="text-sm font-medium text-primary hover:underline"
+                  >
+                    Back to login
+                  </Link>
+                </div>
+              </form>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };

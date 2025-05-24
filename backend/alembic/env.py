@@ -7,12 +7,13 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlmodel import SQLModel
 
 from alembic import context
-from app.core.config import Settings
 
 # Add the project root directory (backend) to the Python path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
+
+from app.core.config import Settings
 
 # Import models for Alembic to detect
 from app.models import *  # noqa

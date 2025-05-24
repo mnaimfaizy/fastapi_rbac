@@ -1,14 +1,15 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
 from pydantic import EmailStr
-from sqlalchemy import exc
+from sqlalchemy import desc, exc  # Import desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.core.security import get_password_hash, verify_password
+from app.core.config import settings  # Import settings
+from app.core.security import PasswordValidator
 from app.crud.base_crud import CRUDBase
 from app.models.password_history_model import UserPasswordHistory
 from app.models.role_model import Role
@@ -18,8 +19,15 @@ from app.schemas.user_schema import IUserCreate, IUserUpdate
 
 class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
     async def get_by_email(self, *, email: str, db_session: AsyncSession | None = None) -> User | None:
-        db_session = db_session or super().get_db().session
-        result = await db_session.execute(select(User).where(User.email == email))
+        resolved_session = db_session or super().get_db().session
+        if resolved_session is None:
+            # import logging
+            # logger = logging.getLogger(__name__)
+            # logger.error("Database session not available in CRUDUser.get_by_email")
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
+
+        # Now resolved_session is guaranteed to be an AsyncSession.
+        result = await resolved_session.execute(select(self.model).where(self.model.email == email))
         # Apply unique() before calling scalar_one_or_none() to handle joined eager loads
         unique_result = result.unique()
         return unique_result.scalar_one_or_none()
@@ -34,12 +42,18 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         return user
 
     async def create_with_role(self, *, obj_in: IUserCreate, db_session: AsyncSession | None = None) -> User:
-        db_session = db_session or super().get_db().session
+        resolved_session = db_session or super().get_db().session
+        if resolved_session is None:
+            # import logging
+            # logger = logging.getLogger(__name__)
+            # logger.error("Database session not available in CRUDUser.create_with_role")
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
+
         db_obj = User.model_validate(obj_in)
-        db_obj.password = get_password_hash(obj_in.password)
-        db_session.add(db_obj)
-        await db_session.commit()
-        await db_session.refresh(db_obj)
+        db_obj.password = PasswordValidator.get_password_hash(obj_in.password)
+        resolved_session.add(db_obj)
+        await resolved_session.commit()
+        await resolved_session.refresh(db_obj)
         return db_obj
 
     async def create(
@@ -50,7 +64,12 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         db_session: AsyncSession | None = None,
     ) -> User:
         """Override the create method to hash the password and handle roles"""
-        db_session = db_session or self.db.session
+        resolved_session = db_session or self.db.session
+        if resolved_session is None:
+            # import logging
+            # logger = logging.getLogger(__name__)
+            # logger.error("Database session not available in CRUDUser.create")
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
 
         role_ids = []
         if isinstance(obj_in, IUserCreate):
@@ -59,7 +78,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
             obj_in_data = obj_in.model_dump(exclude={"password", "role_id"})
             db_obj = User(**obj_in_data)
             # Hash the password
-            db_obj.password = get_password_hash(obj_in.password)
+            db_obj.password = PasswordValidator.get_password_hash(obj_in.password)
         else:  # isinstance(obj_in, User)
             # If a User model instance is passed directly, we assume roles are already handled
             # or not applicable in this context. Password should already be hashed.
@@ -70,19 +89,19 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
 
         try:
             # First, add and commit the user to get an ID
-            db_session.add(db_obj)
-            await db_session.flush()  # Ensure data is flushed to DB before commit
-            await db_session.commit()
-            await db_session.refresh(db_obj)
+            resolved_session.add(db_obj)
+            await resolved_session.flush()  # Ensure data is flushed to DB before commit
+            await resolved_session.commit()
+            await resolved_session.refresh(db_obj)
 
             # After user is committed, handle roles if role_ids were provided
             if role_ids:
                 # Fetch Role objects based on the provided IDs
-                result = await db_session.exec(select(Role).where(Role.id.in_(role_ids)))
+                result = await resolved_session.exec(select(Role).where(Role.id.in_(role_ids)))
                 roles = result.all()
                 if len(roles) != len(role_ids):
                     # Handle error: some role IDs were not found
-                    await db_session.rollback()
+                    await resolved_session.rollback()
                     raise HTTPException(
                         status_code=404,
                         detail=f"One or more roles not found for IDs: {role_ids}",
@@ -90,10 +109,10 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
 
                 # Now that user has been committed, we can safely set relationships
                 db_obj.roles = roles
-                await db_session.commit()
-                await db_session.refresh(db_obj)
+                await resolved_session.commit()
+                await resolved_session.refresh(db_obj)
         except exc.IntegrityError as e:
-            await db_session.rollback()
+            await resolved_session.rollback()
             # Check if it's a unique constraint violation (e.g., email)
             is_unique_constraint_violation = "UNIQUE constraint failed" in str(
                 e
@@ -112,12 +131,12 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         except HTTPException:  # Re-raise HTTPException (like the 404 for roles)
             raise
         except Exception as e:
-            await db_session.rollback()
+            await resolved_session.rollback()
             # Log the exception e
             raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
 
         # Make sure roles are loaded for the return value
-        await db_session.refresh(db_obj, attribute_names=["roles"])
+        await resolved_session.refresh(db_obj, attribute_names=["roles"])
         return db_obj
 
     async def update(
@@ -128,7 +147,12 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         db_session: AsyncSession | None = None,
     ) -> User:
         """Override base update method to handle password hashing and roles"""
-        db_session = db_session or self.db.session
+        resolved_session = db_session or self.db.session
+        if resolved_session is None:
+            # import logging
+            # logger = logging.getLogger(__name__)
+            # logger.error("Database session not available in CRUDUser.update")
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
 
         if isinstance(obj_new, dict):
             update_data = obj_new
@@ -137,7 +161,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
 
         # Handle password hashing if password is being updated
         if "password" in update_data and update_data["password"]:
-            hashed_password = get_password_hash(update_data["password"])
+            hashed_password = PasswordValidator.get_password_hash(update_data["password"])
             obj_current.password = hashed_password
             obj_current.last_changed_password_date = datetime.utcnow()
             del update_data["password"]
@@ -148,7 +172,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         if "role_id" in update_data:
             role_ids = update_data.get("role_id", [])
             if role_ids:
-                result = await db_session.execute(select(Role).where(Role.id.in_(role_ids)))
+                result = await resolved_session.execute(select(Role).where(Role.id.in_(role_ids)))
                 roles = result.scalars().all()
                 if len(roles) != len(role_ids):
                     raise HTTPException(
@@ -165,10 +189,10 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
             setattr(obj_current, field, value)
 
         try:
-            db_session.add(obj_current)
-            await db_session.commit()
+            resolved_session.add(obj_current)
+            await resolved_session.commit()
         except exc.IntegrityError as e:
-            await db_session.rollback()
+            await resolved_session.rollback()
             is_unique_constraint_violation = "UNIQUE constraint failed" in str(
                 e
             ) or "duplicate key value violates unique constraint" in str(e)
@@ -185,12 +209,12 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         except HTTPException:
             raise
         except Exception as e:
-            await db_session.rollback()
+            await resolved_session.rollback()
             raise HTTPException(status_code=500, detail=f"An unexpected error occurred during update: {e}")
 
         # Refresh the object to get updated data and roles
-        await db_session.refresh(obj_current)
-        await db_session.refresh(obj_current, attribute_names=["roles"])
+        await resolved_session.refresh(obj_current)
+        await resolved_session.refresh(obj_current, attribute_names=["roles"])
         return obj_current
 
     def has_verified(self, user: User) -> bool:
@@ -248,7 +272,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
             return None
 
         # Verify password
-        if not verify_password(password, user.password):
+        if not PasswordValidator.verify_password(password, user.password):
             # Increment failed attempts counter
             await self.increment_failed_attempts(user=user, db_session=db_session)
             return None
@@ -258,28 +282,67 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         return user
 
     async def remove(self, *, id: UUID | str, db_session: AsyncSession | None = None) -> User:
-        db_session = db_session or super().get_db().session
-        response = await db_session.execute(select(self.model).where(self.model.id == id))
-        # Apply unique() before accessing the result
+        resolved_session = db_session or super().get_db().session
+        if resolved_session is None:
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
+        response = await resolved_session.execute(select(self.model).where(self.model.id == id))
         unique_response = response.unique()
         obj = unique_response.scalar_one()
 
-        await db_session.delete(obj)
-        await db_session.commit()
+        await resolved_session.delete(obj)
+        await resolved_session.commit()
         return obj
 
-    async def add_to_password_history(
+    async def add_password_to_history(
         self,
         *,
         user_id: UUID,
-        password_hash: str,
+        hashed_password: str,  # Field name in UserPasswordHistory is password_hash
+        created_by_ip: str | None = None,
+        reset_token_id: UUID | None = None,
         db_session: AsyncSession | None = None,
     ) -> None:
         """Add a password to the user's password history"""
-        db_session = db_session or super().get_db().session
-        password_history = UserPasswordHistory(user_id=user_id, password=password_hash)
-        db_session.add(password_history)
-        await db_session.commit()
+        resolved_session = db_session or super().get_db().session
+        if resolved_session is None:
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
+
+        history_entry_data = {
+            "user_id": user_id,
+            "password_hash": hashed_password,  # Corrected field name
+            "created_by_ip": created_by_ip,
+        }
+        if reset_token_id:
+            history_entry_data["reset_token_id"] = reset_token_id
+
+        password_history = UserPasswordHistory(**history_entry_data)
+        resolved_session.add(password_history)
+        await resolved_session.commit()
+
+    async def is_password_reused(
+        self,
+        *,
+        user_id: UUID,
+        new_password_hash: str,
+        db_session: AsyncSession | None = None,
+    ) -> bool:
+        """Check if a new password hash exists in the user's recent password history."""
+        resolved_session = db_session or super().get_db().session
+        if resolved_session is None:
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
+
+        limit = settings.PREVENT_PASSWORD_REUSE
+        if limit <= 0:  # If prevention is disabled or invalid, consider not reused
+            return False
+
+        result = await resolved_session.execute(
+            select(UserPasswordHistory.password_hash)
+            .where(UserPasswordHistory.user_id == user_id)
+            .order_by(desc(UserPasswordHistory.created_at))  # Use imported desc
+            .limit(limit)
+        )
+        history_hashes = result.scalars().all()
+        return new_password_hash in history_hashes
 
     async def is_password_in_history(
         self,
@@ -288,47 +351,73 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         new_password: str,
         db_session: AsyncSession | None = None,
     ) -> bool:
-        """Check if a password exists in the user's password history"""
-        db_session = db_session or super().get_db().session
+        """Check if a plain password matches any in the user's password history."""
+        resolved_session = db_session or super().get_db().session
+        if resolved_session is None:
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
 
-        # Get the last 5 password history entries
-        result = await db_session.execute(
+        limit = settings.PASSWORD_HISTORY_SIZE
+        if limit <= 0:  # If history size is zero or invalid, consider not in history
+            return False
+
+        result = await resolved_session.execute(
             select(UserPasswordHistory)
             .where(UserPasswordHistory.user_id == user_id)
-            .order_by(UserPasswordHistory.created_at.desc())
-            .limit(5)
+            .order_by(desc(UserPasswordHistory.created_at))  # Use imported desc
+            .limit(limit)
         )
         history_entries = result.scalars().all()
 
-        # Compare plain new password with each hashed historical password
-        return any(verify_password(new_password, entry.password) for entry in history_entries)
-
-    async def update_password(
-        self, *, user: User, new_password: str, db_session: AsyncSession | None = None
-    ) -> User:
-        """Update user password and manage password history"""
-        db_session = db_session or super().get_db().session
-
-        # Check if password is in history
-        if await self.is_password_in_history(
-            user_id=user.id, new_password=new_password, db_session=db_session
-        ):
-            raise ValueError("Cannot reuse any of your last 5 passwords")
-
-        # Add current password to history before updating
-        await self.add_to_password_history(
-            user_id=user.id,
-            password_hash=user.password,  # Current password is already hashed
-            db_session=db_session,
+        return any(
+            PasswordValidator.verify_password(new_password, entry.password_hash)  # Corrected field
+            for entry in history_entries
         )
 
-        # Hash the new password and update user
-        new_password_hash = get_password_hash(new_password)
+    async def update_password(
+        self,
+        *,
+        user: User,
+        new_password: str,
+        db_session: AsyncSession | None = None,
+        created_by_ip: str | None = None,
+        reset_token_id: UUID | None = None,
+    ) -> User:
+        """Update user password and manage password history"""
+        resolved_session = db_session or super().get_db().session
+        if resolved_session is None:
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
+
+        if settings.PASSWORD_HISTORY_SIZE > 0 and await self.is_password_in_history(
+            user_id=user.id, new_password=new_password, db_session=resolved_session
+        ):
+            raise ValueError(f"Cannot reuse any of your last {settings.PASSWORD_HISTORY_SIZE} passwords.")
+
+        new_password_hash = PasswordValidator.get_password_hash(new_password)
+
+        if settings.PREVENT_PASSWORD_REUSE > 0 and await self.is_password_reused(
+            user_id=user.id, new_password_hash=new_password_hash, db_session=resolved_session
+        ):
+            raise ValueError(
+                "This password has been used too recently. Please choose a different one."  # Not an f-string
+            )
+
+        if user.password is None:  # Should not happen for an existing user, but good practice
+            raise ValueError("Current user password is not set.")
+
+        await self.add_password_to_history(
+            user_id=user.id,
+            hashed_password=user.password,  # user.password should be str here
+            created_by_ip=created_by_ip,
+            reset_token_id=reset_token_id,
+            db_session=resolved_session,
+        )
+
         user.password = new_password_hash
-        user.last_changed_password_date = datetime.utcnow()
-        db_session.add(user)
-        await db_session.commit()
-        await db_session.refresh(user)
+        user.last_changed_password_date = datetime.now(timezone.utc)
+        user.password_version += 1
+        resolved_session.add(user)
+        await resolved_session.commit()
+        await resolved_session.refresh(user)
 
         return user
 
@@ -337,7 +426,9 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         Increment the number of failed login attempts
         and lock the account if it reaches the threshold.
         """
-        db_session = db_session or super().get_db().session
+        resolved_session = db_session or super().get_db().session
+        if resolved_session is None:
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
 
         # Initialize if None - this is critical since
         # the field may be NULL in the database
@@ -350,17 +441,19 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         print(f"Incremented failed attempts for user {user.email} to " f"{user.number_of_failed_attempts}")
 
         # Check if we need to lock the account (3 failed attempts)
-        if user.number_of_failed_attempts >= 3:
+        if user.number_of_failed_attempts >= settings.MAX_LOGIN_ATTEMPTS:  # Use setting
             # Lock the account for 24 hours
             user.is_locked = True
-            user.locked_until = datetime.utcnow() + timedelta(hours=24)
+            user.locked_until = datetime.utcnow() + timedelta(
+                minutes=settings.ACCOUNT_LOCKOUT_MINUTES
+            )  # Use setting
             print(f"Locking account for user {user.email} until {user.locked_until}")
 
         # Save the changes - use explicit transaction to ensure changes are committed
         try:
-            db_session.add(user)
-            await db_session.commit()
-            await db_session.refresh(user)
+            resolved_session.add(user)
+            await resolved_session.commit()
+            await resolved_session.refresh(user)
             print(
                 (
                     f"After commit: User {user.email} - failed attempts: "
@@ -368,7 +461,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
                 )
             )
         except Exception as e:
-            await db_session.rollback()
+            await resolved_session.rollback()
             print(f"Error updating failed attempts: {str(e)}")
             raise
 
@@ -378,27 +471,31 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         """
         Reset the number of failed login attempts to zero.
         """
-        db_session = db_session or super().get_db().session
+        resolved_session = db_session or super().get_db().session
+        if resolved_session is None:
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
 
         user.number_of_failed_attempts = 0
-        db_session.add(user)
-        await db_session.commit()
-        await db_session.refresh(user)
+        resolved_session.add(user)
+        await resolved_session.commit()
+        await resolved_session.refresh(user)
         return user
 
     async def unlock_account(self, *, user: User, db_session: AsyncSession | None = None) -> User:
         """
         Unlock a user's account by resetting the lock status and counter.
         """
-        db_session = db_session or super().get_db().session
+        resolved_session = db_session or super().get_db().session
+        if resolved_session is None:
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
 
         user.is_locked = False
         user.locked_until = None
         user.number_of_failed_attempts = 0
 
-        db_session.add(user)
-        await db_session.commit()
-        await db_session.refresh(user)
+        resolved_session.add(user)
+        await resolved_session.commit()
+        await resolved_session.refresh(user)
         return user
 
 

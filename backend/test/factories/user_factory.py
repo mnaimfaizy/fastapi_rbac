@@ -6,11 +6,12 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Sequence, cast
 
 import factory
-from factory import Faker
 from factory.alchemy import SQLAlchemyModelFactory
+from factory.declarations import LazyFunction
+from factory.faker import Faker
 from sqlalchemy.orm import Session
 
-from app.core.security import get_password_hash
+from app.core.security import PasswordValidator
 from app.models.role_model import Role
 from app.models.user_model import User
 from app.utils.uuid6 import uuid7
@@ -26,16 +27,16 @@ class UserFactory(SQLAlchemyModelFactory):
         sqlalchemy_session_persistence = "commit"  # Save to database
         sqlalchemy_session: Optional[Session] = None
 
-    id = factory.LazyFunction(uuid7)
+    id = LazyFunction(uuid7)  # type: ignore[assignment]
     email = Faker("email")
     first_name = Faker("first_name")
     last_name = Faker("last_name")
-    password = factory.LazyFunction(lambda: get_password_hash("password123"))
+    password = LazyFunction(lambda: PasswordValidator.get_password_hash("password123"))
     contact_phone = Faker("phone_number")
     is_active = True
     is_superuser = False
-    created_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
-    updated_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
+    created_at = LazyFunction(lambda: datetime.now(timezone.utc))
+    updated_at = LazyFunction(lambda: datetime.now(timezone.utc))
     needs_to_change_password = False
     verified = True
 
