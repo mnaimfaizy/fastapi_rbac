@@ -66,7 +66,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: node-modules-${{ matrix.node-version }}
-          path: react-frontend/node_modules # Download to the react-frontend/node_modules directory
+          path: react-frontend # Download to the react-frontend directory
 
       - name: Run linter
         run: npm run lint
@@ -93,7 +93,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: node-modules-${{ matrix.node-version }}
-          path: react-frontend/node_modules # Download to the react-frontend/node_modules directory
+          path: react-frontend # Download to the react-frontend directory
 
       - name: Check formatting
         run: npm run format -- --check
@@ -120,7 +120,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: node-modules-${{ matrix.node-version }}
-          path: react-frontend/node_modules # Download to the react-frontend/node_modules directory
+          path: react-frontend # Download to the react-frontend directory
 
       - name: Build project
         run: npm run build
