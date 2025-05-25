@@ -50,6 +50,12 @@ class CRUDPermissionGroup(CRUDBase[PermissionGroup, IPermissionGroupCreate, IPer
         result = await db_session.execute(query)
         return result.unique().scalar_one_or_none()
 
+    async def get_by_name(
+        self, *, name: str, db_session: AsyncSession | None = None
+    ) -> PermissionGroup | None:
+        """Get a permission group by name."""
+        return await self.get_group_by_name(name=name, db_session=db_session)  # Delegates to existing method
+
     async def get(self, *, id: UUID | str, db_session: AsyncSession | None = None) -> PermissionGroup | None:
         return await self.get_group_by_id(group_id=id, db_session=db_session)
 
@@ -72,7 +78,7 @@ class CRUDPermissionGroup(CRUDBase[PermissionGroup, IPermissionGroupCreate, IPer
             .limit(limit)
         )
         result = await db_session.execute(query)
-        return result.unique().scalars().all()
+        return list(result.unique().scalars().all())  # Explicitly convert to list
 
     # Override the get_multi_paginated method to load permissions and other relationships
     async def get_multi_paginated(

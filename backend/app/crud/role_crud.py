@@ -1,11 +1,13 @@
 from typing import List
 from uuid import UUID
 
-from sqlalchemy import select
+from fastapi import HTTPException
+from redis.asyncio import Redis
+from sqlalchemy import exc, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.crud.base_crud import CRUDBase
-from app.models.permission_model import Permission  # Add this import
+from app.models.permission_model import Permission
 from app.models.role_model import Role
 from app.models.role_permission_model import RolePermission
 from app.models.user_model import User
@@ -16,6 +18,58 @@ from app.utils.security_audit import create_audit_log
 
 class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
     """CRUD operations for Role model"""
+
+    async def create(
+        self,
+        *,
+        obj_in: IRoleCreate | Role,
+        created_by_id: UUID | str | None = None,
+        db_session: AsyncSession | None = None,
+    ) -> Role:
+        """Create a new role with permissions"""
+        if not db_session:
+            raise ValueError("db_session must be provided to CRUD create method")
+
+        # Handle both IRoleCreate schema and Role model instances
+        if isinstance(obj_in, IRoleCreate):
+            # Extract permissions from the input data
+            permission_ids = obj_in.permissions or []  # Create role data without permissions
+            role_data = obj_in.model_dump(exclude={"permissions"})
+
+            # Create the role
+            role = Role(**role_data)
+        else:
+            # If a Role model instance is passed directly
+            role = obj_in
+            permission_ids = []
+
+        if created_by_id:
+            if isinstance(created_by_id, str):
+                role.created_by_id = UUID(created_by_id)
+            else:
+                role.created_by_id = created_by_id
+
+        try:
+            db_session.add(role)
+            await db_session.flush()  # Flush to get the role ID
+
+            # Assign permissions if any were provided
+            if permission_ids:
+                for permission_id in permission_ids:
+                    # Create RolePermission mapping
+                    role_permission = RolePermission(role_id=role.id, permission_id=permission_id)
+                    db_session.add(role_permission)
+
+            await db_session.commit()
+        except exc.IntegrityError:
+            await db_session.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail="Role already exists",
+            )
+
+        await db_session.refresh(role)
+        return role
 
     async def get_role_by_name(self, *, name: str, db_session: AsyncSession | None = None) -> Role | None:
         db_session = db_session or super().get_db().session
@@ -159,7 +213,7 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
         return role.name.lower() in system_roles
 
     async def invalidate_user_permission_caches(
-        self, *, role_id: UUID, redis_client, db_session: AsyncSession | None = None
+        self, *, role_id: UUID, redis_client: Redis, db_session: AsyncSession | None = None
     ) -> None:
         """
         Invalidate permission caches for all users that have this role assigned.

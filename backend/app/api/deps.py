@@ -105,7 +105,7 @@ def get_current_user(
         if not user_from_db.is_active:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user.")
 
-        if hasattr(user_from_db, "is_super_user") and user_from_db.is_superuser:
+        if hasattr(user_from_db, "is_superuser") and user_from_db.is_superuser:
             return user_from_db
 
         if required_permissions:

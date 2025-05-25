@@ -8,6 +8,17 @@ def serialize_user(user: User) -> dict[str, Any]:
     Serialize a user object into a standardized dictionary format.
     This helper function provides consistent user serialization across endpoints.
     """
+    # Crucial: Ensure that user.roles and role.permissions are eagerly loaded
+    # when the user object is fetched from the DB to avoid N+1 query problems here.
+    # This might require using selectinload in your CRUD methods.
+    user_permissions_set: set[str] = set()
+    if user.roles:
+        for role in user.roles:
+            if hasattr(role, "permissions") and role.permissions:
+                for perm in role.permissions:
+                    if hasattr(perm, "name"):
+                        user_permissions_set.add(perm.name)
+
     return {
         "id": user.id,
         "email": user.email,
@@ -28,6 +39,7 @@ def serialize_user(user: User) -> dict[str, Any]:
             if user.roles
             else []
         ),
+        "permissions": sorted(list(user_permissions_set)),  # Add sorted list of unique permissions
         "created_at": user.created_at,
         "updated_at": user.updated_at,
     }

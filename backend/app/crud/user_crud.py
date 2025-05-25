@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from pydantic import EmailStr
 from sqlalchemy import desc, exc  # Import desc
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload  # Added for eager loading
 from sqlmodel import select
 
 from app.core.config import settings  # Import settings
@@ -26,8 +27,13 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
             # logger.error("Database session not available in CRUDUser.get_by_email")
             raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
 
-        # Now resolved_session is guaranteed to be an AsyncSession.
-        result = await resolved_session.execute(select(self.model).where(self.model.email == email))
+        # Eagerly load roles and their permissions
+        stmt = (
+            select(self.model)
+            .where(self.model.email == email)
+            .options(selectinload(User.roles).selectinload(Role.permissions))
+        )
+        result = await resolved_session.execute(stmt)
         # Apply unique() before calling scalar_one_or_none() to handle joined eager loads
         unique_result = result.unique()
         return unique_result.scalar_one_or_none()
@@ -73,7 +79,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
 
         role_ids = []
         if isinstance(obj_in, IUserCreate):
-            role_ids = obj_in.role_id
+            role_ids = obj_in.role_id if obj_in.role_id is not None else []
             # Create a dict without password and role_id
             obj_in_data = obj_in.model_dump(exclude={"password", "role_id"})
             db_obj = User(**obj_in_data)
@@ -252,6 +258,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         self, *, email: EmailStr, password: str, db_session: AsyncSession | None = None
     ) -> User | None:
         db_session = db_session or super().get_db().session
+        # get_by_email will now eagerly load roles and permissions
         user = await self.get_by_email(email=email, db_session=db_session)
 
         # If user doesn't exist, return None (don't reveal that the user doesn't exist)
@@ -496,6 +503,51 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         resolved_session.add(user)
         await resolved_session.commit()
         await resolved_session.refresh(user)
+        return user
+
+    async def add_roles_by_ids(
+        self,
+        *,
+        user_id: UUID,
+        role_ids: list[UUID],
+        db_session: AsyncSession | None = None,
+    ) -> User:
+        """Adds multiple roles to a user by their IDs."""
+        resolved_session = db_session or self.db.session
+        user = await self.get(id=user_id, db_session=resolved_session)
+        if not user:
+            raise HTTPException(status_code=404, detail=f"User with id {user_id} not found")
+
+        # Fetch Role objects based on the provided IDs
+        roles_result = await resolved_session.execute(select(Role).where(Role.id.in_(role_ids)))
+        roles_to_add = roles_result.scalars().all()
+
+        if len(roles_to_add) != len(role_ids):
+            found_role_ids = {role.id for role in roles_to_add}
+            missing_role_ids = [rid for rid in role_ids if rid not in found_role_ids]
+            raise HTTPException(
+                status_code=404,
+                detail=f"One or more roles not found for IDs: {missing_role_ids}",
+            )
+
+        # Add new roles, avoiding duplicates if user.roles already contains some
+        # This assumes user.roles is already loaded or can be loaded here.
+        # For simplicity, let's assume we are adding and SQLModel handles duplicates gracefully
+        # or the relationship is a set.
+        # A more robust way would be to check existing roles:
+        # current_role_ids = {role.id for role in user.roles}
+        # for role in roles_to_add:
+        #     if role.id not in current_role_ids:
+        #         user.roles.append(role)
+
+        # Simple append, assuming the ORM handles duplicates or it's not an issue for the setup script
+        for role in roles_to_add:
+            if role not in user.roles:  # Prevent duplicates if roles already loaded
+                user.roles.append(role)
+
+        resolved_session.add(user)
+        await resolved_session.commit()
+        await resolved_session.refresh(user, attribute_names=["roles"])
         return user
 
 

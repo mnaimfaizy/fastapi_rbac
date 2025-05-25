@@ -2,8 +2,9 @@
 from typing import Any, AsyncGenerator
 
 import redis.asyncio as aioredis
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import ModeEnum, settings
 
@@ -31,6 +32,7 @@ else:
 
 SessionLocal = async_sessionmaker(
     bind=engine,
+    class_=AsyncSession,
     autocommit=False,
     autoflush=False,
     expire_on_commit=False,
@@ -58,6 +60,7 @@ else:
 
 SessionLocalCelery = async_sessionmaker(
     bind=engine_celery,
+    class_=AsyncSession,
     autocommit=False,
     autoflush=False,
     expire_on_commit=False,

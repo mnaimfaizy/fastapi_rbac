@@ -20,6 +20,7 @@ class RoleSchemaBase(BaseModel):
 # Properties to receive via API on Creation
 class IRoleCreate(RoleSchemaBase):
     name: str = Field(..., min_length=1)
+    permissions: Optional[List[UUID]] = []  # Add permissions field
 
 
 @optional()

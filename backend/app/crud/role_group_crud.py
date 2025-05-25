@@ -32,6 +32,10 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
         result = await db_session.execute(select(RoleGroup).where(RoleGroup.name == name))
         return result.scalar_one_or_none()
 
+    async def get_by_name(self, *, name: str, db_session: AsyncSession | None = None) -> RoleGroup | None:
+        """Alias for get_group_by_name."""
+        return await self.get_group_by_name(name=name, db_session=db_session)
+
     async def check_role_exists_in_group(
         self, *, group_id: UUID, db_session: AsyncSession | None = None
     ) -> bool:

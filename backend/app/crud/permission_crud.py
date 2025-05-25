@@ -30,6 +30,10 @@ class CRUDPermission(CRUDBase[Permission, IPermissionCreate, IPermissionUpdate])
         result = await db_session.execute(stmt)
         return result.unique().scalar_one_or_none()
 
+    async def get_by_name(self, *, name: str, db_session: AsyncSession | None = None) -> Permission | None:
+        """Alias for get_permission_by_name."""
+        return await self.get_permission_by_name(name=name, db_session=db_session)
+
     async def get_permission_by_id(
         self, *, permission_id: UUID, db_session: AsyncSession | None = None
     ) -> Permission | None:

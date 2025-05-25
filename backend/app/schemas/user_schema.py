@@ -55,27 +55,36 @@ class IUserUpdate(UserBase):
 class IUserRead(UserBase):
     id: UUID
     roles: list[dict[str, Any]]  # Change to accept role objects instead of strings
+    permissions: list[str] | None = []  # Add permissions field
 
     # This usage is standard for Pydantic v2/SQLModel
     model_config = {  # Changed from SQLModel.Config(...) to a dictionary
         "from_attributes": True,
         "json_schema_extra": {
             "example": {
-                "id": "a3a3a3a3-a3a3-a3a3-a3a3-a3a3a3a3a3a3",
-                "first_name": "John",
-                "last_name": "Doe",
-                "email": "john.doe@example.com",
+                "id": "e7954260-7873-4f90-836a-30eda72b89b8",
+                "email": "user@example.com",
                 "is_active": True,
                 "is_superuser": False,
-                "needs_to_change_password": False,
-                "expiry_date": "2025-12-31T23:59:59",
-                "contact_phone": "+1234567890",
-                "last_changed_password_date": "2025-04-27T10:00:00",
-                "number_of_failed_attempts": 0,
-                "is_locked": False,
-                "locked_until": None,
-                "verified": True,
-                "roles": [{"id": "uuid-here", "name": "admin"}, {"id": "uuid-here", "name": "user"}],
+                "first_name": "John",
+                "last_name": "Doe",
+                "roles": [
+                    {
+                        "id": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+                        "name": "user",
+                        "description": "A standard user",
+                        "permissions": [
+                            {
+                                "id": "09876543-2109-8765-4321-fedcba098765",
+                                "name": "read_own_data",
+                                "description": "Can read own data",
+                                "group_id": "g1h2i3j4-k5l6-m7n8-o9p0-q1r2s3t4u5v6",
+                            }
+                        ],
+                        "role_group_id": "r1s2t3u4-v5w6-x7y8-z9a0-b1c2d3e4f5g6",
+                    }
+                ],
+                "permissions": ["read_own_data"],  # Added example for permissions
             }
         },
     }
