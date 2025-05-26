@@ -68,8 +68,13 @@ jobs:
           name: node-modules-${{ matrix.node-version }}
           path: react-frontend # Download to the react-frontend directory
 
+      - name: Fix node_modules permissions
+        run: |
+          chmod +x node_modules/.bin/* || true
+          ls -la node_modules/.bin/
+
       - name: Run linter
-        run: npm run lint
+        run: npx eslint src --ext .ts,.tsx --report-unused-disable-directives --max-warnings 0
 
   format_check:
     name: Format Check
@@ -95,8 +100,13 @@ jobs:
           name: node-modules-${{ matrix.node-version }}
           path: react-frontend # Download to the react-frontend directory
 
+      - name: Fix node_modules permissions
+        run: |
+          chmod +x node_modules/.bin/* || true
+          ls -la node_modules/.bin/
+
       - name: Check formatting
-        run: npm run format -- --check
+        run: npx prettier --write . --check
 
   build:
     name: Build
@@ -121,6 +131,10 @@ jobs:
         with:
           name: node-modules-${{ matrix.node-version }}
           path: react-frontend # Download to the react-frontend directory
+
+      - name: Fix node_modules permissions
+        run: |
+          chmod +x node_modules/.bin/* || true
 
       - name: Build project
         run: npm run build
