@@ -2,7 +2,6 @@ from datetime import datetime
 from uuid import UUID
 
 import pytest
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -18,7 +17,7 @@ async def test_create_audit_log(db: AsyncSession) -> None:
     # Create a user first to use as actor
     user = User(
         email=f"{random_lower_string()}@example.com",
-        hashed_password=random_lower_string(),
+        password=random_lower_string(),
         is_active=True,
     )
     db.add(user)
@@ -57,7 +56,7 @@ async def test_retrieve_audit_logs(db: AsyncSession) -> None:
     # Create a user to use as actor
     user = User(
         email=f"{random_lower_string()}@example.com",
-        hashed_password=random_lower_string(),
+        password=random_lower_string(),
         is_active=True,
     )
     db.add(user)
@@ -79,13 +78,8 @@ async def test_retrieve_audit_logs(db: AsyncSession) -> None:
         logs.append(audit_log)
 
     db.add_all(logs)
-    await db.commit()
-
-    # Retrieve all logs for this actor
-    # stmt = select(AuditLog).where(AuditLog.actor_id == user.id).order_by(asc(AuditLog.timestamp))
-    stmt = text("SELECT * FROM AuditLog WHERE actor_id = :actor_id ORDER BY timestamp ASC").params(
-        actor_id=user.id
-    )
+    await db.commit()  # Retrieve all logs for this actor
+    stmt = select(AuditLog).where(AuditLog.actor_id == user.id)
     result = await db.execute(stmt)
     retrieved_logs = result.scalars().all()
 
@@ -103,7 +97,7 @@ async def test_filter_audit_logs_by_action(db: AsyncSession) -> None:
     # Create a user to use as actor
     user = User(
         email=f"{random_lower_string()}@example.com",
-        hashed_password=random_lower_string(),
+        password=random_lower_string(),
         is_active=True,
     )
     db.add(user)

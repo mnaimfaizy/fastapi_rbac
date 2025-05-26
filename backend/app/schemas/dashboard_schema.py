@@ -45,5 +45,4 @@ class IDashboardResponse(BaseModel):
     data: IDashboardResponseData
     message: str = "Dashboard data retrieved successfully"
 
-    class Config:
-        orm_mode = True
+    model_config = {"from_attributes": True}

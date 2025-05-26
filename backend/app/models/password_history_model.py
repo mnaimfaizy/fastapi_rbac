@@ -23,6 +23,3 @@ class UserPasswordHistory(BaseUUIDModel, UserPasswordHistoryBase, table=True):
     """
 
     __tablename__ = "UserPasswordHistory"  # type: ignore[assignment]
-
-    class Config:
-        arbitrary_types_allowed = True

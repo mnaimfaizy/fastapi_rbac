@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List
 
-from pydantic import EmailStr, validator  # Modified import
+from pydantic import EmailStr, field_validator  # Modified import
 from sqlmodel import Column, Field, Relationship, String
 
 from app.models.base_uuid_model import BaseUUIDModel, SQLModel
@@ -30,7 +30,8 @@ class UserBase(SQLModel):
     verified: bool = False
     verification_code: str | None = None
 
-    @validator("expiry_date", "last_changed_password_date", "locked_until", pre=True)
+    @field_validator("expiry_date", "last_changed_password_date", "locked_until", mode="before")
+    @classmethod
     def convert_null_string_to_none(cls, v: Any) -> Any:
         if isinstance(v, str) and v.upper() == "(NULL)":
             return None

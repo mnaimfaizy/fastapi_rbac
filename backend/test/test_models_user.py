@@ -19,16 +19,15 @@ async def test_create_user(db: AsyncSession) -> None:
     email = random_email()
     password = random_lower_string()
     first_name = random_lower_string()
-    last_name = random_lower_string()
-
-    # Create user object
+    last_name = random_lower_string()  # Create user object
     user = User(
         email=email,
-        hashed_password=password,  # In a real app, this would be hashed
+        password=password,  # In a real app, this would be hashed
         first_name=first_name,
         last_name=last_name,
         is_active=True,
         is_superuser=False,
+        password_version=1,  # Required field with default value
     )
 
     # Add user to database
@@ -50,10 +49,9 @@ async def test_create_user(db: AsyncSession) -> None:
 
 @pytest.mark.asyncio
 async def test_user_with_roles(db: AsyncSession) -> None:
-    """Test assigning roles to a user"""
-    # Create user
+    """Test assigning roles to a user"""  # Create user
     email = random_email()
-    user = User(email=email, hashed_password=random_lower_string(), is_active=True)
+    user = User(email=email, password=random_lower_string(), is_active=True, password_version=1)
     db.add(user)
 
     # Create roles
@@ -88,15 +86,14 @@ async def test_user_with_roles(db: AsyncSession) -> None:
 
 @pytest.mark.asyncio
 async def test_user_unique_email_constraint(db: AsyncSession) -> None:
-    """Test that users must have unique emails"""
-    # Create first user
+    """Test that users must have unique emails"""  # Create first user
     email = random_email()
-    user1 = User(email=email, hashed_password=random_lower_string(), is_active=True)
+    user1 = User(email=email, password=random_lower_string(), is_active=True, password_version=1)
     db.add(user1)
-    await db.commit()
-
-    # Try to create second user with same email
-    user2 = User(email=email, hashed_password=random_lower_string(), is_active=True)  # Same email as user1
+    await db.commit()  # Try to create second user with same email
+    user2 = User(
+        email=email, password=random_lower_string(), is_active=True, password_version=1
+    )  # Same email as user1
     db.add(user2)
 
     # This should raise an exception due to unique constraint on email
@@ -109,15 +106,15 @@ async def test_user_unique_email_constraint(db: AsyncSession) -> None:
 
 @pytest.mark.asyncio
 async def test_user_update(db: AsyncSession) -> None:
-    """Test updating user information"""
-    # Create user
+    """Test updating user information"""  # Create user
     email = random_email()
     user = User(
         email=email,
-        hashed_password=random_lower_string(),
+        password=random_lower_string(),
         first_name="Original",
         last_name="Name",
         is_active=True,
+        password_version=1,
     )
     db.add(user)
     await db.commit()

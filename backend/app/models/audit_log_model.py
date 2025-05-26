@@ -21,6 +21,3 @@ class AuditLog(BaseUUIDModel, AuditLogBase, table=True):
     """Model for storing security audit logs"""
 
     __tablename__ = "AuditLog"  # type: ignore[assignment]
-
-    class Config:
-        arbitrary_types_allowed = True
