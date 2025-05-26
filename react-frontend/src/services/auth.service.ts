@@ -39,7 +39,7 @@ class AuthService {
    */
   async getCurrentUser(): Promise<User> {
     // Specify User return type
-    const response = await api.get<SuccessResponse<User>>('/user'); // Use User type
+    const response = await api.get<SuccessResponse<User>>('/users'); // Use User type
     return response.data.data;
   }
 

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { useState, ReactNode } from 'react';
 import {
   Table,
   TableBody,
@@ -17,181 +18,136 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { MoreHorizontal, ChevronDown } from 'lucide-react';
+import { MoreHorizontal, ChevronDown, ArrowUpDown } from 'lucide-react';
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  status: 'active' | 'inactive' | 'pending';
-  lastActive: string;
+// Define and export DataTableColumn
+export interface DataTableColumn<TData extends Record<string, any>> {
+  accessorKey: keyof TData | (string & {}); // Allow string for dot-notation access, though direct keyof is simpler
+  header: string | (() => ReactNode);
+  cell?: (props: { row: TData; value: any }) => ReactNode;
+  enableSorting?: boolean;
+  enableFiltering?: boolean; // Future use for column-specific filtering
 }
 
-interface DataTableProps {
-  data: User[];
+interface DataTableProps<TData extends Record<string, any>> {
+  data: TData[];
+  columns: DataTableColumn<TData>[];
+  // Add other props like onRowClick, etc. if needed
 }
 
-export function DataTable({ data }: DataTableProps) {
+export function DataTable<TData extends Record<string, any>>({
+  data,
+  columns,
+}: DataTableProps<TData>) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortColumn, setSortColumn] = useState<keyof User | null>(null);
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [sortConfig, setSortConfig] = useState<{
+    key: keyof TData | (string & {});
+    direction: 'asc' | 'desc';
+  } | null>(null);
 
-  // Filter data based on search term
-  const filteredData = data.filter(
-    (user) =>
-      user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.role.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  // Sort data based on column and direction
-  const sortedData = [...filteredData].sort((a, b) => {
-    if (!sortColumn) return 0;
-
-    const aValue = a[sortColumn];
-    const bValue = b[sortColumn];
-
-    if (sortDirection === 'asc') {
-      return aValue < bValue ? -1 : 1;
-    } else {
-      return aValue > bValue ? -1 : 1;
+  const handleSort = (key: keyof TData | (string & {})) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (
+      sortConfig &&
+      sortConfig.key === key &&
+      sortConfig.direction === 'asc'
+    ) {
+      direction = 'desc';
     }
+    setSortConfig({ key, direction });
+  };
+
+  const filteredData = data.filter((item) => {
+    if (!searchTerm) return true;
+    return columns.some((column) => {
+      // Basic filtering: check if stringified value of any column contains search term
+      // This can be made more sophisticated (e.g. per-column filter functions)
+      const value = item[column.accessorKey as keyof TData]; // Adjust if accessorKey can be a deep path
+      return String(value).toLowerCase().includes(searchTerm.toLowerCase());
+    });
   });
 
-  // Handle sort
-  const handleSort = (column: keyof User) => {
-    if (sortColumn === column) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortColumn(column);
-      setSortDirection('asc');
-    }
-  };
+  const sortedData = [...filteredData].sort((a, b) => {
+    if (!sortConfig) return 0;
 
-  // Status badge color
-  const getStatusColor = (status: User['status']) => {
-    switch (status) {
-      case 'active':
-        return 'bg-green-100 text-green-800 hover:bg-green-200';
-      case 'inactive':
-        return 'bg-gray-100 text-gray-800 hover:bg-gray-200';
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200';
-      default:
-        return '';
-    }
-  };
+    const valA = a[sortConfig.key as keyof TData];
+    const valB = b[sortConfig.key as keyof TData];
 
-  // Get initials from name for avatar fallback
-  const getInitials = (name: string) => {
-    return name
-      .split(' ')
-      .map((n) => n[0])
-      .join('')
-      .toUpperCase();
-  };
+    // Basic comparison, can be enhanced for different data types
+    if (valA === null || valA === undefined) return 1;
+    if (valB === null || valB === undefined) return -1;
+
+    if (valA < valB) {
+      return sortConfig.direction === 'asc' ? -1 : 1;
+    }
+    if (valA > valB) {
+      return sortConfig.direction === 'asc' ? 1 : -1;
+    }
+    return 0;
+  });
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <Input
-          placeholder="Search users..."
+          placeholder="Search..."
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={(event) => setSearchTerm(event.target.value)}
           className="max-w-sm"
         />
+        {/* Add other controls like column visibility toggles here if needed */}
       </div>
       <div className="rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[300px]">
-                <Button
-                  variant="ghost"
-                  onClick={() => handleSort('name')}
-                  className="flex items-center gap-1 p-0 hover:bg-transparent"
+              {columns.map((column) => (
+                <TableHead
+                  key={String(column.accessorKey)}
+                  onClick={() =>
+                    column.enableSorting !== false &&
+                    handleSort(column.accessorKey)
+                  }
+                  className={
+                    column.enableSorting !== false ? 'cursor-pointer' : ''
+                  }
                 >
-                  Name
-                  {sortColumn === 'name' && (
-                    <ChevronDown
-                      className={`h-4 w-4 transition-transform ${
-                        sortDirection === 'desc' ? 'rotate-180' : ''
-                      }`}
-                    />
+                  {typeof column.header === 'function'
+                    ? column.header()
+                    : column.header}
+                  {sortConfig && sortConfig.key === column.accessorKey && (
+                    <span className="ml-2">
+                      {sortConfig.direction === 'asc' ? (
+                        <ChevronDown className="inline h-4 w-4" /> // Should be ArrowUp
+                      ) : (
+                        <ArrowUpDown className="inline h-4 w-4" /> // Should be ArrowDown, or use a single icon that flips
+                      )}
+                    </span>
                   )}
-                </Button>
-              </TableHead>
-              <TableHead>
-                <Button
-                  variant="ghost"
-                  onClick={() => handleSort('role')}
-                  className="flex items-center gap-1 p-0 hover:bg-transparent"
-                >
-                  Role
-                  {sortColumn === 'role' && (
-                    <ChevronDown
-                      className={`h-4 w-4 transition-transform ${
-                        sortDirection === 'desc' ? 'rotate-180' : ''
-                      }`}
-                    />
-                  )}
-                </Button>
-              </TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>
-                <Button
-                  variant="ghost"
-                  onClick={() => handleSort('lastActive')}
-                  className="flex items-center gap-1 p-0 hover:bg-transparent"
-                >
-                  Last Active
-                  {sortColumn === 'lastActive' && (
-                    <ChevronDown
-                      className={`h-4 w-4 transition-transform ${
-                        sortDirection === 'desc' ? 'rotate-180' : ''
-                      }`}
-                    />
-                  )}
-                </Button>
-              </TableHead>
+                </TableHead>
+              ))}
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {sortedData.length > 0 ? (
-              sortedData.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-2">
-                      <Avatar className="h-8 w-8">
-                        <AvatarImage
-                          src={`https://avatars.dicebear.com/api/initials/${user.name}.svg`}
-                        />
-                        <AvatarFallback>
-                          {getInitials(user.name)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <div>{user.name}</div>
-                        <div className="text-sm text-muted-foreground">
-                          {user.email}
-                        </div>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>{user.role}</TableCell>
-                  <TableCell>
-                    <Badge
-                      className={getStatusColor(user.status)}
-                      variant="outline"
-                    >
-                      {user.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{user.lastActive}</TableCell>
+              sortedData.map((rowItem, rowIndex) => (
+                <TableRow
+                  key={(rowItem as any).id || rowIndex} // Prefer a unique ID if available
+                >
+                  {columns.map((column) => {
+                    // Basic value access. For nested paths (e.g., 'user.name'), a helper function would be needed.
+                    const value = (rowItem as any)[column.accessorKey];
+                    return (
+                      <TableCell key={String(column.accessorKey)}>
+                        {column.cell
+                          ? column.cell({ row: rowItem, value })
+                          : value !== null && value !== undefined
+                            ? String(value)
+                            : ''}
+                      </TableCell>
+                    );
+                  })}
                   <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -202,10 +158,29 @@ export function DataTable({ data }: DataTableProps) {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            console.log('View details:', (rowItem as any).id)
+                          }
+                        >
+                          View Details
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            console.log('Edit item:', (rowItem as any).id)
+                          }
+                        >
+                          Edit
+                        </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem>Edit</DropdownMenuItem>
-                        <DropdownMenuItem>View details</DropdownMenuItem>
-                        <DropdownMenuItem>Suspend user</DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-red-600"
+                          onClick={() =>
+                            console.log('Delete item:', (rowItem as any).id)
+                          }
+                        >
+                          Delete
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -213,14 +188,18 @@ export function DataTable({ data }: DataTableProps) {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center">
-                  No users found.
+                <TableCell
+                  colSpan={columns.length + 1}
+                  className="h-24 text-center"
+                >
+                  No results found.
                 </TableCell>
               </TableRow>
             )}
           </TableBody>
         </Table>
       </div>
+      {/* Add pagination controls here if needed */}
     </div>
   );
 }

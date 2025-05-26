@@ -129,7 +129,6 @@ const MainLayout = () => {
                 </div>
               )}
             </div>
-            <Button>Download Report</Button>
           </div>
         </header>
 

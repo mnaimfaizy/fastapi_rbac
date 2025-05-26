@@ -22,6 +22,8 @@ export interface ApiError {
   errors?: Array<{ field: string; message: string }>;
 }
 
+const BASE_URL = '/users';
+
 class UserService {
   /**
    * Get paginated list of users
@@ -39,7 +41,7 @@ class UserService {
     }
 
     const response = await api.get<ApiResponse<PaginatedItems<User>>>(
-      `/user/list?${params.toString()}`
+      `${BASE_URL}/list?${params.toString()}`
     );
     return response.data.data;
   }
@@ -48,7 +50,7 @@ class UserService {
    * Get a specific user by ID
    */
   async getUserById(userId: string): Promise<User> {
-    const response = await api.get<ApiResponse<User>>(`/user/${userId}`);
+    const response = await api.get<ApiResponse<User>>(`${BASE_URL}/${userId}`);
     return response.data.data;
   }
 
@@ -62,7 +64,10 @@ class UserService {
       if (!payload.role_id) {
         payload.role_id = []; // Send empty array if not provided, adjust if backend prefers null/omission
       }
-      const response = await api.post<ApiResponse<User>>('/user', payload);
+      const response = await api.post<ApiResponse<User>>(
+        `${BASE_URL}`,
+        payload
+      );
       return response.data.data;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
@@ -89,7 +94,7 @@ class UserService {
       // If role_id is part of the update, ensure it's included
       // If role_id is NOT part of the update payload, it won't be sent (correct for partial updates)
       const response = await api.put<ApiResponse<User>>(
-        `/user/${userId}`,
+        `${BASE_URL}/${userId}`,
         payload
       );
       return response.data.data;
@@ -109,7 +114,7 @@ class UserService {
    */
   async deleteUser(userId: string): Promise<void> {
     try {
-      await api.delete(`/user/${userId}`);
+      await api.delete(`${BASE_URL}/${userId}`);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       const apiError = error.response?.data as ApiError;

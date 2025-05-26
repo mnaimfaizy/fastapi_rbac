@@ -9,23 +9,28 @@ import {
   PaginatedPermissionGroupResponse,
 } from '../models/permission';
 
+const PERMISSION_BASE_URL = '/permissions';
+const PERMISSION_GROUP_BASE_URL = '/permission-groups';
+
 class PermissionService {
   // Permission endpoints
   async getPermissions(page = 1, size = 10) {
     const response = await api.get<PaginatedPermissionResponse>(
-      `/permission?page=${page}&size=${size}`
+      `${PERMISSION_BASE_URL}?page=${page}&size=${size}`
     );
     return response.data;
   }
 
   async getPermissionById(id: string) {
-    const response = await api.get<PermissionResponse>(`/permission/${id}`);
+    const response = await api.get<PermissionResponse>(
+      `${PERMISSION_BASE_URL}/${id}`
+    );
     return response.data;
   }
 
   async createPermission(permission: PermissionCreate) {
     const response = await api.post<PermissionResponse>(
-      '/permission',
+      `${PERMISSION_BASE_URL}`,
       permission
     );
     return response.data;
@@ -33,7 +38,7 @@ class PermissionService {
 
   async deletePermission(id: string) {
     try {
-      await api.delete(`/permission/${id}`);
+      await api.delete(`${PERMISSION_BASE_URL}/${id}`);
       return { success: true };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
@@ -54,21 +59,21 @@ class PermissionService {
   // Permission Group endpoints
   async getPermissionGroups(page = 1, size = 10) {
     const response = await api.get<PaginatedPermissionGroupResponse>(
-      `/permission_group?page=${page}&size=${size}`
+      `${PERMISSION_GROUP_BASE_URL}?page=${page}&size=${size}`
     );
     return response.data;
   }
 
   async getPermissionGroupById(id: string) {
     const response = await api.get<PermissionGroupResponse>(
-      `/permission_group/${id}`
+      `${PERMISSION_GROUP_BASE_URL}/${id}`
     );
     return response.data;
   }
 
   async createPermissionGroup(group: PermissionGroupCreate) {
     const response = await api.post<PermissionGroupResponse>(
-      '/permission_group',
+      `${PERMISSION_GROUP_BASE_URL}`,
       group
     );
     return response.data;
@@ -76,7 +81,7 @@ class PermissionService {
 
   async updatePermissionGroup(id: string, group: PermissionGroupUpdate) {
     const response = await api.put<PermissionGroupResponse>(
-      `/permission_group/${id}`,
+      `${PERMISSION_GROUP_BASE_URL}/${id}`,
       group
     );
     return response.data;
@@ -84,7 +89,7 @@ class PermissionService {
 
   async deletePermissionGroup(id: string) {
     try {
-      await api.delete(`/permission_group/${id}`);
+      await api.delete(`${PERMISSION_GROUP_BASE_URL}/${id}`);
       return { success: true };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {

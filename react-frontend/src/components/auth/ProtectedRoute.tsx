@@ -15,23 +15,21 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requiredPermissions = [],
   children,
 }) => {
-  const { isAuthenticated, user } = useAppSelector(
-    (state: RootState) => state.auth
-  );
+  const { user } = useAppSelector((state: RootState) => state.auth);
 
-  if (!isAuthenticated || !user) {
+  if (!user) {
     return <Navigate to="/login" replace />;
   }
 
   // User's permissions are directly available in user.permissions as a list of strings.
-  const userPermissions: string[] = Array.isArray(user.permissions)
+  const userPermissions: string[] = Array.isArray(user?.permissions)
     ? user.permissions
     : [];
 
   // Check for required roles if specified
   if (requiredRoles.length > 0) {
     const userRoleNames =
-      user.roles?.map((role: Role) => String(role.name).toLowerCase()) || []; // Use any for role temporarily
+      user?.roles?.map((role: Role) => String(role.name).toLowerCase()) || []; // Use any for role temporarily
     const hasRequiredRole = requiredRoles.some((roleName) =>
       userRoleNames.includes(roleName.toLowerCase())
     );

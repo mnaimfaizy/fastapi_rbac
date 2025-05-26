@@ -5,6 +5,7 @@ import permissionReducer from './slices/permissionSlice';
 import permissionGroupReducer from './slices/permissionGroupSlice';
 import roleReducer from './slices/roleSlice';
 import roleGroupReducer from './slices/roleGroupSlice'; // Import the new role group reducer
+import dashboardReducer from './slices/dashboardSlice'; // Import the new dashboard reducer
 
 // Configure the Redux store
 export const store = configureStore({
@@ -15,6 +16,7 @@ export const store = configureStore({
     permissionGroup: permissionGroupReducer,
     role: roleReducer,
     roleGroup: roleGroupReducer, // Add the role group reducer
+    dashboard: dashboardReducer, // Add the dashboard reducer
     // Add other reducers here as needed
   },
   middleware: (getDefaultMiddleware) =>
