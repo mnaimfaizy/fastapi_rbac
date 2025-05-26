@@ -6,11 +6,12 @@ import {
 } from 'react-router-dom';
 import { Provider, useSelector } from 'react-redux';
 import { store, RootState } from './store';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { getStoredRefreshToken } from './lib/tokenStorage';
 import { refreshAccessToken, getCurrentUser } from './store/slices/authSlice';
 import { useAppDispatch } from './store/hooks';
-import { Toaster } from '@/components/ui/sonner';
+import { AppWrapper } from './components/common/AppWrapper';
+import { LoadingScreen } from './components/common/LoadingScreen';
 
 // Layouts
 import MainLayout from './components/layout/MainLayout';
@@ -80,269 +81,290 @@ const InitAuth = () => {
 };
 
 function App() {
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Simulate initial loading
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <Provider store={store}>
-      <Router>
-        <InitAuth />
-        <Routes>
-          {/* Authentication Routes */}
-          <Route element={<AuthLayout />}>
-            <Route
-              path="/login"
-              element={
-                <PublicOnlyRoute>
-                  <LoginPage />
-                </PublicOnlyRoute>
-              }
-            />
-            <Route
-              path="/register"
-              element={
-                <PublicOnlyRoute>
-                  <SignupPage />
-                </PublicOnlyRoute>
-              }
-            />
-            <Route path="/verify-email" element={<VerifyEmailPage />} />
-            <Route
-              path="/resend-verification-email"
-              element={
-                <PublicOnlyRoute>
-                  <ResendVerificationEmailForm />
-                </PublicOnlyRoute>
-              }
-            />
-            <Route
-              path="/registration-success"
-              element={<RegistrationSuccessPage />}
-            />
-            {/* Add routes for password reset if needed */}
-            <Route
-              path="/request-password-reset"
-              element={
-                <PublicOnlyRoute>
-                  <PasswordResetRequestPage />
-                </PublicOnlyRoute>
-              }
-            />
-            <Route
-              path="/reset-password"
-              element={
-                <PublicOnlyRoute>
-                  <PasswordResetPage />
-                </PublicOnlyRoute>
-              }
-            />
-            <Route
-              path="/reset-password-confirm"
-              element={
-                <PublicOnlyRoute>
-                  <PasswordResetConfirmPage />
-                </PublicOnlyRoute>
-              }
-            />
-          </Route>
+      {isLoading ? (
+        <LoadingScreen hideAfterMs={1500} />
+      ) : (
+        <Router>
+          <AppWrapper>
+            <InitAuth />
+            <Routes>
+              {/* Authentication Routes */}
+              <Route element={<AuthLayout />}>
+                <Route
+                  path="/login"
+                  element={
+                    <PublicOnlyRoute>
+                      <LoginPage />
+                    </PublicOnlyRoute>
+                  }
+                />
+                <Route
+                  path="/register"
+                  element={
+                    <PublicOnlyRoute>
+                      <SignupPage />
+                    </PublicOnlyRoute>
+                  }
+                />
+                <Route path="/verify-email" element={<VerifyEmailPage />} />
+                <Route
+                  path="/resend-verification-email"
+                  element={
+                    <PublicOnlyRoute>
+                      <ResendVerificationEmailForm />
+                    </PublicOnlyRoute>
+                  }
+                />
+                <Route
+                  path="/registration-success"
+                  element={<RegistrationSuccessPage />}
+                />
+                {/* Add routes for password reset if needed */}
+                <Route
+                  path="/request-password-reset"
+                  element={
+                    <PublicOnlyRoute>
+                      <PasswordResetRequestPage />
+                    </PublicOnlyRoute>
+                  }
+                />
+                <Route
+                  path="/reset-password"
+                  element={
+                    <PublicOnlyRoute>
+                      <PasswordResetPage />
+                    </PublicOnlyRoute>
+                  }
+                />
+                <Route
+                  path="/reset-password-confirm"
+                  element={
+                    <PublicOnlyRoute>
+                      <PasswordResetConfirmPage />
+                    </PublicOnlyRoute>
+                  }
+                />
+              </Route>
 
-          {/* Protected Application Routes */}
-          <Route
-            path="/" // Parent route for protected area
-            element={
-              <ProtectedRoute>
-                <MainLayout /> {/* MainLayout now renders Outlet */}
-              </ProtectedRoute>
-            }
-          >
-            {/* Child routes rendered inside MainLayout's Outlet */}
-            <Route index element={<Navigate to="/dashboard" replace />} />{' '}
-            {/* Redirect / to /dashboard */}
-            <Route path="dashboard" element={<DashboardPage />}>
-              {/* Nested Dashboard Routes - Rendered inside Dashboard's Outlet */}
-              <Route index element={<DashboardOverview />} />{' '}
-              <Route path="/dashboard/profile" element={<ProfileContent />} />
+              {/* Protected Application Routes */}
               <Route
-                path="/dashboard/change-password"
-                element={<ChangePasswordContent />}
-              />
-              {/* User management routes - updated with new components */}
-              <Route
-                path="/dashboard/users"
+                path="/" // Parent route for protected area
                 element={
-                  <ProtectedRoute requiredPermissions={['users.read']}>
-                    <UsersList />
+                  <ProtectedRoute>
+                    <MainLayout /> {/* MainLayout now renders Outlet */}
                   </ProtectedRoute>
                 }
-              />
-              <Route
-                path="/dashboard/users/new"
-                element={
-                  <ProtectedRoute requiredPermissions={['users.create']}>
-                    <UserEditPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/dashboard/users/:userId"
-                element={
-                  <ProtectedRoute requiredPermissions={['users.read']}>
-                    <UserDetailContent />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/dashboard/users/:userId/edit" // Corrected path
-                element={
-                  <ProtectedRoute requiredPermissions={['users.update']}>
-                    <UserEditPage />
-                  </ProtectedRoute>
-                }
-              />
-              {/* Permission management routes */}
-              <Route
-                path="/dashboard/permissions"
-                element={
-                  <ProtectedRoute requiredPermissions={['permission.read']}>
-                    <PermissionsContent />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/dashboard/permissions/new"
-                element={
-                  <ProtectedRoute requiredPermissions={['permission.create']}>
-                    <PermissionFormContent />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/dashboard/permissions/:id"
-                element={
-                  <ProtectedRoute requiredPermissions={['permission.read']}>
-                    <PermissionDetail />
-                  </ProtectedRoute>
-                }
-              />
-              {/* Permission Group routes */}
-              <Route
-                path="/dashboard/permission-groups"
-                element={
-                  <ProtectedRoute
-                    requiredPermissions={['permission_group.read']}
-                  >
-                    <PermissionGroupsContent />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/dashboard/permission-groups/new"
-                element={
-                  <ProtectedRoute
-                    requiredPermissions={['permission_group.create']}
-                  >
-                    <PermissionGroupFormContent />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/dashboard/permission-groups/edit/:groupId"
-                element={
-                  <ProtectedRoute
-                    requiredPermissions={['permission_group.update']}
-                  >
-                    <PermissionGroupFormContent />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/dashboard/permission-groups/:groupId"
-                element={
-                  <ProtectedRoute
-                    requiredPermissions={['permission_group.read']}
-                  >
-                    <PermissionGroupDetail />
-                  </ProtectedRoute>
-                }
-              />
-              {/* Role management routes */}
-              <Route
-                path="/dashboard/roles"
-                element={
-                  <ProtectedRoute requiredPermissions={['role.read']}>
-                    <RolesContent />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/dashboard/roles/new"
-                element={
-                  <ProtectedRoute requiredPermissions={['role.create']}>
-                    <RoleFormContent />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/dashboard/roles/:roleId"
-                element={
-                  <ProtectedRoute requiredPermissions={['role.read']}>
-                    <RoleDetail />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/dashboard/roles/edit/:roleId"
-                element={
-                  <ProtectedRoute requiredPermissions={['role.update']}>
-                    <RoleFormContent />
-                  </ProtectedRoute>
-                }
-              />
-              {/* Role Groups routes */}
-              <Route
-                path="/dashboard/role-groups"
-                element={
-                  <ProtectedRoute requiredPermissions={['role_group.read']}>
-                    <RoleGroupContent />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/dashboard/role-groups/new"
-                element={
-                  <ProtectedRoute requiredPermissions={['role_group.create']}>
-                    <RoleGroupFormContent />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/dashboard/role-groups/:groupId"
-                element={
-                  <ProtectedRoute requiredPermissions={['role_group.read']}>
-                    <RoleGroupDetail />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/dashboard/role-groups/edit/:groupId"
-                element={
-                  <ProtectedRoute requiredPermissions={['role_group.update']}>
-                    <RoleGroupFormContent />
-                  </ProtectedRoute>
-                }
-              />
-              {/* Add other dashboard-nested routes here */}
-              {/* e.g., <Route path="settings" element={<SettingsPage />} /> */}
-            </Route>
-            {/* Add other top-level protected routes here if needed */}
-          </Route>
+              >
+                {/* Child routes rendered inside MainLayout's Outlet */}
+                <Route index element={<Navigate to="/dashboard" replace />} />
+                {/* Redirect / to /dashboard */}
+                <Route path="dashboard" element={<DashboardPage />}>
+                  {/* Nested Dashboard Routes - Rendered inside Dashboard's Outlet */}
+                  <Route index element={<DashboardOverview />} />
+                  <Route
+                    path="/dashboard/profile"
+                    element={<ProfileContent />}
+                  />
+                  <Route
+                    path="/dashboard/change-password"
+                    element={<ChangePasswordContent />}
+                  />
+                  {/* User management routes - updated with new components */}
+                  <Route
+                    path="/dashboard/users"
+                    element={
+                      <ProtectedRoute requiredPermissions={['users.read']}>
+                        <UsersList />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/users/new"
+                    element={
+                      <ProtectedRoute requiredPermissions={['users.create']}>
+                        <UserEditPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/users/:userId"
+                    element={
+                      <ProtectedRoute requiredPermissions={['users.read']}>
+                        <UserDetailContent />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/users/:userId/edit" // Corrected path
+                    element={
+                      <ProtectedRoute requiredPermissions={['users.update']}>
+                        <UserEditPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  {/* Permission management routes */}
+                  <Route
+                    path="/dashboard/permissions"
+                    element={
+                      <ProtectedRoute requiredPermissions={['permission.read']}>
+                        <PermissionsContent />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/permissions/new"
+                    element={
+                      <ProtectedRoute
+                        requiredPermissions={['permission.create']}
+                      >
+                        <PermissionFormContent />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/permissions/:id"
+                    element={
+                      <ProtectedRoute requiredPermissions={['permission.read']}>
+                        <PermissionDetail />
+                      </ProtectedRoute>
+                    }
+                  />
+                  {/* Permission Group routes */}
+                  <Route
+                    path="/dashboard/permission-groups"
+                    element={
+                      <ProtectedRoute
+                        requiredPermissions={['permission_group.read']}
+                      >
+                        <PermissionGroupsContent />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/permission-groups/new"
+                    element={
+                      <ProtectedRoute
+                        requiredPermissions={['permission_group.create']}
+                      >
+                        <PermissionGroupFormContent />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/permission-groups/edit/:groupId"
+                    element={
+                      <ProtectedRoute
+                        requiredPermissions={['permission_group.update']}
+                      >
+                        <PermissionGroupFormContent />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/permission-groups/:groupId"
+                    element={
+                      <ProtectedRoute
+                        requiredPermissions={['permission_group.read']}
+                      >
+                        <PermissionGroupDetail />
+                      </ProtectedRoute>
+                    }
+                  />
+                  {/* Role management routes */}
+                  <Route
+                    path="/dashboard/roles"
+                    element={
+                      <ProtectedRoute requiredPermissions={['role.read']}>
+                        <RolesContent />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/roles/new"
+                    element={
+                      <ProtectedRoute requiredPermissions={['role.create']}>
+                        <RoleFormContent />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/roles/:roleId"
+                    element={
+                      <ProtectedRoute requiredPermissions={['role.read']}>
+                        <RoleDetail />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/roles/edit/:roleId"
+                    element={
+                      <ProtectedRoute requiredPermissions={['role.update']}>
+                        <RoleFormContent />
+                      </ProtectedRoute>
+                    }
+                  />
+                  {/* Role Groups routes */}
+                  <Route
+                    path="/dashboard/role-groups"
+                    element={
+                      <ProtectedRoute requiredPermissions={['role_group.read']}>
+                        <RoleGroupContent />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/role-groups/new"
+                    element={
+                      <ProtectedRoute
+                        requiredPermissions={['role_group.create']}
+                      >
+                        <RoleGroupFormContent />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/role-groups/:groupId"
+                    element={
+                      <ProtectedRoute requiredPermissions={['role_group.read']}>
+                        <RoleGroupDetail />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/role-groups/edit/:groupId"
+                    element={
+                      <ProtectedRoute
+                        requiredPermissions={['role_group.update']}
+                      >
+                        <RoleGroupFormContent />
+                      </ProtectedRoute>
+                    }
+                  />
+                </Route>
+              </Route>
 
-          {/* Unauthorized Page Route */}
-          <Route path="/unauthorized" element={<UnauthorizedPage />} />
+              {/* Unauthorized Page Route */}
+              <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
-          {/* Not Found Route */}
-          <Route path="*" element={<NotFoundPage />} />
-        </Routes>
-        <Toaster position="top-right" expand={false} richColors closeButton />
-      </Router>{' '}
-      {/* Ensure Router is closed correctly */}
+              {/* Not Found Route */}
+              <Route path="*" element={<NotFoundPage />} />
+            </Routes>
+          </AppWrapper>
+        </Router>
+      )}
     </Provider>
   );
 }

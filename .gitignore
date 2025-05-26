@@ -5,7 +5,6 @@ env
 .webpack_cache/
 __pycache__/
 assets/node_modules/
-public/
 .mypy_cache
 .database
 .coverage

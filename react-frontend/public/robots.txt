@@ -1,0 +1,16 @@
+# Robots.txt for FastAPI RBAC Application
+User-agent: *
+
+# Allow crawling of public routes
+Allow: /
+Allow: /login
+Allow: /signup
+Allow: /reset-password
+
+# Disallow crawling of protected routes
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /api/
+
+# Sitemap location
+Sitemap: https://yourdomain.com/sitemap.xml
