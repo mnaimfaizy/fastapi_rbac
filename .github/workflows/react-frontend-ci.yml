@@ -43,7 +43,6 @@ jobs:
           name: node-modules-${{ matrix.node-version }}
           path: react-frontend/node_modules # Path relative to workspace root
           retention-days: 1
-
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -66,16 +65,16 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: node-modules-${{ matrix.node-version }}
-          path: react-frontend # Download to the react-frontend directory
+          path: react-frontend/node_modules # Download directly to node_modules directory
 
       - name: Fix node_modules permissions
         run: |
+          ls -la node_modules/ || echo "node_modules not found"
           chmod +x node_modules/.bin/* || true
-          ls -la node_modules/.bin/
+          ls -la node_modules/.bin/ || echo ".bin directory not found"
 
       - name: Run linter
         run: npx eslint src --ext .ts,.tsx --report-unused-disable-directives --max-warnings 0
-
   format_check:
     name: Format Check
     runs-on: ubuntu-latest
@@ -98,16 +97,16 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: node-modules-${{ matrix.node-version }}
-          path: react-frontend # Download to the react-frontend directory
+          path: react-frontend/node_modules # Download directly to node_modules directory
 
       - name: Fix node_modules permissions
         run: |
+          ls -la node_modules/ || echo "node_modules not found"
           chmod +x node_modules/.bin/* || true
-          ls -la node_modules/.bin/
+          ls -la node_modules/.bin/ || echo ".bin directory not found"
 
       - name: Check formatting
         run: npx prettier --write . --check
-
   build:
     name: Build
     runs-on: ubuntu-latest
@@ -130,10 +129,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: node-modules-${{ matrix.node-version }}
-          path: react-frontend # Download to the react-frontend directory
+          path: react-frontend/node_modules # Download directly to node_modules directory
 
       - name: Fix node_modules permissions
         run: |
+          ls -la node_modules/ || echo "node_modules not found"
           chmod +x node_modules/.bin/* || true
 
       - name: Build project
