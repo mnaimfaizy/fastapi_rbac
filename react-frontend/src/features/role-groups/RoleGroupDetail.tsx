@@ -2,8 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '../../store';
-import { Role } from '@/models/role';
 import { RoleGroupWithRoles } from '@/models/roleGroup';
+import { Role } from '@/models/role';
+import { usePermissions } from '@/hooks/usePermissions'; // Added import
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'; // Added import
+import { AlertCircle } from 'lucide-react'; // Added import
+
 import {
   fetchRoleGroupById,
   deleteRoleGroup,
@@ -89,6 +93,7 @@ interface NestedRoleGroupProps {
   onRemoveRole: (roleId: string) => void;
   onViewGroup?: (groupId: string) => void; // Optional handler to view a group
   expandAllState: boolean; // Add this prop to sync with parent component
+  canRemoveRoles: boolean; // Added permission prop
 }
 
 const NestedRoleGroup: React.FC<NestedRoleGroupProps> = ({
@@ -97,6 +102,7 @@ const NestedRoleGroup: React.FC<NestedRoleGroupProps> = ({
   onRemoveRole,
   onViewGroup,
   expandAllState,
+  canRemoveRoles, // Destructure prop
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
 
@@ -257,19 +263,24 @@ const NestedRoleGroup: React.FC<NestedRoleGroupProps> = ({
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => onRemoveRole(role.id)}
-                                  className="text-destructive hover:text-destructive"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                  <span className="sr-only">Remove role</span>
-                                </Button>
+                                {/* Conditionally render based on canRemoveRoles */}
+                                {canRemoveRoles && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => onRemoveRole(role.id)}
+                                    className="text-destructive hover:text-destructive"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                    <span className="sr-only">Remove role</span>
+                                  </Button>
+                                )}
                               </TooltipTrigger>
-                              <TooltipContent side="left">
-                                Remove role from group
-                              </TooltipContent>
+                              {canRemoveRoles && (
+                                <TooltipContent side="left">
+                                  Remove role from group
+                                </TooltipContent>
+                              )}
                             </Tooltip>
                           </TooltipProvider>
                         </TableCell>
@@ -300,6 +311,7 @@ const NestedRoleGroup: React.FC<NestedRoleGroupProps> = ({
                   onRemoveRole={onRemoveRole}
                   onViewGroup={onViewGroup}
                   expandAllState={expandAllState}
+                  canRemoveRoles={canRemoveRoles} // Pass down
                 />
               ))}
             </div>
@@ -315,6 +327,14 @@ const RoleGroupDetail: React.FC = () => {
   const { groupId } = useParams<{ groupId: string }>();
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
+  const { hasPermission } = usePermissions(); // Initialize hook
+
+  // Define permissions
+  const canReadRoleGroup = hasPermission('role_group.read');
+  const canUpdateRoleGroup = hasPermission('role_group.update');
+  const canDeleteRoleGroup = hasPermission('role_group.delete');
+  const canManageRolesInGroup = hasPermission('role_group.manage_roles'); // e.g., add/remove roles
+  const canCreateChildGroup = hasPermission('role_group.create'); // For adding a new child group
 
   const currentRoleGroupWithUsers = useSelector(
     selectCurrentRoleGroupWithUsers
@@ -331,12 +351,13 @@ const RoleGroupDetail: React.FC = () => {
   const [expandAll, setExpandAll] = useState(true);
 
   useEffect(() => {
-    if (groupId) {
+    if (groupId && canReadRoleGroup) {
+      // Check read permission
       dispatch(fetchRoleGroupById(groupId));
       dispatch(fetchRoles({ page: 1, size: 100 }));
       dispatch(fetchRoleGroups({ page: 1, size: 100 })); // Fetch all groups for parent selection
     }
-  }, [dispatch, groupId]);
+  }, [dispatch, groupId, canReadRoleGroup]);
 
   useEffect(() => {
     if (roles.length > 0 && currentRoleGroupWithUsers) {
@@ -349,6 +370,10 @@ const RoleGroupDetail: React.FC = () => {
   }, [roles, currentRoleGroupWithUsers]);
 
   const handleDelete = async () => {
+    if (!canDeleteRoleGroup) {
+      toast.error('You do not have permission to delete this role group.');
+      return;
+    }
     if (groupId) {
       try {
         await dispatch(deleteRoleGroup(groupId)).unwrap();
@@ -378,6 +403,12 @@ const RoleGroupDetail: React.FC = () => {
   };
 
   const handleRemoveRole = async (roleId: string) => {
+    if (!canManageRolesInGroup) {
+      toast.error(
+        'You do not have permission to remove roles from this group.'
+      );
+      return;
+    }
     if (groupId) {
       try {
         await dispatch(
@@ -397,6 +428,10 @@ const RoleGroupDetail: React.FC = () => {
   };
 
   const handleAddRoles = async () => {
+    if (!canManageRolesInGroup) {
+      toast.error('You do not have permission to add roles to this group.');
+      return;
+    }
     if (groupId && selectedRoles.length > 0) {
       try {
         await dispatch(
@@ -414,6 +449,11 @@ const RoleGroupDetail: React.FC = () => {
   };
 
   const handleMoveToParent = async (newParentId: string | null) => {
+    if (!canUpdateRoleGroup) {
+      // Moving can be considered an update
+      toast.error('You do not have permission to move this role group.');
+      return;
+    }
     if (groupId) {
       try {
         await dispatch(
@@ -448,6 +488,21 @@ const RoleGroupDetail: React.FC = () => {
         (child) => child.id === group.id
       )
   );
+
+  // Global read permission check for the page
+  if (!canReadRoleGroup) {
+    return (
+      <div className="p-4 text-center">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Access Denied</AlertTitle>
+          <AlertDescription>
+            You do not have permission to view this role group.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   if (loading && !currentRoleGroupWithUsers) {
     return (
@@ -521,74 +576,89 @@ const RoleGroupDetail: React.FC = () => {
           </p>
         </div>
         <div className="flex space-x-2">
-          <Dialog open={isMoveDialogOpen} onOpenChange={setIsMoveDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <MoveVertical className="mr-2 h-4 w-4" />
-                Move
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Move Role Group</DialogTitle>
-                <DialogDescription>
-                  Select a new parent for this role group
-                </DialogDescription>
-              </DialogHeader>
-              <div className="py-4">
-                <Select
-                  onValueChange={(value) => handleMoveToParent(value || null)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a parent group" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="root">Root Level</SelectItem>
-                    {availableParents.map((parent) => (
-                      <SelectItem key={parent.id} value={parent.id}>
-                        {parent.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </DialogContent>
-          </Dialog>
+          {canUpdateRoleGroup && ( // Permission for Move button
+            <Dialog open={isMoveDialogOpen} onOpenChange={setIsMoveDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <MoveVertical className="mr-2 h-4 w-4" />
+                  Move
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Move Role Group</DialogTitle>
+                  <DialogDescription>
+                    Select a new parent for this role group
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="py-4">
+                  <Select
+                    onValueChange={(value) => handleMoveToParent(value || null)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a parent group" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="root">Root Level</SelectItem>
+                      {availableParents.map((parent) => (
+                        <SelectItem key={parent.id} value={parent.id}>
+                          {parent.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </DialogContent>
+            </Dialog>
+          )}
 
-          <Button
-            variant="outline"
-            onClick={() => navigate(`/dashboard/role-groups/edit/${groupId}`)}
-          >
-            <Edit className="mr-2 h-4 w-4" />
-            Edit
-          </Button>
+          {canUpdateRoleGroup && ( // Permission for Edit button
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (!canUpdateRoleGroup) {
+                  toast.error(
+                    'You do not have permission to edit this role group.'
+                  );
+                  return;
+                }
+                navigate(`/dashboard/role-groups/edit/${groupId}`);
+              }}
+            >
+              <Edit className="mr-2 h-4 w-4" />
+              Edit
+            </Button>
+          )}
 
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive">
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This action cannot be undone. This will permanently delete
-                  this role group and all its child groups from our servers.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleDelete}
-                  className="bg-destructive text-destructive-foreground"
-                >
+          {canDeleteRoleGroup && ( // Permission for Delete button
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive">
+                  <Trash2 className="mr-2 h-4 w-4" />
                   Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. This will permanently delete
+                    this role group and all its child groups from our servers.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDelete}
+                    className="bg-destructive text-destructive-foreground"
+                    disabled={!canDeleteRoleGroup} // Also disable action if no permission
+                  >
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </div>
       </div>
 
@@ -605,19 +675,26 @@ const RoleGroupDetail: React.FC = () => {
                   Groups that inherit from this group
                 </CardDescription>
               </div>
-
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() =>
-                  navigate('/dashboard/role-groups/new', {
-                    state: { defaultParentId: groupId },
-                  })
-                }
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Add Child Group
-              </Button>
+              {canCreateChildGroup && ( // Permission for Add Child Group button
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    if (!canCreateChildGroup) {
+                      toast.error(
+                        'You do not have permission to create child groups.'
+                      );
+                      return;
+                    }
+                    navigate('/dashboard/role-groups/new', {
+                      state: { defaultParentId: groupId },
+                    });
+                  }}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Child Group
+                </Button>
+              )}
             </CardHeader>
             <CardContent>
               <Table>
@@ -690,69 +767,75 @@ const RoleGroupDetail: React.FC = () => {
               )}
             </Button>
 
-            <Dialog open={isRoleDialogOpen} onOpenChange={setIsRoleDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Roles
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Add Roles to Group</DialogTitle>
-                  <DialogDescription>
-                    Select roles to add to this role group.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="py-4 max-h-80 overflow-auto">
-                  {availableRoles.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-4">
-                      No available roles to add
-                    </p>
-                  ) : (
-                    <div className="space-y-4">
-                      {availableRoles.map((role) => (
-                        <div
-                          key={role.id}
-                          className="flex items-center space-x-2"
-                        >
-                          <Checkbox
-                            id={role.id}
-                            checked={selectedRoles.includes(role.id)}
-                            onCheckedChange={() => toggleRoleSelection(role.id)}
-                          />
-                          <label
-                            htmlFor={role.id}
-                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            {canManageRolesInGroup && ( // Permission for Add Roles button
+              <Dialog
+                open={isRoleDialogOpen}
+                onOpenChange={setIsRoleDialogOpen}
+              >
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Roles
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Add Roles to Group</DialogTitle>
+                    <DialogDescription>
+                      Select roles to add to this role group.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="py-4 max-h-80 overflow-auto">
+                    {availableRoles.length === 0 ? (
+                      <p className="text-center text-muted-foreground py-4">
+                        No available roles to add
+                      </p>
+                    ) : (
+                      <div className="space-y-4">
+                        {availableRoles.map((role) => (
+                          <div
+                            key={role.id}
+                            className="flex items-center justify-between p-2 border rounded-md hover:bg-accent"
                           >
-                            {role.name}
-                            {role.description && (
-                              <p className="text-xs text-muted-foreground mt-1">
-                                {role.description}
-                              </p>
-                            )}
-                          </label>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsRoleDialogOpen(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleAddRoles}
-                    disabled={selectedRoles.length === 0}
-                  >
-                    Add Selected Roles
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                            <div>
+                              <p className="font-medium">{role.name}</p>
+                              {role.description && (
+                                <p className="text-sm text-muted-foreground">
+                                  {role.description}
+                                </p>
+                              )}
+                            </div>
+                            <Checkbox
+                              id={`role-${role.id}`}
+                              checked={selectedRoles.includes(role.id)}
+                              onCheckedChange={() =>
+                                toggleRoleSelection(role.id)
+                              }
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsRoleDialogOpen(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleAddRoles}
+                      disabled={
+                        selectedRoles.length === 0 || !canManageRolesInGroup
+                      }
+                    >
+                      Add Selected Roles
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            )}
           </div>
         </CardHeader>
         <CardContent>
@@ -761,6 +844,7 @@ const RoleGroupDetail: React.FC = () => {
             onRemoveRole={handleRemoveRole}
             onViewGroup={handleViewGroup}
             expandAllState={expandAll}
+            canRemoveRoles={canManageRolesInGroup} // Pass permission to NestedRoleGroup
           />
         </CardContent>
       </Card>

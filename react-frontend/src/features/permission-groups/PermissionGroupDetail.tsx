@@ -6,6 +6,7 @@ import {
   deletePermissionGroup,
   fetchPermissionGroups,
 } from '../../store/slices/permissionGroupSlice';
+import { usePermissions } from '@/hooks/usePermissions'; // Added import
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -263,6 +264,11 @@ export default function PermissionGroupDetail() {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const [expandAll, setExpandAll] = useState(true);
+  const { hasPermission } = usePermissions(); // Added hook
+
+  const canEditGroup = hasPermission('permission_group.update');
+  const canDeleteGroup = hasPermission('permission_group.delete');
+  const canCreateGroup = hasPermission('permission_group.create');
 
   const { currentPermissionGroup, permissionGroups, isLoading } =
     useAppSelector((state: RootState) => state.permissionGroup);
@@ -276,23 +282,26 @@ export default function PermissionGroupDetail() {
     : null;
 
   useEffect(() => {
-    console.log('ID: ', groupId);
-  }, [groupId]); // Debugging line to check the value of id
-
-  useEffect(() => {
     if (groupId) {
       dispatch(fetchPermissionGroupById(groupId));
-      // Fetch all permission groups to build the complete tree
       dispatch(fetchPermissionGroups({ page: 1, pageSize: 100 }));
     }
   }, [dispatch, groupId]);
 
   const handleEdit = () => {
+    if (!canEditGroup) {
+      toast.error("You don't have permission to edit this group.");
+      return;
+    }
     navigate(`/dashboard/permission-groups/edit/${groupId}`);
   };
 
   const handleDelete = async () => {
     if (!groupId) return;
+    if (!canDeleteGroup) {
+      toast.error("You don't have permission to delete this group.");
+      return;
+    }
 
     try {
       await dispatch(deletePermissionGroup(groupId)).unwrap();
@@ -382,22 +391,26 @@ export default function PermissionGroupDetail() {
           </p>
         </div>
         <div className="flex space-x-2">
-          <Button
-            variant="outline"
-            onClick={handleEdit}
-            className="flex items-center"
-          >
-            <Pencil className="mr-2 h-4 w-4" />
-            Edit
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={handleDelete}
-            className="flex items-center"
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete
-          </Button>
+          {canEditGroup && (
+            <Button
+              variant="outline"
+              onClick={handleEdit}
+              className="flex items-center"
+            >
+              <Pencil className="mr-2 h-4 w-4" />
+              Edit
+            </Button>
+          )}
+          {canDeleteGroup && (
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              className="flex items-center"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </Button>
+          )}
         </div>
       </div>
 
@@ -442,19 +455,21 @@ export default function PermissionGroupDetail() {
       </Card>
 
       {/* Add button to create a new child permission group */}
-      <div className="flex justify-start">
-        <Button
-          onClick={() =>
-            navigate('/dashboard/permission-groups/new', {
-              state: { defaultParentId: groupId },
-            })
-          }
-          className="flex items-center"
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Add Child Permission Group
-        </Button>
-      </div>
+      {canCreateGroup && (
+        <div className="flex justify-start">
+          <Button
+            onClick={() =>
+              navigate('/dashboard/permission-groups/new', {
+                state: { defaultParentId: groupId },
+              })
+            }
+            className="flex items-center"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Child Permission Group
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

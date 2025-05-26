@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '../../store';
 import { fetchUserById, deleteUser } from '../../store/slices/userSlice';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,6 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 
 const UserDetailContent = () => {
+  const { hasPermission } = usePermissions();
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
@@ -92,18 +94,22 @@ const UserDetailContent = () => {
           >
             Back to List
           </Link>
-          <Link
-            to={`/dashboard/users/${userId}/edit`}
-            className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700"
-          >
-            Edit User
-          </Link>
-          <button
-            onClick={handleDeleteClick}
-            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-          >
-            Delete User
-          </button>
+          {hasPermission('users.update') && (
+            <Link
+              to={`/dashboard/users/${userId}/edit`}
+              className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700"
+            >
+              Edit User
+            </Link>
+          )}
+          {hasPermission('users.delete') && (
+            <button
+              onClick={handleDeleteClick}
+              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+            >
+              Delete User
+            </button>
+          )}
         </div>
       </div>
 

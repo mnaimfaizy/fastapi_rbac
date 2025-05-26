@@ -56,6 +56,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface PermissionGroupRowProps {
   group: PermissionGroup;
@@ -76,8 +77,12 @@ const PermissionGroupRow: React.FC<PermissionGroupRowProps> = ({
   onEdit,
   onView,
 }: PermissionGroupRowProps) => {
-  // State for expand/collapse functionality
   const [isExpanded, setIsExpanded] = useState(true);
+  const { hasPermission } = usePermissions();
+
+  const canEditGroup = hasPermission('permission_group.update');
+  const canViewGroup = hasPermission('permission_group.read');
+  const canDeleteGroup = hasPermission('permission_group.delete');
 
   // Sync with expandAllState from parent when it changes
   useEffect(() => {
@@ -139,12 +144,16 @@ const PermissionGroupRow: React.FC<PermissionGroupRowProps> = ({
                 {level > 0 && (
                   <div className="absolute left-[-1rem] top-1/2 w-[0.75rem] h-px bg-border"></div>
                 )}
-                <button
-                  onClick={() => onView(group.id)}
-                  className="font-medium hover:underline focus:outline-none focus:text-primary"
-                >
-                  {group.name}
-                </button>
+                {canViewGroup ? (
+                  <button
+                    onClick={() => onView(group.id)}
+                    className="font-medium hover:underline focus:outline-none focus:text-primary"
+                  >
+                    {group.name}
+                  </button>
+                ) : (
+                  <span className="font-medium">{group.name}</span>
+                )}
               </div>
             </div>
 
@@ -195,7 +204,6 @@ const PermissionGroupRow: React.FC<PermissionGroupRowProps> = ({
           </div>
         </TableCell>
 
-        {/* Show parent group name */}
         <TableCell>
           {group.permission_group_id
             ? allGroups.find((g) => g.id === group.permission_group_id)?.name ||
@@ -216,27 +224,32 @@ const PermissionGroupRow: React.FC<PermissionGroupRowProps> = ({
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => onEdit(group.id)}>
-                <Pencil className="mr-2 h-4 w-4" /> {/* Added icon */}
-                <span>Edit</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onView(group.id)}>
-                <Eye className="mr-2 h-4 w-4" /> {/* Added icon */}
-                <span>View details</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => onDelete(group.id)}
-                className="text-red-600 focus:text-red-600 focus:bg-red-100" // Added danger styling
-              >
-                <Trash2 className="mr-2 h-4 w-4" /> {/* Added icon */}
-                <span>Delete</span>
-              </DropdownMenuItem>
+              {canEditGroup && (
+                <DropdownMenuItem onClick={() => onEdit(group.id)}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  <span>Edit</span>
+                </DropdownMenuItem>
+              )}
+              {canViewGroup && (
+                <DropdownMenuItem onClick={() => onView(group.id)}>
+                  <Eye className="mr-2 h-4 w-4" />
+                  <span>View details</span>
+                </DropdownMenuItem>
+              )}
+              {canDeleteGroup && (
+                <DropdownMenuItem
+                  onClick={() => onDelete(group.id)}
+                  className="text-red-600 focus:text-red-600 focus:bg-red-100"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  <span>Delete</span>
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </TableCell>
       </TableRow>
 
-      {/* Only render children if expanded */}
       {isExpanded &&
         childGroups.map((child) => (
           <PermissionGroupRow
@@ -259,6 +272,7 @@ export default function PermissionGroupsDataTable() {
   const navigate = useNavigate();
   const { permissionGroups, isLoading, totalItems, page, pageSize } =
     useAppSelector((state: RootState) => state.permissionGroup);
+  // const { hasPermission } = usePermissions(); // Kept for future use if needed e.g. for an "Add" button
 
   const [searchTerm, setSearchTerm] = useState('');
   const [expandAll, setExpandAll] = useState(true);
@@ -269,17 +283,12 @@ export default function PermissionGroupsDataTable() {
     column: null,
     direction: 'asc',
   });
-  // Add state for delete confirmation dialog
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deleteGroupId, setDeleteGroupId] = useState<string | null>(null);
 
   useEffect(() => {
     dispatch(fetchPermissionGroups({ page, pageSize }));
   }, [dispatch, page, pageSize]);
-
-  useEffect(() => {
-    console.log('Permission Groups:', permissionGroups);
-  }, [permissionGroups]);
 
   const handleSort = (column: string) => {
     setSort((prev) => ({
@@ -295,7 +304,7 @@ export default function PermissionGroupsDataTable() {
 
   const handlePageSizeChange = (newSize: number) => {
     dispatch(setPageSize(newSize));
-    dispatch(setPage(1)); // Reset to first page when changing page size
+    dispatch(setPage(1));
   };
 
   const handleEdit = (id: string) => {
@@ -319,7 +328,6 @@ export default function PermissionGroupsDataTable() {
       dispatch(fetchPermissionGroups({ page, pageSize }));
       toast.success('Permission group deleted successfully');
     } catch (error: unknown) {
-      // The error message is now properly propagated from the service through the Redux slice
       let errorMessage = 'An unknown error occurred';
       if (error instanceof Error) {
         errorMessage = error.message;
@@ -335,7 +343,6 @@ export default function PermissionGroupsDataTable() {
     }
   };
 
-  // Filter groups based on search term (including children)
   const filterGroupsRecursively = (
     groups: PermissionGroup[]
   ): PermissionGroup[] => {
@@ -355,12 +362,10 @@ export default function PermissionGroupsDataTable() {
       }));
   };
 
-  // Filter groups based on search term
   const filteredGroups = searchTerm
     ? filterGroupsRecursively(permissionGroups)
     : permissionGroups;
 
-  // Sort groups
   const sortedGroups = [...filteredGroups].sort((a, b) => {
     if (!sort.column) return 0;
 
@@ -386,7 +391,6 @@ export default function PermissionGroupsDataTable() {
         : 1;
   });
 
-  // Calculate pagination values
   const totalPages = Math.ceil(totalItems / pageSize);
   const startItem = (page - 1) * pageSize + 1;
   const endItem = Math.min(page * pageSize, totalItems);
@@ -456,7 +460,6 @@ export default function PermissionGroupsDataTable() {
                 </TableCell>
               </TableRow>
             ) : sortedGroups.length > 0 ? (
-              // Only show top-level groups (those without parents) initially
               sortedGroups
                 .filter((group) => !group.permission_group_id)
                 .map((group) => (

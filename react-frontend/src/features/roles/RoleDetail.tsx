@@ -53,11 +53,18 @@ import { formatDate } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Permission } from '@/models/permission';
 import { Input } from '@/components/ui/input';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const RoleDetail: React.FC = () => {
   const { roleId } = useParams<{ roleId: string }>();
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
+  const { hasPermission } = usePermissions();
+
+  // Permission checks
+  const canReadRoles = hasPermission('role.read');
+  const canUpdateRoles = hasPermission('role.update');
+  const canDeleteRoles = hasPermission('role.delete');
 
   const { currentRole, loading, error } = useSelector(
     (state: RootState) => state.role
@@ -71,12 +78,19 @@ const RoleDetail: React.FC = () => {
     []
   );
 
+  // Check role read permission and redirect if not allowed
   useEffect(() => {
+    if (!canReadRoles) {
+      toast.error('You do not have permission to view role details');
+      navigate('/dashboard');
+      return;
+    }
+
     if (roleId) {
       dispatch(fetchRoleById(roleId));
       dispatch(fetchPermissions({ page: 1, pageSize: 100 })); // Get all permissions (up to 100)
     }
-  }, [dispatch, roleId]);
+  }, [dispatch, roleId, canReadRoles, navigate]);
 
   // Filter permissions when search term changes or permissions/currentRole update
   useEffect(() => {
@@ -102,16 +116,19 @@ const RoleDetail: React.FC = () => {
   }, [permissions, currentRole, searchTerm]);
 
   const handleDelete = async () => {
+    if (!canDeleteRoles) {
+      toast.error('You do not have permission to delete roles');
+      return;
+    }
+
     if (roleId) {
       try {
         await dispatch(deleteRole(roleId)).unwrap();
         toast.success('Role deleted successfully');
         navigate('/dashboard/roles');
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (error: any) {
+      } catch (error: unknown) {
         const errorMessage =
-          error.response?.data?.detail ||
-          (error instanceof Error ? error.message : 'Failed to delete role');
+          error instanceof Error ? error.message : 'Failed to delete role';
 
         toast.error(errorMessage, {
           duration: 5000,
@@ -121,6 +138,11 @@ const RoleDetail: React.FC = () => {
   };
 
   const handleRemovePermission = async (permissionId: string) => {
+    if (!canUpdateRoles) {
+      toast.error('You do not have permission to modify role permissions');
+      return;
+    }
+
     if (roleId) {
       try {
         await dispatch(
@@ -144,17 +166,13 @@ const RoleDetail: React.FC = () => {
   };
 
   const handleAddPermissions = async () => {
+    if (!canUpdateRoles) {
+      toast.error('You do not have permission to modify role permissions');
+      return;
+    }
+
     if (roleId && selectedPermissions.length > 0) {
       try {
-        // Debug logs to verify what's being sent
-        console.log('Selected permissions to assign:', selectedPermissions);
-        console.log('Role ID:', roleId);
-
-        if (selectedPermissions.length === 0) {
-          toast.error('No valid permissions selected');
-          return;
-        }
-
         // Dispatch the action with the valid permission IDs
         await dispatch(
           assignPermissionsToRole({
@@ -235,53 +253,55 @@ const RoleDetail: React.FC = () => {
                 Created by: {currentRole.created_by.email}
               </span>
             )}
-            {currentRole.role_group_id && (
-              <span className="block">
-                <Link
-                  to={`/dashboard/role-groups/${currentRole.role_group_id}`}
-                  className="hover:underline focus:outline-none focus:text-primary"
-                >
-                  Role Group: {currentRole.role_group_id}
-                </Link>
-              </span>
-            )}
           </p>
         </div>
-        <div className="flex space-x-2">
-          <Button
-            variant="outline"
-            onClick={() => navigate(`/dashboard/roles/edit/${roleId}`)}
-          >
-            <Edit className="mr-2 h-4 w-4" />
-            Edit
-          </Button>
 
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive">
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This action cannot be undone. This will permanently delete
-                  this role from the system.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleDelete}
-                  className="bg-destructive text-destructive-foreground"
+        {/* Action buttons */}
+        <div className="flex items-center space-x-2">
+          {canUpdateRoles && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-2"
+              onClick={() => navigate(`/dashboard/roles/edit/${roleId}`)}
+            >
+              <Edit className="h-4 w-4" />
+              Edit Role
+            </Button>
+          )}
+
+          {canDeleteRoles && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="flex items-center gap-2"
                 >
-                  Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+                  <Trash2 className="h-4 w-4" />
+                  Delete Role
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Role</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. This will permanently delete
+                    this role from the system.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDelete}
+                    className="bg-destructive text-destructive-foreground"
+                  >
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </div>
       </div>
 
@@ -294,96 +314,102 @@ const RoleDetail: React.FC = () => {
             <CardTitle>Assigned Permissions</CardTitle>
             <CardDescription>Permissions granted to this role</CardDescription>
           </div>
-          <Dialog
-            open={isPermissionDialogOpen}
-            onOpenChange={setIsPermissionDialogOpen}
-          >
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Permissions
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Assign Permissions to Role</DialogTitle>
-                <DialogDescription>
-                  Select permissions to assign to this role.
-                </DialogDescription>
-              </DialogHeader>
+          {canUpdateRoles && (
+            <Dialog
+              open={isPermissionDialogOpen}
+              onOpenChange={setIsPermissionDialogOpen}
+            >
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Permissions
+                </Button>
+              </DialogTrigger>
 
-              {/* Search input */}
-              <div className="flex items-center border rounded-md px-3 my-2">
-                <Search className="h-4 w-4 text-muted-foreground mr-2" />
-                <Input
-                  placeholder="Search permissions..."
-                  value={searchTerm}
-                  onChange={handleSearchChange}
-                  className="border-0 focus-visible:ring-0"
-                />
-              </div>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Assign Permissions to Role</DialogTitle>
+                  <DialogDescription>
+                    Select permissions to assign to this role.
+                  </DialogDescription>
+                </DialogHeader>
 
-              <div className="py-4 max-h-80 overflow-y-auto">
-                {filteredPermissions.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-4">
-                    {permissions.length === 0
-                      ? 'No permissions available in the system'
-                      : 'No available permissions to assign'}
-                  </p>
-                ) : (
-                  <div className="space-y-4">
-                    {filteredPermissions.map((permission) => (
-                      <div
-                        key={permission.id}
-                        className="flex items-center space-x-2"
-                      >
-                        <Checkbox
-                          id={permission.id}
-                          checked={selectedPermissions.includes(permission.id)}
-                          onCheckedChange={() =>
-                            togglePermissionSelection(permission.id)
-                          }
-                        />
-                        <label
-                          htmlFor={permission.id}
-                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                        >
-                          {permission.name}
-                          {permission.description && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {permission.description}
-                            </p>
-                          )}
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <DialogFooter>
-                <div className="w-full flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">
-                    {selectedPermissions.length} permission(s) selected
-                  </span>
-                  <div>
-                    <Button
-                      variant="outline"
-                      onClick={() => setIsPermissionDialogOpen(false)}
-                      className="mr-2"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={handleAddPermissions}
-                      disabled={selectedPermissions.length === 0}
-                    >
-                      Assign Selected Permissions
-                    </Button>
-                  </div>
+                {/* Search input */}
+                <div className="flex items-center border rounded-md px-3 my-2">
+                  <Search className="h-4 w-4 text-muted-foreground mr-2" />
+                  <Input
+                    placeholder="Search permissions..."
+                    value={searchTerm}
+                    onChange={handleSearchChange}
+                    className="border-0 focus-visible:ring-0"
+                  />
                 </div>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+
+                <div className="py-4 max-h-80 overflow-y-auto">
+                  {filteredPermissions.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-4">
+                      {permissions.length === 0
+                        ? 'No permissions available in the system'
+                        : 'No available permissions to assign'}
+                    </p>
+                  ) : (
+                    <div className="space-y-4">
+                      {filteredPermissions.map((permission) => (
+                        <div
+                          key={permission.id}
+                          className="flex items-center space-x-2"
+                        >
+                          <Checkbox
+                            id={permission.id}
+                            checked={selectedPermissions.includes(
+                              permission.id
+                            )}
+                            onCheckedChange={() =>
+                              togglePermissionSelection(permission.id)
+                            }
+                          />
+                          <label
+                            htmlFor={permission.id}
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                          >
+                            {permission.name}
+                            {permission.description && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {permission.description}
+                              </p>
+                            )}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <DialogFooter>
+                  <div className="w-full flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">
+                      {selectedPermissions.length} permission(s) selected
+                    </span>
+                    <div>
+                      <Button
+                        variant="outline"
+                        onClick={() => setIsPermissionDialogOpen(false)}
+                        className="mr-2"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleAddPermissions}
+                        disabled={selectedPermissions.length === 0}
+                      >
+                        Assign Selected Permissions
+                      </Button>
+                    </div>
+                  </div>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
         </CardHeader>
         <CardContent>
           {currentRole.permissions && currentRole.permissions.length > 0 ? (
@@ -408,15 +434,19 @@ const RoleDetail: React.FC = () => {
                         {permission.group?.name || 'No group'}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => handleRemovePermission(permission.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          <span className="sr-only">Remove permission</span>
-                        </Button>
+                        {canUpdateRoles && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() =>
+                              handleRemovePermission(permission.id)
+                            }
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            <span className="sr-only">Remove permission</span>
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -427,10 +457,12 @@ const RoleDetail: React.FC = () => {
             <div className="text-center py-6 text-muted-foreground">
               <Users className="h-10 w-10 mx-auto opacity-20 mb-2" />
               <p>No permissions assigned to this role</p>
-              <p className="text-sm mt-1">
-                Click &quot;Add Permissions&quot; to assign permissions to this
-                role.
-              </p>
+              {canUpdateRoles && (
+                <p className="text-sm mt-1">
+                  Click &quot;Add Permissions&quot; to assign permissions to the
+                  role.
+                </p>
+              )}
             </div>
           )}
         </CardContent>

@@ -27,9 +27,11 @@ import {
 import { toast } from 'sonner';
 import { DataTable } from '@/components/dashboard/users/data-table';
 import { columns as baseColumns } from '@/features/users/user-table-columns';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const UsersList = () => {
   const dispatch = useDispatch<AppDispatch>();
+  const { hasPermission } = usePermissions();
   const { users, loading, pagination, error } = useSelector(
     (state: RootState) => state.user
   );
@@ -68,27 +70,10 @@ const UsersList = () => {
     try {
       await dispatch(deleteUser(deleteUserId)).unwrap();
       toast.success('User deleted successfully');
-      dispatch(
-        fetchUsers({
-          page: pagination?.page || 1,
-          limit: pageSize,
-        })
-      );
+      dispatch(fetchUsers({ page: pagination?.page || 1, limit: pageSize }));
     } catch (error: unknown) {
       const errorMessage =
-        error instanceof Error
-          ? error.message
-          : typeof error === 'object' &&
-              error &&
-              'response' in error &&
-              typeof error.response === 'object' &&
-              error.response &&
-              'data' in error.response &&
-              typeof error.response.data === 'object' &&
-              error.response.data &&
-              'detail' in error.response.data
-            ? String(error.response.data.detail)
-            : 'Failed to delete user';
+        error instanceof Error ? error.message : 'Failed to delete user';
       toast.error(errorMessage);
     } finally {
       setIsDeleteDialogOpen(false);
@@ -96,7 +81,7 @@ const UsersList = () => {
     }
   };
 
-  // Create columns with delete handler
+  // Create columns with permission-based actions
   const columns = useMemo(() => {
     return baseColumns.map((col) => {
       if (col.id === 'actions') {
@@ -106,6 +91,7 @@ const UsersList = () => {
           cell: ({ row }: { row: any }) => {
             // Add explicit type for row
             const user = row.original;
+
             return (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -117,30 +103,38 @@ const UsersList = () => {
                 <DropdownMenuContent align="end">
                   <DropdownMenuLabel>Actions</DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <Link to={`/dashboard/users/${user.id}`}>View details</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to={`/dashboard/users/${user.id}/edit`}>
-                      Edit user
-                    </Link>
-                  </DropdownMenuItem>
-                  {user.is_locked && (
+                  {hasPermission('users.read') && (
+                    <DropdownMenuItem asChild>
+                      <Link to={`/dashboard/users/${user.id}`}>
+                        View details
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                  {hasPermission('users.update') && (
+                    <DropdownMenuItem asChild>
+                      <Link to={`/dashboard/users/${user.id}/edit`}>
+                        Edit user
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                  {hasPermission('users.update') && user.is_locked && (
                     <DropdownMenuItem className="text-green-600">
                       Unlock account
                     </DropdownMenuItem>
                   )}
-                  {!user.verified && (
+                  {hasPermission('users.update') && !user.verified && (
                     <DropdownMenuItem className="text-blue-600">
                       Resend verification
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuItem
-                    className="text-destructive"
-                    onClick={() => handleDeleteClick(user.id)}
-                  >
-                    Delete user
-                  </DropdownMenuItem>
+                  {hasPermission('users.delete') && (
+                    <DropdownMenuItem
+                      className="text-destructive"
+                      onClick={() => handleDeleteClick(user.id)}
+                    >
+                      Delete user
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             );
@@ -149,18 +143,20 @@ const UsersList = () => {
       }
       return col;
     });
-  }, [handleDeleteClick]);
+  }, [hasPermission, handleDeleteClick]);
 
   return (
     <div className="container space-y-6 p-4">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold tracking-tight">Users</h1>
-        <Link to="/dashboard/users/new">
-          <Button className="flex items-center gap-2">
-            <PlusCircle className="h-4 w-4" />
-            Add New User
-          </Button>
-        </Link>
+        {hasPermission('users.create') && (
+          <Link to="/dashboard/users/new">
+            <Button className="flex items-center gap-2">
+              <PlusCircle className="h-4 w-4" />
+              Add New User
+            </Button>
+          </Link>
+        )}
       </div>
 
       {error && (
@@ -186,12 +182,12 @@ const UsersList = () => {
               searchPlaceholder="Search users..."
               onRowsPerPageChange={handleRowsPerPageChange}
               pagination={
-                pagination.total
+                pagination
                   ? {
                       pageIndex: pagination.page || 1,
                       pageSize: pageSize || 10,
                       pageCount: pagination.total,
-                      onPageChange: handlePageChange || (() => {}),
+                      onPageChange: handlePageChange,
                     }
                   : undefined
               }

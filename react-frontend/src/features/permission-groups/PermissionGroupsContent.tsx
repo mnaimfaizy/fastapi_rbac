@@ -1,20 +1,14 @@
-import React, { useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { useAppDispatch } from '../../hooks/redux';
-import { fetchPermissionGroups } from '../../store/slices/permissionGroupSlice';
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import PermissionGroupsDataTable from './PermissionGroupsDataTable';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const PermissionGroupsContent: React.FC = () => {
   const navigate = useNavigate();
-  const location = useLocation();
-  const dispatch = useAppDispatch();
-
-  // Refetch permission groups data whenever we navigate to this component
-  useEffect(() => {
-    dispatch(fetchPermissionGroups({}));
-  }, [dispatch, location.pathname]);
+  const { hasPermission } = usePermissions();
+  const canCreatePermissionGroup = hasPermission('permission_group.create');
 
   const handleCreatePermissionGroup = () => {
     navigate('/dashboard/permission-groups/new');
@@ -24,9 +18,11 @@ const PermissionGroupsContent: React.FC = () => {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Manage Permission Groups</CardTitle>
-        <Button onClick={handleCreatePermissionGroup}>
-          Create Permission Group
-        </Button>
+        {canCreatePermissionGroup && (
+          <Button onClick={handleCreatePermissionGroup}>
+            Create Permission Group
+          </Button>
+        )}
       </CardHeader>
       <CardContent>
         <PermissionGroupsDataTable />

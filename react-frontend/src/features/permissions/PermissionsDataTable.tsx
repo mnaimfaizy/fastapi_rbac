@@ -7,6 +7,7 @@ import {
   setPage,
   setPageSize,
 } from '../../store/slices/permissionSlice';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   Table,
   TableBody,
@@ -51,6 +52,9 @@ export default function PermissionsDataTable() {
   const { permissions, isLoading, totalItems, page, pageSize } = useAppSelector(
     (state: RootState) => state.permission
   );
+  const { hasPermission } = usePermissions();
+  const canViewPermission = hasPermission('permission.read');
+  const canDeletePermission = hasPermission('permission.delete');
 
   const [searchTerm, setSearchTerm] = useState('');
   const [sort, setSort] = useState<SortState>({
@@ -83,12 +87,20 @@ export default function PermissionsDataTable() {
   };
 
   const handleView = (id: string) => {
-    navigate(`/dashboard/permissions/${id}`);
+    if (canViewPermission) {
+      navigate(`/dashboard/permissions/${id}`);
+    } else {
+      toast.error("You don't have permission to view details.");
+    }
   };
 
   const openDeleteDialog = (id: string) => {
-    setDeleteItemId(id);
-    setIsDeleteDialogOpen(true);
+    if (canDeletePermission) {
+      setDeleteItemId(id);
+      setIsDeleteDialogOpen(true);
+    } else {
+      toast.error("You don't have permission to delete.");
+    }
   };
 
   const handleDeleteConfirm = async () => {
@@ -242,19 +254,23 @@ export default function PermissionsDataTable() {
                       <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={() => handleView(permission.id)}
-                        >
-                          <Eye className="mr-2 h-4 w-4" />
-                          View details
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => openDeleteDialog(permission.id)}
-                          className="text-destructive focus:text-destructive"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete
-                        </DropdownMenuItem>
+                        {canViewPermission && (
+                          <DropdownMenuItem
+                            onClick={() => handleView(permission.id)}
+                          >
+                            <Eye className="mr-2 h-4 w-4" />
+                            View details
+                          </DropdownMenuItem>
+                        )}
+                        {canDeletePermission && (
+                          <DropdownMenuItem
+                            onClick={() => openDeleteDialog(permission.id)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>

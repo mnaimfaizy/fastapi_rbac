@@ -5,7 +5,6 @@ import {
   Users,
   Settings,
   Lock,
-  ShieldCheck,
   UserCheck,
   LogOut,
   User,
@@ -16,6 +15,7 @@ import {
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAppDispatch } from '../../store/hooks';
 import { logoutUser } from '../../store/slices/authSlice';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
   isCollapsed?: boolean;
@@ -23,42 +23,22 @@ interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
 
 export function Sidebar({ className, isCollapsed = false }: SidebarProps) {
   const location = useLocation();
-  const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
+  const { hasPermission } = usePermissions();
 
-  const handleLogout = async () => {
-    // Use the updated logoutUser thunk that calls the backend API
-    await dispatch(logoutUser());
-    // Navigate will happen automatically after logout due to auth state change
-    // but we keep it here as a fallback
+  const isActive = (path: string) => location.pathname.startsWith(path);
+
+  const handleLogout = () => {
+    dispatch(logoutUser());
     navigate('/login');
-  };
-
-  // Check if current path is active, considering nested routes
-  const isActive = (path: string) => {
-    if (path === '/dashboard' && location.pathname === '/dashboard') {
-      return true;
-    }
-    if (path !== '/dashboard' && location.pathname.startsWith(path)) {
-      return true;
-    }
-    return false;
   };
 
   return (
     <div className={cn('pb-12', className)}>
       <div className="space-y-4 py-4">
-        <div className="px-4 py-2">
-          <h2
-            className={cn(
-              'text-lg font-semibold tracking-tight',
-              isCollapsed && 'text-center'
-            )}
-          >
-            {!isCollapsed && 'Dashboard'}
-          </h2>
-
-          <div className={cn('space-y-1 pt-2')}>
+        <div className="px-3 py-2">
+          <div className="space-y-1">
             <Button
               variant={isActive('/dashboard') ? 'secondary' : 'ghost'}
               size={isCollapsed ? 'icon' : 'default'}
@@ -72,94 +52,106 @@ export function Sidebar({ className, isCollapsed = false }: SidebarProps) {
                 <LayoutDashboard
                   className={cn('h-5 w-5', !isCollapsed && 'mr-2')}
                 />
-                {!isCollapsed && 'Overview'}
+                {!isCollapsed && 'Dashboard'}
               </Link>
             </Button>
 
-            <Button
-              variant={isActive('/dashboard/users') ? 'secondary' : 'ghost'}
-              size={isCollapsed ? 'icon' : 'default'}
-              className={cn(
-                'w-full justify-start',
-                isCollapsed && 'justify-center'
-              )}
-              asChild
-            >
-              <Link to="/dashboard/users">
-                <Users className={cn('h-5 w-5', !isCollapsed && 'mr-2')} />
-                {!isCollapsed && 'Users'}
-              </Link>
-            </Button>
+            {hasPermission('users.read') && (
+              <Button
+                variant={isActive('/dashboard/users') ? 'secondary' : 'ghost'}
+                size={isCollapsed ? 'icon' : 'default'}
+                className={cn(
+                  'w-full justify-start',
+                  isCollapsed && 'justify-center'
+                )}
+                asChild
+              >
+                <Link to="/dashboard/users">
+                  <Users className={cn('h-5 w-5', !isCollapsed && 'mr-2')} />
+                  {!isCollapsed && 'Users'}
+                </Link>
+              </Button>
+            )}
 
-            <Button
-              variant={isActive('/dashboard/roles') ? 'secondary' : 'ghost'}
-              size={isCollapsed ? 'icon' : 'default'}
-              className={cn(
-                'w-full justify-start',
-                isCollapsed && 'justify-center'
-              )}
-              asChild
-            >
-              <Link to="/dashboard/roles">
-                <UserCheck className={cn('h-5 w-5', !isCollapsed && 'mr-2')} />
-                {!isCollapsed && 'Roles'}
-              </Link>
-            </Button>
+            {hasPermission('role.read') && (
+              <Button
+                variant={isActive('/dashboard/roles') ? 'secondary' : 'ghost'}
+                size={isCollapsed ? 'icon' : 'default'}
+                className={cn(
+                  'w-full justify-start',
+                  isCollapsed && 'justify-center'
+                )}
+                asChild
+              >
+                <Link to="/dashboard/roles">
+                  <UserCheck
+                    className={cn('h-5 w-5', !isCollapsed && 'mr-2')}
+                  />
+                  {!isCollapsed && 'Roles'}
+                </Link>
+              </Button>
+            )}
 
-            <Button
-              variant={
-                isActive('/dashboard/role-groups') ? 'secondary' : 'ghost'
-              }
-              size={isCollapsed ? 'icon' : 'default'}
-              className={cn(
-                'w-full justify-start',
-                isCollapsed && 'justify-center'
-              )}
-              asChild
-            >
-              <Link to="/dashboard/role-groups">
-                <FolderHeart
-                  className={cn('h-5 w-5', !isCollapsed && 'mr-2')}
-                />
-                {!isCollapsed && 'Role Groups'}
-              </Link>
-            </Button>
+            {hasPermission('role_group.read') && (
+              <Button
+                variant={
+                  isActive('/dashboard/role-groups') ? 'secondary' : 'ghost'
+                }
+                size={isCollapsed ? 'icon' : 'default'}
+                className={cn(
+                  'w-full justify-start',
+                  isCollapsed && 'justify-center'
+                )}
+                asChild
+              >
+                <Link to="/dashboard/role-groups">
+                  <Folder className={cn('h-5 w-5', !isCollapsed && 'mr-2')} />
+                  {!isCollapsed && 'Role Groups'}
+                </Link>
+              </Button>
+            )}
 
-            <Button
-              variant={
-                isActive('/dashboard/permissions') ? 'secondary' : 'ghost'
-              }
-              size={isCollapsed ? 'icon' : 'default'}
-              className={cn(
-                'w-full justify-start',
-                isCollapsed && 'justify-center'
-              )}
-              asChild
-            >
-              <Link to="/dashboard/permissions">
-                <ShieldCheck
-                  className={cn('h-5 w-5', !isCollapsed && 'mr-2')}
-                />
-                {!isCollapsed && 'Permissions'}
-              </Link>
-            </Button>
+            {hasPermission('permission.read') && (
+              <Button
+                variant={
+                  isActive('/dashboard/permissions') ? 'secondary' : 'ghost'
+                }
+                size={isCollapsed ? 'icon' : 'default'}
+                className={cn(
+                  'w-full justify-start',
+                  isCollapsed && 'justify-center'
+                )}
+                asChild
+              >
+                <Link to="/dashboard/permissions">
+                  <Lock className={cn('h-5 w-5', !isCollapsed && 'mr-2')} />
+                  {!isCollapsed && 'Permissions'}
+                </Link>
+              </Button>
+            )}
 
-            <Button
-              variant={
-                isActive('/dashboard/permission-groups') ? 'secondary' : 'ghost'
-              }
-              size={isCollapsed ? 'icon' : 'default'}
-              className={cn(
-                'w-full justify-start',
-                isCollapsed && 'justify-center'
-              )}
-              asChild
-            >
-              <Link to="/dashboard/permission-groups">
-                <Folder className={cn('h-5 w-5', !isCollapsed && 'mr-2')} />
-                {!isCollapsed && 'Permission Groups'}
-              </Link>
-            </Button>
+            {hasPermission('permission_group.read') && (
+              <Button
+                variant={
+                  isActive('/dashboard/permission-groups')
+                    ? 'secondary'
+                    : 'ghost'
+                }
+                size={isCollapsed ? 'icon' : 'default'}
+                className={cn(
+                  'w-full justify-start',
+                  isCollapsed && 'justify-center'
+                )}
+                asChild
+              >
+                <Link to="/dashboard/permission-groups">
+                  <FolderHeart
+                    className={cn('h-5 w-5', !isCollapsed && 'mr-2')}
+                  />
+                  {!isCollapsed && 'Permission Groups'}
+                </Link>
+              </Button>
+            )}
           </div>
         </div>
 

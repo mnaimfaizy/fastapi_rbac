@@ -1,3 +1,5 @@
+import { Permission } from './permission';
+
 export interface User {
   id: string;
   email: string;
@@ -18,7 +20,8 @@ export interface User {
   verification_code: string | null;
   last_updated_by: string | null;
   roles: Role[];
-  role_id?: string[];
+  permissions?: string[];
+  role_id?: string[] | Permission[];
 }
 
 export interface Role {

@@ -5,6 +5,7 @@ import {
   fetchPermissionById,
   deletePermission,
 } from '../../store/slices/permissionSlice';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -16,11 +17,14 @@ import {
 } from '@/components/ui/card';
 import { Trash2, ArrowLeft } from 'lucide-react';
 import { RootState } from '../../store';
+import { toast } from 'sonner';
 
 export default function PermissionDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
+  const { hasPermission } = usePermissions();
+  const canDeletePermission = hasPermission('permission.delete');
 
   const { currentPermission, isLoading } = useAppSelector(
     (state: RootState) => state.permission
@@ -37,6 +41,10 @@ export default function PermissionDetail() {
 
   const handleDelete = async () => {
     if (!id) return;
+    if (!canDeletePermission) {
+      toast.error("You don't have permission to delete this permission.");
+      return;
+    }
 
     if (window.confirm('Are you sure you want to delete this permission?')) {
       try {
@@ -105,14 +113,16 @@ export default function PermissionDetail() {
         </div>
       </CardContent>
       <CardFooter className="flex justify-end space-x-2 border-t p-4">
-        <Button
-          variant="destructive"
-          onClick={handleDelete}
-          className="flex items-center"
-        >
-          <Trash2 className="mr-2 h-4 w-4" />
-          Delete
-        </Button>
+        {canDeletePermission && (
+          <Button
+            variant="destructive"
+            onClick={handleDelete}
+            className="flex items-center"
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            Delete
+          </Button>
+        )}
       </CardFooter>
     </Card>
   );

@@ -7,7 +7,10 @@ import {
   moveToParent,
   selectRoleGroupsWithUsers,
 } from '../../store/slices/roleGroupSlice';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { AlertCircle } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -75,6 +78,9 @@ interface RoleGroupRowProps {
   onView: (groupId: string) => void;
   onDelete: (groupId: string) => void;
   allGroups: RoleGroup[];
+  canEdit: boolean;
+  canDelete: boolean;
+  canMove: boolean;
 }
 
 const RoleGroupRow: React.FC<
@@ -88,27 +94,24 @@ const RoleGroupRow: React.FC<
   onDelete,
   allGroups,
   expandAllState,
+  canEdit,
+  canDelete,
+  canMove,
 }) => {
-  // Update isExpanded to use expandAllState from parent component
   const [isExpanded, setIsExpanded] = useState(true);
 
-  // Sync with expandAllState from parent when it changes
   useEffect(() => {
     setIsExpanded(expandAllState);
   }, [expandAllState]);
 
-  // Filter out the current group and its children from possible parents
   const availableParents = allGroups.filter(
     (g) =>
       g.id !== group.id && !group.children?.some((child) => child.id === g.id)
   );
 
-  // Check if this group has children or roles to display expand/collapse control
   const hasChildren = group.children && group.children.length > 0;
-  // In RoleGroup model, we might not have direct access to roles, only in RoleGroupWithRoles
-  const isExpandable = hasChildren; // Only expand if there are children
+  const isExpandable = hasChildren;
 
-  // Generate vertical line styles based on nesting level
   const verticalLineClass = level > 0 ? 'relative' : '';
 
   return (
@@ -146,7 +149,6 @@ const RoleGroupRow: React.FC<
                   </Tooltip>
                 </TooltipProvider>
               ) : (
-                // Add empty space for alignment when no expand button
                 <div className="w-6"></div>
               )}
 
@@ -234,57 +236,63 @@ const RoleGroupRow: React.FC<
                   View details
                 </DropdownMenuItem>
 
-                <DropdownMenuItem onClick={() => onEdit(group.id)}>
-                  <Edit className="h-4 w-4 mr-2" />
-                  Edit
-                </DropdownMenuItem>
+                {canEdit && (
+                  <DropdownMenuItem onClick={() => onEdit(group.id)}>
+                    <Edit className="h-4 w-4 mr-2" />
+                    Edit
+                  </DropdownMenuItem>
+                )}
 
                 <DropdownMenuSeparator />
+                {canMove && (
+                  <>
+                    <DropdownMenuLabel>Move to</DropdownMenuLabel>
+                    <DropdownMenuItem onClick={() => onMove(group.id, null)}>
+                      Root Level
+                    </DropdownMenuItem>
 
-                <DropdownMenuLabel>Move to</DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => onMove(group.id, null)}>
-                  Root Level
-                </DropdownMenuItem>
-
-                {availableParents.length > 0 ? (
-                  availableParents
-                    .slice(0, 5) // Show only first 5 parents to avoid very large menus
-                    .map((parent) => (
-                      <DropdownMenuItem
-                        key={parent.id}
-                        onClick={() => onMove(group.id, parent.id)}
-                      >
-                        {parent.name}
+                    {availableParents.length > 0 ? (
+                      availableParents
+                        .slice(0, 5) // Show only first 5 parents to avoid very large menus
+                        .map((parent) => (
+                          <DropdownMenuItem
+                            key={parent.id}
+                            onClick={() => onMove(group.id, parent.id)}
+                          >
+                            {parent.name}
+                          </DropdownMenuItem>
+                        ))
+                    ) : (
+                      <DropdownMenuItem disabled>
+                        No available parents
                       </DropdownMenuItem>
-                    ))
-                ) : (
-                  <DropdownMenuItem disabled>
-                    No available parents
-                  </DropdownMenuItem>
+                    )}
+
+                    {availableParents.length > 5 && (
+                      <DropdownMenuItem asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full justify-start p-2"
+                          onClick={() => onView(group.id)} // Consider a "more parents" modal
+                        >
+                          View more options...
+                        </Button>
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuSeparator />
+                  </>
                 )}
 
-                {availableParents.length > 5 && (
-                  <DropdownMenuItem asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full justify-start p-2"
-                      onClick={() => onView(group.id)}
-                    >
-                      View more options...
-                    </Button>
+                {canDelete && (
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => onDelete(group.id)}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete
                   </DropdownMenuItem>
                 )}
-
-                <DropdownMenuSeparator />
-
-                <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
-                  onClick={() => onDelete(group.id)}
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete
-                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
@@ -335,6 +343,9 @@ const RoleGroupRow: React.FC<
             onDelete={onDelete}
             allGroups={allGroups}
             expandAllState={expandAllState}
+            canEdit={canEdit}
+            canDelete={canDelete}
+            canMove={canMove}
           />
         ))}
     </>
@@ -344,6 +355,7 @@ const RoleGroupRow: React.FC<
 const RoleGroupList: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
+  const { hasPermission } = usePermissions();
   const roleGroupsWithUsers = useSelector(selectRoleGroupsWithUsers);
   const { pagination, loading, error } = useSelector(
     (state: RootState) => state.roleGroup
@@ -353,74 +365,103 @@ const RoleGroupList: React.FC = () => {
   const [deleteGroupId, setDeleteGroupId] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
+  const canReadRoleGroups = hasPermission('role_group.read');
+  const canUpdateRoleGroups = hasPermission('role_group.update');
+  const canDeleteRoleGroups = hasPermission('role_group.delete');
+  const canMoveRoleGroups =
+    hasPermission('role_group.move') || hasPermission('role_group.update');
+
   useEffect(() => {
-    dispatch(fetchRoleGroups({ page: 1, size: 10 }));
-  }, [dispatch]);
+    if (canReadRoleGroups) {
+      dispatch(fetchRoleGroups({ page: 1, size: 10 }));
+    }
+  }, [dispatch, canReadRoleGroups]);
 
   const handlePageChange = (page: number) => {
-    dispatch(fetchRoleGroups({ page, size: pagination.size }));
+    if (canReadRoleGroups) {
+      dispatch(fetchRoleGroups({ page, size: pagination.size }));
+    }
   };
 
   const handleSearch = (event: React.FormEvent) => {
     event.preventDefault();
-    dispatch(
-      fetchRoleGroups({
-        page: 1,
-        size: pagination.size,
-        search_query: search,
-      })
-    );
+    if (canReadRoleGroups) {
+      dispatch(
+        fetchRoleGroups({
+          page: 1,
+          size: pagination.size,
+          search_query: search,
+        })
+      );
+    }
   };
 
   const handleMoveGroup = async (
     groupId: string,
     newParentId: string | null
   ) => {
+    if (!canMoveRoleGroups) {
+      toast.error('You do not have permission to move role groups.');
+      return;
+    }
     try {
       await dispatch(moveToParent({ groupId, parentId: newParentId })).unwrap();
       toast.success('Role group moved successfully');
       dispatch(
         fetchRoleGroups({ page: pagination.page, size: pagination.size })
       );
-    } catch (error) {
-      console.error('Failed to move role group:', error);
+    } catch (err) {
+      console.error('Failed to move role group:', err);
       toast.error('Failed to move role group');
     }
   };
 
   const handleEditRoleGroup = (groupId: string) => {
+    if (!canUpdateRoleGroups) {
+      toast.error('You do not have permission to edit role groups.');
+      return;
+    }
     navigate(`/dashboard/role-groups/edit/${groupId}`);
   };
 
   const handleViewRoleGroup = (groupId: string) => {
+    if (!canReadRoleGroups) {
+      toast.error('You do not have permission to view role group details.');
+      return;
+    }
     navigate(`/dashboard/role-groups/${groupId}`);
   };
 
   const openDeleteDialog = (groupId: string) => {
+    if (!canDeleteRoleGroups) {
+      toast.error('You do not have permission to delete role groups.');
+      return;
+    }
     setDeleteGroupId(groupId);
     setIsDeleteDialogOpen(true);
   };
 
   const handleDeleteConfirm = async () => {
     if (!deleteGroupId) return;
+    if (!canDeleteRoleGroups) {
+      toast.error('You do not have permission to delete role groups.');
+      setIsDeleteDialogOpen(false);
+      setDeleteGroupId(null);
+      return;
+    }
 
     try {
       await dispatch(deleteRoleGroup(deleteGroupId)).unwrap();
       toast.success('Role group deleted successfully');
-      // Refresh the list after deletion
       dispatch(
         fetchRoleGroups({ page: pagination.page, size: pagination.size })
       );
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
-      // Extract the most specific error message from the error response
+    } catch (err: any) {
       const errorMessage =
-        error.response?.data?.detail ||
-        (error instanceof Error
-          ? error.message
-          : 'Failed to delete role group');
+        err.response?.data?.detail ||
+        (err instanceof Error ? err.message : 'Failed to delete role group');
 
-      // Use longer duration for conflict errors as they contain important instructions
       const duration =
         errorMessage.includes('has child groups') ||
         errorMessage.includes('has assigned roles')
@@ -435,6 +476,20 @@ const RoleGroupList: React.FC = () => {
       setDeleteGroupId(null);
     }
   };
+
+  if (!canReadRoleGroups) {
+    return (
+      <div className="p-4 text-center">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Access Denied</AlertTitle>
+          <AlertDescription>
+            You do not have permission to view role groups.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   if (loading && !roleGroupsWithUsers.length) {
     return (
@@ -506,7 +561,7 @@ const RoleGroupList: React.FC = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {roleGroupsWithUsers.length === 0 ? (
+            {roleGroupsWithUsers.length === 0 && !loading ? (
               <TableRow>
                 <TableCell
                   colSpan={5}
@@ -528,6 +583,9 @@ const RoleGroupList: React.FC = () => {
                     onDelete={openDeleteDialog}
                     allGroups={roleGroupsWithUsers}
                     expandAllState={expandAll}
+                    canEdit={canUpdateRoleGroups}
+                    canDelete={canDeleteRoleGroups}
+                    canMove={canMoveRoleGroups}
                   />
                 ))
             )}
@@ -535,7 +593,6 @@ const RoleGroupList: React.FC = () => {
         </Table>
       </div>
 
-      {/* Delete Confirmation Dialog */}
       <AlertDialog
         open={isDeleteDialogOpen}
         onOpenChange={setIsDeleteDialogOpen}
@@ -554,6 +611,7 @@ const RoleGroupList: React.FC = () => {
             <AlertDialogAction
               onClick={handleDeleteConfirm}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={!canDeleteRoleGroups}
             >
               Delete
             </AlertDialogAction>
@@ -561,8 +619,7 @@ const RoleGroupList: React.FC = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Pagination */}
-      {!loading && pagination.pages > 1 && (
+      {!loading && pagination && pagination.pages > 1 && (
         <Pagination>
           <PaginationContent>
             {pagination.page > 1 && (

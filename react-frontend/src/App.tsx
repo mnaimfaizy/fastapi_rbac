@@ -5,11 +5,11 @@ import {
   Navigate,
 } from 'react-router-dom';
 import { Provider, useSelector } from 'react-redux';
-import { store, RootState } from './store'; // Adjust path if needed
+import { store, RootState } from './store';
 import { useEffect } from 'react';
 import { getStoredRefreshToken } from './lib/tokenStorage';
 import { refreshAccessToken, getCurrentUser } from './store/slices/authSlice';
-import { useAppDispatch } from './store/hooks'; // Add this import for useAppDispatch
+import { useAppDispatch } from './store/hooks';
 import { Toaster } from '@/components/ui/sonner';
 
 // Layouts
@@ -45,13 +45,9 @@ import RoleDetail from './features/roles/RoleDetail';
 import RoleGroupContent from './features/role-groups/RoleGroupContent';
 import RoleGroupFormContent from './features/role-groups/RoleGroupFormContent';
 import RoleGroupDetail from './features/role-groups/RoleGroupDetail';
+import UnauthorizedPage from './pages/UnauthorizedPage';
 
-// Example ProtectedRoute component (implement based on your auth state)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const ProtectedRoute = ({ children }: { children: any }) => {
-  const { isAuthenticated } = useSelector((state: RootState) => state.auth);
-  return isAuthenticated ? children : <Navigate to="/login" replace />;
-};
+import ProtectedRoute from './components/auth/ProtectedRoute';
 
 // Example PublicOnlyRoute component (redirects if authenticated)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -168,79 +164,178 @@ function App() {
                 element={<ChangePasswordContent />}
               />
               {/* User management routes - updated with new components */}
-              <Route path="/dashboard/users" element={<UsersList />} />
-              <Route path="/dashboard/users/new" element={<UserEditPage />} />
+              <Route
+                path="/dashboard/users"
+                element={
+                  <ProtectedRoute requiredPermissions={['users.read']}>
+                    <UsersList />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/dashboard/users/new"
+                element={
+                  <ProtectedRoute requiredPermissions={['users.create']}>
+                    <UserEditPage />
+                  </ProtectedRoute>
+                }
+              />
               <Route
                 path="/dashboard/users/:userId"
-                element={<UserDetailContent />}
+                element={
+                  <ProtectedRoute requiredPermissions={['users.read']}>
+                    <UserDetailContent />
+                  </ProtectedRoute>
+                }
               />
               <Route
                 path="/dashboard/users/:userId/edit" // Corrected path
-                element={<UserEditPage />}
+                element={
+                  <ProtectedRoute requiredPermissions={['users.update']}>
+                    <UserEditPage />
+                  </ProtectedRoute>
+                }
               />
               {/* Permission management routes */}
               <Route
                 path="/dashboard/permissions"
-                element={<PermissionsContent />}
+                element={
+                  <ProtectedRoute requiredPermissions={['permission.read']}>
+                    <PermissionsContent />
+                  </ProtectedRoute>
+                }
               />
               <Route
                 path="/dashboard/permissions/new"
-                element={<PermissionFormContent />}
+                element={
+                  <ProtectedRoute requiredPermissions={['permission.create']}>
+                    <PermissionFormContent />
+                  </ProtectedRoute>
+                }
               />
               <Route
                 path="/dashboard/permissions/:id"
-                element={<PermissionDetail />}
+                element={
+                  <ProtectedRoute requiredPermissions={['permission.read']}>
+                    <PermissionDetail />
+                  </ProtectedRoute>
+                }
               />
               {/* Permission Group routes */}
               <Route
                 path="/dashboard/permission-groups"
-                element={<PermissionGroupsContent />}
+                element={
+                  <ProtectedRoute
+                    requiredPermissions={['permission_group.read']}
+                  >
+                    <PermissionGroupsContent />
+                  </ProtectedRoute>
+                }
               />
               <Route
                 path="/dashboard/permission-groups/new"
-                element={<PermissionGroupFormContent />}
+                element={
+                  <ProtectedRoute
+                    requiredPermissions={['permission_group.create']}
+                  >
+                    <PermissionGroupFormContent />
+                  </ProtectedRoute>
+                }
               />
               <Route
                 path="/dashboard/permission-groups/edit/:groupId"
-                element={<PermissionGroupFormContent />}
+                element={
+                  <ProtectedRoute
+                    requiredPermissions={['permission_group.update']}
+                  >
+                    <PermissionGroupFormContent />
+                  </ProtectedRoute>
+                }
               />
               <Route
                 path="/dashboard/permission-groups/:groupId"
-                element={<PermissionGroupDetail />}
+                element={
+                  <ProtectedRoute
+                    requiredPermissions={['permission_group.read']}
+                  >
+                    <PermissionGroupDetail />
+                  </ProtectedRoute>
+                }
               />
               {/* Role management routes */}
-              <Route path="/dashboard/roles" element={<RolesContent />} />
+              <Route
+                path="/dashboard/roles"
+                element={
+                  <ProtectedRoute requiredPermissions={['role.read']}>
+                    <RolesContent />
+                  </ProtectedRoute>
+                }
+              />
               <Route
                 path="/dashboard/roles/new"
-                element={<RoleFormContent />}
+                element={
+                  <ProtectedRoute requiredPermissions={['role.create']}>
+                    <RoleFormContent />
+                  </ProtectedRoute>
+                }
               />
-              <Route path="/dashboard/roles/:roleId" element={<RoleDetail />} />
+              <Route
+                path="/dashboard/roles/:roleId"
+                element={
+                  <ProtectedRoute requiredPermissions={['role.read']}>
+                    <RoleDetail />
+                  </ProtectedRoute>
+                }
+              />
               <Route
                 path="/dashboard/roles/edit/:roleId"
-                element={<RoleFormContent />}
+                element={
+                  <ProtectedRoute requiredPermissions={['role.update']}>
+                    <RoleFormContent />
+                  </ProtectedRoute>
+                }
               />
               {/* Role Groups routes */}
               <Route
                 path="/dashboard/role-groups"
-                element={<RoleGroupContent />}
+                element={
+                  <ProtectedRoute requiredPermissions={['role_group.read']}>
+                    <RoleGroupContent />
+                  </ProtectedRoute>
+                }
               />
               <Route
                 path="/dashboard/role-groups/new"
-                element={<RoleGroupFormContent />}
+                element={
+                  <ProtectedRoute requiredPermissions={['role_group.create']}>
+                    <RoleGroupFormContent />
+                  </ProtectedRoute>
+                }
               />
               <Route
                 path="/dashboard/role-groups/:groupId"
-                element={<RoleGroupDetail />}
+                element={
+                  <ProtectedRoute requiredPermissions={['role_group.read']}>
+                    <RoleGroupDetail />
+                  </ProtectedRoute>
+                }
               />
               <Route
                 path="/dashboard/role-groups/edit/:groupId"
-                element={<RoleGroupFormContent />}
+                element={
+                  <ProtectedRoute requiredPermissions={['role_group.update']}>
+                    <RoleGroupFormContent />
+                  </ProtectedRoute>
+                }
               />
               {/* Add other dashboard-nested routes here */}
               {/* e.g., <Route path="settings" element={<SettingsPage />} /> */}
             </Route>
             {/* Add other top-level protected routes here if needed */}
           </Route>
+
+          {/* Unauthorized Page Route */}
+          <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
           {/* Not Found Route */}
           <Route path="*" element={<NotFoundPage />} />
