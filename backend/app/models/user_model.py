@@ -55,7 +55,7 @@ class User(BaseUUIDModel, UserBase, table=True):
         back_populates="users",
         link_model=UserRole,
         sa_relationship_kwargs={
-            "lazy": "selectin"
+            "lazy": "selectin",
         },  # Changed from 'joined' to 'selectin' for better performance
     )
 

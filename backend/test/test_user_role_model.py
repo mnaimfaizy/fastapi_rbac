@@ -1,8 +1,8 @@
 from uuid import UUID
 
 import pytest
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
 
 from app.models.role_model import Role
 from app.models.user_model import User
@@ -18,7 +18,8 @@ async def test_create_user_role(db: AsyncSession) -> None:
     email = random_email()
     user = User(
         email=email,
-        hashed_password=random_lower_string(),
+        password=random_lower_string(),
+        password_version=1,
         is_active=True,
     )
     db.add(user)
@@ -56,7 +57,8 @@ async def test_retrieve_roles_for_user(db: AsyncSession) -> None:
     email = random_email()
     user = User(
         email=email,
-        hashed_password=random_lower_string(),
+        password=random_lower_string(),
+        password_version=1,
         is_active=True,
     )
     db.add(user)
@@ -87,9 +89,12 @@ async def test_retrieve_roles_for_user(db: AsyncSession) -> None:
     await db.commit()
 
     # Retrieve all roles for this user
-    stmt = text("SELECT * FROM role WHERE id IN (SELECT role_id FROM UserRole WHERE user_id = :user_id)")
-    stmt = stmt.bindparams(user_id=user.id)
-    result = await db.execute(stmt)
+    query = (
+        select(Role)
+        .join(UserRole)  # Simplified join, SQLModel infers from relationships
+        .where(UserRole.user_id == user.id)
+    )
+    result = await db.execute(query)
     retrieved_roles = result.scalars().all()
 
     # Check that all roles were retrieved correctly
@@ -117,7 +122,8 @@ async def test_retrieve_users_with_role(db: AsyncSession) -> None:
         emails.append(email)
         user = User(
             email=email,
-            hashed_password=random_lower_string(),
+            password=random_lower_string(),
+            password_version=1,
             is_active=True,
         )
         users.append(user)
@@ -137,9 +143,12 @@ async def test_retrieve_users_with_role(db: AsyncSession) -> None:
     await db.commit()
 
     # Retrieve all users with this role
-    stmt = text("SELECT * FROM user WHERE id IN (SELECT user_id FROM UserRole WHERE role_id = :role_id)")
-    stmt = stmt.bindparams(role_id=role.id)
-    result = await db.execute(stmt)
+    query = (
+        select(User)
+        .join(UserRole)  # Simplified join, SQLModel infers from relationships
+        .where(UserRole.role_id == role.id)
+    )
+    result = await db.execute(query)
     retrieved_users = result.scalars().all()
 
     # Check that all users were retrieved correctly

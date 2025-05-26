@@ -16,7 +16,8 @@ async def test_create_password_history(db: AsyncSession) -> None:
     # Create a user first
     user = User(
         email=f"{random_lower_string()}@example.com",
-        hashed_password=random_lower_string(),
+        password=random_lower_string(),
+        password_version=1,
         is_active=True,
     )
     db.add(user)
@@ -25,7 +26,7 @@ async def test_create_password_history(db: AsyncSession) -> None:
 
     # Create password history entry
     hashed_password = "hashed_password_value"
-    password_history = UserPasswordHistory(user_id=user.id, password=hashed_password)
+    password_history = UserPasswordHistory(user_id=user.id, password_hash=hashed_password)
 
     # Add password history to database
     db.add(password_history)
@@ -47,7 +48,8 @@ async def test_retrieve_user_password_history(db: AsyncSession) -> None:
     # Create a user
     user = User(
         email=f"{random_lower_string()}@example.com",
-        hashed_password=random_lower_string(),
+        password=random_lower_string(),
+        password_version=1,
         is_active=True,
     )
     db.add(user)
@@ -57,7 +59,7 @@ async def test_retrieve_user_password_history(db: AsyncSession) -> None:
     # Create multiple password history entries
     histories = []
     for i in range(3):
-        password_history = UserPasswordHistory(user_id=user.id, password=f"old_password_{i}")
+        password_history = UserPasswordHistory(user_id=user.id, password_hash=f"old_password_{i}")
         histories.append(password_history)
 
     db.add_all(histories)
@@ -81,7 +83,8 @@ async def test_check_password_reuse(db: AsyncSession) -> None:
     # Create a user
     user = User(
         email=f"{random_lower_string()}@example.com",
-        hashed_password=random_lower_string(),
+        password=random_lower_string(),
+        password_version=1,
         is_active=True,
     )
     db.add(user)
@@ -93,8 +96,8 @@ async def test_check_password_reuse(db: AsyncSession) -> None:
     password2 = "hashed_password_2"
 
     histories = [
-        UserPasswordHistory(user_id=user.id, password=password1),
-        UserPasswordHistory(user_id=user.id, password=password2),
+        UserPasswordHistory(user_id=user.id, password_hash=password1),
+        UserPasswordHistory(user_id=user.id, password_hash=password2),
     ]
     db.add_all(histories)
     await db.commit()

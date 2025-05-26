@@ -94,7 +94,7 @@ const UserDetailContent = () => {
           >
             Back to List
           </Link>
-          {hasPermission('users.update') && (
+          {hasPermission('user.update') && (
             <Link
               to={`/dashboard/users/${userId}/edit`}
               className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700"
@@ -102,7 +102,7 @@ const UserDetailContent = () => {
               Edit User
             </Link>
           )}
-          {hasPermission('users.delete') && (
+          {hasPermission('user.delete') && (
             <button
               onClick={handleDeleteClick}
               className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"

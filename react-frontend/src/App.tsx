@@ -186,7 +186,7 @@ function App() {
                   <Route
                     path="/dashboard/users"
                     element={
-                      <ProtectedRoute requiredPermissions={['users.read']}>
+                      <ProtectedRoute requiredPermissions={['user.read']}>
                         <UsersList />
                       </ProtectedRoute>
                     }
@@ -194,7 +194,7 @@ function App() {
                   <Route
                     path="/dashboard/users/new"
                     element={
-                      <ProtectedRoute requiredPermissions={['users.create']}>
+                      <ProtectedRoute requiredPermissions={['user.create']}>
                         <UserEditPage />
                       </ProtectedRoute>
                     }
@@ -202,7 +202,7 @@ function App() {
                   <Route
                     path="/dashboard/users/:userId"
                     element={
-                      <ProtectedRoute requiredPermissions={['users.read']}>
+                      <ProtectedRoute requiredPermissions={['user.read']}>
                         <UserDetailContent />
                       </ProtectedRoute>
                     }
@@ -210,7 +210,7 @@ function App() {
                   <Route
                     path="/dashboard/users/:userId/edit" // Corrected path
                     element={
-                      <ProtectedRoute requiredPermissions={['users.update']}>
+                      <ProtectedRoute requiredPermissions={['user.update']}>
                         <UserEditPage />
                       </ProtectedRoute>
                     }

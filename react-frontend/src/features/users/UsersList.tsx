@@ -103,31 +103,31 @@ const UsersList = () => {
                 <DropdownMenuContent align="end">
                   <DropdownMenuLabel>Actions</DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  {hasPermission('users.read') && (
+                  {hasPermission('user.read') && (
                     <DropdownMenuItem asChild>
                       <Link to={`/dashboard/users/${user.id}`}>
                         View details
                       </Link>
                     </DropdownMenuItem>
                   )}
-                  {hasPermission('users.update') && (
+                  {hasPermission('user.update') && (
                     <DropdownMenuItem asChild>
                       <Link to={`/dashboard/users/${user.id}/edit`}>
                         Edit user
                       </Link>
                     </DropdownMenuItem>
                   )}
-                  {hasPermission('users.update') && user.is_locked && (
+                  {hasPermission('user.update') && user.is_locked && (
                     <DropdownMenuItem className="text-green-600">
                       Unlock account
                     </DropdownMenuItem>
                   )}
-                  {hasPermission('users.update') && !user.verified && (
+                  {hasPermission('user.update') && !user.verified && (
                     <DropdownMenuItem className="text-blue-600">
                       Resend verification
                     </DropdownMenuItem>
                   )}
-                  {hasPermission('users.delete') && (
+                  {hasPermission('user.delete') && (
                     <DropdownMenuItem
                       className="text-destructive"
                       onClick={() => handleDeleteClick(user.id)}
@@ -149,7 +149,7 @@ const UsersList = () => {
     <div className="container space-y-6 p-4">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold tracking-tight">Users</h1>
-        {hasPermission('users.create') && (
+        {hasPermission('user.create') && (
           <Link to="/dashboard/users/new">
             <Button className="flex items-center gap-2">
               <PlusCircle className="h-4 w-4" />

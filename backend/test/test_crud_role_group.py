@@ -3,12 +3,13 @@ from uuid import UUID
 import pytest
 import pytest_asyncio
 from fastapi import HTTPException
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.crud.role_crud import role_crud
 from app.crud.role_group_crud import role_group
 from app.crud.user_crud import user_crud
+from app.models.role_group_map_model import RoleGroupMap
 from app.models.role_group_model import RoleGroup
 from app.models.user_model import User
 from app.schemas.role_group_schema import IRoleGroupCreate, IRoleGroupUpdate
@@ -173,9 +174,12 @@ async def test_hierarchical_role_groups(db: AsyncSession) -> None:
     assert stored_child
     assert stored_child.id == child_group.id
     assert stored_child.parent_id == parent_group.id
-    assert hasattr(stored_child, "parent")
-    assert stored_child.parent.id == parent_group.id
-    assert stored_child.parent.name == parent_name
+    # Instead of accessing stored_child.parent, fetch the parent group explicitly
+    assert stored_child.parent_id is not None
+    parent_of_child = await role_group.get(id=stored_child.parent_id, db_session=db)
+    assert parent_of_child is not None
+    assert parent_of_child.id == parent_group.id
+    assert parent_of_child.name == parent_name
 
 
 @pytest.mark.asyncio
@@ -210,14 +214,11 @@ async def test_add_roles_to_group(db: AsyncSession) -> None:
     # Check that each role was correctly assigned to the group
     # Use a different approach that works with SQLAlchemy/SQLModel
     for role_id in role_ids:
-        # Use an alternate approach - check if any record exists
-        statement = text(
-            "SELECT EXISTS (SELECT 1 FROM RoleGroupMap WHERE role_id = :role_id "
-            "AND role_group_id = :group_id)"
+        result = await db.execute(
+            select(RoleGroupMap)
+            .where(RoleGroupMap.role_id == role_id)
+            .where(RoleGroupMap.role_group_id == group.id)  # type: ignore
         )
-        statement = statement.bindparams(role_id=role_id, group_id=group.id)
-
-        result = await db.execute(select(statement))
         exists = result.scalar()
         assert exists
 
@@ -247,14 +248,11 @@ async def test_remove_roles_from_group(db: AsyncSession) -> None:
 
     # Verify all roles were added initially
     for role_id in role_ids:
-        # Use exists() instead of direct object access
-        statement = text(
-            "SELECT EXISTS (SELECT 1 FROM RoleGroupMap WHERE role_id = :role_id "
-            "AND role_group_id = :group_id)"
+        result = await db.execute(
+            select(RoleGroupMap)
+            .where(RoleGroupMap.role_id == role_id)
+            .where(RoleGroupMap.role_group_id == group.id)  # type: ignore
         )
-        statement = statement.bindparams(role_id=role_id, group_id=group.id)
-
-        result = await db.execute(select(statement))
         exists = result.scalar()
         assert exists
 
@@ -264,23 +262,20 @@ async def test_remove_roles_from_group(db: AsyncSession) -> None:
 
     # Verify that removed roles no longer have mappings
     for role_id in roles_to_remove:
-        # Check that mappings were removed
-        statement = text(
-            "SELECT EXISTS (SELECT 1 FROM RoleGroupMap WHERE role_id = :role_id"
-            "AND role_group_id = :group_id)"
+        result = await db.execute(
+            select(RoleGroupMap)
+            .where(RoleGroupMap.role_id == role_id)
+            .where(RoleGroupMap.role_group_id == group.id)  # type: ignore
         )
-        statement = statement.bindparams(role_id=role_id, group_id=group.id)
-
-        result = await db.execute(select(statement))
         exists = result.scalar()
         assert not exists  # Mapping should not exist now
 
     # Verify that the remaining role still has mapping
-    statement = text(
-        "SELECT EXISTS (SELECT 1 FROM RoleGroupMap WHERE role_id = :role_id AND role_group_id = :group_id)"
+    result = await db.execute(
+        select(RoleGroupMap)
+        .where(RoleGroupMap.role_id == role_ids[2])
+        .where(RoleGroupMap.role_group_id == group.id)  # type: ignore
     )
-    statement = statement.bindparams(role_id=role_ids[2], group_id=group.id)
-    result = await db.execute(statement)
     exists = result.scalar()
     assert exists  # This mapping should still exist
 

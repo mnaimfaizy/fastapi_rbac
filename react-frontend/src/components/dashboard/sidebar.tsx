@@ -56,7 +56,7 @@ export function Sidebar({ className, isCollapsed = false }: SidebarProps) {
               </Link>
             </Button>
 
-            {hasPermission('users.read') && (
+            {hasPermission('user.read') && (
               <Button
                 variant={isActive('/dashboard/users') ? 'secondary' : 'ghost'}
                 size={isCollapsed ? 'icon' : 'default'}
