@@ -41,13 +41,20 @@ services:
       - fastapi_rbac_redis
       - fastapi_rbac_worker
 
+  fastapi_rbac_pgadmin:
+    extends:
+      file: ./backend/docker-compose.prod.yml
+      service: fastapi_rbac_pgadmin
+    depends_on:
+      fastapi_rbac_db:
+        condition: service_healthy
   # Frontend service
   react_frontend:
     extends:
       file: ./react-frontend/docker-compose.prod.yml
       service: react_frontend
     environment:
-      - VITE_API_BASE_URL=http://fastapi_rbac:8000
+      - VITE_API_BASE_URL=/api/v1 # Use relative path, nginx will proxy to backend
     depends_on:
       - fastapi_rbac
     ports:
@@ -55,9 +62,11 @@ services:
 
 networks:
   fastapi_rbac_network:
+    name: fastapi_rbac_network
     driver: bridge
 
 volumes:
   postgres_data:
   celery_beat_data:
   redis_data:
+  pgadmin_data:

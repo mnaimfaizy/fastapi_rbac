@@ -60,7 +60,15 @@ RUN pip install --no-cache-dir /wheels/* && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy environment file first (if it exists)
-COPY .env.production .env.production
+RUN if [ -f /app/.env.production ]; then \
+        cp /app/.env.production /app/.env.production; \
+    elif [ -f /app/production.env.example ]; then \
+        cp /app/production.env.example /app/.env.production; \
+    else \
+        echo "Warning: No .env file found to create .env.production" >&2; \
+        # Optionally, create an empty file or exit, depending on requirements
+        # touch /app/.env.production; \
+    fi
 
 # Copy source code
 COPY app/ ./app/

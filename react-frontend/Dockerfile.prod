@@ -12,7 +12,7 @@ COPY package*.json ./
 
 # Install dependencies with clean install
 # This ensures we use exactly what's in package-lock.json
-RUN npm ci --silent
+RUN npm ci --silent --legacy-peer-deps
 
 # Copy source code
 COPY . .

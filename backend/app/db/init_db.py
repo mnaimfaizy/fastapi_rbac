@@ -18,7 +18,7 @@ from app.schemas.role_schema import IRoleCreate
 from app.schemas.user_schema import IUserCreate
 from app.utils.string_utils import format_permission_name
 
-current_date = datetime.now(timezone.utc)
+current_date = datetime.now(timezone.utc).replace(tzinfo=None)
 
 SUPERUSER_EMAIL = settings.FIRST_SUPERUSER_EMAIL
 

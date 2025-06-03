@@ -4,7 +4,7 @@ from uuid import UUID
 from sqlalchemy import event, text
 from sqlalchemy.engine.base import Connection
 from sqlalchemy.orm.mapper import Mapper
-from sqlmodel import Field, Relationship, SQLModel, String
+from sqlmodel import Field, Relationship, SQLModel
 
 from app.models.base_uuid_model import BaseUUIDModel
 from app.models.role_group_map_model import RoleGroupMap
@@ -24,7 +24,7 @@ class RoleBase(SQLModel):
 
 
 class Role(BaseUUIDModel, RoleBase, table=True):
-    name: str | None = Field(String(250), nullable=True, index=True)
+    name: str | None = Field(default=None, max_length=250, nullable=True, index=True)
     description: str | None = Field(default=None, nullable=True, index=True)
     role_group_id: UUID | None = Field(default=None, foreign_key="RoleGroup.id", nullable=True)
     created_by_id: UUID | None = Field(default=None, foreign_key="User.id")
@@ -51,19 +51,18 @@ def after_insert_role(mapper: Mapper, connection: Connection, target: "Role") ->
     # If role_group_id is set on creation, ensure RoleGroupMap is created
     if target.role_group_id:
         # Check if mapping already exists
-        query = text("SELECT 1 FROM RoleGroupMap WHERE role_id = :role_id AND role_group_id = :role_group_id")
-        existing = connection.execute(
-            query, {"role_id": str(target.id), "role_group_id": str(target.role_group_id)}
-        ).fetchone()
+        query = text(
+            'SELECT 1 FROM "RoleGroupMap" WHERE role_id = :role_id AND role_group_id = :role_group_id'
+        )
+        params = {"role_id": str(target.id), "role_group_id": str(target.role_group_id)}
+        existing = connection.execute(query, params).fetchone()
 
         if not existing:
             # Create new mapping
             insert_query = text(
-                "INSERT INTO RoleGroupMap (role_id, role_group_id) VALUES (:role_id, :role_group_id)"
+                'INSERT INTO "RoleGroupMap" (role_id, role_group_id) VALUES (:role_id, :role_group_id)'
             )
-            connection.execute(
-                insert_query, {"role_id": str(target.id), "role_group_id": str(target.role_group_id)}
-            )
+            connection.execute(insert_query, params)
 
 
 @event.listens_for(Role, "after_update")
@@ -71,21 +70,20 @@ def after_update_role(mapper: Mapper, connection: Connection, target: "Role") ->
     # If role_group_id was changed
     if target.role_group_id:
         # Check if mapping already exists
-        query = text("SELECT 1 FROM RoleGroupMap WHERE role_id = :role_id AND role_group_id = :role_group_id")
-        existing = connection.execute(
-            query, {"role_id": str(target.id), "role_group_id": str(target.role_group_id)}
-        ).fetchone()
+        query = text(
+            'SELECT 1 FROM "RoleGroupMap" WHERE role_id = :role_id AND role_group_id = :role_group_id'
+        )
+        params = {"role_id": str(target.id), "role_group_id": str(target.role_group_id)}
+        existing = connection.execute(query, params).fetchone()
 
         if not existing:
             # Create new mapping
             insert_query = text(
-                "INSERT INTO RoleGroupMap (role_id, role_group_id) VALUES (:role_id, :role_group_id)"
+                'INSERT INTO "RoleGroupMap" (role_id, role_group_id) VALUES (:role_id, :role_group_id)'
             )
-            connection.execute(
-                insert_query, {"role_id": str(target.id), "role_group_id": str(target.role_group_id)}
-            )
+            connection.execute(insert_query, params)
 
     # If role_group_id was removed, remove any mappings
     if not target.role_group_id:
-        delete_query = text("DELETE FROM RoleGroupMap WHERE role_id = :role_id")
+        delete_query = text('DELETE FROM "RoleGroupMap" WHERE role_id = :role_id')
         connection.execute(delete_query, {"role_id": str(target.id)})

@@ -7,7 +7,7 @@ services:
     environment:
       - POSTGRES_USER=${DATABASE_USER:-postgres}
       - POSTGRES_PASSWORD=${DATABASE_PASSWORD:-postgres}
-      - POSTGRES_DB=${DATABASE_NAME:-postgres}
+      - POSTGRES_DB=${DATABASE_NAME:-fastapi_db}
       - PGDATA=/var/lib/postgresql/data/pgdata
       - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
     user: root
@@ -23,7 +23,7 @@ services:
       retries: 5
     networks:
       - fastapi_rbac_network
-    expose:
+    ports:
       - "5432:5432"
 
   fastapi_rbac_redis:
@@ -197,10 +197,44 @@ services:
       - fastapi_rbac_network
     command: ["/bin/bash", "/app/scripts/beat-start.sh"]
 
+  fastapi_rbac_pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: fastapi_rbac_pgadmin
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+      PGADMIN_LISTEN_PORT: 80
+      # Variables for pgpassfile
+      DATABASE_HOST: ${DATABASE_HOST:-fastapi_rbac_db}
+      DATABASE_USER: ${DATABASE_USER:-postgres}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-postgres}
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      DATABASE_NAME: ${DATABASE_NAME:-fastapi_db}
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ../pgadmin/servers.json:/pgadmin4/servers.json:ro
+    entrypoint:
+      - "/bin/sh"
+      - "-c"
+      - "echo '${DATABASE_HOST:-fastapi_rbac_db}:5432:*:${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres}' > /tmp/pgpassfile && chmod 600 /tmp/pgpassfile && /entrypoint.sh"
+    networks:
+      - fastapi_rbac_network
+    depends_on:
+      fastapi_rbac_db:
+        condition: service_healthy
+    env_file:
+      - .env.production
+
 volumes:
   postgres_data:
   celery_beat_data:
   redis_data:
+  pgadmin_data:
 
 networks:
   fastapi_rbac_network:
