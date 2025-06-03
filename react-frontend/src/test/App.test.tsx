@@ -10,14 +10,14 @@ describe('App Component', () => {
 
   it('shows login page for unauthenticated users', () => {
     renderWithProviders(<App />);
-    
+
     // Since the default store has unauthenticated state, this should show login content
     expect(document.body).toBeInTheDocument();
   });
 
   it('shows content for authenticated users', () => {
     renderWithProviders(<App />);
-    
+
     // Test that the app renders correctly
     expect(document.body).toBeInTheDocument();
   });
