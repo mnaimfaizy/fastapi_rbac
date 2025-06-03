@@ -1,108 +1,148 @@
-# Python FastAPI User Management Service
+# FastAPI RBAC - User Management Microservice
 
-This is the user management micro service which will manage the Authentication and Authorization for all other services.
+A comprehensive Role-Based Access Control (RBAC) system with FastAPI backend and React frontend, designed to handle Authentication and Authorization for other services.
 
-## Project Overview
+## 🚀 Quick Start
 
-This project implements a comprehensive Role-Based Access Control (RBAC) system with:
+### New to the project?
 
-- **FastAPI Backend**: Modern, high-performance API with async support
-- **React Frontend**: TypeScript-based UI with modern component architecture
-- **Flexible Database Options**: SQLite for local development, PostgreSQL for testing/production
-- **Docker Support**: Containerized deployment with modular compose files
+**Start here:** [`docs/getting-started/GETTING_STARTED.md`](docs/getting-started/GETTING_STARTED.md)
 
-## Key Features
+### Want to run immediately?
 
-- JWT-based authentication with refresh tokens
-- Role-based access control system
-- Comprehensive user management
-- Permission and role management
-- Email notifications with templates
-- Background task processing with Celery
-- Redis-based caching and task queue
+```powershell
+git clone <repository-url>
+cd fastapi_rbac
+docker-compose up -d
 
-## IDE Setup and Code Consistency
+# Access at:
+# Frontend: http://localhost:80
+# Backend API: http://localhost:8000/docs
+```
 
-This project includes workspace-specific VS Code settings to ensure consistent code formatting and style across the team. These settings are committed to the repository and will be automatically applied when opening the project in VS Code.
+## 📚 Documentation
 
-### Required VS Code Extensions
+All documentation has been organized for easy navigation:
 
-For the best development experience, install these VS Code extensions:
+- **📖 [Getting Started](docs/getting-started/)** - New developer onboarding
+- **💻 [Development](docs/development/)** - Development setup and workflows
+- **🚀 [Deployment](docs/deployment/)** - Production deployment guides
+- **🔧 [Troubleshooting](docs/troubleshooting/)** - Problem-solving guides
+- **📋 [Reference](docs/reference/)** - Technical reference materials
 
-1. **Python** - Microsoft's Python extension (ms-python.python)
-2. **Black Formatter** - Python code formatting (ms-python.black-formatter)
-3. **isort** - Python import sorting (ms-python.isort)
-4. **Flake8** - Python linting (ms-python.flake8)
-5. **Mypy Type Checker** - Python type checking (ms-python.mypy-type-checker)
-6. **ESLint** - JavaScript/TypeScript linting (dbaeumer.vscode-eslint)
-7. **Prettier** - JavaScript/TypeScript formatting (esbenp.prettier-vscode)
+## 🛠️ Scripts & Utilities
 
-### Automatic Configuration
+Utility scripts are organized by purpose in the [`scripts/`](scripts/) directory:
 
-The project includes a `.vscode/settings.json` file with predefined settings for:
+- **Development**: [`scripts/dev/`](scripts/dev/) - Local development helpers
+- **Docker**: [`scripts/docker/`](scripts/docker/) - Container operations
+- **Deployment**: [`scripts/deployment/`](scripts/deployment/) - Release and deployment
+- **Database**: [`scripts/database/`](scripts/database/) - Database management
 
-- Python formatting with Black (line length: 88)
-- Automatic import sorting with isort (Black-compatible profile)
-- Flake8 linting
-- Mypy type checking
-- Automatic formatting on save
-- Environment file recognition
+## ✨ Key Features
 
-### Customizing Settings
+- **🔐 JWT Authentication**: Secure token-based auth with refresh tokens
+- **👥 Role-Based Access Control**: Flexible permission system with role hierarchies
+- **🎯 User Management**: Complete CRUD operations with admin oversight
+- **📧 Email Integration**: Notifications and password reset functionality
+- **⚡ Background Tasks**: Celery integration for async operations
+- **🐳 Docker Ready**: Full containerization with production configs
+- **🧪 Comprehensive Testing**: Unit and integration test suites
+- **📊 API Documentation**: Auto-generated OpenAPI/Swagger docs
 
-While the project settings are designed to work for most team members, you can override them in your personal VS Code settings if needed. However, please ensure any code you contribute adheres to the project's style guide when committed.
+## 🏗️ Project Structure
 
-## Development Environment Setup
+```
+fastapi_rbac/
+├── 📁 backend/              # FastAPI application
+│   ├── app/                 # Main application code
+│   ├── alembic/            # Database migrations
+│   └── tests/              # Backend tests
+├── 📁 react-frontend/       # React TypeScript app
+│   ├── src/                # Frontend source code
+│   └── public/             # Static assets
+├── 📁 docs/                # 📚 Organized documentation
+│   ├── getting-started/    # New developer guides
+│   ├── development/        # Development workflows
+│   ├── deployment/         # Production guides
+│   ├── troubleshooting/    # Problem solving
+│   └── reference/          # Technical references
+├── 📁 scripts/             # 🛠️ Utility scripts
+│   ├── dev/               # Development helpers
+│   ├── docker/            # Container operations
+│   ├── deployment/        # Release scripts
+│   └── database/          # DB management
+└── 📄 docker-compose.yml   # Development environment
+```
 
-The project now supports two distinct development workflows:
+## 🎯 Development Workflow
 
-1. **Local Development**: Uses SQLite database for faster development cycles
-2. **Docker-based Testing**: Uses PostgreSQL for testing and production-like environments
+### 1. First Time Setup
 
-### Environment Files Structure
+```powershell
+# Follow the comprehensive setup guide
+# This covers IDE setup, dependencies, and configuration
+.\docs\development\DEVELOPER_SETUP.md
+```
 
-Each component (backend, frontend) has dedicated environment files for different contexts:
+### 2. Daily Development
 
-- `.env.development`: Local development settings (SQLite for backend)
-- `.env.test`: Testing environment settings (PostgreSQL)
-- `.env.production`: Production environment settings
+```powershell
+# Start development environment
+docker-compose up -d
 
-These files are derived from the `.env.example` templates in each directory.
+# Run backend tests
+.\scripts\dev\run-tests.ps1
 
-### Docker Compose Structure
+# Access services:
+# - Frontend: http://localhost:80
+# - Backend: http://localhost:8000
+# - API Docs: http://localhost:8000/docs
+```
 
-The project uses a modular Docker Compose approach:
+### 3. Before Deployment
 
-1. **Root `docker-compose.yml`**: Contains shared services (PostgreSQL, Redis, Mailhog)
-2. **`backend/docker-compose.yml`**: Contains backend-specific services
-3. **`react-frontend/docker-compose.yml`**: Contains frontend-specific services
+```powershell
+# Validate production setup
+.\scripts\docker\validate-config.ps1 -Validate
 
-This structure allows for selective service deployment using Docker Compose's include feature.
+# Test production configuration locally
+.\scripts\docker\test-production.ps1
+```
 
-## Local Development Quickstart
+## 🔧 Common Operations
 
-### Backend (with SQLite)
+| Task                     | Command                                      | Documentation                                              |
+| ------------------------ | -------------------------------------------- | ---------------------------------------------------------- |
+| **Start development**    | `docker-compose up -d`                       | [Getting Started](docs/getting-started/GETTING_STARTED.md) |
+| **Run tests**            | `.\scripts\dev\run-tests.ps1`                | [Testing Guide](docs/development/TESTING.md)               |
+| **Deploy to production** | `.\scripts\deployment\push-to-dockerhub.ps1` | [Deployment](docs/deployment/PRODUCTION_SETUP.md)          |
+| **Troubleshoot CORS**    | `.\scripts\docker\diagnose-cors.ps1`         | [CORS Guide](docs/troubleshooting/CORS_TROUBLESHOOTING.md) |
+| **Database migration**   | `.\scripts\database\migrate-db.ps1`          | [DB Reference](docs/reference/DATABASE_SCHEMA.md)          |
 
-```bash
-# Navigate to backend directory
-cd backend
+## 🆘 Need Help?
 
-# Set development mode (uses SQLite)
-export MODE=development  # On Windows: $env:MODE="development"
+1. **🔍 Check documentation**: Start with [Getting Started](docs/getting-started/GETTING_STARTED.md)
+2. **🔧 Browse troubleshooting**: See [troubleshooting guides](docs/troubleshooting/)
+3. **💬 Ask the team**: Create an issue with detailed information
+4. **📖 Read the code**: Well-documented with inline comments
 
-# Create virtual environment
-python -m venv .venv
+## 🤝 Contributing
 
-# Activate virtual environment
-# Windows: .venv\Scripts\Activate.ps1
-# Linux/Mac: . .venv/bin/activate
+1. Read the [Development Setup](docs/development/DEVELOPER_SETUP.md)
+2. Follow the [Coding Standards](docs/development/CODING_STANDARDS.md)
+3. Write tests for new features
+4. Update documentation as needed
 
-# Install dependencies
-pip install -r requirements.txt
+---
+
+**Ready to get started?** 👉 [Click here to begin!](docs/getting-started/GETTING_STARTED.md)
 
 # Run the backend service
+
 uvicorn app.main:app --port 8001 --reload
-```
+
+````
 
 ### Frontend
 
@@ -115,7 +155,7 @@ npm install
 
 # Run the development server
 npm run dev
-```
+````
 
 ## Docker-based Development
 

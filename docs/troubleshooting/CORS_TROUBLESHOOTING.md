@@ -32,12 +32,11 @@ CORS errors typically occur when:
 
 3. **Test with the provided scripts**:
 
-   ```powershell
-   # Test both containers together
-   .\test-cors-setup.ps1
+   ```powershell # Test both containers together
+   .\scripts\docker\test-cors-setup.ps1
 
    # Diagnose specific CORS issues
-   .\diagnose-cors.ps1
+   .\scripts\docker\diagnose-cors.ps1
    ```
 
 ## Advanced Troubleshooting
@@ -50,8 +49,8 @@ CORS errors typically occur when:
 ## Debugging Tools
 
 - `docker-compose.prod-test.yml`: Runs frontend and backend together
-- `test-cors-setup.ps1`: Sets up and tests the containers
-- `diagnose-cors.ps1`: Provides detailed diagnostic information
+- `scripts\docker\test-cors-setup.ps1`: Sets up and tests the containers
+- `scripts\docker\diagnose-cors.ps1`: Provides detailed diagnostic information
 
 For persistent issues, check the container logs:
 

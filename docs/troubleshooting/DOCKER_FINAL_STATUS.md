@@ -114,8 +114,8 @@
 
 ### Validation Scripts
 
-- `validate-docker-config.ps1` - Comprehensive configuration validation
-- `test-production-deployment.ps1` - Local production testing
+- `scripts\docker\validate-docker-config.ps1` - Comprehensive configuration validation
+- `scripts\docker\test-production-deployment.ps1` - Local production testing
 
 ### Documentation
 
@@ -199,7 +199,7 @@
 
 ### For Development:
 
-1. **Local Testing**: Use `test-production-deployment.ps1` to test locally
+1. **Local Testing**: Use `scripts\docker\test-production-deployment.ps1` to test locally
 2. **Code Changes**: Continue development with the working configuration
 3. **CI/CD**: Integrate with your deployment pipeline
 

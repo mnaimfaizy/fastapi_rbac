@@ -185,7 +185,7 @@ Run these commands to validate your deployment:
 
 ```powershell
 # Validate Docker configuration
-.\validate-docker-config.ps1
+.\scripts\docker\validate-docker-config.ps1
 
 # Test API connectivity
 curl http://your-domain.com/api/v1/health
