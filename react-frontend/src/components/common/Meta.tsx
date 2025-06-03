@@ -1,5 +1,3 @@
-import { Helmet } from 'react-helmet-async';
-
 interface MetaProps {
   title?: string;
   description?: string;
@@ -36,7 +34,8 @@ export const Meta = ({
   const fullTitle = `${title} | ${appName}`;
 
   return (
-    <Helmet>
+    <>
+      {/* React 19 native document metadata */}
       <title>{fullTitle}</title>
       <meta name="description" content={description} />
       <meta name="keywords" content={keywords} />
@@ -57,6 +56,6 @@ export const Meta = ({
 
       {/* Canonical URL */}
       <link rel="canonical" href={canonicalUrl} />
-    </Helmet>
+    </>
   );
 };
