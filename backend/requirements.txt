@@ -128,6 +128,7 @@ typing_extensions==4.13.2
 tzdata==2025.2
 ujson==5.10.0
 urllib3==2.4.0
+slowapi==0.1.9
 uvicorn==0.34.2
 vine==5.1.0
 virtualenv==20.30.0

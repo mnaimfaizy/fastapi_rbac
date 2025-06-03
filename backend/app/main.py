@@ -13,6 +13,10 @@ from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
 from fastapi_limiter import FastAPILimiter
 from jwt import DecodeError, ExpiredSignatureError, MissingRequiredClaimError
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.pool import NullPool
 from starlette.middleware.cors import CORSMiddleware
@@ -142,6 +146,11 @@ fastapi_app = FastAPI(
     lifespan=lifespan,
 )
 
+# Create limiter instance for rate limiting
+limiter = Limiter(key_func=get_remote_address)
+fastapi_app.state.limiter = limiter
+fastapi_app.add_middleware(SlowAPIMiddleware)
+
 
 fastapi_app.add_middleware(
     SQLAlchemyMiddleware,
@@ -201,6 +210,21 @@ fastapi_app.include_router(api_router_v1, prefix=settings.API_V1_STR)
 
 
 # Exception handlers for consistent error responses
+@fastapi_app.exception_handler(RateLimitExceeded)
+async def rate_limit_exception_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    """
+    Handle rate limit exceeded errors with standardized JSON response
+    """
+    return JSONResponse(
+        status_code=429,
+        content={
+            "success": False,
+            "message": f"Rate limit exceeded: {exc.detail}",
+            "code": "RATE_LIMIT_EXCEEDED",
+        },
+    )
+
+
 @fastapi_app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     """

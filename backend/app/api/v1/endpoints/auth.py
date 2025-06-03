@@ -9,6 +9,8 @@ from fastapi.security import OAuth2PasswordRequestForm
 from jwt import DecodeError, ExpiredSignatureError, MissingRequiredClaimError
 from pydantic import EmailStr
 from redis.asyncio import Redis as AsyncRedis
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app import crud
@@ -42,10 +44,14 @@ from app.utils.user_utils import serialize_user
 
 logger = logging.getLogger("fastapi_rbac")
 
+# Create limiter instance for this module
+limiter = Limiter(key_func=get_remote_address)
+
 router = APIRouter()
 
 
 @router.post("/login")
+@limiter.limit("5/minute")
 async def login(
     request: Request,
     email: EmailStr = Body(...),
@@ -373,6 +379,7 @@ async def login(
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
+@limiter.limit("3/hour")
 async def register(
     request: Request,
     user_in: UserRegister,
@@ -1325,7 +1332,9 @@ async def get_new_access_token(
 
 
 @router.post("/access-token")
+@limiter.limit("5/minute")
 async def login_access_token(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     redis_client: AsyncRedis = Depends(get_redis_client),
@@ -1573,6 +1582,7 @@ async def logout(
 
 
 @router.post("/password-reset/request")
+@limiter.limit("3/hour")
 async def request_password_reset(
     request: Request,  # Added request parameter
     reset_request: PasswordResetRequest = Body(...),
