@@ -161,42 +161,140 @@ backend/
 
 ```
 react-frontend/
+├── public/                   # Static public assets
 ├── src/
+│   ├── App.css               # Global application styles
+│   ├── App.tsx               # Main application component with routing
+│   ├── main.tsx              # Application entry point with providers
+│   ├── index.css             # Global CSS styles and Tailwind directives
+│   ├── vite-env.d.ts         # Vite environment type declarations
 │   ├── assets/               # Static assets and images
 │   ├── components/           # Reusable UI components
 │   │   ├── auth/             # Authentication components
-│   │   ├── layout/           # Layout components (navbar, sidebar, etc.)
-│   │   └── ui/               # ShadCN UI components
-│   ├── features/             # Feature-based modules
-│   │   ├── auth/             # Authentication features (login, signup, etc.)
+│   │   │   ├── LoginForm.tsx # Login form component
+│   │   │   ├── SignupForm.tsx # Registration form component
+│   │   │   └── ProtectedRoute.tsx # Route protection component
+│   │   ├── common/           # Common reusable components
+│   │   │   ├── AppWrapper.tsx # Application wrapper with providers
+│   │   │   ├── LoadingScreen.tsx # Loading state component
+│   │   │   ├── SplashScreen.tsx # Initial loading splash
+│   │   │   ├── Meta.tsx      # HTML meta tag management
+│   │   │   └── PageMeta.tsx  # Page-specific meta management
+│   │   ├── dashboard/        # Dashboard-specific components
+│   │   ├── layout/           # Layout components
+│   │   │   ├── AuthLayout.tsx # Layout for authentication pages
+│   │   │   ├── MainLayout.tsx # Main application layout
+│   │   │   └── ProtectedRoute.tsx # Route-level protection
+│   │   └── ui/               # ShadCN UI component library
+│   │       ├── alert-dialog.tsx # Modal dialog components
+│   │       ├── alert.tsx     # Alert/notification components
+│   │       ├── avatar.tsx    # User avatar component
+│   │       ├── badge.tsx     # Status badge component
+│   │       ├── button.tsx    # Button component with variants
+│   │       ├── card.tsx      # Card container component
+│   │       ├── checkbox.tsx  # Checkbox form input
+│   │       ├── command.tsx   # Command palette component
+│   │       ├── dialog.tsx    # Modal dialog component
+│   │       ├── dropdown-menu.tsx # Dropdown menu component
+│   │       ├── form.tsx      # Form wrapper with validation
+│   │       ├── input.tsx     # Text input component
+│   │       ├── label.tsx     # Form label component
+│   │       ├── pagination.tsx # Pagination component
+│   │       ├── popover.tsx   # Popover/tooltip component
+│   │       ├── select.tsx    # Select dropdown component
+│   │       ├── separator.tsx # Visual separator component
+│   │       ├── sheet.tsx     # Side sheet/drawer component
+│   │       ├── skeleton.tsx  # Loading skeleton component
+│   │       ├── sonner.tsx    # Toast notification component
+│   │       ├── table.tsx     # Data table component
+│   │       ├── textarea.tsx  # Multi-line text input
+│   │       └── tooltip.tsx   # Tooltip component
+│   ├── features/             # Feature-based modules (domain-driven design)
+│   │   ├── auth/             # Authentication features
+│   │   │   ├── components/   # Auth-specific components
+│   │   │   ├── LoginPage.tsx # Login page component
+│   │   │   ├── SignupPage.tsx # Registration page component
+│   │   │   ├── PasswordResetPage.tsx # Password reset page
+│   │   │   ├── PasswordResetRequestPage.tsx # Password reset request
+│   │   │   ├── PasswordResetConfirmPage.tsx # Password reset confirmation
+│   │   │   └── RegistrationSuccessPage.tsx # Registration success page
+│   │   ├── dashboard/        # Dashboard features
 │   │   ├── users/            # User management features
+│   │   │   ├── user-table-columns.tsx # Data table column definitions
+│   │   │   ├── UsersList.tsx # User list/table component
+│   │   │   ├── UserDetailContent.tsx # User detail view
+│   │   │   ├── UserEditForm.tsx # User editing form
+│   │   │   └── UserEditPage.tsx # User edit page component
 │   │   ├── roles/            # Role management features
+│   │   │   ├── RoleList.tsx  # Role list component
+│   │   │   ├── RoleDetail.tsx # Role detail view
+│   │   │   ├── RoleForm.tsx  # Role creation/edit form
+│   │   │   ├── RoleFormContent.tsx # Form content component
+│   │   │   └── RolesContent.tsx # Main roles page content
 │   │   ├── permissions/      # Permission management features
+│   │   │   ├── PermissionsContent.tsx # Main permissions page
+│   │   │   ├── PermissionsDataTable.tsx # Permissions data table
+│   │   │   ├── PermissionDetail.tsx # Permission detail view
+│   │   │   ├── PermissionForm.tsx # Permission form
+│   │   │   └── PermissionFormContent.tsx # Form content component
 │   │   ├── role-groups/      # Role group management features
 │   │   └── permission-groups/ # Permission group management features
 │   ├── hooks/                # Custom React hooks
-│   │   ├── useAuth.ts        # Authentication hooks
-│   │   └── ...               # Other custom hooks
+│   │   ├── redux.ts          # Redux-specific hooks (useAppDispatch, useAppSelector)
+│   │   ├── useAuth.ts        # Authentication state and functions
+│   │   ├── usePermissions.ts # Permission checking utilities
+│   │   ├── usePageMeta.ts    # Page metadata management
+│   │   └── use-media-query.ts # Responsive design utilities
 │   ├── lib/                  # Utility functions and shared code
-│   │   ├── utils.ts          # General utility functions
-│   │   └── validation.ts     # Form validation utilities
+│   │   ├── utils.ts          # General utility functions (cn, formatters, etc.)
+│   │   └── tokenStorage.ts   # Secure token storage management
 │   ├── models/               # TypeScript interfaces and types
-│   │   ├── auth.ts           # Authentication-related types
-│   │   ├── user.ts           # User-related interfaces
+│   │   ├── auth.ts           # Authentication types (Token, LoginCredentials, etc.)
+│   │   ├── user.ts           # User interfaces and types
 │   │   ├── role.ts           # Role-related interfaces
-│   │   └── permission.ts     # Permission-related interfaces
+│   │   ├── roleGroup.ts      # Role group interfaces
+│   │   ├── permission.ts     # Permission-related interfaces
+│   │   ├── dashboard.ts      # Dashboard/analytics interfaces
+│   │   ├── common.ts         # Common types and interfaces
+│   │   └── pagination.ts     # Pagination-related types
+│   ├── pages/                # Top-level page components
+│   │   ├── NotFoundPage.tsx  # 404 error page
+│   │   └── UnauthorizedPage.tsx # 403 unauthorized page
 │   ├── services/             # API communication services
-│   │   ├── api.ts            # Base API client with interceptors
-│   │   ├── auth.service.ts   # Authentication API services
-│   │   ├── user.service.ts   # User API services
-│   │   └── ...               # Other API services
+│   │   ├── api.ts            # Base Axios client with interceptors
+│   │   ├── authTokenManager.ts # Token refresh and management
+│   │   ├── auth.service.ts   # Authentication API calls
+│   │   ├── user.service.ts   # User management API calls
+│   │   ├── role.service.ts   # Role management API calls
+│   │   ├── roleGroup.service.ts # Role group API calls
+│   │   ├── permission.service.ts # Permission management API calls
+│   │   └── dashboard.service.ts # Dashboard/analytics API calls
 │   └── store/                # Redux store configuration
-│       ├── index.ts          # Store setup and configuration
-│       ├── middleware.ts     # Redux middleware (e.g., for API calls)
-│       └── slices/           # Redux slices for state management
+│       ├── index.ts          # Store setup with middleware
+│       ├── hooks.ts          # Typed Redux hooks
+│       └── slices/           # Redux Toolkit slices
 │           ├── authSlice.ts  # Authentication state management
-│           ├── userSlice.ts  # User state management
-│           └── ...           # Other state slices
+│           ├── userSlice.ts  # User management state
+│           ├── roleSlice.ts  # Role management state
+│           ├── roleGroupSlice.ts # Role group state
+│           ├── permissionSlice.ts # Permission management state
+│           ├── permissionGroupSlice.ts # Permission group state
+│           └── dashboardSlice.ts # Dashboard/analytics state
+├── components.json           # ShadCN UI configuration
+├── eslint.config.js          # ESLint configuration
+├── index.html                # HTML template
+├── nginx.conf                # Nginx configuration for production
+├── package.json              # Dependencies and scripts
+├── tsconfig.json             # TypeScript configuration
+├── tsconfig.app.json         # App-specific TypeScript config
+├── tsconfig.node.json        # Node-specific TypeScript config
+├── vite.config.ts            # Vite build configuration
+├── .env.example              # Environment variables template
+├── .env.production           # Production environment config
+├── .env.test                 # Test environment config
+├── Dockerfile                # Development Docker configuration
+├── Dockerfile.prod           # Production Docker configuration
+└── docker-compose.yml        # Development Docker Compose
 ```
 
 ## Core Data Models
@@ -259,22 +357,52 @@ react-frontend/
 
 1. **User Interface**: `models/user.ts`
 
-   - Interface for user data: id, email, firstName, lastName, isActive, roles
+   - Comprehensive user data interface with security properties
+   - Properties: id, email, first_name, last_name, is_active, is_superuser, is_locked, locked_until
+   - Security fields: needs_to_change_password, verified, number_of_failed_attempts, verification_code
+   - Timestamps: created_at, updated_at, expiry_date, last_changed_password_date
+   - Relationships: roles array and permissions array for access control
    - Used for user management features and displaying user information
 
 2. **Role Interface**: `models/role.ts`
 
    - Interface for role data: id, name, description, permissions
+   - Role group relationships for hierarchical management
    - Used for role management and access control
 
 3. **Permission Interface**: `models/permission.ts`
 
-   - Interface for permission data: id, name, description, groupId
+   - Interface for permission data: id, name, description, group_id
+   - Permission group relationships for logical organization
    - Used for permission management and role configuration
 
-4. **Auth Types**: `models/auth.ts`
-   - Interfaces for authentication: LoginRequest, AuthResponse, TokenPayload
-   - Defines structures for working with JWT tokens
+4. **Role Group Interface**: `models/roleGroup.ts`
+
+   - Interface for hierarchical role organization
+   - Properties: id, name, description, parent_id for nesting
+   - Used for structured role management
+
+5. **Auth Types**: `models/auth.ts`
+
+   - **Token Interface**: access_token, token_type, refresh_token, user
+   - **LoginCredentials**: email, password for authentication
+   - **ErrorResponse**: message, code, detail for error handling
+   - **AuthState**: Complete authentication state for Redux store
+   - Defines structures for working with JWT tokens and auth flows
+
+6. **Common Types**: `models/common.ts`
+
+   - Shared interfaces and utility types across the application
+   - Response wrappers and pagination interfaces
+
+7. **Dashboard Types**: `models/dashboard.ts`
+
+   - Analytics and dashboard-specific interfaces
+   - Metrics, charts, and reporting data structures
+
+8. **Pagination Types**: `models/pagination.ts`
+   - Standard pagination interfaces for list views
+   - Page, limit, total, and navigation metadata
 
 ## Authentication Flow
 
@@ -299,943 +427,500 @@ react-frontend/
    - If refresh fails, user is logged out and redirected to login
 
 4. **Logout Process**:
-   - Frontend calls `/api/v1/auth/logout` endpoint
-   - Backend invalidates tokens in Redis
+   - Frontend calls `/api/v1/auth/logout` endpoint - Backend invalidates tokens in Redis
    - Frontend clears tokens from memory and localStorage
 
-## Background Tasks and Celery Integration
+## Frontend Architecture and Patterns
 
-The backend supports both FastAPI BackgroundTasks for simple operations and Celery for complex, distributed, and scheduled tasks:
+The React frontend follows modern React patterns and best practices:
 
-### Background Task System
+### Key Architecture Decisions
 
-1. **FastAPI BackgroundTasks**: Used for simple, quick tasks during development
-2. **Celery Workers**: Used for production workloads, long-running tasks, and scheduled operations
-3. **Task Queues**: Multiple queues for different task types:
-   - `emails`: Email sending tasks
-   - `maintenance`: System maintenance tasks
-   - `logging`: Security audit logging
-   - `user_management`: User-related background operations
-   - `periodic_tasks`: Scheduled recurring tasks
-   - `default`: General purpose tasks
+1. **Token Security Strategy**:
 
-### Available Background Tasks
+   - Access tokens stored in memory (Redux state) to prevent XSS attacks
+   - Refresh tokens stored in localStorage with secure handling
+   - Automatic token refresh via Axios interceptors
 
-1. **Email Tasks** (`app/worker.py`):
+2. **State Management**:
 
-   - `send_email_task`: Send emails with templates
-   - Password reset emails, verification emails, etc.
+   - Redux Toolkit for predictable state management
+   - Feature-based slices (authSlice, userSlice, roleSlice, etc.)
+   - Async thunks for API calls with proper error handling
 
-2. **Token Management**:
+3. **Component Architecture**:
 
-   - `cleanup_tokens_task`: Clean up expired tokens from Redis
-   - Automatic token cleanup during logout and security events
+   - Feature-driven organization in `src/features/`
+   - Reusable UI components in `src/components/ui/` (ShadCN)
+   - Layout components for consistent page structure
 
-3. **Security Tasks**:
+4. **Type Safety**:
+   - TypeScript interfaces for all data models
+   - Typed Redux hooks (useAppDispatch, useAppSelector)
+   - Strong typing for API responses and service calls
 
-   - `log_security_event_task`: Audit logging for security events
-   - `process_account_lockout_task`: Handle account lockouts
+### Core Frontend Patterns
 
-4. **Scheduled Tasks** (`app/celery_beat_schedule.py`):
-   - Daily token cleanup
-   - Weekly security log cleanup
-   - Hourly account unlock checks
-   - System health monitoring
-
-### Celery Configuration
-
-- **Centralized Config**: `app/celery_app.py` and `app/core/celery_config.py`
-- **Service Configuration**: `app/core/service_config.py` for environment-specific settings
-- **Worker Scripts**: `scripts/worker-start.sh/ps1` for starting workers
-- **Beat Scheduler**: `scripts/beat-start.sh/ps1` for scheduled tasks
-
-## Database Initialization and Seed Data
-
-The system includes comprehensive database initialization with seed data:
-
-### Initial Data Setup (`app/db/init_db.py`)
-
-1. **Default Permission Groups**:
-
-   - User, Role, Permission, Role Group, Permission Group, Self, Content
-
-2. **Default Permissions**:
-
-   - CRUD operations for each resource type
-   - Self-management permissions for user profiles
-   - Content management permissions
-
-3. **Default Role Groups**:
-
-   - Administrative, Management, StandardUser
-
-4. **Default Roles**:
-
-   - Admin: Full system access
-   - Manager: User and content management
-   - User: Self-management and basic content access
-
-5. **Default Users**:
-   - Admin user (superuser)
-   - Manager user (management role)
-   - Standard user (basic access)
-
-### Permission Naming Convention
-
-Permissions use a structured naming format: `{group_name}.{action_name}`
-
-- Examples: `user.create`, `role.read`, `self.update_profile`
-- Managed by `app/utils/string_utils.py` format_permission_name function
-
-### Database Initialization Scripts
-
-1. **Runtime Initialization**: `app/initial_data.py` - Run during application startup
-2. **Manual Initialization**: `init_data.py` - Standalone script for manual setup
-3. **Docker Initialization**: `init-scripts/` - Database setup for containerized deployments
-
-## Critical Implementation Patterns - DO NOT MODIFY
-
-### Core Security Architecture
-
-**DO NOT modify these core security components without explicit permission:**
-
-1. **Password Security** (`app/core/security.py`):
-
-   - Password hashing using bcrypt with salt and pepper
-   - Token generation and validation logic
-   - Password history tracking system
-   - Account lockout mechanisms
-
-2. **Authentication Flow** (`app/api/deps.py`):
-
-   - JWT token validation dependency
-   - Role-based access control decorators
-   - Current user extraction from tokens
-   - Redis token blacklist checking
-
-3. **Database Session Management** (`app/db/session.py`):
-
-   - Async database session creation
-   - Connection pooling configuration
-   - Transaction handling patterns
-
-4. **Core Models Relationships** (all files in `app/models/`):
-   - Many-to-many relationship tables (UserRole, RolePermission, etc.)
-   - UUID primary key inheritance from BaseUUIDModel
-   - SQLAlchemy event listeners in role models
-
-### Core Configuration - HANDLE WITH EXTREME CARE
-
-**These files contain critical system configuration:**
-
-1. **Main Application** (`app/main.py`):
-
-   - FastAPI application instance creation
-   - Middleware registration order
-   - CORS configuration
-   - Global exception handlers
-   - Application lifespan events
-
-2. **Celery Configuration** (`app/celery_app.py`, `app/core/celery_config.py`):
-
-   - Centralized Celery application instance
-   - Task queue definitions and routing
-   - Redis broker configuration
-   - Task execution settings
-
-3. **Database Initialization** (`app/db/init_db.py`):
-   - Initial data seeding logic
-   - Superuser creation process
-   - Permission and role hierarchy setup
-   - Default system configurations
-
-### Required Patterns for New Code
-
-When adding new features, ALWAYS follow these patterns:
-
-1. **API Endpoint Pattern**:
-
-   ```python
-   @router.get("", response_model=IGetResponseBase[IResourceRead])
-   async def get_resources(
-       current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin])),
-       db_session: AsyncSession = Depends(deps.get_db_session),
-   ):
-       # Implementation
-       resources = await crud.resource.get_multi(db_session=db_session)
-       return create_response(data=resources)
-   ```
-
-2. **CRUD Pattern** (inherit from `CRUDBase`):
-
-   ```python
-   class CRUDResource(CRUDBase[Resource, IResourceCreate, IResourceUpdate]):
-       # Custom methods only
-       pass
-
-   resource = CRUDResource(Resource)
-   ```
-
-3. **Schema Pattern** (use consistent naming):
-
-   ```python
-   class IResourceBase(BaseModel):
-       # Common fields
-
-   class IResourceCreate(IResourceBase):
-       # Creation-specific fields
-
-   class IResourceUpdate(IResourceBase):
-       # Update-specific fields (use @optional decorator)
-
-   class IResourceRead(IResourceBase):
-       id: UUID
-       # Read-only fields
-   ```
-
-4. **Model Pattern** (inherit from `BaseUUIDModel`):
-
-   ```python
-   class ResourceBase(SQLModel):
-       # Field definitions
-     class Resource(BaseUUIDModel, ResourceBase, table=True):
-       __tablename__ = "Resource"
-       # Relationships and constraints
-   ```
-
-5. **Dependency Pattern** (for resource validation):
-
-   ```python
-   # app/deps/resource_deps.py
-   from app.utils.exceptions.common_exception import IdNotFoundException
-
-   async def valid_resource_id(
-       resource_id: UUID = Path(..., description="The ID of the resource")
-   ) -> Resource:
-       """Validate that a resource exists and return it."""
-       resource = await crud.resource.get(id=resource_id)
-       if not resource:
-           raise IdNotFoundException(Resource, id=resource_id)
-       return resource
-   ```
-
-### Security Requirements - NEVER BYPASS
-
-1. **Role-Based Access Control**:
-
-   - ALWAYS use `deps.get_current_user(required_roles=[...])` for protected endpoints
-   - NEVER bypass role checking for sensitive operations
-   - Use appropriate role enums from `IRoleEnum`
-
-2. **Input Validation**:
-
-   - ALWAYS validate input using Pydantic schemas
-   - NEVER trust user input without validation
-   - Use appropriate field validators for sensitive data
-
-3. **Database Operations**:
-
-   - ALWAYS use async database sessions
-   - NEVER execute raw SQL without parameterization
-   - Use CRUD classes for all database operations
-
-4. **Error Handling**:
-
-   - ALWAYS use standard response schemas (`create_response`, `create_error_response`)
-   - NEVER expose internal system details in error messages
-   - Log security-relevant events using audit logging
-
-5. **Background Tasks**:
-   - Use `app/utils/background_tasks.py` for task management
-   - Support both FastAPI BackgroundTasks and Celery
-   - NEVER execute blocking operations in request handlers
-
-### File Organization Rules
-
-1. **New API Endpoints**: Place in `app/api/v1/endpoints/[resource].py`
-2. **New Models**: Place in `app/models/[resource]_model.py`
-3. **New Schemas**: Place in `app/schemas/[resource]_schema.py`
-4. **New CRUD**: Place in `app/crud/[resource]_crud.py`
-5. **New Dependencies**: Place in `app/deps/[resource]_deps.py`
-6. **New Utilities**: Place in appropriate subdirectory under `app/utils/`
-
-### Important Utility Functions and Patterns
-
-**Security Audit Logging** (`app/utils/security_audit.py`):
-
-```python
-from app.utils.security_audit import create_audit_log
-
-# Log security events for compliance
-await create_audit_log(
-    db_session=db_session,
-    actor_id=current_user.id,
-    action="user.login",
-    resource_type="user",
-    resource_id=str(user.id),
-    details={"ip_address": request.client.host}
-)
-```
-
-**Background Task Management** (`app/utils/background_tasks.py`):
-
-```python
-from app.utils.background_tasks import add_task_to_queue
-
-# Queue background tasks properly
-await add_task_to_queue(
-    "send_email_task",
-    queue_name="emails",
-    email_data={"to": user.email, "template": "welcome"}
-)
-```
-
-**String Utilities** (`app/utils/string_utils.py`):
-
-```python
-from app.utils.string_utils import format_permission_name
-
-# Format permission names consistently
-permission_name = format_permission_name("user", "create")  # Returns "user.create"
-```
-
-**Token Management** (`app/utils/token_manager.py`):
-
-```python
-from app.utils.token_manager import invalidate_user_tokens
-
-# Invalidate all tokens for security events
-await invalidate_user_tokens(user_id=user.id, reason="password_change")
-```
-
-### Testing Requirements
-
-When adding new features, ALWAYS include:
-
-1. **API Tests**: Test all endpoints in `test/test_api_[resource].py`
-2. **CRUD Tests**: Test database operations in `test/test_crud_[resource].py`
-3. **Model Tests**: Test relationships in `test/test_models_[resource].py`
-4. **Security Tests**: Test authorization and validation
-5. **Factory Classes**: Create test data factories in `test/factories/`
-
-## Common Tasks and How to Implement Them
-
-### Adding a New API Endpoint
-
-1. Create appropriate schemas in `backend/app/schemas/`:
-
-   ```python
-   # backend/app/schemas/new_resource_schema.py
-   from pydantic import BaseModel
-   from uuid import UUID
-
-   class INewResourceBase(BaseModel):
-       name: str
-       description: str | None = None
-
-   class INewResourceCreate(INewResourceBase):
-       pass
-
-   class INewResourceUpdate(INewResourceBase):
-       name: str | None = None
-
-   class INewResourceRead(INewResourceBase):
-       id: UUID
-
-       class Config:
-           orm_mode = True
-   ```
-
-2. Add CRUD operations in `backend/app/crud/`:
-
-   ```python
-   # backend/app/crud/new_resource_crud.py
-   from app.crud.base_crud import CRUDBase
-   from app.models.new_resource_model import NewResource
-   from app.schemas.new_resource_schema import INewResourceCreate, INewResourceUpdate
-
-   class CRUDNewResource(CRUDBase[NewResource, INewResourceCreate, INewResourceUpdate]):
-       # Add custom CRUD methods specific to this resource
-       pass
-
-   new_resource = CRUDNewResource(NewResource)
-   ```
-
-3. Create a model in `backend/app/models/`:
-
-   ```python
-   # backend/app/models/new_resource_model.py
-   from sqlmodel import Field, SQLModel, String
-   from app.models.base_uuid_model import BaseUUIDModel
-
-   class NewResourceBase(SQLModel):
-       name: str = Field(index=True)
-       description: str | None = None
-
-   class NewResource(BaseUUIDModel, NewResourceBase, table=True):
-       # Add relationships and additional fields here
-       pass
-   ```
-
-4. Create an endpoint file in `backend/app/api/v1/endpoints/`:
-
-   ```python
-   # backend/app/api/v1/endpoints/new_resource.py
-   from fastapi import APIRouter, Depends
-   from uuid import UUID
-
-   from app import crud
-   from app.api import deps
-   from app.models.user_model import User
-   from app.schemas.new_resource_schema import INewResourceCreate, INewResourceRead, INewResourceUpdate
-   from app.schemas.response_schema import IGetResponseBase, create_response
-   from app.schemas.role_schema import IRoleEnum
-
-   router = APIRouter()
-
-   @router.get("", response_model=IGetResponseBase[INewResourceRead])
-   async def get_new_resources(
-       current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin])),
-   ):
-       """Get all new resources. Requires admin role."""
-       resources = await crud.new_resource.get_multi()
-       return create_response(data=resources)
-
-   # Add other CRUD endpoints...
-   ```
-
-5. Register the router in `backend/app/api/v1/api.py`:
-
-   ```python
-   from app.api.v1.endpoints import new_resource
-
-   api_router.include_router(new_resource.router, prefix="/new-resource", tags=["new_resource"])
-   ```
-
-### Adding a New Frontend Feature
-
-1. Create TypeScript interfaces in `react-frontend/src/models/`:
+1. **Authentication Hook Pattern**:
 
    ```typescript
-   // react-frontend/src/models/newResource.ts
-   export interface NewResource {
-     id: string;
-     name: string;
-     description: string | null;
-   }
+   // useAuth.ts provides centralized auth logic
+   const { user, isAuthenticated, hasPermission } = useAuth();
+   ```
 
-   export interface CreateNewResourceDto {
-     name: string;
-     description?: string;
-   }
+2. **Protected Route Pattern**:
 
-   export interface UpdateNewResourceDto {
-     name?: string;
-     description?: string;
+   ```typescript
+   <ProtectedRoute
+     requiredRoles={["admin"]}
+     requiredPermissions={["user.read"]}
+   >
+     <UserManagement />
+   </ProtectedRoute>
+   ```
+
+3. **Permission Checking Pattern**:
+
+   ```typescript
+   const { hasPermission, hasAnyPermission } = usePermissions();
+
+   {
+     hasPermission("user.create") && <CreateUserButton />;
    }
    ```
 
-2. Add API service functions in `react-frontend/src/services/`:
+4. **Service Layer Pattern**:
 
    ```typescript
-   // react-frontend/src/services/newResource.service.ts
-   import { api } from "./api";
-   import {
-     CreateNewResourceDto,
-     NewResource,
-     UpdateNewResourceDto,
-   } from "../models/newResource";
-
-   const BASE_URL = "/api/v1/new-resource";
-
-   export const newResourceService = {
-     getAll: async (): Promise<NewResource[]> => {
-       const response = await api.get(BASE_URL);
-       return response.data.data;
-     },
-
-     getById: async (id: string): Promise<NewResource> => {
-       const response = await api.get(`${BASE_URL}/${id}`);
-       return response.data.data;
-     },
-
-     create: async (data: CreateNewResourceDto): Promise<NewResource> => {
-       const response = await api.post(BASE_URL, data);
-       return response.data.data;
-     },
-
-     update: async (
-       id: string,
-       data: UpdateNewResourceDto
-     ): Promise<NewResource> => {
-       const response = await api.put(`${BASE_URL}/${id}`, data);
-       return response.data.data;
-     },
-
-     delete: async (id: string): Promise<void> => {
-       await api.delete(`${BASE_URL}/${id}`);
-     },
+   // Centralized API calls with error handling
+   export const userService = {
+     getAll: () => api.get("/api/v1/users"),
+     create: (data) => api.post("/api/v1/users", data),
+     // ... other CRUD operations
    };
    ```
 
-3. Create Redux slice in `react-frontend/src/store/slices/`:
+5. **Redux Async Thunk Pattern**:
+   ```typescript
+   export const fetchUsers = createAsyncThunk(
+     "users/fetchAll",
+     async (_, { rejectWithValue }) => {
+       try {
+         return await userService.getAll();
+       } catch (error) {
+         return rejectWithValue(error.message);
+       }
+     }
+   );
+   ```
+
+### Frontend Development Best Practices
+
+### Component Architecture Patterns
+
+1. **Feature-Based Organization**:
+
+   ```
+   src/features/
+   ├── auth/
+   │   ├── components/         # Feature-specific components
+   │   ├── hooks/             # Feature-specific hooks
+   │   ├── services/          # Feature-specific API calls
+   │   └── types/             # Feature-specific TypeScript types
+   ├── users/
+   ├── roles/
+   └── permissions/
+   ```
+
+2. **Component Naming Conventions**:
+
+   - **Pages**: `LoginPage.tsx`, `UserListPage.tsx`
+   - **Components**: `UserTable.tsx`, `RoleForm.tsx`
+   - **Layout Components**: `MainLayout.tsx`, `AuthLayout.tsx`
+   - **UI Components**: Use ShadCN naming (lowercase with hyphens)
+
+3. **Component Structure Pattern**:
 
    ```typescript
-   // react-frontend/src/store/slices/newResourceSlice.ts
-   import {
-     createSlice,
-     createAsyncThunk,
-     PayloadAction,
-   } from "@reduxjs/toolkit";
-   import { newResourceService } from "../../services/newResource.service";
-   import {
-     NewResource,
-     CreateNewResourceDto,
-     UpdateNewResourceDto,
-   } from "../../models/newResource";
+   // UserListPage.tsx
+   import React from "react";
+   import { useAppSelector, useAppDispatch } from "../../hooks/redux";
+   import { usePermissions } from "../../hooks/usePermissions";
 
-   interface NewResourceState {
-     items: NewResource[];
-     selectedItem: NewResource | null;
+   interface UserListPageProps {
+     // Define props interface
+   }
+
+   export const UserListPage: React.FC<UserListPageProps> = (props) => {
+     // Hooks first
+     const dispatch = useAppDispatch();
+     const { users, loading } = useAppSelector((state) => state.users);
+     const { hasPermission } = usePermissions();
+
+     // Effect hooks
+     useEffect(() => {
+       // Side effects
+     }, []);
+
+     // Event handlers
+     const handleCreateUser = () => {
+       // Handler logic
+     };
+
+     // Conditional rendering logic
+     if (loading) return <LoadingSpinner />;
+
+     return <div className="space-y-6">{/* Component JSX */}</div>;
+   };
+   ```
+
+### State Management Best Practices
+
+1. **Redux Store Structure**:
+
+   ```typescript
+   // Slice structure pattern
+   interface UserState {
+     items: User[];
+     selectedUser: User | null;
      loading: boolean;
      error: string | null;
+     pagination: PaginationState;
    }
 
-   const initialState: NewResourceState = {
-     items: [],
-     selectedItem: null,
-     loading: false,
-     error: null,
+   // Async thunk pattern
+   export const fetchUsers = createAsyncThunk(
+     "users/fetchAll",
+     async (params: FetchUsersParams, { rejectWithValue }) => {
+       try {
+         return await userService.getAll(params);
+       } catch (error) {
+         return rejectWithValue(handleApiError(error));
+       }
+     }
+   );
+   ```
+
+2. **Service Layer Pattern**:
+
+   ```typescript
+   // services/user.service.ts
+   class UserService {
+     private baseUrl = "/api/v1/users";
+
+     async getAll(params?: GetUsersParams): Promise<PaginatedResponse<User>> {
+       const response = await api.get(this.baseUrl, { params });
+       return response.data;
+     }
+
+     async create(userData: CreateUserDto): Promise<User> {
+       const response = await api.post(this.baseUrl, userData);
+       return response.data.data;
+     }
+
+     // Other CRUD operations...
+   }
+
+   export const userService = new UserService();
+   ```
+
+### TypeScript Best Practices
+
+1. **Interface Definitions**:
+
+   ```typescript
+   // models/user.ts
+   export interface User {
+     id: string;
+     email: string;
+     first_name: string;
+     last_name: string;
+     is_active: boolean;
+     roles: Role[];
+     permissions: Permission[];
+     created_at: string;
+     updated_at: string;
+   }
+
+   // Use DTOs for API operations
+   export interface CreateUserDto {
+     email: string;
+     first_name: string;
+     last_name: string;
+     password: string;
+     role_ids?: string[];
+   }
+
+   export interface UpdateUserDto
+     extends Partial<Omit<CreateUserDto, "password">> {
+     id: string;
+   }
+   ```
+
+2. **Generic Types for API Responses**:
+
+   ```typescript
+   // models/common.ts
+   export interface ApiResponse<T> {
+     data: T;
+     message?: string;
+     success: boolean;
+   }
+
+   export interface PaginatedResponse<T> extends ApiResponse<T[]> {
+     pagination: {
+       page: number;
+       limit: number;
+       total: number;
+       pages: number;
+     };
+   }
+   ```
+
+### Error Handling Patterns
+
+1. **API Error Handling**:
+
+   ```typescript
+   // utils/errorHandler.ts
+   export const handleApiError = (error: any): string => {
+     if (error.response?.data?.message) {
+       return error.response.data.message;
+     }
+     if (error.message) {
+       return error.message;
+     }
+     return "An unexpected error occurred";
    };
 
-   export const fetchNewResources = createAsyncThunk(
-     "newResource/fetchAll",
-     async () => {
-       return await newResourceService.getAll();
+   // In components
+   const handleSubmit = async (data: CreateUserDto) => {
+     try {
+       await dispatch(createUser(data)).unwrap();
+       toast.success("User created successfully");
+       navigate("/users");
+     } catch (error) {
+       toast.error(error as string);
+     }
+   };
+   ```
+
+2. **Form Validation with React Hook Form and Zod**:
+
+   ```typescript
+   import { zodResolver } from "@hookform/resolvers/zod";
+   import * as z from "zod";
+
+   const userSchema = z.object({
+     email: z.string().email("Invalid email address"),
+     first_name: z.string().min(1, "First name is required"),
+     last_name: z.string().min(1, "Last name is required"),
+     password: z.string().min(8, "Password must be at least 8 characters"),
+   });
+
+   type UserFormData = z.infer<typeof userSchema>;
+
+   const UserForm: React.FC = () => {
+     const {
+       register,
+       handleSubmit,
+       formState: { errors },
+     } = useForm<UserFormData>({
+       resolver: zodResolver(userSchema),
+     });
+
+     const onSubmit = (data: UserFormData) => {
+       // Handle form submission
+     };
+
+     return (
+       <form onSubmit={handleSubmit(onSubmit)}>
+         {/* Form fields with error handling */}
+       </form>
+     );
+   };
+   ```
+
+### Performance Optimization
+
+1. **Code Splitting with Lazy Loading**:
+
+   ```typescript
+   // App.tsx
+   const UserManagement = lazy(() => import("./features/users/UserManagement"));
+   const RoleManagement = lazy(() => import("./features/roles/RoleManagement"));
+
+   // In routes
+   <Route
+     path="/users"
+     element={
+       <Suspense fallback={<LoadingSpinner />}>
+         <ProtectedRoute requiredRoles={["admin"]}>
+           <UserManagement />
+         </ProtectedRoute>
+       </Suspense>
+     }
+   />;
+   ```
+
+2. **Memoization for Performance**:
+
+   ```typescript
+   // Use React.memo for expensive components
+   export const UserTable = React.memo<UserTableProps>(
+     ({ users, onEdit, onDelete }) => {
+       // Component implementation
      }
    );
 
-   // Add other async thunks for CRUD operations
+   // Use useMemo for expensive calculations
+   const filteredUsers = useMemo(() => {
+     return users.filter((user) =>
+       user.email.toLowerCase().includes(searchTerm.toLowerCase())
+     );
+   }, [users, searchTerm]);
 
-   const newResourceSlice = createSlice({
-     name: "newResource",
-     initialState,
-     reducers: {
-       setSelectedResource: (
-         state,
-         action: PayloadAction<NewResource | null>
-       ) => {
-         state.selectedItem = action.payload;
-       },
+   // Use useCallback for event handlers
+   const handleUserEdit = useCallback(
+     (userId: string) => {
+       navigate(`/users/${userId}/edit`);
      },
-     extraReducers: (builder) => {
-       builder
-         .addCase(fetchNewResources.pending, (state) => {
-           state.loading = true;
-           state.error = null;
-         })
-         .addCase(fetchNewResources.fulfilled, (state, action) => {
-           state.loading = false;
-           state.items = action.payload;
-         })
-         .addCase(fetchNewResources.rejected, (state, action) => {
-           state.loading = false;
-           state.error = action.error.message || "Failed to fetch resources";
-         });
+     [navigate]
+   );
+   ```
 
-       // Handle other async actions
+### Testing Strategies
+
+1. **Component Testing Pattern**:
+
+   ```typescript
+   // __tests__/UserList.test.tsx
+   import { render, screen } from "@testing-library/react";
+   import { Provider } from "react-redux";
+   import { configureStore } from "@reduxjs/toolkit";
+   import { UserList } from "../UserList";
+
+   const mockStore = configureStore({
+     reducer: {
+       users: userSlice.reducer,
+       auth: authSlice.reducer,
+     },
+     preloadedState: {
+       users: { items: mockUsers, loading: false, error: null },
+       auth: { user: mockUser, isAuthenticated: true },
      },
    });
 
-   export const { setSelectedResource } = newResourceSlice.actions;
-   export default newResourceSlice.reducer;
+   test("renders user list correctly", () => {
+     render(
+       <Provider store={mockStore}>
+         <UserList />
+       </Provider>
+     );
+
+     expect(screen.getByText("Users")).toBeInTheDocument();
+     expect(screen.getByRole("table")).toBeInTheDocument();
+   });
    ```
 
-4. Create React components in `react-frontend/src/features/`:
+2. **Custom Hook Testing**:
 
    ```typescript
-   // react-frontend/src/features/new-resource/NewResourceList.tsx
-   import React, { useEffect } from "react";
-   import { useAppDispatch, useAppSelector } from "../../hooks/reduxHooks";
-   import { fetchNewResources } from "../../store/slices/newResourceSlice";
+   // __tests__/useAuth.test.ts
+   import { renderHook } from "@testing-library/react";
+   import { Provider } from "react-redux";
+   import { useAuth } from "../hooks/useAuth";
 
-   export const NewResourceList: React.FC = () => {
-     const dispatch = useAppDispatch();
-     const { items, loading, error } = useAppSelector(
-       (state) => state.newResource
+   test("useAuth returns authenticated state", () => {
+     const wrapper = ({ children }) => (
+       <Provider store={mockStore}>{children}</Provider>
      );
 
-     useEffect(() => {
-       dispatch(fetchNewResources());
-     }, [dispatch]);
+     const { result } = renderHook(() => useAuth(), { wrapper });
 
-     if (loading) return <div>Loading...</div>;
-     if (error) return <div>Error: {error}</div>;
+     expect(result.current.isAuthenticated).toBe(true);
+     expect(result.current.user).toEqual(mockUser);
+   });
+   ```
 
-     return (
-       <div>
-         <h1>New Resources</h1>
-         <ul>
-           {items.map((item) => (
-             <li key={item.id}>{item.name}</li>
-           ))}
-         </ul>
-       </div>
-     );
+### Accessibility Best Practices
+
+1. **Semantic HTML and ARIA**:
+
+   ```typescript
+   // Use semantic HTML elements
+   <main role="main">
+     <section aria-labelledby="users-heading">
+       <h1 id="users-heading">User Management</h1>
+       <table role="table" aria-label="Users list">
+         <thead>
+           <tr role="row">
+             <th role="columnheader">Name</th>
+             <th role="columnheader">Email</th>
+             <th role="columnheader">Actions</th>
+           </tr>
+         </thead>
+       </table>
+     </section>
+   </main>
+   ```
+
+2. **Keyboard Navigation**:
+
+   ```typescript
+   // Implement keyboard navigation for interactive elements
+   const handleKeyDown = (event: KeyboardEvent, action: () => void) => {
+     if (event.key === "Enter" || event.key === " ") {
+       event.preventDefault();
+       action();
+     }
+   };
+
+   // Use in components
+   <div
+     role="button"
+     tabIndex={0}
+     onKeyDown={(e) => handleKeyDown(e, handleClick)}
+     onClick={handleClick}
+   >
+     Interactive Element
+   </div>;
+   ```
+
+### Security Best Practices
+
+1. **Input Sanitization**:
+
+   ```typescript
+   // Use DOMPurify for HTML content
+   import DOMPurify from "dompurify";
+
+   const SafeHtmlContent: React.FC<{ content: string }> = ({ content }) => {
+     const sanitizedContent = DOMPurify.sanitize(content);
+     return <div dangerouslySetInnerHTML={{ __html: sanitizedContent }} />;
    };
    ```
 
-5. Add routes in the router configuration:
+2. **Secure Token Storage**:
 
    ```typescript
-   // Update the appropriate router file to include the new routes
-   import { NewResourceList } from '../features/new-resource/NewResourceList';
-   import { NewResourceDetail } from '../features/new-resource/NewResourceDetail';
+   // lib/tokenStorage.ts
+   class TokenStorage {
+     private static readonly ACCESS_TOKEN_KEY = "auth_token";
+     private static readonly REFRESH_TOKEN_KEY = "refresh_token";
 
-   // Inside your routes configuration:
-   {
-     path: 'new-resources',
-     element: <ProtectedRoute requiredRoles={['admin']}><NewResourceList /></ProtectedRoute>,
-   },
-   {
-     path: 'new-resources/:id',
-     element: <ProtectedRoute requiredRoles={['admin']}><NewResourceDetail /></ProtectedRoute>,
-   }
-   ```
-
-### Adding Role-Based Access Control
-
-1. Use the dependency injection pattern from `backend/app/api/deps.py`:
-
-   ```python
-   @router.get("/protected-endpoint")
-   async def protected_function(
-       current_user: User = Depends(deps.get_current_user(required_roles=[IRoleEnum.admin])),
-   ):
-       """
-       This endpoint is protected and only accessible by admin users.
-
-       Required roles:
-       - admin
-       """
-       # Only admin users can access this endpoint
-       return {"message": "You have access to admin functionality"}
-   ```
-
-2. On frontend, use the ProtectedRoute component with role requirements:
-
-   ```typescript
-   // Example of a protected route component
-   import { Navigate } from "react-router-dom";
-   import { useAppSelector } from "../store/hooks";
-
-   interface ProtectedRouteProps {
-     requiredRoles?: string[];
-     children: React.ReactNode;
-   }
-
-   export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
-     requiredRoles = [],
-     children,
-   }) => {
-     const { isAuthenticated, user } = useAppSelector((state) => state.auth);
-
-     // Not authenticated at all
-     if (!isAuthenticated) {
-       return <Navigate to="/login" replace />;
+     static setTokens(accessToken: string, refreshToken: string) {
+       // Access token in memory only (Redux state)
+       // Refresh token in localStorage with encryption if needed
+       localStorage.setItem(this.REFRESH_TOKEN_KEY, refreshToken);
      }
 
-     // Check for required roles if specified
-     if (requiredRoles.length > 0) {
-       const userRoles = user?.roles?.map((role) => role.name) || [];
-       const hasRequiredRole = requiredRoles.some((role) =>
-         userRoles.includes(role)
-       );
-
-       if (!hasRequiredRole) {
-         return <Navigate to="/unauthorized" replace />;
-       }
+     static clearTokens() {
+       localStorage.removeItem(this.REFRESH_TOKEN_KEY);
+       // Clear from Redux state
      }
-
-     return <>{children}</>;
-   };
+   }
    ```
-
-3. For conditional rendering based on user roles:
-
-   ```tsx
-   const { user } = useAppSelector((state) => state.auth);
-   const userRoles = user?.roles?.map((role) => role.name) || [];
-
-   return (
-     <div>
-       <h1>Dashboard</h1>
-
-       {userRoles.includes("admin") && (
-         <div className="admin-panel">
-           <h2>Admin Controls</h2>
-           {/* Admin-only content */}
-         </div>
-       )}
-
-       {userRoles.includes("manager") && (
-         <div className="manager-panel">
-           <h2>Manager Controls</h2>
-           {/* Manager-only content */}
-         </div>
-       )}
-     </div>
-   );
-   ```
-
-### Database Migrations
-
-1. Create a new model in the appropriate file, then create a new migration with Alembic:
-
-   ```bash
-   cd backend
-   alembic revision --autogenerate -m "Add new resource table"
-   ```
-
-2. Review the generated migration in `backend/alembic/versions/` to ensure it captures all intended changes
-
-3. Apply migrations to the database:
-
-   ```bash
-   alembic upgrade head
-   ```
-
-4. For deployment scenarios, include migration commands in your CI/CD pipeline or container startup scripts
-
-## Environment Configuration
-
-### Backend Environment
-
-Key variables defined in `backend/backend.env`:
-
-- `PROJECT_NAME`: Name of the project (e.g., "FastAPI RBAC")
-- `API_VERSION`: API version number for documentation
-- `API_V1_STR`: API v1 prefix ("/api/v1")
-- `SECRET_KEY`: Secret key for JWT token signing
-- `ACCESS_TOKEN_EXPIRE_MINUTES`: Lifespan of access tokens
-- `REFRESH_TOKEN_EXPIRE_DAYS`: Lifespan of refresh tokens
-- `BACKEND_CORS_ORIGINS`: CORS configuration for allowed origins
-- `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`: PostgreSQL connection parameters
-- `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`: Redis connection parameters
-- `EMAILS_ENABLED`, `SMTP_*`: Email sending configuration
-- `FIRST_SUPERUSER_EMAIL`, `FIRST_SUPERUSER_PASSWORD`: Initial admin user credentials
-- `MODE`: Application mode (development, testing, production)
-
-#### Celery-Specific Environment Variables
-
-- `CELERY_BROKER_URL`: Redis URL for Celery message broker
-- `CELERY_RESULT_BACKEND`: Redis URL for storing task results
-- `CELERY_TASK_ALWAYS_EAGER`: Execute tasks synchronously in development/testing
-- `CELERY_CONCURRENCY`: Number of concurrent worker processes
-- `DATABASE_CELERY_NAME`: Database name for Celery beat scheduler
-
-#### Email Configuration
-
-- `EMAILS_ENABLED`: Enable/disable email sending
-- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`: SMTP server configuration
-- `EMAILS_FROM_EMAIL`, `EMAILS_FROM_NAME`: Default sender information
-
-### Frontend Environment
-
-Key variables defined in `react-frontend/.env`:
-
-- `VITE_API_BASE_URL`: URL for the FastAPI backend API
-- `VITE_AUTH_ACCESS_TOKEN_NAME`: Name of the auth access token for storage
-- `VITE_AUTH_REFRESH_TOKEN_NAME`: Name of the auth refresh token for storage
-- `VITE_APP_NAME`: Application name for display in UI
-
-## Development and Deployment Scripts
-
-The project includes comprehensive script collections for development, testing, and deployment operations:
-
-### Backend Scripts (`backend/scripts/`)
-
-**Core Development Scripts:**
-
-- `run.ps1/sh`: Start the FastAPI development server
-- `lint.ps1/sh`: Run code linting with ruff and mypy
-- `format.ps1/sh`: Format code with ruff formatter
-- `format-imports.ps1/sh`: Format and sort imports with isort
-- `development-setup.ps1/sh`: Set up development environment
-- `development-entrypoint.ps1/sh`: Development container entrypoint
-
-**Celery Task Management:**
-
-- `worker-start.ps1/sh`: Start Celery workers for background tasks
-- `beat-start.ps1/sh`: Start Celery beat scheduler for periodic tasks
-- `flower-start.ps1/sh`: Start Flower monitoring dashboard for Celery
-
-**Production Scripts:**
-
-- `entrypoint.ps1/sh`: Production container entrypoint
-- Database initialization and migration scripts
-
-### Project-Level Scripts (`scripts/`)
-
-**Development Scripts (`scripts/dev/`):**
-
-- `setup-dev-env.ps1`: Complete development environment setup
-- `run-tests.ps1`: Execute comprehensive test suites
-- `clean-dev.ps1`: Clean development artifacts and caches
-
-**Docker Scripts (`scripts/docker/`):**
-
-- `build-images.ps1`: Build Docker images for all services
-- `test-production.ps1`: Test production Docker configuration locally
-- `validate-config.ps1`: Validate Docker Compose configurations
-- `diagnose-cors.ps1`: Diagnose CORS issues in containerized environments
-
-**Database Scripts (`scripts/database/`):**
-
-- Database backup and restore utilities
-- Migration and seeding scripts for different environments
-- Data validation and cleanup tools
-
-**Deployment Scripts (`scripts/deployment/`):**
-
-- Production deployment automation
-- Health check and monitoring setup
-- Environment-specific configuration management
-
-### Usage Guidelines for AI Agents
-
-**When suggesting script usage:**
-
-1. **Cross-platform compatibility**: Always mention both `.ps1` (PowerShell) and `.sh` (Bash) versions
-2. **Environment context**: Consider whether the user is in development, testing, or production
-3. **Prerequisites**: Check that required services (Redis, PostgreSQL) are running
-4. **Virtual environment**: Ensure virtual environment is activated for Python scripts
-
-**Common script workflows:**
-
-```powershell
-# Development setup (Windows)
-.\scripts\dev\setup-dev-env.ps1
-cd backend
-.\scripts\development-setup.ps1
-.\scripts\run.ps1
-
-# Start background services
-.\scripts\worker-start.ps1    # In separate terminal
-.\scripts\beat-start.ps1      # In separate terminal
-.\scripts\flower-start.ps1    # Optional: monitoring
-
-# Code quality
-.\scripts\lint.ps1
-.\scripts\format.ps1
-.\scripts\format-imports.ps1
-```
-
-## Development Workflow
-
-### Backend Development
-
-1. Activate virtual environment:
-
-   - Windows: `.venv\Scripts\Activate.ps1`
-   - Linux/MacOS: `. .venv/bin/activate`
-
-2. Install dependencies with Poetry:
-
-   ```bash
-   poetry install
-   ```
-
-3. Set up environment variables:
-
-   - Copy `backend.env.example` to `backend.env` and configure variables
-   - Update any database or service connection details as needed
-
-4. Run database migrations:
-
-   ```bash
-   alembic upgrade head
-   ```
-
-5. Run the development server:
-
-   ```bash
-   uvicorn app.main:fastapi_app --reload --port 8000
-   ```
-
-6. Access API documentation at http://localhost:8000/docs
-
-### Frontend Development
-
-1. Install dependencies:
-
-   ```bash
-   cd react-frontend
-   npm install
-   ```
-
-2. Set up environment variables:
-
-   - Copy `.env.example` to `.env` and configure variables
-   - Update the API URL to point to your backend server
-
-3. Start the development server:
-
-   ```bash
-   npm run dev
-   ```
-
-4. Access the application at http://localhost:5173
-
-### Docker Deployment
-
-Run the entire stack with Docker Compose:
-
-```bash
-docker-compose up -d
-```
-
-This will start:
-
-- PostgreSQL database
-- Redis for token and cache management
-- Backend FastAPI application
-- Frontend React application
-- Celery worker for background tasks (if configured)
-- Celery beat for scheduled tasks (if configured)
-
-## Security Considerations
-
-1. **Token Management**:
-
-   - Access tokens are short-lived (typically 15-30 minutes)
-   - Refresh tokens are longer-lived (typically 7-30 days)
-   - Access tokens are stored in memory (Redux state) to prevent XSS attacks
-   - Refresh tokens are stored in localStorage with appropriate security measures
-   - All tokens are validated server-side before processing requests
-   - Tokens are tracked in Redis for invalidation during logout or security events
-
-2. **Password Security**:
-
-   - Passwords are hashed using bcrypt with appropriate cost factors
-   - Password history is maintained to prevent reuse
-   - Account lockout after multiple failed attempts
-   - Password complexity requirements enforced
-   - Password reset functionality with secure tokens
-
-3. **Role-Based Security**:
-
-   - Endpoints are protected by role requirements
-   - UI elements are conditionally rendered based on user roles
-   - Permission checks are performed server-side
-   - Token payload includes minimal user information
-
-4. **General Security**:
-   - CORS protection for API endpoints
-   - Rate limiting for sensitive endpoints (login, password reset)
-   - HTTPS enforced in production
-   - Content Security Policy headers
-   - Proper error handling to prevent information leakage
 
 ## When Making Changes
 
@@ -1288,3 +973,305 @@ This will start:
    - Add comments for complex logic
 
 By following these guidelines, you'll be able to effectively understand and work with this FastAPI RBAC project while maintaining its security, performance, and code quality standards.
+
+## Frontend Troubleshooting Guide
+
+### Common Development Issues
+
+1. **CORS Errors**:
+
+   ```
+   Error: Access to XMLHttpRequest at 'http://localhost:8000/api/v1/auth/login'
+   from origin 'http://localhost:5173' has been blocked by CORS policy
+   ```
+
+   **Solutions:**
+
+   - Ensure backend `BACKEND_CORS_ORIGINS` includes frontend URL
+   - Check that backend is running and accessible
+   - Verify API base URL in frontend environment variables
+   - Use browser dev tools to check preflight OPTIONS requests
+
+2. **Token Refresh Issues**:
+
+   ```
+   Error: Request failed with status code 401
+   TypeError: Cannot read properties of null (reading 'access_token')
+   ```
+
+   **Solutions:**
+
+   - Check that refresh token is stored correctly in localStorage
+   - Verify token expiration times are configured properly
+   - Ensure Axios interceptors are properly handling 401 responses
+   - Clear browser storage and re-login if tokens are corrupted
+
+3. **Environment Variable Issues**:
+
+   ```
+   Error: process is not defined
+   TypeError: Cannot read properties of undefined (reading 'VITE_API_BASE_URL')
+   ```
+
+   **Solutions:**
+
+   - Ensure all environment variables are prefixed with `VITE_`
+   - Check that `.env` file exists and is properly formatted
+   - Verify environment variables are loaded in `vite.config.ts`
+   - Restart development server after changing environment variables
+
+4. **TypeScript Type Errors**:
+
+   ```
+   TS2339: Property 'roles' does not exist on type 'User'
+   TS2322: Type 'string' is not assignable to type 'number'
+   ```
+
+   **Solutions:**
+
+   - Ensure backend Pydantic schemas match frontend TypeScript interfaces
+   - Update interface definitions when backend models change
+   - Use proper type assertions and guards for API responses
+   - Run `npm run build` to catch type errors early
+
+5. **Redux State Issues**:
+
+   ```
+   Error: Cannot read properties of undefined (reading 'user')
+   Redux state is not persisting between page refreshes
+   ```
+
+   **Solutions:**
+
+   - Check that Redux store is properly configured with middleware
+   - Ensure components are wrapped with Redux Provider
+   - Verify initial state is properly set in slices
+   - Use Redux DevTools to debug state changes
+
+### Performance Issues
+
+1. **Slow Initial Load**:
+
+   - Implement code splitting with React.lazy()
+   - Use React.memo for expensive components
+   - Optimize bundle size with proper tree shaking
+   - Implement proper loading states and skeleton screens
+
+2. **Memory Leaks**:
+
+   - Clean up event listeners and subscriptions in useEffect cleanup
+   - Cancel pending API requests on component unmount
+   - Use AbortController for cancellable requests
+   - Avoid storing large objects in Redux unnecessarily
+
+3. **Bundle Size Issues**:
+   - Analyze bundle with `npm run build -- --analyze`
+   - Use dynamic imports for large libraries
+   - Implement proper code splitting strategies
+   - Remove unused dependencies and code
+
+### API Integration Issues
+
+1. **Authentication Flow Problems**:
+
+   ```typescript
+   // Debug authentication state
+   const debugAuth = () => {
+     console.log("Auth State:", {
+       isAuthenticated: !!user,
+       hasAccessToken: !!accessToken,
+       hasRefreshToken: !!localStorage.getItem("refresh_token"),
+       userRoles: user?.roles?.map((r) => r.name),
+       tokenExpiry: accessToken ? "Check JWT payload" : "No token",
+     });
+   };
+   ```
+
+2. **Permission Checking Issues**:
+
+   ```typescript
+   // Debug permission system
+   const debugPermissions = () => {
+     console.log("User Permissions:", {
+       userRoles: user?.roles?.map((r) => r.name),
+       userPermissions: user?.permissions?.map((p) => p.name),
+       hasAdminRole: hasRole("admin"),
+       hasUserCreatePermission: hasPermission("user.create"),
+     });
+   };
+   ```
+
+3. **API Request Debugging**:
+
+   ```typescript
+   // Add request/response logging
+   api.interceptors.request.use((request) => {
+     console.log("API Request:", {
+       method: request.method,
+       url: request.url,
+       headers: request.headers,
+       data: request.data,
+     });
+     return request;
+   });
+
+   api.interceptors.response.use(
+     (response) => {
+       console.log("API Response:", {
+         status: response.status,
+         data: response.data,
+         headers: response.headers,
+       });
+       return response;
+     },
+     (error) => {
+       console.error("API Error:", {
+         status: error.response?.status,
+         message: error.response?.data?.message,
+         url: error.config?.url,
+       });
+       return Promise.reject(error);
+     }
+   );
+   ```
+
+### Build and Deployment Issues
+
+1. **Vite Build Errors**:
+
+   ```
+   Error: Build failed with errors
+   RollupError: Cannot resolve module
+   ```
+
+   **Solutions:**
+
+   - Check that all imports use correct file paths
+   - Verify that all dependencies are installed
+   - Ensure TypeScript configuration is correct
+   - Clear node_modules and reinstall if needed
+
+2. **Docker Build Issues**:
+
+   ```
+   Error: COPY failed: no source files were specified
+   npm ERR! peer dep missing
+   ```
+
+   **Solutions:**
+
+   - Check Dockerfile paths are correct
+   - Ensure .dockerignore doesn't exclude necessary files
+   - Verify multi-stage build configuration
+   - Use proper base images for Node.js version compatibility
+
+3. **Nginx Configuration Issues**:
+
+   ```
+   404 Not Found on page refresh
+   CORS errors in production
+   ```
+
+   **Solutions:**
+
+   - Configure proper fallback routing for SPA
+   - Set up correct CORS headers in nginx.conf
+   - Ensure proper proxy configuration for API calls
+   - Check that static files are served correctly
+
+### Development Tools and IDE Issues
+
+1. **ESLint Configuration**:
+
+   ```
+   Error: Failed to load config "@typescript-eslint/recommended"
+   Parsing error: Cannot read file 'tsconfig.json'
+   ```
+
+   **Solutions:**
+
+   - Ensure ESLint configuration extends correct presets
+   - Check that TypeScript configuration files exist
+   - Install all required ESLint plugins and parsers
+   - Restart VS Code after configuration changes
+
+2. **VS Code IntelliSense Issues**:
+
+   - Reload VS Code window (Ctrl+Shift+P > "Reload Window")
+   - Check that TypeScript language service is running
+   - Verify workspace settings and extensions are correct
+   - Ensure proper TypeScript project references
+
+3. **Hot Reload Not Working**:
+   - Check that Vite dev server is running on correct port
+   - Verify file watching is not blocked by antivirus software
+   - Ensure proper network configuration in development
+   - Clear browser cache and restart development server
+
+### Testing Issues
+
+1. **Jest/Vitest Configuration**:
+
+   ```
+   Error: Cannot find module '@testing-library/react'
+   SyntaxError: Cannot use import statement outside a module
+   ```
+
+   **Solutions:**
+
+   - Install all required testing dependencies
+   - Configure proper module resolution for ES modules
+   - Set up test environment configuration correctly
+   - Use appropriate transform configuration for TypeScript
+
+2. **Component Testing Errors**:
+
+   ```typescript
+   // __tests__/UserList.test.tsx
+   import { render, screen } from "@testing-library/react";
+   import { Provider } from "react-redux";
+   import { configureStore } from "@reduxjs/toolkit";
+   import { UserList } from "../UserList";
+
+   const mockStore = configureStore({
+     reducer: {
+       users: userSlice.reducer,
+       auth: authSlice.reducer,
+     },
+     preloadedState: {
+       users: { items: mockUsers, loading: false, error: null },
+       auth: { user: mockUser, isAuthenticated: true },
+     },
+   });
+
+   test("renders user list correctly", () => {
+     render(
+       <Provider store={mockStore}>
+         <UserList />
+       </Provider>
+     );
+
+     expect(screen.getByText("Users")).toBeInTheDocument();
+     expect(screen.getByRole("table")).toBeInTheDocument();
+   });
+   ```
+
+3. **Custom Hook Testing**:
+
+   ```typescript
+   // __tests__/useAuth.test.ts
+   import { renderHook } from "@testing-library/react";
+   import { Provider } from "react-redux";
+   import { useAuth } from "../hooks/useAuth";
+
+   test("useAuth returns authenticated state", () => {
+     const wrapper = ({ children }) => (
+       <Provider store={mockStore}>{children}</Provider>
+     );
+
+     const { result } = renderHook(() => useAuth(), { wrapper });
+
+     expect(result.current.isAuthenticated).toBe(true);
+     expect(result.current.user).toEqual(mockUser);
+   });
+   ```
