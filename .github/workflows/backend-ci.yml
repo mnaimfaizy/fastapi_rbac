@@ -165,7 +165,7 @@ jobs:
           push: false
           tags: fastapi-rbac-backend:latest
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=max,ignore-error=true
 
       - name: Build Worker Docker image
         uses: docker/build-push-action@v5
@@ -175,4 +175,4 @@ jobs:
           push: false
           tags: fastapi-rbac-worker:latest
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=max,ignore-error=true
