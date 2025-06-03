@@ -12,14 +12,19 @@ from app.models.role_group_model import RoleGroup
 from app.models.role_model import Role
 from app.models.user_model import User
 from app.schemas.role_group_schema import IRoleGroupCreate, IRoleGroupUpdate
-from app.utils.exceptions.common_exception import NameExistException, ResourceNotFoundException
+from app.utils.exceptions.common_exception import (
+    NameExistException,
+    ResourceNotFoundException,
+)
 from app.utils.security_audit import create_audit_log
 
 
 class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
     """CRUD operations for RoleGroup model"""
 
-    async def get_all(self, *, db_session: AsyncSession | None = None) -> List[RoleGroup]:
+    async def get_all(
+        self, *, db_session: AsyncSession | None = None
+    ) -> List[RoleGroup]:
         """Get all role groups without pagination"""
         db_session = db_session or super().get_db().session
         result = await db_session.execute(select(RoleGroup))
@@ -29,10 +34,14 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
         self, *, name: str, db_session: AsyncSession | None = None
     ) -> RoleGroup | None:
         db_session = db_session or super().get_db().session
-        result = await db_session.execute(select(RoleGroup).where(RoleGroup.name == name))
+        result = await db_session.execute(
+            select(RoleGroup).where(RoleGroup.name == name)
+        )
         return result.scalar_one_or_none()
 
-    async def get_by_name(self, *, name: str, db_session: AsyncSession | None = None) -> RoleGroup | None:
+    async def get_by_name(
+        self, *, name: str, db_session: AsyncSession | None = None
+    ) -> RoleGroup | None:
         """Alias for get_group_by_name."""
         return await self.get_group_by_name(name=name, db_session=db_session)
 
@@ -40,7 +49,9 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
         self, *, group_id: UUID, db_session: AsyncSession | None = None
     ) -> bool:
         db_session = db_session or super().get_db().session
-        result = await db_session.execute(select(RoleGroupMap).where(RoleGroupMap.role_group_id == group_id))
+        result = await db_session.execute(
+            select(RoleGroupMap).where(RoleGroupMap.role_group_id == group_id)
+        )
         return result.scalar_one_or_none() is not None
 
     async def add_roles_to_group(
@@ -82,14 +93,19 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
             # Delete the mapping between role and group
             await db_session.execute(
                 delete(RoleGroupMap).where(
-                    RoleGroupMap.role_group_id == group_id, RoleGroupMap.role_id == role_id
+                    RoleGroupMap.role_group_id == group_id,
+                    RoleGroupMap.role_id == role_id,
                 )
             )
 
         await db_session.commit()
 
     async def validate_circular_dependency(
-        self, *, group_id: UUID, role_ids: List[UUID], db_session: AsyncSession | None = None
+        self,
+        *,
+        group_id: UUID,
+        role_ids: List[UUID],
+        db_session: AsyncSession | None = None,
     ) -> bool:
         """Check for circular dependencies when adding roles to a group"""
         db_session = db_session or super().get_db().session
@@ -102,7 +118,9 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
             checked_roles.add(role_id)
 
             # Get all groups that this role belongs to
-            result = await db_session.execute(select(RoleGroupMap).where(RoleGroupMap.role_id == role_id))
+            result = await db_session.execute(
+                select(RoleGroupMap).where(RoleGroupMap.role_id == role_id)
+            )
             role_groups = result.scalars().all()
 
             for role_group_map in role_groups:
@@ -111,7 +129,9 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
 
                 # Get roles in this group and check them
                 sub_result = await db_session.execute(
-                    select(RoleGroupMap).where(RoleGroupMap.role_group_id == role_group_map.role_group_id)
+                    select(RoleGroupMap).where(
+                        RoleGroupMap.role_group_id == role_group_map.role_group_id
+                    )
                 )
                 sub_roles = sub_result.scalars().all()
 
@@ -130,7 +150,11 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
         return False
 
     async def bulk_create(
-        self, *, groups: List[IRoleGroupCreate], current_user: User, db_session: AsyncSession | None = None
+        self,
+        *,
+        groups: List[IRoleGroupCreate],
+        current_user: User,
+        db_session: AsyncSession | None = None,
     ) -> List[RoleGroup]:
         """Create multiple role groups in a single transaction"""
         db_session = db_session or super().get_db().session
@@ -138,7 +162,9 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
 
         for group in groups:
             # Check if group name already exists
-            existing = await self.get_group_by_name(name=group.name, db_session=db_session)
+            existing = await self.get_group_by_name(
+                name=group.name, db_session=db_session
+            )
             if existing:
                 raise NameExistException(RoleGroup, name=group.name)
 
@@ -166,7 +192,11 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
         return new_groups
 
     async def bulk_delete(
-        self, *, group_ids: List[UUID], current_user: User, db_session: AsyncSession | None = None
+        self,
+        *,
+        group_ids: List[UUID],
+        current_user: User,
+        db_session: AsyncSession | None = None,
     ) -> None:
         """Delete multiple role groups in a single transaction"""
         db_session = db_session or super().get_db().session
@@ -177,7 +207,9 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
                 raise ResourceNotFoundException(RoleGroup, id=group_id)
 
             # Check if group has any roles before deletion
-            has_roles = await self.check_role_exists_in_group(group_id=group_id, db_session=db_session)
+            has_roles = await self.check_role_exists_in_group(
+                group_id=group_id, db_session=db_session
+            )
             if has_roles:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
@@ -199,7 +231,10 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
         await db_session.commit()
 
     async def sync_roles_with_role_groups(
-        self, *, db_session: AsyncSession | None = None, current_user: User | None = None
+        self,
+        *,
+        db_session: AsyncSession | None = None,
+        current_user: User | None = None,
     ) -> Dict[str, int]:
         """
         Synchronize roles with their role groups based on the role_group_id field.
@@ -211,7 +246,9 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
         db_session = db_session or super().get_db().session
 
         # Get all roles that have a role_group_id assigned
-        result = await db_session.execute(select(Role).where(Role.role_group_id.is_not(None)))
+        result = await db_session.execute(
+            select(Role).where(Role.role_group_id.is_not(None))
+        )
         roles = result.scalars().all()
 
         # Track statistics
@@ -228,7 +265,10 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
             query = (
                 select(1)
                 .select_from(RoleGroupMap)
-                .where(RoleGroupMap.role_id == role.id, RoleGroupMap.role_group_id == role.role_group_id)
+                .where(
+                    RoleGroupMap.role_id == role.id,
+                    RoleGroupMap.role_group_id == role.role_group_id,
+                )
             )
             existing_mapping = await db_session.execute(query)
 
@@ -237,14 +277,18 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
                 continue
 
             # Create new mapping
-            new_mapping = RoleGroupMap(role_id=role.id, role_group_id=role.role_group_id)
+            new_mapping = RoleGroupMap(
+                role_id=role.id, role_group_id=role.role_group_id
+            )
             db_session.add(new_mapping)
             stats["created"] += 1
 
             # Create audit log if user is provided
             if current_user:
                 # Get the role name safely
-                role_name = role.name if hasattr(role, "name") and role.name else "Unknown"
+                role_name = (
+                    role.name if hasattr(role, "name") and role.name else "Unknown"
+                )
 
                 try:
                     await create_audit_log(
@@ -262,7 +306,9 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
                     logging.error(f"Error creating audit log: {str(audit_error)}")
                     # Check if the error is about the missing table
                     if "no such table: audit_logs" in str(audit_error):
-                        logging.warning("audit_logs table does not exist. Skipping audit logging.")
+                        logging.warning(
+                            "audit_logs table does not exist. Skipping audit logging."
+                        )
                         # Stop trying to create audit logs for other roles to avoid repeated errors
                         current_user = None
 
@@ -294,7 +340,9 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
             query = (
                 select(RoleGroup)
                 .options(selectinload(RoleGroup.creator))
-                .options(selectinload(RoleGroup.children).selectinload(RoleGroup.creator))
+                .options(
+                    selectinload(RoleGroup.children).selectinload(RoleGroup.creator)
+                )
                 .order_by(RoleGroup.name)
             )
 
@@ -337,7 +385,9 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
                     # that doesn't have circular references
 
             # Filter items to only include root-level groups (those without parents)
-            root_groups = [group for group in paginated_result.items if group.parent_id is None]
+            root_groups = [
+                group for group in paginated_result.items if group.parent_id is None
+            ]
 
             # Update the paginated result to include only root groups
             paginated_result.items = root_groups
@@ -409,7 +459,9 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
             import logging
 
             # Log the specific error and context
-            logging.error(f"Error in get_with_hierarchy for id {id}: {str(e)}", exc_info=True)
+            logging.error(
+                f"Error in get_with_hierarchy for id {id}: {str(e)}", exc_info=True
+            )
             # Re-raise the exception to be handled by the caller or FastAPI's exception handlers
             raise
 

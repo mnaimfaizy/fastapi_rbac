@@ -80,7 +80,11 @@ async def test_retrieve_roles_in_group(db: AsyncSession) -> None:
     await db.commit()
 
     # Retrieve all roles in the group
-    stmt = select(Role).join(RoleGroupMap).where(RoleGroupMap.role_group_id == role_group.id)
+    stmt = (
+        select(Role)
+        .join(RoleGroupMap)
+        .where(RoleGroupMap.role_group_id == role_group.id)
+    )
     result = await db.execute(stmt)
     retrieved_roles = result.scalars().all()
 
@@ -144,7 +148,9 @@ async def test_unique_constraint(db: AsyncSession) -> None:
     db.add(role)
 
     # Create a role group
-    role_group = RoleGroup(name=f"group_{random_lower_string()}", description="Test group")
+    role_group = RoleGroup(
+        name=f"group_{random_lower_string()}", description="Test group"
+    )
     db.add(role_group)
 
     await db.commit()

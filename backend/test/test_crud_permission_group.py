@@ -8,7 +8,10 @@ from app.crud.permission_crud import permission_crud
 from app.crud.permission_group_crud import permission_group_crud
 from app.models.permission_group_model import PermissionGroup
 from app.models.permission_model import Permission
-from app.schemas.permission_group_schema import IPermissionGroupCreate, IPermissionGroupUpdate
+from app.schemas.permission_group_schema import (
+    IPermissionGroupCreate,
+    IPermissionGroupUpdate,
+)
 from app.schemas.permission_schema import IPermissionCreate
 
 from .utils import random_lower_string
@@ -35,7 +38,9 @@ async def test_get_permission_group_by_id(db: AsyncSession) -> None:
     group_in = IPermissionGroupCreate(name=name)
     group = await permission_group_crud.create(obj_in=group_in, db_session=db)
     # Get the group by ID
-    stored_group = await permission_group_crud.get_group_by_id(group_id=group.id, db_session=db)
+    stored_group = await permission_group_crud.get_group_by_id(
+        group_id=group.id, db_session=db
+    )
     # Check that the retrieved group matches
     assert stored_group
     assert stored_group.id == group.id
@@ -50,7 +55,9 @@ async def test_get_permission_group_by_name(db: AsyncSession) -> None:
     group_in = IPermissionGroupCreate(name=name)
     group = await permission_group_crud.create(obj_in=group_in, db_session=db)
     # Get the group by name
-    stored_group = await permission_group_crud.get_group_by_name(name=name, db_session=db)
+    stored_group = await permission_group_crud.get_group_by_name(
+        name=name, db_session=db
+    )
     # Check that the retrieved group matches
     assert stored_group
     assert stored_group.id == group.id
@@ -67,7 +74,9 @@ async def test_update_permission_group(db: AsyncSession) -> None:
     # Update the group name
     new_name = f"updated-name-{random_lower_string(8)}"
     group_update = IPermissionGroupUpdate(name=new_name)
-    updated_group = await permission_group_crud.update(obj_current=group, obj_new=group_update, db_session=db)
+    updated_group = await permission_group_crud.update(
+        obj_current=group, obj_new=group_update, db_session=db
+    )
     # Check that the group was updated
     assert updated_group.id == group.id
     assert updated_group.name == new_name
@@ -83,12 +92,16 @@ async def test_update_permission_group_name(db: AsyncSession) -> None:
     # Update the group name
     new_name = f"updated-group-{random_lower_string(8)}"
     group_update = IPermissionGroupUpdate(name=new_name)
-    updated_group = await permission_group_crud.update(obj_current=group, obj_new=group_update, db_session=db)
+    updated_group = await permission_group_crud.update(
+        obj_current=group, obj_new=group_update, db_session=db
+    )
     # Check that the group was updated
     assert updated_group.id == group.id
     assert updated_group.name == new_name
     # Verify the update by getting the group with the new name
-    stored_group = await permission_group_crud.get_group_by_name(name=new_name, db_session=db)
+    stored_group = await permission_group_crud.get_group_by_name(
+        name=new_name, db_session=db
+    )
     assert stored_group
     assert stored_group.id == group.id
 
@@ -111,7 +124,9 @@ async def test_get_multi_permission_groups(db: AsyncSession) -> None:
     assert len(groups) == 5
 
     # Get next page
-    groups_page_2 = await permission_group_crud.get_multi(skip=5, limit=5, db_session=db)
+    groups_page_2 = await permission_group_crud.get_multi(
+        skip=5, limit=5, db_session=db
+    )
     # Check that we got the second page
     assert len(groups_page_2) == 5
     # Ensure both pages have different items
@@ -144,7 +159,9 @@ async def test_add_permissions_to_group(db: AsyncSession) -> None:
     # Create a permission group
     group_name = f"test-group-with-perms-{random_lower_string(8)}"
     group_in = IPermissionGroupCreate(name=group_name)
-    group: PermissionGroup = await permission_group_crud.create(obj_in=group_in, db_session=db)
+    group: PermissionGroup = await permission_group_crud.create(
+        obj_in=group_in, db_session=db
+    )
 
     # Create permissions in this group
     permission_count = 5
@@ -170,7 +187,9 @@ async def test_add_permissions_to_group(db: AsyncSession) -> None:
         assert permission.group_id == group.id
 
     # Verify that we can load the group with its permissions
-    stored_group = await permission_group_crud.get_group_by_id(group_id=group.id, db_session=db)
+    stored_group = await permission_group_crud.get_group_by_id(
+        group_id=group.id, db_session=db
+    )
     assert stored_group is not None
     assert stored_group.id == group.id
     assert stored_group.name == group_name
@@ -182,7 +201,9 @@ async def test_permission_group_with_subgroups(db: AsyncSession) -> None:
     # Create a parent permission group
     parent_group_name = f"parent-group-{random_lower_string(8)}"
     parent_group_in = IPermissionGroupCreate(name=parent_group_name)
-    parent_group = await permission_group_crud.create(obj_in=parent_group_in, db_session=db)
+    parent_group = await permission_group_crud.create(
+        obj_in=parent_group_in, db_session=db
+    )
 
     # Create child permission groups
     child_group_count = 3
@@ -193,11 +214,15 @@ async def test_permission_group_with_subgroups(db: AsyncSession) -> None:
             name=child_name,
             permission_group_id=parent_group.id,  # Set parent relationship
         )
-        child_group = await permission_group_crud.create(obj_in=child_group_in, db_session=db)
+        child_group = await permission_group_crud.create(
+            obj_in=child_group_in, db_session=db
+        )
         child_groups.append(child_group)
 
     # Verify parent-child relationships using SQLModel query
-    query = select(PermissionGroup).where(PermissionGroup.permission_group_id == parent_group.id)
+    query = select(PermissionGroup).where(
+        PermissionGroup.permission_group_id == parent_group.id
+    )
     result = await db.exec(query)
     children = result.all()
 

@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from fastapi_async_sqlalchemy import SQLAlchemyMiddleware
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
+from fastapi_csrf_protect import CsrfProtect
 from fastapi_limiter import FastAPILimiter
 from jwt import DecodeError, ExpiredSignatureError, MissingRequiredClaimError
 from slowapi import Limiter
@@ -19,10 +20,12 @@ from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.pool import NullPool
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
 # Import Celery beat schedule to ensure it's registered
 import app.celery_beat_schedule as celery_beat_schedule  # noqa
+from app.api import deps  # Import deps to set CSRF instance
 from app.api.deps import get_redis_client
 from app.api.v1.api import api_router as api_router_v1
 
@@ -37,6 +40,9 @@ from app.schemas.response_schema import ErrorDetail, create_error_response
 from app.utils.exceptions.user_exceptions import UserSelfDeleteException
 from app.utils.fastapi_globals import GlobalsMiddleware, g
 
+# Store CSRF protect instance globally for use in dependencies
+csrf_protect = None
+
 # Configure logger from the logging.ini file
 try:
     config_file = os.path.join(os.path.dirname(__file__), "..", "logging.ini")
@@ -47,7 +53,9 @@ try:
         logger = logging.getLogger("fastapi_rbac")
         logger.setLevel(logging.DEBUG)
         handler = logging.StreamHandler()
-        handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        )
         logger.addHandler(handler)
 except Exception as e:
     print(f"Error loading logging configuration: {e}")
@@ -56,6 +64,44 @@ except Exception as e:
 
 # Get logger for this module
 logger = logging.getLogger("fastapi_rbac")
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware to add security headers to all responses.
+    Implements defense-in-depth security practices.
+    """
+
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+
+        # Security headers for all responses
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = (
+            "geolocation=(), microphone=(), camera=(), payment=(), "
+            "usb=(), magnetometer=(), gyroscope=(), accelerometer=(), "
+            "ambient-light-sensor=()"
+        )
+
+        # HSTS header for HTTPS connections
+        if request.url.scheme == "https":
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains; preload"
+            )
+
+        # Content Security Policy for API responses
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "object-src 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self'; "
+            "frame-ancestors 'none'"
+        )
+
+        return response
 
 
 # Flag to indicate whether Celery is available based on environment
@@ -86,13 +132,17 @@ async def user_id_identifier(request: Request) -> Optional[str]:
                 except DecodeError:
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
-                        detail=("Error when decoding the token. " "Please check your request."),
+                        detail=(
+                            "Error when decoding the token. "
+                            "Please check your request."
+                        ),
                     )
                 except MissingRequiredClaimError:
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail=(
-                            "There is no required field in your token. " "Please contact the administrator."
+                            "There is no required field in your token. "
+                            "Please contact the administrator."
                         ),
                     )
 
@@ -142,7 +192,10 @@ fastapi_app = FastAPI(
     title=settings.PROJECT_NAME or "FastAPI RBAC",
     version=settings.API_VERSION,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
-    description=("FastAPI RBAC system with comprehensive " "authentication and authorization features"),
+    description=(
+        "FastAPI RBAC system with comprehensive "
+        "authentication and authorization features"
+    ),
     lifespan=lifespan,
 )
 
@@ -164,6 +217,23 @@ fastapi_app.add_middleware(
     },
 )
 fastapi_app.add_middleware(GlobalsMiddleware)
+
+# Add security headers middleware for defense-in-depth protection
+fastapi_app.add_middleware(SecurityHeadersMiddleware)
+
+# Configure CSRF protection for forms and state-changing operations
+# CSRF protection will be applied to specific endpoints that need it
+csrf_protect = CsrfProtect()
+
+
+# Configure CSRF settings using environment variables approach
+@CsrfProtect.load_config
+def get_csrf_config():
+    return [("secret_key", settings.SECRET_KEY)]
+
+
+# Set the CSRF instance in deps module for dependency injection
+deps.set_csrf_protect_instance(csrf_protect)
 
 # Set all CORS origins enabled
 if settings.BACKEND_CORS_ORIGINS:
@@ -205,13 +275,11 @@ async def root() -> Dict[str, str]:
     return {"message": "Hello World"}
 
 
-# Add Routers
-fastapi_app.include_router(api_router_v1, prefix=settings.API_V1_STR)
-
-
 # Exception handlers for consistent error responses
 @fastapi_app.exception_handler(RateLimitExceeded)
-async def rate_limit_exception_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+async def rate_limit_exception_handler(
+    request: Request, exc: RateLimitExceeded
+) -> JSONResponse:
     """
     Handle rate limit exceeded errors with standardized JSON response
     """
@@ -226,7 +294,9 @@ async def rate_limit_exception_handler(request: Request, exc: RateLimitExceeded)
 
 
 @fastapi_app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
     """
     Handle validation errors with standardized format for frontend consumption
     """
@@ -251,7 +321,9 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 
 @fastapi_app.exception_handler(SQLAlchemyError)
-async def database_exception_handler(request: Request, exc: SQLAlchemyError) -> JSONResponse:
+async def database_exception_handler(
+    request: Request, exc: SQLAlchemyError
+) -> JSONResponse:
     """Handle database errors and log them."""
     error_detail = {
         "error_type": "database_error",
@@ -291,7 +363,9 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 
 
 @fastapi_app.exception_handler(CustomException)
-async def custom_exception_handler(request: Request, exc: CustomException) -> JSONResponse:
+async def custom_exception_handler(
+    request: Request, exc: CustomException
+) -> JSONResponse:
     """
     Handle custom exceptions with standardized format for frontend consumption
     """
@@ -305,7 +379,9 @@ async def custom_exception_handler(request: Request, exc: CustomException) -> JS
 
 
 @fastapi_app.exception_handler(UserSelfDeleteException)
-async def user_self_delete_exception_handler(request: Request, exc: UserSelfDeleteException) -> JSONResponse:
+async def user_self_delete_exception_handler(
+    request: Request, exc: UserSelfDeleteException
+) -> JSONResponse:
     """
     Handle attempts by users to delete their own account.
     """
@@ -319,7 +395,9 @@ async def user_self_delete_exception_handler(request: Request, exc: UserSelfDele
 
 
 @fastapi_app.exception_handler(SQLAlchemyError)
-async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError) -> JSONResponse:
+async def sqlalchemy_exception_handler(
+    request: Request, exc: SQLAlchemyError
+) -> JSONResponse:
     """
     Handle database errors with standardized format for frontend consumption.
     Logs the full error internally but returns a generic message to the client.
@@ -333,7 +411,9 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError) -
         error_message = f"Database operation failed: {str(exc)}"
     else:
         # In production or other modes, use a generic message
-        error_message = "A database error occurred. Please try again later or contact support."
+        error_message = (
+            "A database error occurred. Please try again later or contact support."
+        )
 
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -353,6 +433,39 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content=create_error_response(
             message="Internal server error",
-            errors=[ErrorDetail(code="internal_error", message="An unexpected error occurred")],
+            errors=[
+                ErrorDetail(
+                    code="internal_error", message="An unexpected error occurred"
+                )
+            ],
         ).model_dump(),
     )
+
+
+@fastapi_app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    """
+    Handle rate limit exceeded exceptions
+    """
+    response = JSONResponse(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        content=create_error_response(
+            message="Rate limit exceeded",
+            errors=[
+                ErrorDetail(
+                    code="rate_limit", message=f"Rate limit exceeded: {exc.detail}"
+                )
+            ],
+        ).model_dump(),
+    )
+    response = request.app.state.limiter._inject_headers(
+        response, request.state.view_rate_limit
+    )
+    return response
+
+
+# Include API routes
+fastapi_app.include_router(api_router_v1, prefix=settings.API_V1_STR)
+
+# Export the app instance for uvicorn
+app = fastapi_app

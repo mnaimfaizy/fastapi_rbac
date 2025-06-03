@@ -23,7 +23,10 @@ from app.schemas.response_schema import (
     IPutResponseBase,
     create_response,
 )
-from app.utils.exceptions.common_exception import IdNotFoundException, NameExistException
+from app.utils.exceptions.common_exception import (
+    IdNotFoundException,
+    NameExistException,
+)
 
 router = APIRouter()
 
@@ -31,20 +34,28 @@ router = APIRouter()
 @router.get("")
 async def get_permission_groups(
     params: Params = Depends(),
-    current_user: User = Depends(deps.get_current_user(required_permissions=["permission_group.read"])),
+    current_user: User = Depends(
+        deps.get_current_user(required_permissions=["permission_group.read"])
+    ),
     db_session: AsyncSession = Depends(deps.get_async_db),
 ) -> IGetResponsePaginated[IPermissionGroupReadWithPermissions]:
     """
     Gets a paginated list of permission groups
     """
-    permission_groups = await crud.permission_group.get_multi_paginated(params=params, db_session=db_session)
+    permission_groups = await crud.permission_group.get_multi_paginated(
+        params=params, db_session=db_session
+    )
     return create_response(data=permission_groups)
 
 
-@router.get("/{group_id}", response_model=IGetResponseBase[IPermissionGroupWithPermissions])
+@router.get(
+    "/{group_id}", response_model=IGetResponseBase[IPermissionGroupWithPermissions]
+)
 async def get_permission_group_by_id(
     group_id: UUID,
-    current_user: User = Depends(deps.get_current_user(required_permissions=["permission_group.read"])),
+    current_user: User = Depends(
+        deps.get_current_user(required_permissions=["permission_group.read"])
+    ),
     db_session: AsyncSession = Depends(deps.get_async_db),
 ) -> IGetResponseBase[IPermissionGroupWithPermissions]:
     """
@@ -117,7 +128,9 @@ async def get_permission_group_by_id(
 @router.post("")
 async def create_permission_group(
     group: IPermissionGroupCreate,
-    current_user: User = Depends(deps.get_current_user(required_permissions=["permission_group.create"])),
+    current_user: User = Depends(
+        deps.get_current_user(required_permissions=["permission_group.create"])
+    ),
     db_session: AsyncSession = Depends(deps.get_async_db),
 ) -> IPostResponseBase[IPermissionGroupRead]:
     """
@@ -141,8 +154,12 @@ async def create_permission_group(
 @router.put("/{group_id}")
 async def update_permission_group(
     group: IPermissionGroupUpdate,
-    current_group: PermissionGroup = Depends(permission_group_deps.get_permission_group_by_id),
-    current_user: User = Depends(deps.get_current_user(required_permissions=["permission_group.update"])),
+    current_group: PermissionGroup = Depends(
+        permission_group_deps.get_permission_group_by_id
+    ),
+    current_user: User = Depends(
+        deps.get_current_user(required_permissions=["permission_group.update"])
+    ),
     db_session: AsyncSession = Depends(deps.get_async_db),
 ) -> IPutResponseBase[IPermissionGroupRead]:
     """
@@ -161,7 +178,9 @@ async def update_permission_group(
 @router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_permission_group(
     group: PermissionGroup = Depends(permission_group_deps.get_permission_group_by_id),
-    current_user: User = Depends(deps.get_current_user(required_permissions=["permission_group.delete"])),
+    current_user: User = Depends(
+        deps.get_current_user(required_permissions=["permission_group.delete"])
+    ),
     db_session: AsyncSession = Depends(deps.get_async_db),
 ) -> None:
     """

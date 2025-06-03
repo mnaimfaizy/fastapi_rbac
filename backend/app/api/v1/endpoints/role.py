@@ -39,7 +39,9 @@ router = APIRouter()
 @router.get("")
 async def get_roles(
     params: Params = Depends(),
-    current_user: User = Depends(deps.get_current_user(required_permissions=["role.read"])),
+    current_user: User = Depends(
+        deps.get_current_user(required_permissions=["role.read"])
+    ),
 ) -> IGetResponsePaginated[IRoleRead]:
     """
     Gets a paginated list of roles
@@ -74,7 +76,9 @@ async def get_all_roles_list(
 @router.get("/{role_id}")
 async def get_role_by_id(
     role: Role = Depends(role_deps.get_user_role_by_id),
-    current_user: User = Depends(deps.get_current_user(required_permissions=["role.read"])),
+    current_user: User = Depends(
+        deps.get_current_user(required_permissions=["role.read"])
+    ),
 ) -> IGetResponseBase[IRoleRead]:
     """
     Gets a role by its id
@@ -85,7 +89,9 @@ async def get_role_by_id(
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_role(
     role: IRoleCreate,
-    current_user: User = Depends(deps.get_current_user(required_permissions=["role.create"])),
+    current_user: User = Depends(
+        deps.get_current_user(required_permissions=["role.create"])
+    ),
     db_session: AsyncSession = Depends(deps.get_db),
 ) -> IPostResponseBase[IRoleRead]:
     """
@@ -94,11 +100,15 @@ async def create_role(
     Required roles:
     - admin
     """
-    role_current = await crud.role.get_role_by_name(name=role.name, db_session=db_session)
+    role_current = await crud.role.get_role_by_name(
+        name=role.name, db_session=db_session
+    )
     if role_current:
         raise NameExistException(Role, name=role_current.name)
 
-    new_role = await crud.role.create(obj_in=role, created_by_id=current_user.id, db_session=db_session)
+    new_role = await crud.role.create(
+        obj_in=role, created_by_id=current_user.id, db_session=db_session
+    )
     return create_response(data=new_role)
 
 
@@ -106,7 +116,9 @@ async def create_role(
 async def update_role(
     role: IRoleUpdate,
     current_role: Role = Depends(role_deps.get_user_role_by_id),
-    current_user: User = Depends(deps.get_current_user(required_permissions=["role.update"])),
+    current_user: User = Depends(
+        deps.get_current_user(required_permissions=["role.update"])
+    ),
 ) -> IPutResponseBase[IRoleRead]:
     """
     Updates a role by its id
@@ -130,7 +142,9 @@ async def update_role(
 @router.delete("/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_role(
     role: Role = Depends(role_deps.get_user_role_by_id),
-    current_user: User = Depends(deps.get_current_user(required_permissions=["role.delete"])),
+    current_user: User = Depends(
+        deps.get_current_user(required_permissions=["role.delete"])
+    ),
 ) -> None:
     """
     Deletes a role by its id
@@ -185,7 +199,9 @@ async def delete_role(
 async def assign_permissions_to_role(
     role_id: UUID,
     permissions: IRolePermissionAssign,
-    current_user: User = Depends(deps.get_current_user(required_permissions=["role.update"])),
+    current_user: User = Depends(
+        deps.get_current_user(required_permissions=["role.update"])
+    ),
     redis_client: Redis = Depends(get_redis_client),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ) -> IPostResponseBase[IRoleRead]:
@@ -226,10 +242,14 @@ async def assign_permissions_to_role(
         # Clear user permissions caches that might include this role
         # This is done in background to not block the response
         background_tasks.add_task(
-            crud.role.invalidate_user_permission_caches, role_id=role_id, redis_client=redis_client
+            crud.role.invalidate_user_permission_caches,
+            role_id=role_id,
+            redis_client=redis_client,
         )
 
-        return create_response(data=serialize_role(role), message="Permissions assigned successfully")
+        return create_response(
+            data=serialize_role(role), message="Permissions assigned successfully"
+        )
     except ResourceNotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
@@ -246,7 +266,9 @@ async def remove_permissions_from_role(
     permission_ids: Optional[List[UUID]] = Query(
         None, description="IDs of permissions to remove from the role"
     ),
-    current_user: User = Depends(deps.get_current_user(required_permissions=["role.update"])),
+    current_user: User = Depends(
+        deps.get_current_user(required_permissions=["role.update"])
+    ),
     redis_client: Redis = Depends(get_redis_client),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ) -> IPostResponseBase[IRoleRead]:
@@ -301,10 +323,14 @@ async def remove_permissions_from_role(
         # Clear user permissions caches that might include this role
         # This is done in background to not block the response
         background_tasks.add_task(
-            crud.role.invalidate_user_permission_caches, role_id=role_id, redis_client=redis_client
+            crud.role.invalidate_user_permission_caches,
+            role_id=role_id,
+            redis_client=redis_client,
         )
 
-        return create_response(data=serialize_role(role), message="Permissions removed successfully")
+        return create_response(
+            data=serialize_role(role), message="Permissions removed successfully"
+        )
     except ResourceNotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:

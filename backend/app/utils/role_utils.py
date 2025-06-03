@@ -23,7 +23,12 @@ def serialize_role(role: Role) -> dict[str, Any]:
         "role_group_id": role.role_group_id,
         "permissions": (
             [
-                {"id": perm.id, "name": perm.name, "description": perm.description, "group_id": perm.group_id}
+                {
+                    "id": perm.id,
+                    "name": perm.name,
+                    "description": perm.description,
+                    "group_id": perm.group_id,
+                }
                 for perm in role.permissions
             ]
             if hasattr(role, "permissions")

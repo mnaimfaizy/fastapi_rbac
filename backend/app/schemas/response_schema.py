@@ -11,8 +11,12 @@ T = TypeVar("T")
 
 
 class PageBase(Page[T], Generic[T]):
-    previous_page: int | None = Field(default=None, description="Page number of the previous page")
-    next_page: int | None = Field(default=None, description="Page number of the next page")
+    previous_page: int | None = Field(
+        default=None, description="Page number of the previous page"
+    )
+    next_page: int | None = Field(
+        default=None, description="Page number of the next page"
+    )
 
 
 class IResponseBase(BaseModel, Generic[T]):

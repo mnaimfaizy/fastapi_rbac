@@ -56,7 +56,9 @@ def create_access_token(
 ) -> str:
     """Create a JWT access token."""
     expire = datetime.now(timezone.utc) + (
-        expires_delta if expires_delta else timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        expires_delta
+        if expires_delta
+        else timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
 
     to_encode = add_token_claims(
@@ -74,10 +76,14 @@ def create_access_token(
     return encoded_jwt
 
 
-def create_refresh_token(subject: Union[str, Any], expires_delta: timedelta | None = None) -> str:
+def create_refresh_token(
+    subject: Union[str, Any], expires_delta: timedelta | None = None
+) -> str:
     """Create a JWT refresh token."""
     expire = datetime.now(timezone.utc) + (
-        expires_delta if expires_delta else timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES)
+        expires_delta
+        if expires_delta
+        else timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES)
     )
 
     to_encode = add_token_claims(
@@ -88,14 +94,20 @@ def create_refresh_token(subject: Union[str, Any], expires_delta: timedelta | No
         }
     )
 
-    encoded_jwt = jwt.encode(to_encode, settings.JWT_REFRESH_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    encoded_jwt = jwt.encode(
+        to_encode, settings.JWT_REFRESH_SECRET_KEY, algorithm=JWT_ALGORITHM
+    )
     return encoded_jwt
 
 
-def create_reset_token(subject: Union[str, Any], expires_delta: timedelta | None = None) -> str:
+def create_reset_token(
+    subject: Union[str, Any], expires_delta: timedelta | None = None
+) -> str:
     """Create a password reset token."""
     expire = datetime.now(timezone.utc) + (
-        expires_delta if expires_delta else timedelta(minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
+        expires_delta
+        if expires_delta
+        else timedelta(minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
     )
 
     to_encode = add_token_claims(
@@ -106,11 +118,15 @@ def create_reset_token(subject: Union[str, Any], expires_delta: timedelta | None
         }
     )
 
-    encoded_jwt = jwt.encode(to_encode, settings.JWT_RESET_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    encoded_jwt = jwt.encode(
+        to_encode, settings.JWT_RESET_SECRET_KEY, algorithm=JWT_ALGORITHM
+    )
     return encoded_jwt
 
 
-def create_verification_token(subject: Union[str, Any], expires_delta: timedelta | None = None) -> str:
+def create_verification_token(
+    subject: Union[str, Any], expires_delta: timedelta | None = None
+) -> str:
     """
     Create an email verification token with enhanced security.
 
@@ -165,7 +181,9 @@ def decode_token(
 
         # Basic format validation
         if not token or not isinstance(token, str) or "." not in token:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token format")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token format"
+            )
 
         try:
             # Full token validation
@@ -216,7 +234,9 @@ def decode_token(
         raise
     except Exception as e:
         logger.error(f"Token validation error: {str(e)}")
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token validation failed")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Token validation failed"
+        )
 
 
 def validate_token_claims(payload: dict) -> None:
@@ -229,7 +249,8 @@ def validate_token_claims(payload: dict) -> None:
             f"Token validation failed: Missing required claims: {missing_claims}. Payload: {payload}"
         )
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Missing required claims: {missing_claims}"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Missing required claims: {missing_claims}",
         )
 
     # Allow 5 minutes clock skew for issued at time
@@ -237,8 +258,13 @@ def validate_token_claims(payload: dict) -> None:
     iat_val = payload.get("iat")
 
     if not isinstance(iat_val, (int, float)):
-        logger.error(f"IAT claim is not numeric! Value: {iat_val}, Type: {type(iat_val)}")
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid IAT format in token")
+        logger.error(
+            f"IAT claim is not numeric! Value: {iat_val}, Type: {type(iat_val)}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid IAT format in token",
+        )
 
     condition_met = iat_val > now_ts + 300
 
@@ -246,7 +272,9 @@ def validate_token_claims(payload: dict) -> None:
         logger.warning(
             f"Invalid token issue time: iat ({iat_val}) is greater than now_ts + 300 ({now_ts + 300})"
         )
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token issue time")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token issue time"
+        )
 
 
 class PasswordValidator:
@@ -261,15 +289,23 @@ class PasswordValidator:
         errors = []
 
         if len(password) < settings.PASSWORD_MIN_LENGTH:
-            errors.append(f"Password must be at least {settings.PASSWORD_MIN_LENGTH} characters long")
+            errors.append(
+                f"Password must be at least {settings.PASSWORD_MIN_LENGTH} characters long"
+            )
 
         if len(password) > settings.PASSWORD_MAX_LENGTH:
-            errors.append(f"Password must not exceed {settings.PASSWORD_MAX_LENGTH} characters")
+            errors.append(
+                f"Password must not exceed {settings.PASSWORD_MAX_LENGTH} characters"
+            )
 
-        if settings.PASSWORD_REQUIRE_UPPERCASE and not any(c.isupper() for c in password):
+        if settings.PASSWORD_REQUIRE_UPPERCASE and not any(
+            c.isupper() for c in password
+        ):
             errors.append("Password must contain at least one uppercase letter")
 
-        if settings.PASSWORD_REQUIRE_LOWERCASE and not any(c.islower() for c in password):
+        if settings.PASSWORD_REQUIRE_LOWERCASE and not any(
+            c.islower() for c in password
+        ):
             errors.append("Password must contain at least one lowercase letter")
 
         if settings.PASSWORD_REQUIRE_DIGITS and not any(c.isdigit() for c in password):
@@ -282,16 +318,26 @@ class PasswordValidator:
                     f"{settings.PASSWORD_SPECIAL_CHARS}"
                 )
 
-        if settings.PREVENT_COMMON_PASSWORDS and password.lower() in settings.COMMON_PASSWORDS:
-            errors.append("This password is too common. Please choose a stronger password")
+        if (
+            settings.PREVENT_COMMON_PASSWORDS
+            and password.lower() in settings.COMMON_PASSWORDS
+        ):
+            errors.append(
+                "This password is too common. Please choose a stronger password"
+            )
 
-        if settings.PREVENT_SEQUENTIAL_CHARS and PasswordValidator.has_sequential_chars(password):
+        if (
+            settings.PREVENT_SEQUENTIAL_CHARS
+            and PasswordValidator.has_sequential_chars(password)
+        ):
             errors.append(
                 "Password contains sequential characters (e.g., 123, abc). "
                 "Please use a more random combination"
             )
 
-        if settings.PREVENT_REPEATED_CHARS and PasswordValidator.has_repeated_chars(password):
+        if settings.PREVENT_REPEATED_CHARS and PasswordValidator.has_repeated_chars(
+            password
+        ):
             errors.append("Password contains too many repeated characters")
 
         return len(errors) == 0, errors
@@ -299,7 +345,11 @@ class PasswordValidator:
     @staticmethod
     def has_sequential_chars(password: str, sequence_length: int = 3) -> bool:
         """Check if password contains sequential characters."""
-        sequences = ("abcdefghijklmnopqrstuvwxyz", "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "0123456789")
+        sequences = (
+            "abcdefghijklmnopqrstuvwxyz",
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+            "0123456789",
+        )
 
         for sequence in sequences:
             for i in range(len(sequence) - sequence_length + 1):
@@ -350,11 +400,14 @@ class PasswordValidator:
         except Exception as e:
             logger.error(f"Password hashing failed: {str(e)}")
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to process password"
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to process password",
             )
 
     @staticmethod
-    def verify_password(plain_password: str | bytes, hashed_password: str | bytes) -> bool:
+    def verify_password(
+        plain_password: str | bytes, hashed_password: str | bytes
+    ) -> bool:
         """Verify a password against its hash."""
         try:
             if isinstance(plain_password, str):
@@ -372,7 +425,8 @@ class PasswordValidator:
         except Exception as e:
             logger.error(f"Password verification failed: {str(e)}")
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to verify password"
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to verify password",
             )
 
 
@@ -392,5 +446,6 @@ def get_content(variable: str) -> str:
     except Exception as e:
         logger.error(f"Data decryption failed: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to decrypt data"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to decrypt data",
         )

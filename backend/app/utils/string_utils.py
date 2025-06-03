@@ -1,7 +1,9 @@
 from typing import Optional
 
 
-def format_permission_name(permission_name: str, group_name: Optional[str] = None) -> str:
+def format_permission_name(
+    permission_name: str, group_name: Optional[str] = None
+) -> str:
     """
     Formats a permission name by combining the permission group name and permission name
     in lowercase, with dots as separators.

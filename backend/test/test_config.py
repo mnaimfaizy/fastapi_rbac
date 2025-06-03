@@ -31,7 +31,9 @@ class TestDBType(str, Enum):
 class TestConfig:
     # Database settings
     DB_TYPE: TestDBType = TestDBType.from_str(os.environ.get("TEST_DB_TYPE"))
-    SQLITE_URI: str = os.environ.get("TEST_SQLITE_URI", "sqlite+aiosqlite:///test_db.sqlite3")
+    SQLITE_URI: str = os.environ.get(
+        "TEST_SQLITE_URI", "sqlite+aiosqlite:///test_db.sqlite3"
+    )
 
     # PostgreSQL settings (for CI)
     POSTGRES_USER: str = os.environ.get("TEST_POSTGRES_USER", "postgres")
@@ -43,7 +45,9 @@ class TestConfig:
     # Redis settings
     REDIS_HOST: str = os.environ.get("TEST_REDIS_HOST", "localhost")
     REDIS_PORT: str = os.environ.get("TEST_REDIS_PORT", "6379")
-    REDIS_USE_MOCK: bool = os.environ.get("TEST_REDIS_USE_MOCK", "true").lower() == "true"
+    REDIS_USE_MOCK: bool = (
+        os.environ.get("TEST_REDIS_USE_MOCK", "true").lower() == "true"
+    )
 
     @classmethod
     def get_db_uri(cls) -> str:

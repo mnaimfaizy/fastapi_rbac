@@ -26,9 +26,15 @@ def setup_env_vars(env: TestEnv) -> None:
 
     if env == TestEnv.LOCAL_POSTGRES:
         os.environ["TEST_DB_TYPE"] = "postgres"
-        os.environ["TEST_POSTGRES_USER"] = os.environ.get("TEST_POSTGRES_USER", "postgres")
-        os.environ["TEST_POSTGRES_PASSWORD"] = os.environ.get("TEST_POSTGRES_PASSWORD", "postgres")
-        os.environ["TEST_POSTGRES_HOST"] = os.environ.get("TEST_POSTGRES_HOST", "localhost")
+        os.environ["TEST_POSTGRES_USER"] = os.environ.get(
+            "TEST_POSTGRES_USER", "postgres"
+        )
+        os.environ["TEST_POSTGRES_PASSWORD"] = os.environ.get(
+            "TEST_POSTGRES_PASSWORD", "postgres"
+        )
+        os.environ["TEST_POSTGRES_HOST"] = os.environ.get(
+            "TEST_POSTGRES_HOST", "localhost"
+        )
         os.environ["TEST_POSTGRES_PORT"] = os.environ.get("TEST_POSTGRES_PORT", "5432")
         os.environ["TEST_POSTGRES_DB"] = os.environ.get("TEST_POSTGRES_DB", "test_db")
         print("Using local PostgreSQL database for testing")
@@ -48,7 +54,14 @@ def run_docker_tests() -> int:
     """Run tests in Docker containers"""
     print("Running tests in Docker environment...")
     result = subprocess.run(
-        ["docker-compose", "-f", "docker-compose.test.yml", "up", "--build", "--abort-on-container-exit"],
+        [
+            "docker-compose",
+            "-f",
+            "docker-compose.test.yml",
+            "up",
+            "--build",
+            "--abort-on-container-exit",
+        ],
         check=False,
     )
     # Clean up containers after test
@@ -101,9 +114,13 @@ def main() -> int:
         default=TestEnv.LOCAL_SQLITE,
         help="Test environment (default: sqlite)",
     )
-    parser.add_argument("--coverage", action="store_true", help="Run tests with coverage")
+    parser.add_argument(
+        "--coverage", action="store_true", help="Run tests with coverage"
+    )
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
-    parser.add_argument("test_path", nargs="?", help="Path to specific test file or directory")
+    parser.add_argument(
+        "test_path", nargs="?", help="Path to specific test file or directory"
+    )
 
     args = parser.parse_args()
 

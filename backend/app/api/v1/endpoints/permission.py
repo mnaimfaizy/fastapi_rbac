@@ -17,7 +17,10 @@ from app.schemas.response_schema import (
     IPostResponseBase,
     create_response,
 )
-from app.utils.exceptions.common_exception import IdNotFoundException, NameExistException
+from app.utils.exceptions.common_exception import (
+    IdNotFoundException,
+    NameExistException,
+)
 from app.utils.string_utils import format_permission_name
 
 router = APIRouter()
@@ -26,7 +29,9 @@ router = APIRouter()
 @router.get("")
 async def get_permissions(
     params: Params = Depends(),
-    current_user: User = Depends(deps.get_current_user(required_permissions=["permission.read"])),
+    current_user: User = Depends(
+        deps.get_current_user(required_permissions=["permission.read"])
+    ),
 ) -> IGetResponsePaginated[IPermissionRead]:
     """
     Gets a paginated list of permission
@@ -38,7 +43,9 @@ async def get_permissions(
 @router.get("/{permission_id}", response_model=IGetResponseBase[IPermissionRead])
 async def get_permission_by_id(
     permission_id: UUID,
-    current_user: User = Depends(deps.get_current_user(required_permissions=["permission.read"])),
+    current_user: User = Depends(
+        deps.get_current_user(required_permissions=["permission.read"])
+    ),
 ) -> IGetResponseBase[IPermissionRead]:
     """
     Gets a permission by its ID
@@ -53,7 +60,9 @@ async def get_permission_by_id(
 @router.post("")
 async def create_permission(
     permission: IPermissionCreate,
-    current_user: User = Depends(deps.get_current_user(required_permissions=["permission.create"])),
+    current_user: User = Depends(
+        deps.get_current_user(required_permissions=["permission.create"])
+    ),
     db_session: AsyncSession = Depends(deps.get_async_db),
 ) -> IPostResponseBase[IPermissionRead]:
     """
@@ -71,7 +80,9 @@ async def create_permission(
         # Create a copy of the permission object to avoid modifying the input
         permission_dict = permission.model_dump()
         # Format the name using both permission name and group name
-        permission_dict["name"] = format_permission_name(permission.name, permission_group.name)
+        permission_dict["name"] = format_permission_name(
+            permission.name, permission_group.name
+        )
         # Create a new IPermissionCreate instance with the formatted name
         formatted_permission = IPermissionCreate(**permission_dict)
     else:
@@ -81,12 +92,16 @@ async def create_permission(
         formatted_permission = IPermissionCreate(**permission_dict)
 
     # Check if a permission with the formatted name already exists
-    permission_current = await crud.permission.get_permission_by_name(name=formatted_permission.name)
+    permission_current = await crud.permission.get_permission_by_name(
+        name=formatted_permission.name
+    )
     if permission_current:
         raise NameExistException(Permission, name=formatted_permission.name)
 
     new_permission = await crud.permission.create(
-        obj_in=formatted_permission, created_by_id=current_user.id, db_session=db_session
+        obj_in=formatted_permission,
+        created_by_id=current_user.id,
+        db_session=db_session,
     )
     return create_response(data=new_permission)
 
@@ -94,7 +109,9 @@ async def create_permission(
 @router.delete("/{permission_id}")
 async def delete_permission(
     permission: Permission = Depends(permission_deps.get_permission_by_id),
-    current_user: User = Depends(deps.get_current_user(required_permissions=["permission.delete"])),
+    current_user: User = Depends(
+        deps.get_current_user(required_permissions=["permission.delete"])
+    ),
 ) -> IDeleteResponseBase[IPermissionRead]:
     """
     Deletes a permission by its id
@@ -106,7 +123,9 @@ async def delete_permission(
     try:
         # Check if permission is currently used by any roles
         # This check is optional but recommended to prevent orphaned references
-        is_in_use = await crud.permission.is_permission_in_use(permission_id=permission.id)
+        is_in_use = await crud.permission.is_permission_in_use(
+            permission_id=permission.id
+        )
         if is_in_use:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -117,7 +136,9 @@ async def delete_permission(
             )
 
         deleted_permission = await crud.permission.remove(id=permission.id)
-        return create_response(data=deleted_permission, message="Permission deleted successfully")
+        return create_response(
+            data=deleted_permission, message="Permission deleted successfully"
+        )
     except Exception as e:
         # Catch potential DB errors or other issues during deletion
         raise HTTPException(

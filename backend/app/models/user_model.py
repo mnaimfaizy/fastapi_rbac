@@ -30,7 +30,9 @@ class UserBase(SQLModel):
     verified: bool = False
     verification_code: str | None = None
 
-    @field_validator("expiry_date", "last_changed_password_date", "locked_until", mode="before")
+    @field_validator(
+        "expiry_date", "last_changed_password_date", "locked_until", mode="before"
+    )
     @classmethod
     def convert_null_string_to_none(cls, v: Any) -> Any:
         if isinstance(v, str) and v.upper() == "(NULL)":
@@ -46,9 +48,15 @@ class User(BaseUUIDModel, UserBase, table=True):
     first_name: str | None = Field(default=None, index=True)
     last_name: str | None = Field(default=None, index=True)
     password: str | None = Field(default=None)  # Store the hashed password
-    password_version: int = Field(default=1)  # Track password changes for token invalidation
-    expiry_date: datetime | None = Field(default_factory=lambda: datetime.now(timezone.utc))
-    last_changed_password_date: datetime | None = Field(default_factory=lambda: datetime.now(timezone.utc))
+    password_version: int = Field(
+        default=1
+    )  # Track password changes for token invalidation
+    expiry_date: datetime | None = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
+    last_changed_password_date: datetime | None = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
 
     # Roles
     roles: List["Role"] = Relationship(

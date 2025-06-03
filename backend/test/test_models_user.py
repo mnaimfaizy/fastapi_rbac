@@ -51,7 +51,9 @@ async def test_create_user(db: AsyncSession) -> None:
 async def test_user_with_roles(db: AsyncSession) -> None:
     """Test assigning roles to a user"""  # Create user
     email = random_email()
-    user = User(email=email, password=random_lower_string(), is_active=True, password_version=1)
+    user = User(
+        email=email, password=random_lower_string(), is_active=True, password_version=1
+    )
     db.add(user)
 
     # Create roles
@@ -88,7 +90,9 @@ async def test_user_with_roles(db: AsyncSession) -> None:
 async def test_user_unique_email_constraint(db: AsyncSession) -> None:
     """Test that users must have unique emails"""  # Create first user
     email = random_email()
-    user1 = User(email=email, password=random_lower_string(), is_active=True, password_version=1)
+    user1 = User(
+        email=email, password=random_lower_string(), is_active=True, password_version=1
+    )
     db.add(user1)
     await db.commit()  # Try to create second user with same email
     user2 = User(
@@ -97,7 +101,9 @@ async def test_user_unique_email_constraint(db: AsyncSession) -> None:
     db.add(user2)
 
     # This should raise an exception due to unique constraint on email
-    with pytest.raises(IntegrityError):  # Could be more specific with the exact SQLAlchemy exception
+    with pytest.raises(
+        IntegrityError
+    ):  # Could be more specific with the exact SQLAlchemy exception
         await db.commit()
 
     # Rollback to clean the session

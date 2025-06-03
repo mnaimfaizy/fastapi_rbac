@@ -46,7 +46,9 @@ class UserFactory(SQLAlchemyModelFactory):
         return 1000
 
     @factory.post_generation
-    def roles(self, create: bool, extracted: Optional[Sequence[Role]], **kwargs: Any) -> None:
+    def roles(
+        self, create: bool, extracted: Optional[Sequence[Role]], **kwargs: Any
+    ) -> None:
         """Add roles to the user if provided."""
         if not create or not extracted:
             return
@@ -78,7 +80,10 @@ class UserFactory(SQLAlchemyModelFactory):
         return cast(
             User,
             cls.create(
-                is_locked=True, number_of_failed_attempts=5, locked_until=now + timedelta(hours=1), **kwargs
+                is_locked=True,
+                number_of_failed_attempts=5,
+                locked_until=now + timedelta(hours=1),
+                **kwargs
             ),
         )
 
@@ -94,4 +99,7 @@ class UserFactory(SQLAlchemyModelFactory):
         import string
 
         verification_code = "".join(random.choices(string.digits, k=6))
-        return cast(User, cls.create(verified=False, verification_code=verification_code, **kwargs))
+        return cast(
+            User,
+            cls.create(verified=False, verification_code=verification_code, **kwargs),
+        )

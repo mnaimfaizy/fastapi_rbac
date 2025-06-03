@@ -22,4 +22,6 @@ if settings.MODE == ModeEnum.development:
     # Print debug information when running in development mode
     print(f"Celery initialized with broker: {celery_config['broker_url']}")
     print(f"Task always eager: {celery_config.get('task_always_eager', False)}")
-    print(f"Available task queues: {', '.join(q.name for q in celery_config['task_queues'])}")
+    print(
+        f"Available task queues: {', '.join(q.name for q in celery_config['task_queues'])}"
+    )

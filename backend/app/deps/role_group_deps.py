@@ -7,14 +7,21 @@ from typing_extensions import Annotated
 from app import crud
 from app.api.deps import get_async_db
 from app.models.role_group_model import RoleGroup
-from app.utils.exceptions.common_exception import IdNotFoundException, NameNotFoundException
+from app.utils.exceptions.common_exception import (
+    IdNotFoundException,
+    NameNotFoundException,
+)
 
 
 async def get_group_by_name(
-    group_name: Annotated[str, Query(description="String compare with role group name")] = "",
+    group_name: Annotated[
+        str, Query(description="String compare with role group name")
+    ] = "",
     db_session: AsyncSession = Depends(get_async_db),
 ) -> str:
-    group = await crud.role_group.get_group_by_name(name=group_name, db_session=db_session)
+    group = await crud.role_group.get_group_by_name(
+        name=group_name, db_session=db_session
+    )
     if not group:
         raise NameNotFoundException(RoleGroup, name=group_name)
     return group
@@ -27,7 +34,9 @@ async def get_group_by_id(
 ) -> RoleGroup:
     # Use the hierarchical method to retrieve the group with all relationships and roles
     group = await crud.role_group.get_with_hierarchy(
-        id=group_id, db_session=db_session, include_roles_recursive=include_roles_recursive
+        id=group_id,
+        db_session=db_session,
+        include_roles_recursive=include_roles_recursive,
     )
     if not group:
         raise IdNotFoundException(RoleGroup, id=group_id)

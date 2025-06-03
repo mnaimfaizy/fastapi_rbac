@@ -88,7 +88,9 @@ async def test_update_role(db: AsyncSession) -> None:
     # Update the role description
     new_description = "Updated Description"
     role_update = IRoleUpdate(name=role.name, description=new_description)
-    updated_role = await role_crud.update(obj_current=role, obj_new=role_update, db_session=db)
+    updated_role = await role_crud.update(
+        obj_current=role, obj_new=role_update, db_session=db
+    )
     # Check that the role was updated
     assert updated_role.id == role.id
     assert updated_role.name == name
@@ -108,7 +110,9 @@ async def test_update_role_name(db: AsyncSession) -> None:
     # Update the role name
     new_name = f"updated-role-{random_lower_string(8)}"
     role_update = IRoleUpdate(name=new_name)
-    updated_role = await role_crud.update(obj_current=role, obj_new=role_update, db_session=db)
+    updated_role = await role_crud.update(
+        obj_current=role, obj_new=role_update, db_session=db
+    )
     # Check that the role was updated
     assert updated_role.id == role.id
     assert updated_role.name == new_name
@@ -209,7 +213,9 @@ async def test_add_role_to_user(db: AsyncSession) -> None:
     role = await role_crud.create(obj_in=role_in, db_session=db)
 
     # Add role to user
-    updated_role = await role_crud.add_role_to_user(user=user, role_id=role.id, db_session=db)
+    updated_role = await role_crud.add_role_to_user(
+        user=user, role_id=role.id, db_session=db
+    )
 
     # Check that role was added to user
     assert updated_role.id == role.id
@@ -234,7 +240,9 @@ async def test_add_role_to_user_not_found(db: AsyncSession) -> None:
 
     # Check that ValueError is raised with the correct message pattern
     with pytest.raises(ValueError, match=f"Role with ID {non_existent_id} not found"):
-        await role_crud.add_role_to_user(user=user, role_id=non_existent_id, db_session=db)
+        await role_crud.add_role_to_user(
+            user=user, role_id=non_existent_id, db_session=db
+        )
 
 
 @pytest.mark.asyncio
@@ -248,14 +256,19 @@ async def test_permission_exist_in_role(db: AsyncSession) -> None:
     role = await role_crud.create(obj_in=role_in, db_session=db)
 
     # Initially should have no permissions
-    has_permissions = await role_crud.permission_exist_in_role(role_id=role.id, db_session=db)
+    has_permissions = await role_crud.permission_exist_in_role(
+        role_id=role.id, db_session=db
+    )
     assert has_permissions is False
 
     # Create a permission group first since group_id is required
     group_in = IPermissionGroupCreate(
-        name=f"test-perm-group-{random_lower_string(8)}", description="Test Permission Group"
+        name=f"test-perm-group-{random_lower_string(8)}",
+        description="Test Permission Group",
     )
-    permission_group = await permission_group_crud.create(obj_in=group_in, db_session=db)
+    permission_group = await permission_group_crud.create(
+        obj_in=group_in, db_session=db
+    )
 
     # Create a permission with the required group_id
     perm_in = IPermissionCreate(
@@ -271,11 +284,16 @@ async def test_permission_exist_in_role(db: AsyncSession) -> None:
 
     # Assign permission to role
     await role_crud.assign_permissions(
-        role_id=role.id, permission_ids=[permission.id], current_user=mock_user, db_session=db
+        role_id=role.id,
+        permission_ids=[permission.id],
+        current_user=mock_user,
+        db_session=db,
     )
 
     # Now should have permissions
-    has_permissions = await role_crud.permission_exist_in_role(role_id=role.id, db_session=db)
+    has_permissions = await role_crud.permission_exist_in_role(
+        role_id=role.id, db_session=db
+    )
     assert has_permissions is True
 
 
@@ -312,7 +330,9 @@ async def test_user_exist_in_role(db: AsyncSession) -> None:
 
     # Test with non-existent role
     non_existent_id = UUID("00000000-0000-0000-0000-000000000000")
-    has_users = await role_crud.user_exist_in_role(role_id=non_existent_id, db_session=db)
+    has_users = await role_crud.user_exist_in_role(
+        role_id=non_existent_id, db_session=db
+    )
     assert has_users is False
 
 
@@ -328,9 +348,12 @@ async def test_assign_permissions(db: AsyncSession) -> None:
 
     # Create a permission group first since group_id is required
     group_in = IPermissionGroupCreate(
-        name=f"test-perm-group-{random_lower_string(8)}", description="Test Permission Group"
+        name=f"test-perm-group-{random_lower_string(8)}",
+        description="Test Permission Group",
     )
-    permission_group = await permission_group_crud.create(obj_in=group_in, db_session=db)
+    permission_group = await permission_group_crud.create(
+        obj_in=group_in, db_session=db
+    )
 
     # Create multiple permissions
     permission_ids = []
@@ -349,7 +372,10 @@ async def test_assign_permissions(db: AsyncSession) -> None:
 
     # Assign permissions to role
     updated_role = await role_crud.assign_permissions(
-        role_id=role.id, permission_ids=permission_ids, current_user=mock_user, db_session=db
+        role_id=role.id,
+        permission_ids=permission_ids,
+        current_user=mock_user,
+        db_session=db,
     )
 
     # Check that permissions were assigned
@@ -359,7 +385,10 @@ async def test_assign_permissions(db: AsyncSession) -> None:
 
     # Test assignment idempotency (assigning same permissions again)
     updated_role = await role_crud.assign_permissions(
-        role_id=role.id, permission_ids=permission_ids, current_user=mock_user, db_session=db
+        role_id=role.id,
+        permission_ids=permission_ids,
+        current_user=mock_user,
+        db_session=db,
     )
 
     # Check that permissions are still the same (no duplicates)
@@ -380,7 +409,10 @@ async def test_assign_permissions_not_found(db: AsyncSession) -> None:
     # Check that ResourceNotFoundException is raised
     with pytest.raises(ResourceNotFoundException):
         await role_crud.assign_permissions(
-            role_id=non_existent_id, permission_ids=permission_ids, current_user=mock_user, db_session=db
+            role_id=non_existent_id,
+            permission_ids=permission_ids,
+            current_user=mock_user,
+            db_session=db,
         )
 
 
@@ -396,9 +428,12 @@ async def test_remove_permissions(db: AsyncSession) -> None:
 
     # Create a permission group first since group_id is required
     group_in = IPermissionGroupCreate(
-        name=f"test-perm-group-{random_lower_string(8)}", description="Test Permission Group"
+        name=f"test-perm-group-{random_lower_string(8)}",
+        description="Test Permission Group",
     )
-    permission_group = await permission_group_crud.create(obj_in=group_in, db_session=db)
+    permission_group = await permission_group_crud.create(
+        obj_in=group_in, db_session=db
+    )
 
     # Create multiple permissions
     permission_ids = []
@@ -417,7 +452,10 @@ async def test_remove_permissions(db: AsyncSession) -> None:
 
     # Assign permissions to role
     updated_role = await role_crud.assign_permissions(
-        role_id=role.id, permission_ids=permission_ids, current_user=mock_user, db_session=db
+        role_id=role.id,
+        permission_ids=permission_ids,
+        current_user=mock_user,
+        db_session=db,
     )
 
     # Check that permissions were assigned
@@ -425,7 +463,10 @@ async def test_remove_permissions(db: AsyncSession) -> None:
 
     # Remove one permission
     updated_role = await role_crud.remove_permissions(
-        role_id=role.id, permission_ids=[permission_ids[0]], current_user=mock_user, db_session=db
+        role_id=role.id,
+        permission_ids=[permission_ids[0]],
+        current_user=mock_user,
+        db_session=db,
     )
 
     # Check that permission was removed
@@ -435,7 +476,10 @@ async def test_remove_permissions(db: AsyncSession) -> None:
     # Try to remove non-existent permission (should not fail)
     non_existent_id = UUID("00000000-0000-0000-0000-000000000000")
     updated_role = await role_crud.remove_permissions(
-        role_id=role.id, permission_ids=[non_existent_id], current_user=mock_user, db_session=db
+        role_id=role.id,
+        permission_ids=[non_existent_id],
+        current_user=mock_user,
+        db_session=db,
     )
 
     # Should still have 2 permissions
@@ -456,7 +500,10 @@ async def test_remove_permissions_not_found(db: AsyncSession) -> None:
     # Check that ResourceNotFoundException is raised
     with pytest.raises(ResourceNotFoundException):
         await role_crud.remove_permissions(
-            role_id=non_existent_id, permission_ids=permission_ids, current_user=mock_user, db_session=db
+            role_id=non_existent_id,
+            permission_ids=permission_ids,
+            current_user=mock_user,
+            db_session=db,
         )
 
 
@@ -484,16 +531,22 @@ async def test_validate_system_role(db: AsyncSession) -> None:
 
     # Check system roles
     for role_id in system_role_ids:
-        is_system_role = await role_crud.validate_system_role(role_id=role_id, db_session=db)
+        is_system_role = await role_crud.validate_system_role(
+            role_id=role_id, db_session=db
+        )
         assert is_system_role is True
 
     # Check regular role
-    is_system_role = await role_crud.validate_system_role(role_id=regular_role.id, db_session=db)
+    is_system_role = await role_crud.validate_system_role(
+        role_id=regular_role.id, db_session=db
+    )
     assert is_system_role is False
 
     # Check non-existent role
     non_existent_id = UUID("00000000-0000-0000-0000-000000000000")
-    is_system_role = await role_crud.validate_system_role(role_id=non_existent_id, db_session=db)
+    is_system_role = await role_crud.validate_system_role(
+        role_id=non_existent_id, db_session=db
+    )
     assert is_system_role is False
 
 
@@ -529,7 +582,9 @@ async def test_invalidate_user_permission_caches(db: AsyncSession) -> None:
 
     # Call the method directly with the real implementation
     await role_crud.invalidate_user_permission_caches(
-        role_id=role.id, redis_client=mock_redis, db_session=db  # Pass the database session
+        role_id=role.id,
+        redis_client=mock_redis,
+        db_session=db,  # Pass the database session
     )
 
     # Verify that our Redis operations were called as expected

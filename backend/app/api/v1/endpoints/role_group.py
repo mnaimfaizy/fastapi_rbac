@@ -38,7 +38,9 @@ router = APIRouter()
 @router.get("")
 async def get_role_groups(
     params: Params = Depends(),
-    current_user: User = Depends(deps.get_current_user(required_permissions=["role_group.read"])),
+    current_user: User = Depends(
+        deps.get_current_user(required_permissions=["role_group.read"])
+    ),
     db_session: AsyncSession = Depends(deps.get_async_db),
 ) -> IGetResponsePaginated[IRoleGroupRead]:
     """
@@ -75,7 +77,9 @@ async def get_role_groups(
 async def get_role_group_by_id(
     group_id: UUID,
     include_nested_roles: bool = False,
-    current_user: User = Depends(deps.get_current_user(required_permissions=["role_group.read"])),
+    current_user: User = Depends(
+        deps.get_current_user(required_permissions=["role_group.read"])
+    ),
     db_session: AsyncSession = Depends(deps.get_async_db),
 ) -> IGetResponseBase[IRoleGroupWithRoles]:
     """
@@ -92,7 +96,9 @@ async def get_role_group_by_id(
     """
     try:
         role_group = await role_group_deps.get_group_by_id(
-            group_id=group_id, db_session=db_session, include_roles_recursive=include_nested_roles
+            group_id=group_id,
+            db_session=db_session,
+            include_roles_recursive=include_nested_roles,
         )
 
         # The model will now have the parent relationship properly loaded
@@ -221,7 +227,9 @@ async def get_role_group_by_id(
 @router.post("")
 async def create_role_group(
     group: IRoleGroupCreate,
-    current_user: User = Depends(deps.get_current_user(required_permissions=["role_group.create"])),
+    current_user: User = Depends(
+        deps.get_current_user(required_permissions=["role_group.create"])
+    ),
     db_session: AsyncSession = Depends(deps.get_async_db),
 ) -> IPostResponseBase[IRoleGroupRead]:
     """
@@ -231,7 +239,9 @@ async def create_role_group(
     - admin
     - manager
     """
-    role_group_current = await crud.role_group.get_group_by_name(name=group.name, db_session=db_session)
+    role_group_current = await crud.role_group.get_group_by_name(
+        name=group.name, db_session=db_session
+    )
     if role_group_current:
         raise NameExistException(RoleGroup, name=group.name)
     new_group = await crud.role_group.create(
@@ -244,7 +254,9 @@ async def create_role_group(
 async def update_role_group(
     group: IRoleGroupUpdate,
     current_group: RoleGroup = Depends(role_group_deps.get_group_by_id),
-    current_user: User = Depends(deps.get_current_user(required_permissions=["role_group.update"])),
+    current_user: User = Depends(
+        deps.get_current_user(required_permissions=["role_group.update"])
+    ),
     db_session: AsyncSession = Depends(deps.get_async_db),
 ) -> IPutResponseBase[IRoleGroupRead]:
     """
@@ -263,7 +275,9 @@ async def update_role_group(
 @router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_role_group(
     group: RoleGroup = Depends(role_group_deps.get_group_by_id),
-    current_user: User = Depends(deps.get_current_user(required_permissions=["role_group.delete"])),
+    current_user: User = Depends(
+        deps.get_current_user(required_permissions=["role_group.delete"])
+    ),
     db_session: AsyncSession = Depends(deps.get_async_db),
 ) -> None:
     """
@@ -285,7 +299,9 @@ async def delete_role_group(
         )
 
     # Check if group has any roles before deletion
-    has_roles = await crud.role_group.check_role_exists_in_group(group_id=group.id, db_session=db_session)
+    has_roles = await crud.role_group.check_role_exists_in_group(
+        group_id=group.id, db_session=db_session
+    )
     if has_roles:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -310,7 +326,9 @@ async def delete_role_group(
 @router.post("/bulk")
 async def bulk_create_role_groups(
     groups: List[IRoleGroupCreate],
-    current_user: User = Depends(deps.get_current_user(required_permissions=["role_group.create"])),
+    current_user: User = Depends(
+        deps.get_current_user(required_permissions=["role_group.create"])
+    ),
     redis_client: Redis = Depends(get_redis_client),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ) -> IPostResponseBase[List[IRoleGroupRead]]:
@@ -322,12 +340,17 @@ async def bulk_create_role_groups(
     - manager
     """
     try:
-        new_groups = await crud.role_group.bulk_create(groups=groups, current_user=current_user)
+        new_groups = await crud.role_group.bulk_create(
+            groups=groups, current_user=current_user
+        )
 
         # Invalidate role groups list cache
         background_tasks.add_task(redis_client.delete, "role_groups:list")
 
-        return create_response(data=new_groups, message=f"Successfully created {len(new_groups)} role groups")
+        return create_response(
+            data=new_groups,
+            message=f"Successfully created {len(new_groups)} role groups",
+        )
     except NameExistException as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except Exception as e:
@@ -340,7 +363,9 @@ async def bulk_create_role_groups(
 @router.delete("/bulk")
 async def bulk_delete_role_groups(
     group_ids: List[UUID],
-    current_user: User = Depends(deps.get_current_user(required_permissions=["role_group.delete"])),
+    current_user: User = Depends(
+        deps.get_current_user(required_permissions=["role_group.delete"])
+    ),
     redis_client: Redis = Depends(get_redis_client),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ) -> IPostResponseBase:
@@ -352,14 +377,18 @@ async def bulk_delete_role_groups(
     - manager
     """
     try:
-        await crud.role_group.bulk_delete(group_ids=group_ids, current_user=current_user)
+        await crud.role_group.bulk_delete(
+            group_ids=group_ids, current_user=current_user
+        )
 
         # Invalidate role groups list cache and individual group caches
         background_tasks.add_task(redis_client.delete, "role_groups:list")
         for group_id in group_ids:
             background_tasks.add_task(redis_client.delete, f"role_group:{group_id}")
 
-        return create_response(message=f"Successfully deleted {len(group_ids)} role groups")
+        return create_response(
+            message=f"Successfully deleted {len(group_ids)} role groups"
+        )
     except ResourceNotFoundException as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except HTTPException as e:
@@ -376,7 +405,9 @@ async def bulk_delete_role_groups(
 async def add_roles_to_group(
     group_id: UUID,
     role_ids: dict,
-    current_user: User = Depends(deps.get_current_user(required_permissions=["role_group.update"])),
+    current_user: User = Depends(
+        deps.get_current_user(required_permissions=["role_group.update"])
+    ),
     redis_client: Redis = Depends(get_redis_client),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ) -> IPostResponseBase[IRoleGroupWithRoles]:
@@ -409,10 +440,14 @@ async def add_roles_to_group(
         )
 
         if has_circular:
-            raise CircularDependencyException("Adding these roles would create a circular dependency")
+            raise CircularDependencyException(
+                "Adding these roles would create a circular dependency"
+            )
 
         # Add roles to the group with converted UUIDs
-        await crud.role_group.add_roles_to_group(group_id=group_id, role_ids=uuid_role_ids)
+        await crud.role_group.add_roles_to_group(
+            group_id=group_id, role_ids=uuid_role_ids
+        )
 
         # Comprehensive cache invalidation
         # Invalidate cache for this role group
@@ -430,7 +465,9 @@ async def add_roles_to_group(
 
             # Invalidate user permissions caches for each role
             background_tasks.add_task(
-                crud.role.invalidate_user_permission_caches, role_id=role_id, redis_client=redis_client
+                crud.role.invalidate_user_permission_caches,
+                role_id=role_id,
+                redis_client=redis_client,
             )
 
         # Get updated group
@@ -438,7 +475,8 @@ async def add_roles_to_group(
         return create_response(data=updated_group)
     except ValueError as e:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid UUID format in role_ids: {str(e)}"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid UUID format in role_ids: {str(e)}",
         )
     except CircularDependencyException as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
@@ -453,7 +491,9 @@ async def add_roles_to_group(
 async def remove_roles_from_group(
     group_id: UUID,
     role_ids: dict,
-    current_user: User = Depends(deps.get_current_user(required_permissions=["role_group.update"])),
+    current_user: User = Depends(
+        deps.get_current_user(required_permissions=["role_group.update"])
+    ),
     redis_client: Redis = Depends(get_redis_client),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ) -> IPostResponseBase[IRoleGroupWithRoles]:
@@ -481,7 +521,9 @@ async def remove_roles_from_group(
                 raise ValueError(f"Invalid role_id format: {role_id}")
 
         # Call the CRUD method with converted UUIDs
-        await crud.role_group.remove_roles_from_group(group_id=group_id, role_ids=uuid_role_ids)
+        await crud.role_group.remove_roles_from_group(
+            group_id=group_id, role_ids=uuid_role_ids
+        )
 
         # Comprehensive cache invalidation
         # Invalidate cache for this role group
@@ -499,7 +541,9 @@ async def remove_roles_from_group(
 
             # Invalidate user permissions caches for each role
             background_tasks.add_task(
-                crud.role.invalidate_user_permission_caches, role_id=role_id, redis_client=redis_client
+                crud.role.invalidate_user_permission_caches,
+                role_id=role_id,
+                redis_client=redis_client,
             )
 
         # Get updated group
@@ -508,7 +552,8 @@ async def remove_roles_from_group(
     except ValueError as e:
         # Handle invalid UUID format
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid UUID format in role_ids: {str(e)}"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid UUID format in role_ids: {str(e)}",
         )
     except Exception as e:
         # Handle other exceptions
@@ -522,7 +567,9 @@ async def remove_roles_from_group(
 async def clone_role_group(
     group_id: UUID,
     new_name: str,
-    current_user: User = Depends(deps.get_current_user(required_permissions=["role_group.create"])),
+    current_user: User = Depends(
+        deps.get_current_user(required_permissions=["role_group.create"])
+    ),
     redis_client: Redis = Depends(get_redis_client),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ) -> IPostResponseBase[IRoleGroupWithRoles]:
@@ -551,7 +598,9 @@ async def clone_role_group(
         role_ids = []
         if source_group.roles:
             role_ids = [role.id for role in source_group.roles]
-            await crud.role_group.add_roles_to_group(group_id=new_group.id, role_ids=role_ids)
+            await crud.role_group.add_roles_to_group(
+                group_id=new_group.id, role_ids=role_ids
+            )
 
         # Comprehensive cache invalidation
         # Invalidate role groups list cache
@@ -570,7 +619,9 @@ async def clone_role_group(
 
             # Invalidate user permissions caches for each role
             background_tasks.add_task(
-                crud.role.invalidate_user_permission_caches, role_id=role_id, redis_client=redis_client
+                crud.role.invalidate_user_permission_caches,
+                role_id=role_id,
+                redis_client=redis_client,
             )
 
         # Get updated group with roles
@@ -588,7 +639,9 @@ async def clone_role_group(
 
 @router.post("/sync-roles")
 async def sync_role_group_mappings(
-    current_user: User = Depends(deps.get_current_user(required_permissions=["role_group.update"])),
+    current_user: User = Depends(
+        deps.get_current_user(required_permissions=["role_group.update"])
+    ),
     redis_client: Redis = Depends(get_redis_client),
     background_tasks: BackgroundTasks = BackgroundTasks(),
 ) -> IPostResponseBase:
@@ -602,7 +655,9 @@ async def sync_role_group_mappings(
     """
 
     try:
-        result = await crud.role_group.sync_roles_with_role_groups(current_user=current_user)
+        result = await crud.role_group.sync_roles_with_role_groups(
+            current_user=current_user
+        )
 
         # Invalidate role groups cache
         background_tasks.add_task(redis_client.delete, "role_groups:list")

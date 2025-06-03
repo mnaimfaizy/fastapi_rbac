@@ -5,7 +5,12 @@ from jose import jwt
 from jose.exceptions import ExpiredSignatureError  # Added import
 
 from app.core.config import settings
-from app.core.security import PasswordValidator, create_access_token, create_refresh_token, decode_token
+from app.core.security import (
+    PasswordValidator,
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+)
 
 
 def test_password_hashing() -> None:

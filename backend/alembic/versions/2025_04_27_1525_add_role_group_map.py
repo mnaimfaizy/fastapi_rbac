@@ -24,10 +24,14 @@ def upgrade() -> None:
     op.create_table(
         "role_group_map",
         sa.Column("role_id", sa.UUID(), sa.ForeignKey("Role.id"), primary_key=True),
-        sa.Column("role_group_id", sa.UUID(), sa.ForeignKey("RoleGroup.id"), primary_key=True),
+        sa.Column(
+            "role_group_id", sa.UUID(), sa.ForeignKey("RoleGroup.id"), primary_key=True
+        ),
     )
     op.create_index("ix_role_group_map_role_id", "role_group_map", ["role_id"])
-    op.create_index("ix_role_group_map_role_group_id", "role_group_map", ["role_group_id"])
+    op.create_index(
+        "ix_role_group_map_role_group_id", "role_group_map", ["role_group_id"]
+    )
 
 
 def downgrade() -> None:

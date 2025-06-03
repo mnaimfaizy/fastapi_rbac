@@ -65,11 +65,15 @@ class PermissionFactory(BaseFactory):
         """Generate a group ID, creating a new group if necessary."""
         if not hasattr(self, "_group"):
             # Create a permission group if none exists
-            self._group = cast(PermissionGroup, PermissionGroupFactory(created_by_id=None))
+            self._group = cast(
+                PermissionGroup, PermissionGroupFactory(created_by_id=None)
+            )
         return self._group.id
 
     @classmethod
-    def with_group(cls, group: Optional[PermissionGroup] = None, **kwargs: Any) -> Permission:
+    def with_group(
+        cls, group: Optional[PermissionGroup] = None, **kwargs: Any
+    ) -> Permission:
         """Create permission with a specific group."""
         if group is None:
             group = cast(PermissionGroup, PermissionGroupFactory())
@@ -106,7 +110,9 @@ class RoleFactory(BaseFactory):
     role_group_id = None  # Optional role group
 
     @factory.post_generation  # type: ignore
-    def permissions(self, create: bool, extracted: Optional[Sequence[Permission]], **kwargs: Any) -> None:
+    def permissions(
+        self, create: bool, extracted: Optional[Sequence[Permission]], **kwargs: Any
+    ) -> None:
         """Add permissions to the role if provided."""
         if not create or not extracted:
             return
@@ -124,7 +130,10 @@ class RoleFactory(BaseFactory):
 
     @classmethod
     def with_permissions(
-        cls, permissions: Optional[Sequence[Permission]] = None, count: int = 2, **kwargs: Any
+        cls,
+        permissions: Optional[Sequence[Permission]] = None,
+        count: int = 2,
+        **kwargs: Any,
     ) -> Role:
         """Create role with specific permissions."""
         role = cast(Role, cls(**kwargs))
@@ -138,7 +147,9 @@ class RoleFactory(BaseFactory):
             from app.models.role_permission_model import RolePermission
 
             for permission in permissions:
-                role_permission = RolePermission(role_id=role.id, permission_id=permission.id)
+                role_permission = RolePermission(
+                    role_id=role.id, permission_id=permission.id
+                )
                 session.add(role_permission)
 
         session.flush()

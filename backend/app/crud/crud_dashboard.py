@@ -9,23 +9,31 @@ from app.models.user_model import User
 # For this example, we'll mock active sessions or assume it's handled elsewhere.
 
 
-async def get_total_users_count(db: AsyncSession) -> int:  # Changed Session to AsyncSession
+async def get_total_users_count(
+    db: AsyncSession,
+) -> int:  # Changed Session to AsyncSession
     result = await db.execute(select(func.count(User.id)))
     return result.scalar_one_or_none() or 0
 
 
-async def get_total_roles_count(db: AsyncSession) -> int:  # Changed Session to AsyncSession
+async def get_total_roles_count(
+    db: AsyncSession,
+) -> int:  # Changed Session to AsyncSession
     result = await db.execute(select(func.count(Role.id)))
     return result.scalar_one_or_none() or 0
 
 
-async def get_total_permissions_count(db: AsyncSession) -> int:  # Changed Session to AsyncSession
+async def get_total_permissions_count(
+    db: AsyncSession,
+) -> int:  # Changed Session to AsyncSession
     # This might need adjustment if permissions are complex (e.g. grouped)
     result = await db.execute(select(func.count(Permission.id)))
     return result.scalar_one_or_none() or 0
 
 
-async def get_active_sessions_count(db: AsyncSession) -> int:  # Changed Session to AsyncSession
+async def get_active_sessions_count(
+    db: AsyncSession,
+) -> int:  # Changed Session to AsyncSession
     # Placeholder: Actual implementation depends on how sessions are tracked.
     # This might involve querying a session table, checking Redis, or an audit log.
     # For now, returning a mock value or a count of recently active users.

@@ -39,7 +39,9 @@ async def test_create_user(db: AsyncSession) -> None:  # Added return type
     assert hasattr(user, "password")
     assert user.password is not None  # Added assertion
     assert user.password != password  # Password should be hashed
-    assert PasswordValidator.verify_password(password, user.password)  # Verify password hashing worked
+    assert PasswordValidator.verify_password(
+        password, user.password
+    )  # Verify password hashing worked
 
 
 @pytest.mark.asyncio
@@ -111,7 +113,9 @@ async def test_update_user(db: AsyncSession) -> None:  # Added return type
     )
 
     # Update the user
-    updated_user = await user_crud.update(obj_current=user, obj_new=user_update, db_session=db)
+    updated_user = await user_crud.update(
+        obj_current=user, obj_new=user_update, db_session=db
+    )
 
     # Check that user was updated correctly
     assert updated_user.id == user.id
@@ -141,7 +145,9 @@ async def test_update_user_password(db: AsyncSession) -> None:  # Added return t
     )
 
     # Update the user
-    updated_user = await user_crud.update(obj_current=user, obj_new=user_update, db_session=db)
+    updated_user = await user_crud.update(
+        obj_current=user, obj_new=user_update, db_session=db
+    )
 
     # Check that the password was updated correctly
     assert updated_user.id == user.id
@@ -167,7 +173,9 @@ async def test_authenticate_user(db: AsyncSession) -> None:  # Added return type
     user = await user_crud.create(obj_in=user_in, db_session=db)
 
     # Authenticate with correct credentials
-    authenticated_user = await user_crud.authenticate(email=email, password=password, db_session=db)
+    authenticated_user = await user_crud.authenticate(
+        email=email, password=password, db_session=db
+    )
 
     # Check that authentication succeeds with correct credentials
     assert authenticated_user
@@ -175,11 +183,15 @@ async def test_authenticate_user(db: AsyncSession) -> None:  # Added return type
     assert authenticated_user.email == email
 
     # Check that authentication fails with wrong email
-    wrong_user = await user_crud.authenticate(email=random_email(), password=password, db_session=db)
+    wrong_user = await user_crud.authenticate(
+        email=random_email(), password=password, db_session=db
+    )
     assert wrong_user is None
 
     # Check that authentication fails with wrong password
-    wrong_user = await user_crud.authenticate(email=email, password=random_lower_string(), db_session=db)
+    wrong_user = await user_crud.authenticate(
+        email=email, password=random_lower_string(), db_session=db
+    )
     assert wrong_user is None
 
 
@@ -253,7 +265,9 @@ async def test_password_history_enforcement(db: AsyncSession) -> None:
 
     for _ in range(5):
         new_password = random_lower_string()
-        await user_crud.update_password(user=user, new_password=new_password, db_session=db)
+        await user_crud.update_password(
+            user=user, new_password=new_password, db_session=db
+        )
 
     with pytest.raises(ValueError, match="Cannot reuse any of your last 5 passwords"):
         await user_crud.update_password(user=user, new_password=password, db_session=db)
@@ -271,7 +285,9 @@ async def test_inactive_user_behavior(db: AsyncSession) -> None:
     await db.commit()
     await db.refresh(user)
 
-    authenticated_user = await user_crud.authenticate(email=email, password=password, db_session=db)
+    authenticated_user = await user_crud.authenticate(
+        email=email, password=password, db_session=db
+    )
     assert authenticated_user is None
 
 

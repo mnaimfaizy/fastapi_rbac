@@ -12,7 +12,9 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.db.init_db import init_db
 
 # Set test database URI to use a shared in-memory SQLite database
-TEST_SQLALCHEMY_DATABASE_URI = "sqlite+aiosqlite:///file:memory_test_db?cache=shared&uri=true"
+TEST_SQLALCHEMY_DATABASE_URI = (
+    "sqlite+aiosqlite:///file:memory_test_db?cache=shared&uri=true"
+)
 
 # Create engine instance for testing
 engine = create_async_engine(
@@ -53,11 +55,17 @@ async def db_engine() -> AsyncGenerator[AsyncEngine, None]:
             return db_tables_, metadata_tables_
 
         db_tables_actual, metadata_tables_known = await conn.run_sync(get_debug_info)
-        print(f"DEBUG CONTEXT: Tables physically in DB after create_all: {db_tables_actual}")
-        print(f"DEBUG CONTEXT: Tables known to SQLModel.metadata: {metadata_tables_known}")
+        print(
+            f"DEBUG CONTEXT: Tables physically in DB after create_all: {db_tables_actual}"
+        )
+        print(
+            f"DEBUG CONTEXT: Tables known to SQLModel.metadata: {metadata_tables_known}"
+        )
 
     # Initialize database with test data
-    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    session_factory = async_sessionmaker(
+        engine, class_=AsyncSession, expire_on_commit=False
+    )
     async with session_factory() as session:
         await init_db(session)
 
@@ -76,7 +84,11 @@ async def db() -> AsyncGenerator[AsyncSession, None]:
         await connection.begin_nested()
 
         async_session_local = async_sessionmaker(
-            bind=connection, class_=AsyncSession, expire_on_commit=False, autocommit=False, autoflush=False
+            bind=connection,
+            class_=AsyncSession,
+            expire_on_commit=False,
+            autocommit=False,
+            autoflush=False,
         )
 
         async with async_session_local() as session:

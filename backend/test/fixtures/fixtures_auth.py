@@ -16,14 +16,18 @@ from app.utils.uuid6 import uuid7
 
 
 @pytest_asyncio.fixture(scope="function")
-async def superuser_token_headers(client: AsyncClient, db: AsyncSession) -> Dict[str, str]:
+async def superuser_token_headers(
+    client: AsyncClient, db: AsyncSession
+) -> Dict[str, str]:
     """Return authentication headers for a superuser."""
     from app.crud.user_crud import user_crud
     from app.schemas.user_schema import IUserCreate
 
     # Try to verify if superuser exists
     try:
-        superuser = await user_crud.get_by_email(email=settings.FIRST_SUPERUSER_EMAIL, db_session=db)
+        superuser = await user_crud.get_by_email(
+            email=settings.FIRST_SUPERUSER_EMAIL, db_session=db
+        )
         if not superuser:
             # Create superuser if it doesn't exist
             superuser_data = IUserCreate(
@@ -116,7 +120,9 @@ async def superuser_token_headers(client: AsyncClient, db: AsyncSession) -> Dict
 
 
 @pytest_asyncio.fixture(scope="function")
-async def normal_user_token_headers(client: AsyncClient, db: AsyncSession) -> Dict[str, str]:
+async def normal_user_token_headers(
+    client: AsyncClient, db: AsyncSession
+) -> Dict[str, str]:
     """Return authentication headers for a normal user."""
     from app.crud.user_crud import user_crud
     from app.schemas.user_schema import IUserCreate

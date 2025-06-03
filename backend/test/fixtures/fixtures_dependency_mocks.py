@@ -26,7 +26,9 @@ class DependencyOverrider:
     ```
     """
 
-    def __init__(self, app: FastAPI, overrides: Dict[Callable[..., Any], Callable[..., Any]]):
+    def __init__(
+        self, app: FastAPI, overrides: Dict[Callable[..., Any], Callable[..., Any]]
+    ):
         """
         Initialize with app and overrides dictionary.
 
@@ -52,7 +54,10 @@ class DependencyOverrider:
         return self
 
     def __exit__(
-        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[Any]
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[Any],
     ) -> None:
         """Restore original overrides."""
         # Remove our overrides

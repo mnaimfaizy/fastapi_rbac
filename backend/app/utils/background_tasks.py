@@ -90,7 +90,10 @@ async def send_password_reset_email(
 
 
 async def send_verification_email(
-    background_tasks: BackgroundTasks, user_email: str, verification_token: str, verification_url: str
+    background_tasks: BackgroundTasks,
+    user_email: str,
+    verification_token: str,
+    verification_url: str,
 ) -> None:
     """
     Send an email verification email as a background task.
@@ -155,10 +158,14 @@ async def cleanup_expired_tokens(
         cleanup_tokens_task.delay(str(user_id), token_type.value)
     else:
         # Use FastAPI background tasks
-        background_tasks.add_task(_cleanup_tokens_task, redis_client, user_id, token_type)
+        background_tasks.add_task(
+            _cleanup_tokens_task, redis_client, user_id, token_type
+        )
 
 
-async def _cleanup_tokens_task(redis_client: Redis, user_id: UUID, token_type: TokenType) -> None:
+async def _cleanup_tokens_task(
+    redis_client: Redis, user_id: UUID, token_type: TokenType
+) -> None:
     """
     Clean up expired tokens for a user.
     This is the actual task that gets executed in the background.
@@ -274,7 +281,10 @@ async def _process_account_lockout_task(
 
 
 async def cleanup_unverified_account(
-    background_tasks: BackgroundTasks, user_id: UUID, redis_client: Redis, delay_hours: int = 24
+    background_tasks: BackgroundTasks,
+    user_id: UUID,
+    redis_client: Redis,
+    delay_hours: int = 24,
 ) -> None:
     """
     Cleanup task for unverified accounts.

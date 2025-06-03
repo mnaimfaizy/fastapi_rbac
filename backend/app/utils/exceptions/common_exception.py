@@ -13,7 +13,9 @@ class ContentNoChangeException(HTTPException):
         detail: Any = None,
         headers: Optional[Dict[str, Any]] = None,
     ) -> None:
-        super().__init__(status_code=status.HTTP_400_BAD_REQUEST, detail=detail, headers=headers)
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=detail, headers=headers
+        )
 
 
 class IdNotFoundException(HTTPException, Generic[ModelType]):

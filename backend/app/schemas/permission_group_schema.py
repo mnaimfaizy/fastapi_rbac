@@ -52,7 +52,9 @@ class IPermissionGroupUpdate(PermissionGroupBase):
 
 
 class IPermissionGroupWithPermissions(IPermissionGroupBase):
-    model_config = ConfigDict(from_attributes=True, arbitrary_types_allowed=True, populate_by_name=True)
+    model_config = ConfigDict(
+        from_attributes=True, arbitrary_types_allowed=True, populate_by_name=True
+    )
 
     creator: Optional[UserBasic] = None
     permissions: Optional[List[Permission]] = []

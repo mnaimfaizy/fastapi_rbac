@@ -18,7 +18,9 @@ class IUserCreate(UserBase):
     password: str
     last_changed_password_date: datetime | None = None
     expiry_date: datetime | None = None
-    number_of_failed_attempts: int | None = 0  # Adding the missing field with default value
+    number_of_failed_attempts: int | None = (
+        0  # Adding the missing field with default value
+    )
     verified: bool = False  # Add verified field, default to False
     roles: list[dict[str, Any]] | None = None  # Adding roles field
 
@@ -149,7 +151,9 @@ class IVerifyEmail(BaseModel):
 class PasswordResetRequest(BaseModel):
     """Schema for requesting a password reset"""
 
-    email: EmailStr = Field(..., description="Email address of the user requesting password reset")
+    email: EmailStr = Field(
+        ..., description="Email address of the user requesting password reset"
+    )
 
 
 class PasswordResetConfirm(BaseModel):

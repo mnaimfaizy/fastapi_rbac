@@ -26,7 +26,9 @@ async def test_create_password_history(db: AsyncSession) -> None:
 
     # Create password history entry
     hashed_password = "hashed_password_value"
-    password_history = UserPasswordHistory(user_id=user.id, password_hash=hashed_password)
+    password_history = UserPasswordHistory(
+        user_id=user.id, password_hash=hashed_password
+    )
 
     # Add password history to database
     db.add(password_history)
@@ -59,7 +61,9 @@ async def test_retrieve_user_password_history(db: AsyncSession) -> None:
     # Create multiple password history entries
     histories = []
     for i in range(3):
-        password_history = UserPasswordHistory(user_id=user.id, password_hash=f"old_password_{i}")
+        password_history = UserPasswordHistory(
+            user_id=user.id, password_hash=f"old_password_{i}"
+        )
         histories.append(password_history)
 
     db.add_all(histories)
@@ -105,7 +109,8 @@ async def test_check_password_reuse(db: AsyncSession) -> None:
     # Check if a specific password exists in history
     new_password = "hashed_password_3"
     stmt = select(UserPasswordHistory).where(
-        UserPasswordHistory.user_id == user.id, UserPasswordHistory.password_hash == new_password
+        UserPasswordHistory.user_id == user.id,
+        UserPasswordHistory.password_hash == new_password,
     )
     result = await db.execute(stmt)
     existing_entry = result.scalars().first()
@@ -115,7 +120,8 @@ async def test_check_password_reuse(db: AsyncSession) -> None:
 
     # Check if another password exists in history
     stmt = select(UserPasswordHistory).where(
-        UserPasswordHistory.user_id == user.id, UserPasswordHistory.password_hash == password1
+        UserPasswordHistory.user_id == user.id,
+        UserPasswordHistory.password_hash == password1,
     )
     result = await db.execute(stmt)
     existing_entry = result.scalars().first()
