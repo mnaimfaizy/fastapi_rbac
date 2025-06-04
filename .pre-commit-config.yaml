@@ -5,16 +5,21 @@ repos:
     rev: v4.6.0
     hooks:
       - id: trailing-whitespace
+        exclude: ^react-frontend/
       - id: end-of-file-fixer
+        exclude: ^react-frontend/
       - id: check-yaml
+        exclude: ^react-frontend/
       - id: check-added-large-files
+        exclude: ^react-frontend/
   - repo: https://github.com/psf/black
     rev: 24.4.2 # Use a version consistent with requirements.txt if possible
     hooks:
       - id: black
-        args: ["backend/"]
+        files: ^backend/
         exclude: >
           (?x)(
+            ^react-frontend/|
             ^.venv/|
             ^venv/|
             ^.env/|
@@ -28,9 +33,11 @@ repos:
     rev: 5.13.2 # Use a version consistent with requirements.txt if possible
     hooks:
       - id: isort
+        files: ^backend/
         args: ["--settings-path=backend/pyproject.toml"] # Use pyproject.toml for settings
         exclude: >
           (?x)(
+            ^react-frontend/|
             ^.venv/|
             ^venv/|
             ^.env/|
@@ -53,6 +60,7 @@ repos:
           ]
         exclude: >
           (?x)(
+            ^react-frontend/|
             ^.venv/|
             ^venv/|
             ^.env/|
@@ -70,6 +78,7 @@ repos:
         files: ^backend/ # Ensure it only runs on backend code
         exclude: >
           (?x)(
+            ^react-frontend/|
             ^.venv/|
             ^venv/|
             ^.env/|
@@ -101,4 +110,5 @@ repos:
             "--config-file=backend/mypy.ini", # Point to your mypy config
           ]
         # If mypy needs dependencies from your project, add them here:
+        # additional_dependencies: ['types-requests', ...]
         # additional_dependencies: ['types-requests', ...]
