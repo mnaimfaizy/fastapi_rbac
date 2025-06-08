@@ -8,7 +8,6 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
-    css: true,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
@@ -30,6 +29,10 @@ export default defineConfig({
         },
       },
     },
+    css: false,
+    testTimeout: 5000,
+    hookTimeout: 5000,
+    teardownTimeout: 5000,
   },
   resolve: {
     alias: {

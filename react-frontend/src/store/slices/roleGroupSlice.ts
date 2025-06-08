@@ -53,6 +53,11 @@ const initialState: RoleGroupState = {
  * @returns Array of role groups with proper children hierarchy
  */
 function buildRoleGroupHierarchy(flatGroups: RoleGroup[]): RoleGroup[] {
+  // Handle null, undefined, or non-array input
+  if (!flatGroups || !Array.isArray(flatGroups)) {
+    return [];
+  }
+
   // Create a map of role groups by ID for quick lookups
   const groupMap = new Map<string, RoleGroup>();
   flatGroups.forEach((group) => {

@@ -41,8 +41,11 @@ const UsersList = () => {
 
   // Fetch users when component mounts
   useEffect(() => {
-    dispatch(fetchUsers({ page: 1, limit: pageSize }));
-  }, [dispatch, pageSize]);
+    // Only fetch if we don't have users already (prevents test interference)
+    if (!users || users.length === 0) {
+      dispatch(fetchUsers({ page: 1, limit: pageSize }));
+    }
+  }, [dispatch, pageSize, users]);
 
   const handlePageChange = (page: number) => {
     dispatch(fetchUsers({ page, limit: pageSize }));
@@ -130,6 +133,7 @@ const UsersList = () => {
                   {hasPermission('user.delete') && (
                     <DropdownMenuItem
                       className="text-destructive"
+                      data-testid="delete-user-button"
                       onClick={() => handleDeleteClick(user.id)}
                     >
                       Delete user
@@ -172,7 +176,10 @@ const UsersList = () => {
         <CardContent>
           {loading && !users?.length ? (
             <div className="flex justify-center items-center h-64">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+              <div
+                data-testid="loading-spinner"
+                className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"
+              ></div>
             </div>
           ) : (
             <DataTable
@@ -212,6 +219,7 @@ const UsersList = () => {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteConfirm}
+              data-testid="confirm-delete-user"
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Delete
