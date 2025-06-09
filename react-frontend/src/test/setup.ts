@@ -20,6 +20,17 @@ beforeAll(() => {
       );
     }
   };
+
+  // Polyfill for pointer capture methods (needed for Radix UI components)
+  Element.prototype.hasPointerCapture = function () {
+    return false;
+  };
+  Element.prototype.setPointerCapture = function () {};
+  Element.prototype.releasePointerCapture = function () {};
+
+  // Polyfill for scrollIntoView method (needed for Radix UI Select)
+  Element.prototype.scrollIntoView = function () {};
+  window.scrollTo = function () {};
 });
 
 // Cleanup after each test
@@ -54,6 +65,9 @@ Object.defineProperty(window, 'matchMedia', {
 // Mock IntersectionObserver
 global.IntersectionObserver = class IntersectionObserver {
   constructor() {}
+  root = null;
+  rootMargin = '';
+  thresholds = [];
   observe() {
     return null;
   }
@@ -62,6 +76,9 @@ global.IntersectionObserver = class IntersectionObserver {
   }
   unobserve() {
     return null;
+  }
+  takeRecords() {
+    return [];
   }
 };
 
