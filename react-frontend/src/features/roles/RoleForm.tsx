@@ -73,7 +73,7 @@ const RoleForm: React.FC<RoleFormProps> = ({
     const loadPermissions = async () => {
       try {
         const response = await permissionService.getPermissions(1, 100);
-        setPermissions(response.data.data.items || []);
+        setPermissions(response.data.items || []);
       } catch (error) {
         console.error('Failed to load permissions:', error);
       }

@@ -11,6 +11,7 @@ export interface RecentLoginUser {
   name: string;
   email: string;
   lastActive: string;
+  first_name?: string;
 }
 
 export interface UserSummaryForTable {
@@ -26,4 +27,17 @@ export interface DashboardData {
   stats: DashboardStats;
   recent_logins?: RecentLoginUser[];
   system_users_summary?: UserSummaryForTable[];
+  totalUsers?: number;
+  totalRoles?: number;
+  totalPermissions?: number;
+  recentUsers?: RecentLoginUser[];
+  userGrowthData?: Array<Record<string, unknown>>;
+  roleDistribution?: Array<Record<string, unknown>>;
+  systemHealth?: {
+    status: string;
+    [key: string]: unknown;
+  };
+  securitySummary?: {
+    [key: string]: unknown;
+  };
 }

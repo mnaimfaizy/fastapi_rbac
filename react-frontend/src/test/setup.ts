@@ -2,6 +2,44 @@ import '@testing-library/jest-dom';
 import { beforeAll, afterEach, afterAll, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 
+// Mock axios
+vi.mock('axios', () => ({
+  default: {
+    create: vi.fn(() => ({
+      get: vi.fn(),
+      post: vi.fn(),
+      put: vi.fn(),
+      delete: vi.fn(),
+      patch: vi.fn(),
+      interceptors: {
+        request: {
+          use: vi.fn(),
+          eject: vi.fn(),
+        },
+        response: {
+          use: vi.fn(),
+          eject: vi.fn(),
+        },
+      },
+    })),
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+    patch: vi.fn(),
+    interceptors: {
+      request: {
+        use: vi.fn(),
+        eject: vi.fn(),
+      },
+      response: {
+        use: vi.fn(),
+        eject: vi.fn(),
+      },
+    },
+  },
+}));
+
 // Set default test timeout to prevent hanging tests
 vi.setConfig({ testTimeout: 10000 });
 
