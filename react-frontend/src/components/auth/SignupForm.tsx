@@ -60,10 +60,17 @@ export function SignupForm({
     setFieldErrors({}); // Clear previous field errors
 
     try {
+      // Split fullName into firstName and lastName
+      const nameParts = data.fullName.trim().split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+
       // Call register service
       await AuthService.register({
         email: data.email,
         password: data.password,
+        first_name: firstName,
+        last_name: lastName,
         full_name: data.fullName, // Map fullName to full_name
       });
 

@@ -28,6 +28,8 @@ export interface Role {
   id: string;
   name: string;
   description?: string;
+  permissions?: Permission[];
+  created_at?: string;
 }
 
 // API Response interfaces
@@ -35,6 +37,7 @@ export interface ApiResponse<T> {
   message: string;
   meta: Record<string, unknown>;
   data: T;
+  success?: boolean;
 }
 
 export interface PaginatedItems<T> {

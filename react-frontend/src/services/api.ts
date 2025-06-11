@@ -6,6 +6,7 @@ import {
 } from '../lib/tokenStorage';
 import { store } from '../store';
 import { refreshAccessToken, logout } from '../store/slices/authSlice';
+import csrfService from './csrfService';
 
 // Define error response interface to match backend format
 export interface ErrorDetail {
@@ -43,11 +44,28 @@ const api = axios.create({
 
 // Request interceptor
 api.interceptors.request.use(
-  (config) => {
+  async (config) => {
     const token = getStoredAccessToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    // Add CSRF token for state-changing operations
+    if (
+      ['post', 'put', 'patch', 'delete'].includes(
+        config.method?.toLowerCase() || ''
+      )
+    ) {
+      try {
+        const csrfToken = await csrfService.getOrFetchCsrfToken();
+        config.headers['X-CSRF-Token'] = csrfToken;
+      } catch (error) {
+        console.error('Failed to get CSRF token:', error);
+        // Continue with request without CSRF token
+        // Backend will return 403 if CSRF is required
+      }
+    }
+
     return config;
   },
   (error) => Promise.reject(error)
@@ -146,9 +164,35 @@ api.interceptors.response.use(
       }
     }
 
-    // Handle 403 (Forbidden)
+    // Handle 403 (Forbidden) - CSRF and Authorization errors
     if (error.response?.status === 403) {
       const responseData = error.response.data as ErrorResponseData;
+
+      // Check if it's a CSRF token error
+      const errorMessage = responseData?.message || responseData?.detail;
+      const isCSRFError =
+        typeof errorMessage === 'string' &&
+        (errorMessage.toLowerCase().includes('csrf') ||
+          errorMessage.toLowerCase().includes('token invalid'));
+
+      if (isCSRFError && !originalRequest?._retry) {
+        // Clear cached CSRF token and retry with new one
+        originalRequest._retry = true;
+        csrfService.clearCsrfToken();
+
+        try {
+          const newCSRFToken = await csrfService.getCsrfToken();
+          if (originalRequest?.headers) {
+            originalRequest.headers['X-CSRF-Token'] = newCSRFToken;
+            return api(originalRequest);
+          }
+        } catch (csrfError) {
+          console.error('CSRF token refresh failed:', csrfError);
+          return Promise.reject(error);
+        }
+      }
+
+      // Check for auth token errors
       if (
         (typeof responseData === 'object' &&
           responseData?.message?.toLowerCase().includes('token')) ||

@@ -7,8 +7,9 @@ from collections.abc import AsyncGenerator, Coroutine
 from typing import Any, Callable
 from uuid import UUID  # Import UUID
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
+from fastapi_csrf_protect import CsrfProtect
 from jwt import DecodeError, ExpiredSignatureError, MissingRequiredClaimError
 from redis.asyncio import Redis
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -19,7 +20,11 @@ from app.core.security import decode_token
 from app.db.session import SessionLocal, get_redis_client
 from app.models.user_model import User
 from app.schemas.common_schema import TokenType
+from app.utils.sanitization import InputSanitizer
 from app.utils.token import get_valid_tokens
+
+# Import CSRF protection for dependency injection
+csrf_protect = None  # Will be set by main.py during startup
 
 # Ensure Permission model and relationship attributes are correctly imported/handled
 # from app.models.permission_model import Permission # If direct import is needed
@@ -130,3 +135,81 @@ def get_current_user(
         return user_from_db
 
     return current_user
+
+
+def get_input_sanitizer(strict_mode: bool = True, max_length: int = 10000) -> InputSanitizer:
+    """
+    Get input sanitizer instance for dependency injection.
+
+    Args:
+        strict_mode: Whether to use strict sanitization (default: True)
+        max_length: Maximum allowed length for input strings (default: 10000)
+
+    Returns:
+        InputSanitizer: Configured sanitizer instance
+    """
+    return InputSanitizer(strict_mode=strict_mode, max_length=max_length)
+
+
+def get_strict_sanitizer() -> InputSanitizer:
+    """
+    Get strict input sanitizer for sensitive operations.
+
+    Returns:
+        InputSanitizer: Strict sanitizer instance with shorter max length
+    """
+    return InputSanitizer(strict_mode=True, max_length=5000)
+
+
+def get_permissive_sanitizer() -> InputSanitizer:
+    """
+    Get permissive input sanitizer for content that may contain HTML.
+
+    Returns:
+        InputSanitizer: Permissive sanitizer instance
+    """
+    return InputSanitizer(strict_mode=False, max_length=50000)
+
+
+def set_csrf_protect_instance(csrf_instance: CsrfProtect) -> None:
+    """
+    Set the global CSRF protect instance.
+    Called from main.py during application startup.
+    """
+    global csrf_protect
+    csrf_protect = csrf_instance
+
+
+def get_csrf_protect() -> CsrfProtect:
+    """
+    Get the CSRF protection instance for dependency injection.
+
+    Returns:
+        CsrfProtect: The CSRF protection instance
+    """
+    if csrf_protect is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="CSRF protection not initialized",
+        )
+    return csrf_protect
+
+
+async def validate_csrf_token(request: Request, csrf: CsrfProtect = Depends(get_csrf_protect)) -> None:
+    """
+    Validate CSRF token for state-changing operations.
+
+    Args:
+        request: The FastAPI request object
+        csrf: The CSRF protection instance
+
+    Raises:
+        HTTPException: If CSRF token is invalid or missing
+    """
+    try:
+        await csrf.validate_csrf(request)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"CSRF token validation failed: {str(e)}",
+        )

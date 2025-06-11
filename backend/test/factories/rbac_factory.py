@@ -124,7 +124,10 @@ class RoleFactory(BaseFactory):
 
     @classmethod
     def with_permissions(
-        cls, permissions: Optional[Sequence[Permission]] = None, count: int = 2, **kwargs: Any
+        cls,
+        permissions: Optional[Sequence[Permission]] = None,
+        count: int = 2,
+        **kwargs: Any,
     ) -> Role:
         """Create role with specific permissions."""
         role = cast(Role, cls(**kwargs))

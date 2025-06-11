@@ -13,7 +13,9 @@ from .utils import random_email
 async def test_user(db: AsyncSession) -> User:
     """Fixture to create a test user"""
     user = User(
-        email=random_email(), hashed_password="hashed_password", is_active=True  # Generate a unique email
+        email=random_email(),
+        hashed_password="hashed_password",
+        is_active=True,  # Generate a unique email
     )
     db.add(user)
     await db.commit()
@@ -35,7 +37,9 @@ async def test_permission_group(db: AsyncSession, test_user: User) -> Permission
 async def test_permission(db: AsyncSession, test_permission_group: PermissionGroup) -> Permission:
     """Fixture to create a test permission"""
     permission = Permission(
-        name="Test Permission", description="A test permission", group_id=test_permission_group.id
+        name="Test Permission",
+        description="A test permission",
+        group_id=test_permission_group.id,
     )
     db.add(permission)
     await db.commit()
@@ -47,7 +51,9 @@ async def test_permission(db: AsyncSession, test_permission_group: PermissionGro
 async def test_create_permission(db: AsyncSession, test_permission_group: PermissionGroup) -> None:
     """Test creating a permission in the database"""
     permission = Permission(
-        name="New Permission", description="A new permission", group_id=test_permission_group.id
+        name="New Permission",
+        description="A new permission",
+        group_id=test_permission_group.id,
     )
     db.add(permission)
     await db.commit()

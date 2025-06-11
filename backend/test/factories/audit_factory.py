@@ -37,7 +37,10 @@ class AuditLogFactory(SQLAlchemyModelFactory):
         """Generate a JSON-compatible details dictionary."""
         action_map: Dict[str, Dict[str, Any]] = {
             "create": {"new_values": {"name": Faker("name").evaluate(None, None, {})}},
-            "update": {"old_values": {"status": "inactive"}, "new_values": {"status": "active"}},
+            "update": {
+                "old_values": {"status": "inactive"},
+                "new_values": {"status": "active"},
+            },
             "delete": {"reason": "User request"},
             "login": {"method": "password", "browser": "Chrome"},
             "logout": {"reason": "User initiated", "session_length": "1h 23m"},

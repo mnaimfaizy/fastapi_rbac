@@ -30,13 +30,15 @@ export interface RoleGroupWithRoles extends RoleGroup {
 // Interface for creating a new role group
 export interface RoleGroupCreate {
   name: string;
-  parent_id?: string; // Optional parent group ID
+  parent_id?: string | null; // Optional parent group ID
+  description?: string; // Optional description
 }
 
 // Interface for updating a role group
 export interface RoleGroupUpdate {
   name?: string;
   parent_id?: string;
+  description?: string;
 }
 
 // API response interfaces

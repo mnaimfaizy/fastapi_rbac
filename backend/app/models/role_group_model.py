@@ -40,5 +40,8 @@ class RoleGroup(BaseUUIDModel, RoleGroupBase, table=True):
     )
 
     creator: "User" = Relationship(
-        sa_relationship_kwargs={"lazy": "selectin", "foreign_keys": "RoleGroup.created_by_id"}
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "foreign_keys": "RoleGroup.created_by_id",
+        }
     )

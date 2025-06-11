@@ -78,7 +78,10 @@ INITIAL_PERMISSION_GROUPS: List[Dict[str, Any]] = [
     {"name": "Role", "description": "Permissions for managing roles"},
     {"name": "Permission", "description": "Permissions for managing permissions"},
     {"name": "Role Group", "description": "Permissions for managing role groups"},
-    {"name": "Permission Group", "description": "Permissions for managing permission groups"},
+    {
+        "name": "Permission Group",
+        "description": "Permissions for managing permission groups",
+    },
     {"name": "Self", "description": "Permissions for users managing their own profile"},
     {"name": "Content", "description": "Permissions for managing general content"},
 ]
@@ -87,7 +90,11 @@ INITIAL_PERMISSIONS: List[Dict[str, str]] = [
     # User Permissions
     {"name": "create", "description": "Create users", "group_name": "User"},
     {"name": "read", "description": "Read user data (all users)", "group_name": "User"},
-    {"name": "update", "description": "Update user data (all users)", "group_name": "User"},
+    {
+        "name": "update",
+        "description": "Update user data (all users)",
+        "group_name": "User",
+    },
     {"name": "delete", "description": "Delete users", "group_name": "User"},
     {"name": "manage_roles", "description": "Manage user roles", "group_name": "User"},
     # Role Permissions
@@ -143,8 +150,16 @@ INITIAL_PERMISSIONS: List[Dict[str, str]] = [
         "group_name": "Permission Group",
     },
     # Self Profile Permissions
-    {"name": "read_profile", "description": "Read own user profile", "group_name": "Self"},
-    {"name": "update_profile", "description": "Update own user profile", "group_name": "Self"},
+    {
+        "name": "read_profile",
+        "description": "Read own user profile",
+        "group_name": "Self",
+    },
+    {
+        "name": "update_profile",
+        "description": "Update own user profile",
+        "group_name": "Self",
+    },
     {"name": "read_roles", "description": "Read own roles", "group_name": "Self"},
     {
         "name": "read_permissions",
@@ -152,10 +167,22 @@ INITIAL_PERMISSIONS: List[Dict[str, str]] = [
         "group_name": "Self",
     },
     # Content Permissions
-    {"name": "create_article", "description": "Create articles", "group_name": "Content"},
+    {
+        "name": "create_article",
+        "description": "Create articles",
+        "group_name": "Content",
+    },
     {"name": "read_article", "description": "Read articles", "group_name": "Content"},
-    {"name": "update_article", "description": "Update articles", "group_name": "Content"},
-    {"name": "delete_article", "description": "Delete articles", "group_name": "Content"},
+    {
+        "name": "update_article",
+        "description": "Update articles",
+        "group_name": "Content",
+    },
+    {
+        "name": "delete_article",
+        "description": "Delete articles",
+        "group_name": "Content",
+    },
 ]
 
 INITIAL_ROLE_GROUPS: List[Dict[str, Any]] = [
@@ -220,7 +247,8 @@ async def get_or_create_superuser(db_session: AsyncSession) -> UserModel:
     user = await crud.user.get_by_email(email=SUPERUSER_EMAIL, db_session=db_session)
     if not user:
         superuser_data_entry = next(
-            (u["user_data"] for u in INITIAL_USERS_DATA if u["user_data"].email == SUPERUSER_EMAIL), None
+            (u["user_data"] for u in INITIAL_USERS_DATA if u["user_data"].email == SUPERUSER_EMAIL),
+            None,
         )
         if not superuser_data_entry:
             raise Exception(f"Superuser email {SUPERUSER_EMAIL} not found in INITIAL_USERS_DATA.")
@@ -240,7 +268,9 @@ async def init_db(db_session: AsyncSession) -> None:
         pg_obj = await crud.permission_group.get_by_name(name=pg_data["name"], db_session=db_session)
         if not pg_obj:
             pg_create_schema = IPermissionGroupCreate(
-                name=pg_data["name"], description=pg_data["description"], created_by_id=admin_user_id
+                name=pg_data["name"],
+                description=pg_data["description"],
+                created_by_id=admin_user_id,
             )
             pg_obj = await crud.permission_group.create(obj_in=pg_create_schema, db_session=db_session)
         if pg_obj:
@@ -283,7 +313,9 @@ async def init_db(db_session: AsyncSession) -> None:
         rg_obj = await crud.role_group.get_by_name(name=rg_data["name"], db_session=db_session)
         if not rg_obj:
             rg_create_schema = IRoleGroupCreate(
-                name=rg_data["name"], description=rg_data["description"], created_by_id=admin_user_id
+                name=rg_data["name"],
+                description=rg_data["description"],
+                created_by_id=admin_user_id,
             )
             rg_obj = await crud.role_group.create(obj_in=rg_create_schema, db_session=db_session)
         if rg_obj:
@@ -346,7 +378,9 @@ async def init_db(db_session: AsyncSession) -> None:
         if role_ids_to_assign:
             try:
                 await crud.user.add_roles_by_ids(
-                    db_session=db_session, user_id=user_obj.id, role_ids=role_ids_to_assign
+                    db_session=db_session,
+                    user_id=user_obj.id,
+                    role_ids=role_ids_to_assign,
                 )
             except AttributeError:
                 print(

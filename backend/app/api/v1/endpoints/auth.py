@@ -4,16 +4,19 @@ from datetime import datetime, timedelta, timezone
 from typing import cast  # Keep cast
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
+from fastapi_csrf_protect import CsrfProtect
 from jwt import DecodeError, ExpiredSignatureError, MissingRequiredClaimError
 from pydantic import EmailStr
 from redis.asyncio import Redis as AsyncRedis
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app import crud
 from app.api import deps
-from app.api.deps import get_redis_client
+from app.api.deps import get_redis_client, get_strict_sanitizer
 from app.core import security  # security module contains token functions
 from app.core.config import settings
 from app.core.security import PasswordValidator, decode_token  # For password complexity
@@ -42,25 +45,53 @@ from app.utils.user_utils import serialize_user
 
 logger = logging.getLogger("fastapi_rbac")
 
+# Create limiter instance for this module
+limiter = Limiter(key_func=get_remote_address)
+
 router = APIRouter()
 
 
 @router.post("/login")
+@limiter.limit("5/minute")
 async def login(
     request: Request,
     email: EmailStr = Body(...),
     password: str = Body(...),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     redis_client: AsyncRedis = Depends(get_redis_client),
+    sanitizer: deps.InputSanitizer = Depends(get_strict_sanitizer),
+    _: None = Depends(deps.validate_csrf_token),
 ) -> IPostResponseBase[Token]:
     """
     Login for all users
     """
-    ip_address = request.client.host if request.client else "Unknown"
+    ip_address = request.client.host if request.client else "Unknown"  # Sanitize inputs for security
     try:
-        # Get user record
+        sanitized_email = sanitizer.sanitize(str(email), "email")
+        # Password should not be sanitized as it needs to remain exactly as entered
+        # but we can validate its length to prevent DoS attacks
+        if len(password) > sanitizer.max_length:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Password length exceeds maximum allowed size",
+            )
+    except ValueError as e:
+        background_tasks.add_task(
+            log_security_event,
+            background_tasks=background_tasks,
+            event_type="login_input_sanitization_failed",
+            details={
+                "error": str(e),
+                "email": (str(email)[:50] + "..." if len(str(email)) > 50 else str(email)),
+                "ip_address": ip_address,
+            },
+        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid input format")
+
+    try:
+        # Get user record - use sanitized email
         try:
-            user_record = await crud.user.get_by_email(email=email)
+            user_record = await crud.user.get_by_email(email=sanitized_email)
         except Exception as e:
             background_tasks.add_task(
                 log_security_event,
@@ -373,16 +404,55 @@ async def login(
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
+@limiter.limit("3/hour")
 async def register(
     request: Request,
     user_in: UserRegister,
     background_tasks: BackgroundTasks,
     redis_client: AsyncRedis = Depends(get_redis_client),
+    sanitizer: deps.InputSanitizer = Depends(get_strict_sanitizer),
+    _: None = Depends(deps.validate_csrf_token),
 ) -> IPostResponseBase[IUserRead]:
     """
     Register a new user with security measures.
     """
-    ip_address = request.client.host if request.client else "Unknown"
+    ip_address = (
+        request.client.host if request.client else "Unknown"
+    )  # Input sanitization for registration data
+    try:
+        # Sanitize email
+        sanitized_email = sanitizer.sanitize(str(user_in.email), "email")
+
+        # Validate password length to prevent DoS attacks
+        if len(user_in.password) > 1000:
+            background_tasks.add_task(
+                log_security_event,
+                background_tasks=background_tasks,
+                event_type="registration_password_too_long",
+                details={
+                    "ip_address": ip_address,
+                    "password_length": len(user_in.password),
+                },
+            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password too long")
+
+        # Sanitize name fields
+        sanitized_first_name = sanitizer.sanitize(user_in.first_name, "text")
+        sanitized_last_name = sanitizer.sanitize(user_in.last_name, "text")
+
+        # Update user_in with sanitized data - assign directly as string
+        user_in.email = sanitized_email  # EmailStr validation handled by Pydantic
+        user_in.first_name = sanitized_first_name
+        user_in.last_name = sanitized_last_name
+
+    except Exception as e:
+        background_tasks.add_task(
+            log_security_event,
+            background_tasks=background_tasks,
+            event_type="registration_input_sanitization_failed",
+            details={"error": str(e), "ip_address": ip_address},
+        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid input data")
 
     try:
         # Use specific settings for registration rate limits if they exist
@@ -592,7 +662,10 @@ async def register(
             log_security_event,
             background_tasks=background_tasks,
             event_type="registration_unexpected_error",
-            details={"error": str(e), "ip_address": ip_address},  # Log email if available from user_in
+            details={
+                "error": str(e),
+                "ip_address": ip_address,
+            },  # Log email if available from user_in
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -606,12 +679,28 @@ async def verify_email(
     body: VerifyEmail,
     background_tasks: BackgroundTasks,
     redis_client: AsyncRedis = Depends(get_redis_client),
+    sanitizer: deps.InputSanitizer = Depends(get_strict_sanitizer),
+    _: None = Depends(deps.validate_csrf_token),
 ) -> IPostResponseBase[IUserRead]:
     """
     Verify user's email address using the provided token.
     """
     ip_address = request.client.host if request.client else "Unknown"
     email_from_token_str: str | None = None
+
+    # Input sanitization for email verification data
+    try:
+        # Sanitize token (it should contain only alphanumeric and safe chars)
+        sanitized_token = sanitizer.sanitize(body.token, "text")
+        body.token = sanitized_token
+    except Exception as e:
+        background_tasks.add_task(
+            log_security_event,
+            background_tasks=background_tasks,
+            event_type="verify_email_input_sanitization_failed",
+            details={"error": str(e), "ip_address": ip_address},
+        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid input data")
 
     try:
         # First validate the token structure and signature
@@ -774,7 +863,7 @@ async def verify_email(
                 "Unexpected error in verify_email for IP %s, Token Sub: %s"
                 % (
                     ip_address,
-                    email_from_token_str if "email_from_token_str" in locals() else "N/A",
+                    (email_from_token_str if "email_from_token_str" in locals() else "N/A"),
                 )
             ),
             exc_info=True,
@@ -786,7 +875,7 @@ async def verify_email(
             details={
                 "error": str(e),
                 "ip_address": ip_address,
-                "token_subject": email_from_token_str if "email_from_token_str" in locals() else "N/A",
+                "token_subject": (email_from_token_str if "email_from_token_str" in locals() else "N/A"),
             },  # Log token if available
         )
         raise HTTPException(
@@ -801,6 +890,7 @@ async def resend_verification_email(
     body: PasswordResetRequest,  # Contains email
     background_tasks: BackgroundTasks,
     redis_client: AsyncRedis = Depends(get_redis_client),
+    _: None = Depends(deps.validate_csrf_token),
 ) -> IPostResponseBase:  # No data returned, just a message
     """
     Resend verification email if the user exists, is not verified, and is active.
@@ -904,7 +994,11 @@ async def resend_verification_email(
                 background_tasks=background_tasks,
                 event_type="resend_verification_email_send_failed",
                 user_id=user.id,
-                details={"error": str(e), "email": user.email, "ip_address": ip_address},
+                details={
+                    "error": str(e),
+                    "email": user.email,
+                    "ip_address": ip_address,
+                },
             )
             # Fall through to generic success to prevent info leak
 
@@ -935,7 +1029,11 @@ async def resend_verification_email(
             log_security_event,
             background_tasks=background_tasks,
             event_type=f"resend_verification_unexpected_error_{error_type.lower()}",
-            details={"error": str(e), "email": email_to_verify, "ip_address": ip_address},
+            details={
+                "error": str(e),
+                "email": email_to_verify,
+                "ip_address": ip_address,
+            },
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -949,6 +1047,7 @@ async def change_password(
     current_password: str = Body(...),
     new_password: str = Body(...),
     background_tasks: BackgroundTasks = BackgroundTasks(),
+    _: None = Depends(deps.validate_csrf_token),
     current_user: User = Depends(deps.get_current_user()),
     redis_client: AsyncRedis = Depends(get_redis_client),
     db_session: AsyncSession = Depends(deps.get_db),
@@ -998,11 +1097,18 @@ async def change_password(
                 background_tasks=background_tasks,
                 event_type="password_change_complexity_failed",
                 user_id=current_user.id,
-                details={"email": current_user.email, "errors": errors, "ip_address": ip_address},
+                details={
+                    "email": current_user.email,
+                    "errors": errors,
+                    "ip_address": ip_address,
+                },
             )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"message": "New password does not meet complexity requirements.", "errors": errors},
+                detail={
+                    "message": "New password does not meet complexity requirements.",
+                    "errors": errors,
+                },
             )
 
         if settings.PREVENT_PASSWORD_REUSE > 0:
@@ -1137,7 +1243,7 @@ async def change_password(
             event_type="password_change_unexpected_error",
             user_id=current_user.id,  # Ensure current_user is valid
             details={
-                "email": current_user.email if current_user else "N/A",  # Add a check for current_user
+                "email": (current_user.email if current_user else "N/A"),  # Add a check for current_user
                 "error": str(e),
                 "ip_address": ip_address,
             },
@@ -1183,7 +1289,10 @@ async def get_new_access_token(
                 log_security_event,
                 background_tasks=background_tasks,
                 event_type="refresh_token_decode_error",
-                details={"token_error": "Invalid token format", "ip_address": ip_address},
+                details={
+                    "token_error": "Invalid token format",
+                    "ip_address": ip_address,
+                },
             )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -1197,7 +1306,10 @@ async def get_new_access_token(
                 log_security_event,
                 background_tasks=background_tasks,
                 event_type="refresh_token_missing_claim",
-                details={"token_error": "Missing required claim", "ip_address": ip_address},
+                details={
+                    "token_error": "Missing required claim",
+                    "ip_address": ip_address,
+                },
             )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -1236,12 +1348,17 @@ async def get_new_access_token(
                 )
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail={"status": False, "message": "Invalid user identifier in token"},
+                    detail={
+                        "status": False,
+                        "message": "Invalid user identifier in token",
+                    },
                 )
 
             if user and user.is_active:
                 access_token = security.create_access_token(
-                    str(user.id), user.email, expires_delta=access_token_expires  # Use user.id from DB object
+                    str(user.id),
+                    user.email,
+                    expires_delta=access_token_expires,  # Use user.id from DB object
                 )
                 # It's debatable whether to add the new access token to redis
                 # if only refresh tokens are strictly managed this way.
@@ -1320,12 +1437,17 @@ async def get_new_access_token(
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"status": False, "message": "An unexpected error occurred while refreshing the token."},
+            detail={
+                "status": False,
+                "message": "An unexpected error occurred while refreshing the token.",
+            },
         )
 
 
 @router.post("/access-token")
+@limiter.limit("5/minute")
 async def login_access_token(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     redis_client: AsyncRedis = Depends(get_redis_client),
@@ -1573,21 +1695,34 @@ async def logout(
 
 
 @router.post("/password-reset/request")
+@limiter.limit("3/hour")
 async def request_password_reset(
     request: Request,  # Added request parameter
     reset_request: PasswordResetRequest = Body(...),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     redis_client: AsyncRedis = Depends(get_redis_client),
+    sanitizer: deps.InputSanitizer = Depends(get_strict_sanitizer),
+    _: None = Depends(deps.validate_csrf_token),
 ) -> IPostResponseBase:
     """
     Request a password reset for a given email address.
     Sends a token that can be used to reset the password.
     """
     ip_address = request.client.host if request.client else "Unknown"
-    email_for_reset = reset_request.email
     user: User | None = None  # Define user here for broader scope
 
     try:
+        # Sanitize email input
+        try:
+            email_for_reset = sanitizer.sanitize(str(reset_request.email), "email")
+        except Exception as e:
+            background_tasks.add_task(
+                log_security_event,
+                background_tasks=background_tasks,
+                event_type="password_reset_request_sanitization_failed",
+                details={"error": str(e), "ip_address": ip_address},
+            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email format")
         user = await crud.user.get_by_email(email=email_for_reset)
         if not user:
             background_tasks.add_task(
@@ -1690,6 +1825,7 @@ async def confirm_password_reset(
     reset_confirm: PasswordResetConfirm = Body(...),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     redis_client: AsyncRedis = Depends(get_redis_client),
+    _: None = Depends(deps.validate_csrf_token),
 ) -> IPostResponseBase:  # No data returned, just a message
     """
     Reset password.
@@ -1705,11 +1841,18 @@ async def confirm_password_reset(
                 log_security_event,
                 background_tasks=background_tasks,
                 event_type="password_reset_complexity_failed",
-                details={"errors": errors, "ip_address": ip_address, "token_used": reset_confirm.token},
+                details={
+                    "errors": errors,
+                    "ip_address": ip_address,
+                    "token_used": reset_confirm.token,
+                },
             )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"message": "New password does not meet complexity requirements.", "errors": errors},
+                detail={
+                    "message": "New password does not meet complexity requirements.",
+                    "errors": errors,
+                },
             )
 
         try:
@@ -1792,7 +1935,10 @@ async def confirm_password_reset(
                 background_tasks=background_tasks,
                 event_type="password_reset_token_not_in_redis",
                 user_id=user.id,  # user is guaranteed to be not None here
-                details={"token_in_redis": bool(valid_reset_tokens), "ip_address": ip_address},
+                details={
+                    "token_in_redis": bool(valid_reset_tokens),
+                    "ip_address": ip_address,
+                },
             )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -1887,12 +2033,41 @@ async def reset_password(
     body_in: PasswordResetConfirm,  # Changed from body to body_in
     background_tasks: BackgroundTasks,
     redis_client: AsyncRedis = Depends(get_redis_client),
+    sanitizer: deps.InputSanitizer = Depends(get_strict_sanitizer),
+    _: None = Depends(deps.validate_csrf_token),
 ) -> IPostResponseBase:  # No data returned, just a message
     """
     Reset password.
     """
     ip_address = request.client.host if request.client else "Unknown"
     email_from_token_str: str | None = None
+
+    # Input sanitization for password reset data
+    try:
+        # Sanitize token (it should contain only alphanumeric and safe chars)
+        sanitized_token = sanitizer.sanitize(body_in.token, "text")
+        body_in.token = sanitized_token
+
+        # Validate password length to prevent DoS attacks
+        if len(body_in.new_password) > 1000:
+            background_tasks.add_task(
+                log_security_event,
+                background_tasks=background_tasks,
+                event_type="password_reset_password_too_long",
+                details={
+                    "ip_address": ip_address,
+                    "password_length": len(body_in.new_password),
+                },
+            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password too long")
+    except Exception as e:
+        background_tasks.add_task(
+            log_security_event,
+            background_tasks=background_tasks,
+            event_type="password_reset_input_sanitization_failed",
+            details={"error": str(e), "ip_address": ip_address},
+        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid input data")
 
     try:
         # Validate new password complexity before anything else
@@ -1902,11 +2077,18 @@ async def reset_password(
                 log_security_event,
                 background_tasks=background_tasks,
                 event_type="password_reset_complexity_failed",
-                details={"errors": errors, "ip_address": ip_address, "token_used": body_in.token},
+                details={
+                    "errors": errors,
+                    "ip_address": ip_address,
+                    "token_used": body_in.token,
+                },
             )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"message": "New password does not meet complexity requirements.", "errors": errors},
+                detail={
+                    "message": "New password does not meet complexity requirements.",
+                    "errors": errors,
+                },
             )
 
         try:
@@ -1989,7 +2171,10 @@ async def reset_password(
                 background_tasks=background_tasks,
                 event_type="password_reset_token_not_in_redis",
                 user_id=user.id,  # user is guaranteed to be not None here
-                details={"token_in_redis": bool(valid_reset_tokens), "ip_address": ip_address},
+                details={
+                    "token_in_redis": bool(valid_reset_tokens),
+                    "ip_address": ip_address,
+                },
             )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -2075,4 +2260,40 @@ async def reset_password(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred. Please try again later.",
+        )
+
+
+@router.get("/csrf-token")
+async def get_csrf_token(
+    request: Request, response: Response, csrf_protect: CsrfProtect = Depends(deps.get_csrf_protect)
+) -> IPostResponseBase[dict]:
+    """
+    Get CSRF token for frontend to use in state-changing operations.
+    This endpoint also sets the required CSRF cookie.
+
+    Returns:
+        dict: Contains the CSRF token
+    """
+    try:
+        # Generate CSRF tokens - returns tuple (unsigned_token, signed_token)
+        csrf_token, signed_token = csrf_protect.generate_csrf_tokens()
+
+        response_data = {"csrf_token": csrf_token}  # Send unsigned token to frontend
+
+        # Set the SIGNED token in cookie (this is what the library expects for validation)
+        response.set_cookie(
+            key="fastapi-csrf-token",
+            value=signed_token,  # Use signed token for cookie
+            httponly=True,  # Prevent XSS attacks
+            secure=False,  # Set to True in production with HTTPS
+            samesite="lax",  # CSRF protection
+            max_age=3600,  # 1 hour expiration
+        )
+
+        return create_response(message="CSRF token generated successfully", data=response_data)
+    except Exception as e:
+        logger.error(f"Error generating CSRF token: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to generate CSRF token",
         )

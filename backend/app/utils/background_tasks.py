@@ -90,7 +90,10 @@ async def send_password_reset_email(
 
 
 async def send_verification_email(
-    background_tasks: BackgroundTasks, user_email: str, verification_token: str, verification_url: str
+    background_tasks: BackgroundTasks,
+    user_email: str,
+    verification_token: str,
+    verification_url: str,
 ) -> None:
     """
     Send an email verification email as a background task.
@@ -274,7 +277,10 @@ async def _process_account_lockout_task(
 
 
 async def cleanup_unverified_account(
-    background_tasks: BackgroundTasks, user_id: UUID, redis_client: Redis, delay_hours: int = 24
+    background_tasks: BackgroundTasks,
+    user_id: UUID,
+    redis_client: Redis,
+    delay_hours: int = 24,
 ) -> None:
     """
     Cleanup task for unverified accounts.

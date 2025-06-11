@@ -94,4 +94,7 @@ class UserFactory(SQLAlchemyModelFactory):
         import string
 
         verification_code = "".join(random.choices(string.digits, k=6))
-        return cast(User, cls.create(verified=False, verification_code=verification_code, **kwargs))
+        return cast(
+            User,
+            cls.create(verified=False, verification_code=verification_code, **kwargs),
+        )

@@ -67,7 +67,10 @@ class Settings(BaseSettings):
     JWT_VERIFICATION_SECRET_KEY: str = secrets.token_urlsafe(32)
     ENCRYPT_KEY: str = secrets.token_urlsafe(32)
     ALGORITHM: str = "HS256"  # Added JWT Algorithm
-    BACKEND_CORS_ORIGINS: List[Union[str, AnyHttpUrl]] = ["http://localhost:3000", "http://localhost:80"]
+    BACKEND_CORS_ORIGINS: List[Union[str, AnyHttpUrl]] = [
+        "http://localhost:3000",
+        "http://localhost:80",
+    ]
 
     # Frontend URL
     FRONTEND_URL: str = "http://localhost:5173"

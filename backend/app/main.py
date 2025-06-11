@@ -3,22 +3,29 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from logging.config import fileConfig
-from typing import AsyncGenerator, Dict, Optional
+from typing import AsyncGenerator, Callable, Dict, List, Optional, Tuple
 
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi_async_sqlalchemy import SQLAlchemyMiddleware
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
+from fastapi_csrf_protect import CsrfProtect
 from fastapi_limiter import FastAPILimiter
 from jwt import DecodeError, ExpiredSignatureError, MissingRequiredClaimError
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.pool import NullPool
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
 # Import Celery beat schedule to ensure it's registered
 import app.celery_beat_schedule as celery_beat_schedule  # noqa
+from app.api import deps  # Import deps to set CSRF instance
 from app.api.deps import get_redis_client
 from app.api.v1.api import api_router as api_router_v1
 
@@ -32,6 +39,9 @@ from app.core.service_config import service_settings
 from app.schemas.response_schema import ErrorDetail, create_error_response
 from app.utils.exceptions.user_exceptions import UserSelfDeleteException
 from app.utils.fastapi_globals import GlobalsMiddleware, g
+
+# Store CSRF protect instance globally for use in dependencies
+csrf_protect = None
 
 # Configure logger from the logging.ini file
 try:
@@ -52,6 +62,42 @@ except Exception as e:
 
 # Get logger for this module
 logger = logging.getLogger("fastapi_rbac")
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware to add security headers to all responses.
+    Implements defense-in-depth security practices.
+    """
+
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        response = await call_next(request)
+
+        # Security headers for all responses
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = (
+            "geolocation=(), microphone=(), camera=(), payment=(), "
+            "usb=(), magnetometer=(), gyroscope=(), accelerometer=(), "
+            "ambient-light-sensor=()"
+        )
+
+        # HSTS header for HTTPS connections
+        if request.url.scheme == "https":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+
+        # Content Security Policy for API responses
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "object-src 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self'; "
+            "frame-ancestors 'none'"
+        )
+
+        return response
 
 
 # Flag to indicate whether Celery is available based on environment
@@ -142,6 +188,11 @@ fastapi_app = FastAPI(
     lifespan=lifespan,
 )
 
+# Create limiter instance for rate limiting
+limiter = Limiter(key_func=get_remote_address)
+fastapi_app.state.limiter = limiter
+fastapi_app.add_middleware(SlowAPIMiddleware)
+
 
 fastapi_app.add_middleware(
     SQLAlchemyMiddleware,
@@ -155,6 +206,23 @@ fastapi_app.add_middleware(
     },
 )
 fastapi_app.add_middleware(GlobalsMiddleware)
+
+# Add security headers middleware for defense-in-depth protection
+fastapi_app.add_middleware(SecurityHeadersMiddleware)
+
+# Configure CSRF protection for forms and state-changing operations
+# CSRF protection will be applied to specific endpoints that need it
+csrf_protect = CsrfProtect()
+
+
+# Configure CSRF settings using environment variables approach
+@CsrfProtect.load_config
+def get_csrf_config() -> List[Tuple[str, str]]:
+    return [("secret_key", settings.SECRET_KEY)]
+
+
+# Set the CSRF instance in deps module for dependency injection
+deps.set_csrf_protect_instance(csrf_protect)
 
 # Set all CORS origins enabled
 if settings.BACKEND_CORS_ORIGINS:
@@ -196,11 +264,22 @@ async def root() -> Dict[str, str]:
     return {"message": "Hello World"}
 
 
-# Add Routers
-fastapi_app.include_router(api_router_v1, prefix=settings.API_V1_STR)
-
-
 # Exception handlers for consistent error responses
+@fastapi_app.exception_handler(RateLimitExceeded)
+async def rate_limit_exception_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    """
+    Handle rate limit exceeded errors with standardized JSON response
+    """
+    return JSONResponse(
+        status_code=429,
+        content={
+            "success": False,
+            "message": f"Rate limit exceeded: {exc.detail}",
+            "code": "RATE_LIMIT_EXCEEDED",
+        },
+    )
+
+
 @fastapi_app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     """
@@ -332,3 +411,26 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
             errors=[ErrorDetail(code="internal_error", message="An unexpected error occurred")],
         ).model_dump(),
     )
+
+
+@fastapi_app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    """
+    Handle rate limit exceeded exceptions
+    """
+    response = JSONResponse(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        content=create_error_response(
+            message="Rate limit exceeded",
+            errors=[ErrorDetail(code="rate_limit", message=f"Rate limit exceeded: {exc.detail}")],
+        ).model_dump(),
+    )
+    response = request.app.state.limiter._inject_headers(response, request.state.view_rate_limit)
+    return response
+
+
+# Include API routes
+fastapi_app.include_router(api_router_v1, prefix=settings.API_V1_STR)
+
+# Export the app instance for uvicorn
+app = fastapi_app

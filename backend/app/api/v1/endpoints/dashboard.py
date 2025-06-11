@@ -70,7 +70,7 @@ async def get_dashboard_data(
                     name=f"{user_obj.first_name} {user_obj.last_name}".strip(),
                     email=user_obj.email,
                     role=role_name,
-                    status="active" if user_obj.is_active else "inactive",  # Assuming is_active field
+                    status=("active" if user_obj.is_active else "inactive"),  # Assuming is_active field
                     last_active=(
                         user_login.updated_at.strftime("%Y-%m-%d %H:%M:%S")
                         if user_login.updated_at
@@ -90,6 +90,6 @@ async def get_dashboard_data(
     dashboard_response_data = IDashboardResponseData(
         stats=stats,
         recent_logins=recent_logins_data if is_admin else None,  # Only for admin
-        system_users_summary=system_users_summary_data if is_admin else None,  # Only for admin
+        system_users_summary=(system_users_summary_data if is_admin else None),  # Only for admin
     )
     return IDashboardResponse(data=dashboard_response_data)

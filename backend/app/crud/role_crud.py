@@ -213,7 +213,11 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
         return role.name.lower() in system_roles
 
     async def invalidate_user_permission_caches(
-        self, *, role_id: UUID, redis_client: Redis, db_session: AsyncSession | None = None
+        self,
+        *,
+        role_id: UUID,
+        redis_client: Redis,
+        db_session: AsyncSession | None = None,
     ) -> None:
         """
         Invalidate permission caches for all users that have this role assigned.

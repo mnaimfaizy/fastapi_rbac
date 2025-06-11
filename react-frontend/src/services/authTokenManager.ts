@@ -47,10 +47,11 @@ class AuthTokenManager {
    * Clear the token expiry timer
    */
   clearExpiryTimer(): void {
+    // Always call clearTimeout, even if timer is null
     if (this.tokenExpiryTimer !== null) {
       window.clearTimeout(this.tokenExpiryTimer);
-      this.tokenExpiryTimer = null;
     }
+    this.tokenExpiryTimer = null;
   }
 
   /**
@@ -58,7 +59,7 @@ class AuthTokenManager {
    * @param token JWT token string
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private decodeJWT(token: string): any {
+  public decodeJWT(token: string): any {
     try {
       // Split the token and get the payload part (second part)
       const base64Url = token.split('.')[1];

@@ -17,7 +17,11 @@ from alembic import op
 revision: str = "2025_04_27_1526"
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = ("2025_04_27_1523", "2025_04_27_1525", "2271ef9d5855")
+depends_on: Union[str, Sequence[str], None] = (
+    "2025_04_27_1523",
+    "2025_04_27_1525",
+    "2271ef9d5855",
+)
 
 
 def upgrade() -> None:

@@ -226,7 +226,9 @@ async def assign_permissions_to_role(
         # Clear user permissions caches that might include this role
         # This is done in background to not block the response
         background_tasks.add_task(
-            crud.role.invalidate_user_permission_caches, role_id=role_id, redis_client=redis_client
+            crud.role.invalidate_user_permission_caches,
+            role_id=role_id,
+            redis_client=redis_client,
         )
 
         return create_response(data=serialize_role(role), message="Permissions assigned successfully")
@@ -301,7 +303,9 @@ async def remove_permissions_from_role(
         # Clear user permissions caches that might include this role
         # This is done in background to not block the response
         background_tasks.add_task(
-            crud.role.invalidate_user_permission_caches, role_id=role_id, redis_client=redis_client
+            crud.role.invalidate_user_permission_caches,
+            role_id=role_id,
+            redis_client=redis_client,
         )
 
         return create_response(data=serialize_role(role), message="Permissions removed successfully")

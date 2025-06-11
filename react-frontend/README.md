@@ -10,6 +10,9 @@ This React application provides a secure frontend for the FastAPI authentication
 - **ShadCN UI**: Modern UI components library with Tailwind CSS
 - **Docker Support**: Containerized deployment with Nginx
 - **Secure Token Management**: In-memory access tokens and secure refresh token handling
+- **Comprehensive Testing**: 354 tests across 16 files with excellent coverage
+- **CSRF Protection**: Integration with backend CSRF token system
+- **Security Headers**: Enhanced browser-level protection
 
 ## Project Structure
 
@@ -23,6 +26,9 @@ react-frontend/
 │   │   └── ui/         # ShadCN UI components
 │   ├── features/       # Feature-based modules
 │   │   ├── auth/       # Authentication features (login)
+│   │   ├── users/      # User management features
+│   │   ├── roles/      # Role management features
+│   │   ├── permissions/ # Permission management features
 │   │   └── dashboard/  # Dashboard features
 │   ├── hooks/          # Custom React hooks
 │   ├── lib/            # Utility functions
@@ -31,6 +37,9 @@ react-frontend/
 │   ├── store/          # Redux store configuration
 │   │   ├── slices/     # Redux slices
 │   │   └── hooks.ts    # Custom Redux hooks
+│   ├── test/           # Comprehensive test suite (354 tests across 16 files)
+│   │   ├── services/   # API service tests
+│   │   └── *.test.tsx  # Component and feature tests
 │   ├── App.tsx         # Main application component
 │   └── main.tsx        # Entry point
 ├── docker-compose.yml  # Docker configuration for frontend services
@@ -103,11 +112,69 @@ docker-compose up -d
 
 ## Security Considerations
 
-- Access tokens are stored in memory to prevent XSS attacks
-- Refresh tokens are managed securely
-- Automatic token refresh mechanism
-- Role-based access control
-- Request validation and sanitization
+- **Access Token Security**: Stored in memory (Redux state) to prevent XSS attacks
+- **Refresh Token Management**: Secure localStorage handling with automatic cleanup
+- **CSRF Protection**: Integration with backend CSRF token system
+- **Security Headers**: Enhanced Content Security Policy and browser protections
+- **Request Sanitization**: Client-side input validation and sanitization
+- **Token Refresh**: Automatic and secure refresh mechanism
+- **Role-based Access Control**: Component-level permission checking
+- **Route Protection**: Authentication and authorization guards
+
+## Testing
+
+The frontend includes comprehensive testing infrastructure with **354 tests across 16 test files**.
+
+### Test Categories
+
+- **Component Tests**: React component rendering and interaction
+- **API Service Tests**: Complete API service layer with mocking
+- **Authentication Flow Tests**: Login, logout, and token management
+- **User Management Tests**: CRUD operations and permissions
+- **Role & Permission Tests**: Access control and authorization
+- **Integration Tests**: Redux store integration and state management
+- **Security Tests**: CSRF protection and input validation
+
+### Test Coverage
+
+- **App Component**: Basic application structure (3 tests)
+- **Authentication Flows**: Login, signup, password reset (12 tests)
+- **User Management**: Complete user CRUD operations (22 tests)
+- **Role Management**: Role creation, editing, deletion (35 tests)
+- **Permission Management**: Permission handling (40 tests)
+- **Role Groups**: Hierarchical role organization (50 tests)
+- **Permission Groups**: Permission organization (22 tests)
+- **API Services**: Comprehensive service testing (170+ tests)
+- **CSRF Service**: Security validation (17 tests)
+
+### Running Tests
+
+```bash
+# Run all tests
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Run tests with UI
+npm run test:ui
+
+# Run tests with coverage report
+npm run test:coverage
+
+# Run specific test file
+npm test -- UsersList.test.tsx
+
+# Run tests matching pattern
+npm test -- --run --reporter=verbose
+```
+
+### Test Configuration
+
+- **Framework**: Vitest with React Testing Library
+- **Mocking**: MSW (Mock Service Worker) for API mocking
+- **Coverage**: V8 coverage provider
+- **Environment**: jsdom for browser environment simulation
 
 ## Environment Variables
 
@@ -120,6 +187,10 @@ docker-compose up -d
 - `npm run build`: Build for production
 - `npm run lint`: Lint code
 - `npm run preview`: Preview production build locally
+- `npm test`: Run test suite
+- `npm run test:watch`: Run tests in watch mode
+- `npm run test:ui`: Run tests with interactive UI
+- `npm run test:coverage`: Generate coverage report
 
 ## Expanding the ESLint configuration
 

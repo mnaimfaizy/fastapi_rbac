@@ -60,7 +60,12 @@ class CRUDPermission(CRUDBase[Permission, IPermissionCreate, IPermissionUpdate])
         return result.unique().scalar_one_or_none()
 
     async def get_permissions_by_group(
-        self, *, group_id: UUID, skip: int = 0, limit: int = 100, db_session: AsyncSession | None = None
+        self,
+        *,
+        group_id: UUID,
+        skip: int = 0,
+        limit: int = 100,
+        db_session: AsyncSession | None = None,
     ) -> list[Permission]:
         """
         Get all permissions belonging to a specific permission group.
@@ -80,7 +85,12 @@ class CRUDPermission(CRUDBase[Permission, IPermissionCreate, IPermissionUpdate])
         return list(result.unique().scalars().all())
 
     async def search_permissions(
-        self, *, search_term: str, skip: int = 0, limit: int = 100, db_session: AsyncSession | None = None
+        self,
+        *,
+        search_term: str,
+        skip: int = 0,
+        limit: int = 100,
+        db_session: AsyncSession | None = None,
     ) -> list[Permission]:
         """
         Search permissions by name or description.
@@ -101,7 +111,7 @@ class CRUDPermission(CRUDBase[Permission, IPermissionCreate, IPermissionUpdate])
             .where(
                 or_(
                     Permission.name.ilike(search),
-                    Permission.description.ilike(search) if Permission.description else False,
+                    (Permission.description.ilike(search) if Permission.description else False),
                 )
             )
             .offset(skip)
@@ -128,7 +138,10 @@ class CRUDPermission(CRUDBase[Permission, IPermissionCreate, IPermissionUpdate])
         return count > 0
 
     async def create_bulk(
-        self, *, obj_in_list: list[IPermissionCreate], db_session: AsyncSession | None = None
+        self,
+        *,
+        obj_in_list: list[IPermissionCreate],
+        db_session: AsyncSession | None = None,
     ) -> list[Permission]:
         """
         Create multiple permissions in a single database transaction.

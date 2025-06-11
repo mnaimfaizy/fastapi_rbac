@@ -38,7 +38,9 @@ export const fetchRoles = createAsyncThunk(
       const response = await roleService.getRoles(params);
       return response.data; // Assuming response.data is PaginatedResponse<Role>
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || error.message);
+      return rejectWithValue(
+        error.response?.data?.message || error.message || 'Error loading roles'
+      );
     }
   }
 );

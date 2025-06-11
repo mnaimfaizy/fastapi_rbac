@@ -105,7 +105,8 @@ async def test_check_password_reuse(db: AsyncSession) -> None:
     # Check if a specific password exists in history
     new_password = "hashed_password_3"
     stmt = select(UserPasswordHistory).where(
-        UserPasswordHistory.user_id == user.id, UserPasswordHistory.password_hash == new_password
+        UserPasswordHistory.user_id == user.id,
+        UserPasswordHistory.password_hash == new_password,
     )
     result = await db.execute(stmt)
     existing_entry = result.scalars().first()
@@ -115,7 +116,8 @@ async def test_check_password_reuse(db: AsyncSession) -> None:
 
     # Check if another password exists in history
     stmt = select(UserPasswordHistory).where(
-        UserPasswordHistory.user_id == user.id, UserPasswordHistory.password_hash == password1
+        UserPasswordHistory.user_id == user.id,
+        UserPasswordHistory.password_hash == password1,
     )
     result = await db.execute(stmt)
     existing_entry = result.scalars().first()

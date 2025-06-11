@@ -229,7 +229,8 @@ def validate_token_claims(payload: dict) -> None:
             f"Token validation failed: Missing required claims: {missing_claims}. Payload: {payload}"
         )
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Missing required claims: {missing_claims}"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Missing required claims: {missing_claims}",
         )
 
     # Allow 5 minutes clock skew for issued at time
@@ -238,7 +239,10 @@ def validate_token_claims(payload: dict) -> None:
 
     if not isinstance(iat_val, (int, float)):
         logger.error(f"IAT claim is not numeric! Value: {iat_val}, Type: {type(iat_val)}")
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid IAT format in token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid IAT format in token",
+        )
 
     condition_met = iat_val > now_ts + 300
 
@@ -299,7 +303,11 @@ class PasswordValidator:
     @staticmethod
     def has_sequential_chars(password: str, sequence_length: int = 3) -> bool:
         """Check if password contains sequential characters."""
-        sequences = ("abcdefghijklmnopqrstuvwxyz", "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "0123456789")
+        sequences = (
+            "abcdefghijklmnopqrstuvwxyz",
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+            "0123456789",
+        )
 
         for sequence in sequences:
             for i in range(len(sequence) - sequence_length + 1):
@@ -350,7 +358,8 @@ class PasswordValidator:
         except Exception as e:
             logger.error(f"Password hashing failed: {str(e)}")
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to process password"
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to process password",
             )
 
     @staticmethod
@@ -372,7 +381,8 @@ class PasswordValidator:
         except Exception as e:
             logger.error(f"Password verification failed: {str(e)}")
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to verify password"
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to verify password",
             )
 
 
@@ -392,5 +402,6 @@ def get_content(variable: str) -> str:
     except Exception as e:
         logger.error(f"Data decryption failed: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to decrypt data"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to decrypt data",
         )

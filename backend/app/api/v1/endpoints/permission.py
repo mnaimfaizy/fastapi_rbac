@@ -86,7 +86,9 @@ async def create_permission(
         raise NameExistException(Permission, name=formatted_permission.name)
 
     new_permission = await crud.permission.create(
-        obj_in=formatted_permission, created_by_id=current_user.id, db_session=db_session
+        obj_in=formatted_permission,
+        created_by_id=current_user.id,
+        db_session=db_session,
     )
     return create_response(data=new_permission)
 

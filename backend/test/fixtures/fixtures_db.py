@@ -76,7 +76,11 @@ async def db() -> AsyncGenerator[AsyncSession, None]:
         await connection.begin_nested()
 
         async_session_local = async_sessionmaker(
-            bind=connection, class_=AsyncSession, expire_on_commit=False, autocommit=False, autoflush=False
+            bind=connection,
+            class_=AsyncSession,
+            expire_on_commit=False,
+            autocommit=False,
+            autoflush=False,
         )
 
         async with async_session_local() as session:

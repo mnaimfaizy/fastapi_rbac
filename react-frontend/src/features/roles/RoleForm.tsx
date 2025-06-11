@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Form,
   FormControl,
@@ -22,12 +23,21 @@ import {
 } from '@/components/ui/select';
 import { Role } from '@/models/role';
 import { RoleGroup } from '@/models/roleGroup';
+import { Permission } from '@/models/permission';
+import permissionService from '@/services/permission.service';
 
 // Zod schema for validation
 const roleSchema = z.object({
-  name: z.string().min(1, { message: 'Role name is required' }),
+  name: z
+    .string()
+    .min(1, { message: 'Role name is required' })
+    .regex(/^[a-zA-Z0-9_-]+$/, {
+      message:
+        'Role name can only contain letters, numbers, underscores, and hyphens',
+    }),
   description: z.string().optional(),
   role_group_id: z.string().optional(),
+  permission_ids: z.array(z.string()).optional(),
 });
 
 export type RoleFormData = z.infer<typeof roleSchema>;
@@ -45,14 +55,54 @@ const RoleForm: React.FC<RoleFormProps> = ({
   isLoading,
   roleGroups,
 }) => {
+  const [permissions, setPermissions] = useState<Permission[]>([]);
+  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
+
   const form = useForm<RoleFormData>({
     resolver: zodResolver(roleSchema),
     defaultValues: {
       name: initialData?.name || '',
       description: initialData?.description || '',
       role_group_id: initialData?.role_group_id || undefined,
+      permission_ids: initialData?.permissions?.map((p) => p.id) || [],
     },
   });
+
+  // Load permissions on component mount
+  useEffect(() => {
+    const loadPermissions = async () => {
+      try {
+        const response = await permissionService.getPermissions(1, 100);
+        setPermissions(response.data.items || []);
+      } catch (error) {
+        console.error('Failed to load permissions:', error);
+      }
+    };
+    loadPermissions();
+  }, []);
+
+  // Update selected permissions when initialData changes
+  useEffect(() => {
+    if (initialData?.permissions) {
+      setSelectedPermissions(initialData.permissions.map((p) => p.id));
+    }
+  }, [initialData]);
+
+  const handlePermissionChange = (permissionId: string, checked: boolean) => {
+    const updatedPermissions = checked
+      ? [...selectedPermissions, permissionId]
+      : selectedPermissions.filter((id) => id !== permissionId);
+
+    setSelectedPermissions(updatedPermissions);
+    form.setValue('permission_ids', updatedPermissions);
+  };
+
+  const handleFormSubmit = (data: RoleFormData) => {
+    onSubmit({
+      ...data,
+      permission_ids: selectedPermissions,
+    });
+  };
 
   // Update default values if initialData changes (e.g., after fetch)
   React.useEffect(() => {
@@ -67,7 +117,10 @@ const RoleForm: React.FC<RoleFormProps> = ({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form
+        onSubmit={form.handleSubmit(handleFormSubmit)}
+        className="space-y-4"
+      >
         <FormField
           control={form.control}
           name="name"
@@ -125,11 +178,48 @@ const RoleForm: React.FC<RoleFormProps> = ({
           )}
         />
 
+        {/* Permissions Selection */}
+        <div>
+          <FormLabel className="text-base font-medium">Permissions</FormLabel>
+          <div className="mt-2 space-y-2 max-h-64 overflow-y-auto border rounded-md p-4">
+            {permissions.map((permission) => (
+              <div key={permission.id} className="flex items-center space-x-2">
+                <Checkbox
+                  id={`permission-${permission.id}`}
+                  data-testid={`permission-${permission.name}-checkbox`}
+                  checked={selectedPermissions.includes(permission.id)}
+                  onCheckedChange={(checked) =>
+                    handlePermissionChange(permission.id, checked as boolean)
+                  }
+                  aria-label={permission.name}
+                />
+                <label
+                  htmlFor={`permission-${permission.id}`}
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  {permission.name}
+                </label>
+                <span className="text-xs text-muted-foreground">
+                  {permission.description}
+                </span>
+              </div>
+            ))}
+            {permissions.length === 0 && (
+              <p
+                className="text-sm text-muted-foreground"
+                data-testid="loading-permissions"
+              >
+                Loading permissions...
+              </p>
+            )}
+          </div>
+        </div>
+
         <Button type="submit" disabled={isLoading}>
           {isLoading
             ? 'Saving...'
             : initialData
-              ? 'Update Role'
+              ? 'Save Changes'
               : 'Create Role'}
         </Button>
       </form>

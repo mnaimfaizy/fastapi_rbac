@@ -248,7 +248,10 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
             raise
         except Exception as e:
             await resolved_session.rollback()
-            raise HTTPException(status_code=500, detail=f"An unexpected error occurred during update: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"An unexpected error occurred during update: {e}",
+            )
 
         await resolved_session.refresh(obj_current)
         await resolved_session.refresh(obj_current, attribute_names=["roles"])
@@ -414,7 +417,9 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         new_password_hash = PasswordValidator.get_password_hash(new_password)
 
         if settings.PREVENT_PASSWORD_REUSE > 0 and await self.is_password_reused(
-            user_id=user.id, new_password_hash=new_password_hash, db_session=resolved_session
+            user_id=user.id,
+            new_password_hash=new_password_hash,
+            db_session=resolved_session,
         ):
             raise ValueError("This password has been used too recently. Please choose a different one.")
         if user.password is None:

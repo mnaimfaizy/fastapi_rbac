@@ -1,62 +1,79 @@
+import React from 'react';
 import { Navigate } from 'react-router-dom';
-import { RootState } from '../../store';
-import PropTypes from 'prop-types';
-import { useAppSelector } from '@/store/hooks';
-import { Role } from '@/models/user';
+import { useAuth } from '../../hooks/useAuth';
+import { usePermissions } from '../../hooks/usePermissions';
 
 interface ProtectedRouteProps {
   requiredRoles?: string[];
   requiredPermissions?: string[];
+  requireAllPermissions?: boolean; // If true, requires ALL permissions; if false, requires ANY
   children: React.ReactNode;
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requiredRoles = [],
   requiredPermissions = [],
+  requireAllPermissions = true,
   children,
 }) => {
-  const { user } = useAppSelector((state: RootState) => state.auth);
+  const { isAuthenticated, user, loading } = useAuth();
+  const { hasRole, hasPermission } = usePermissions();
 
-  if (!user) {
+  // Show loading state while authentication is being determined
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div
+          data-testid="loading-spinner"
+          className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"
+        ></div>
+      </div>
+    );
+  }
+
+  // Redirect to login if not authenticated
+  if (!isAuthenticated || !user) {
     return <Navigate to="/login" replace />;
   }
 
-  // User's permissions are directly available in user.permissions as a list of strings.
-  const userPermissions: string[] = Array.isArray(user?.permissions)
-    ? user.permissions
-    : [];
-
   // Check for required roles if specified
   if (requiredRoles.length > 0) {
-    const userRoleNames =
-      user?.roles?.map((role: Role) => String(role.name).toLowerCase()) || []; // Use any for role temporarily
-    const hasRequiredRole = requiredRoles.some((roleName) =>
-      userRoleNames.includes(roleName.toLowerCase())
-    );
-
+    const hasRequiredRole = requiredRoles.some((roleName) => hasRole(roleName));
     if (!hasRequiredRole) {
-      return <Navigate to="/unauthorized" replace />;
+      return (
+        <div className="flex justify-center items-center min-h-screen">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-red-600">Unauthorized</h1>
+            <p className="mt-2 text-gray-600">
+              You don&apos;t have permission to access this page.
+            </p>
+          </div>
+        </div>
+      );
     }
   }
 
   // Check for required permissions if specified
   if (requiredPermissions.length > 0) {
-    const hasRequiredPermission = requiredPermissions.every((permission) =>
-      userPermissions.includes(permission)
-    );
+    const hasRequiredPermission = requireAllPermissions
+      ? requiredPermissions.every((permission) => hasPermission(permission))
+      : requiredPermissions.some((permission) => hasPermission(permission));
 
     if (!hasRequiredPermission) {
-      return <Navigate to="/unauthorized" replace />;
+      return (
+        <div className="flex justify-center items-center min-h-screen">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-red-600">Unauthorized</h1>
+            <p className="mt-2 text-gray-600">
+              You don&apos;t have permission to access this page.
+            </p>
+          </div>
+        </div>
+      );
     }
   }
 
   return <>{children}</>;
-};
-
-ProtectedRoute.propTypes = {
-  requiredRoles: PropTypes.arrayOf(PropTypes.string),
-  requiredPermissions: PropTypes.arrayOf(PropTypes.string),
-  children: PropTypes.node.isRequired,
 };
 
 export default ProtectedRoute;

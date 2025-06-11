@@ -76,7 +76,9 @@ async def auth_headers() -> Callable[..., Dict[str, str]]:
     """Factory fixture to create authentication headers for testing."""
 
     def _create_headers(
-        token: Optional[str] = None, user_id: Optional[str] = None, roles: Optional[list[str]] = None
+        token: Optional[str] = None,
+        user_id: Optional[str] = None,
+        roles: Optional[list[str]] = None,
     ) -> Dict[str, str]:
         """
         Create authentication headers.

@@ -272,21 +272,27 @@ async def test_search_permissions(db: AsyncSession) -> None:
     # Create permissions with the unique term in name
     for i in range(3):
         permission_in = IPermissionCreate(
-            name=f"name-{unique_term}-{i}", description=f"Regular description {i}", group_id=group.id
+            name=f"name-{unique_term}-{i}",
+            description=f"Regular description {i}",
+            group_id=group.id,
         )
         await permission_crud.create(obj_in=permission_in, db_session=db)
 
     # Create permissions with the unique term in description
     for i in range(2):
         permission_in = IPermissionCreate(
-            name=f"regular-name-{i}", description=f"Description with {unique_term} term", group_id=group.id
+            name=f"regular-name-{i}",
+            description=f"Description with {unique_term} term",
+            group_id=group.id,
         )
         await permission_crud.create(obj_in=permission_in, db_session=db)
 
     # Create additional permissions without the term
     for i in range(4):
         permission_in = IPermissionCreate(
-            name=f"other-name-{i}", description=f"Other description {i}", group_id=group.id
+            name=f"other-name-{i}",
+            description=f"Other description {i}",
+            group_id=group.id,
         )
         await permission_crud.create(obj_in=permission_in, db_session=db)
 
@@ -383,7 +389,9 @@ async def test_assign_permissions_to_role_already_assigned(db: AsyncSession) -> 
 
     # Create a permission
     permission_in = IPermissionCreate(
-        name=f"test-permission-{random_lower_string(5)}", description="Test Permission", group_id=group.id
+        name=f"test-permission-{random_lower_string(5)}",
+        description="Test Permission",
+        group_id=group.id,
     )
     permission = await permission_crud.create(obj_in=permission_in, db_session=db)
 
@@ -468,7 +476,9 @@ async def test_create_bulk_permissions(db: AsyncSession) -> None:
     bulk_prefix = random_lower_string(8)
     permission_schemas = [
         IPermissionCreate(
-            name=f"bulk-permission-{bulk_prefix}-{i}", description=f"Bulk Permission {i}", group_id=group.id
+            name=f"bulk-permission-{bulk_prefix}-{i}",
+            description=f"Bulk Permission {i}",
+            group_id=group.id,
         )
         for i in range(5)
     ]
@@ -506,7 +516,9 @@ async def test_create_bulk_permissions_duplicate_name(db: AsyncSession) -> None:
     bulk_prefix = random_lower_string(8)
     permission_schemas = [
         IPermissionCreate(
-            name=f"bulk-permission-{bulk_prefix}-{i}", description=f"Bulk Permission {i}", group_id=group.id
+            name=f"bulk-permission-{bulk_prefix}-{i}",
+            description=f"Bulk Permission {i}",
+            group_id=group.id,
         )
         for i in range(3)
     ]
@@ -514,7 +526,9 @@ async def test_create_bulk_permissions_duplicate_name(db: AsyncSession) -> None:
     # Add a permission with duplicate name
     permission_schemas.append(
         IPermissionCreate(
-            name=duplicate_name, description="Duplicate Permission", group_id=group.id  # Duplicate name
+            name=duplicate_name,
+            description="Duplicate Permission",
+            group_id=group.id,  # Duplicate name
         )
     )
 

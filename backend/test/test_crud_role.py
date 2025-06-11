@@ -253,7 +253,8 @@ async def test_permission_exist_in_role(db: AsyncSession) -> None:
 
     # Create a permission group first since group_id is required
     group_in = IPermissionGroupCreate(
-        name=f"test-perm-group-{random_lower_string(8)}", description="Test Permission Group"
+        name=f"test-perm-group-{random_lower_string(8)}",
+        description="Test Permission Group",
     )
     permission_group = await permission_group_crud.create(obj_in=group_in, db_session=db)
 
@@ -271,7 +272,10 @@ async def test_permission_exist_in_role(db: AsyncSession) -> None:
 
     # Assign permission to role
     await role_crud.assign_permissions(
-        role_id=role.id, permission_ids=[permission.id], current_user=mock_user, db_session=db
+        role_id=role.id,
+        permission_ids=[permission.id],
+        current_user=mock_user,
+        db_session=db,
     )
 
     # Now should have permissions
@@ -328,7 +332,8 @@ async def test_assign_permissions(db: AsyncSession) -> None:
 
     # Create a permission group first since group_id is required
     group_in = IPermissionGroupCreate(
-        name=f"test-perm-group-{random_lower_string(8)}", description="Test Permission Group"
+        name=f"test-perm-group-{random_lower_string(8)}",
+        description="Test Permission Group",
     )
     permission_group = await permission_group_crud.create(obj_in=group_in, db_session=db)
 
@@ -349,7 +354,10 @@ async def test_assign_permissions(db: AsyncSession) -> None:
 
     # Assign permissions to role
     updated_role = await role_crud.assign_permissions(
-        role_id=role.id, permission_ids=permission_ids, current_user=mock_user, db_session=db
+        role_id=role.id,
+        permission_ids=permission_ids,
+        current_user=mock_user,
+        db_session=db,
     )
 
     # Check that permissions were assigned
@@ -359,7 +367,10 @@ async def test_assign_permissions(db: AsyncSession) -> None:
 
     # Test assignment idempotency (assigning same permissions again)
     updated_role = await role_crud.assign_permissions(
-        role_id=role.id, permission_ids=permission_ids, current_user=mock_user, db_session=db
+        role_id=role.id,
+        permission_ids=permission_ids,
+        current_user=mock_user,
+        db_session=db,
     )
 
     # Check that permissions are still the same (no duplicates)
@@ -380,7 +391,10 @@ async def test_assign_permissions_not_found(db: AsyncSession) -> None:
     # Check that ResourceNotFoundException is raised
     with pytest.raises(ResourceNotFoundException):
         await role_crud.assign_permissions(
-            role_id=non_existent_id, permission_ids=permission_ids, current_user=mock_user, db_session=db
+            role_id=non_existent_id,
+            permission_ids=permission_ids,
+            current_user=mock_user,
+            db_session=db,
         )
 
 
@@ -396,7 +410,8 @@ async def test_remove_permissions(db: AsyncSession) -> None:
 
     # Create a permission group first since group_id is required
     group_in = IPermissionGroupCreate(
-        name=f"test-perm-group-{random_lower_string(8)}", description="Test Permission Group"
+        name=f"test-perm-group-{random_lower_string(8)}",
+        description="Test Permission Group",
     )
     permission_group = await permission_group_crud.create(obj_in=group_in, db_session=db)
 
@@ -417,7 +432,10 @@ async def test_remove_permissions(db: AsyncSession) -> None:
 
     # Assign permissions to role
     updated_role = await role_crud.assign_permissions(
-        role_id=role.id, permission_ids=permission_ids, current_user=mock_user, db_session=db
+        role_id=role.id,
+        permission_ids=permission_ids,
+        current_user=mock_user,
+        db_session=db,
     )
 
     # Check that permissions were assigned
@@ -425,7 +443,10 @@ async def test_remove_permissions(db: AsyncSession) -> None:
 
     # Remove one permission
     updated_role = await role_crud.remove_permissions(
-        role_id=role.id, permission_ids=[permission_ids[0]], current_user=mock_user, db_session=db
+        role_id=role.id,
+        permission_ids=[permission_ids[0]],
+        current_user=mock_user,
+        db_session=db,
     )
 
     # Check that permission was removed
@@ -435,7 +456,10 @@ async def test_remove_permissions(db: AsyncSession) -> None:
     # Try to remove non-existent permission (should not fail)
     non_existent_id = UUID("00000000-0000-0000-0000-000000000000")
     updated_role = await role_crud.remove_permissions(
-        role_id=role.id, permission_ids=[non_existent_id], current_user=mock_user, db_session=db
+        role_id=role.id,
+        permission_ids=[non_existent_id],
+        current_user=mock_user,
+        db_session=db,
     )
 
     # Should still have 2 permissions
@@ -456,7 +480,10 @@ async def test_remove_permissions_not_found(db: AsyncSession) -> None:
     # Check that ResourceNotFoundException is raised
     with pytest.raises(ResourceNotFoundException):
         await role_crud.remove_permissions(
-            role_id=non_existent_id, permission_ids=permission_ids, current_user=mock_user, db_session=db
+            role_id=non_existent_id,
+            permission_ids=permission_ids,
+            current_user=mock_user,
+            db_session=db,
         )
 
 
@@ -529,7 +556,9 @@ async def test_invalidate_user_permission_caches(db: AsyncSession) -> None:
 
     # Call the method directly with the real implementation
     await role_crud.invalidate_user_permission_caches(
-        role_id=role.id, redis_client=mock_redis, db_session=db  # Pass the database session
+        role_id=role.id,
+        redis_client=mock_redis,
+        db_session=db,  # Pass the database session
     )
 
     # Verify that our Redis operations were called as expected

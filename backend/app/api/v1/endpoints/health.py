@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi import APIRouter, BackgroundTasks, Depends
 from redis.asyncio import Redis
 
@@ -12,7 +14,7 @@ router = APIRouter()
 async def health_check(
     background_tasks: BackgroundTasks,
     redis_client: Redis = Depends(get_redis_client),
-):
+) -> dict[str, Any]:
     """
     Perform a health check of all critical system components, including:
     - API Server

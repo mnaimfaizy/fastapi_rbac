@@ -82,14 +82,19 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
             # Delete the mapping between role and group
             await db_session.execute(
                 delete(RoleGroupMap).where(
-                    RoleGroupMap.role_group_id == group_id, RoleGroupMap.role_id == role_id
+                    RoleGroupMap.role_group_id == group_id,
+                    RoleGroupMap.role_id == role_id,
                 )
             )
 
         await db_session.commit()
 
     async def validate_circular_dependency(
-        self, *, group_id: UUID, role_ids: List[UUID], db_session: AsyncSession | None = None
+        self,
+        *,
+        group_id: UUID,
+        role_ids: List[UUID],
+        db_session: AsyncSession | None = None,
     ) -> bool:
         """Check for circular dependencies when adding roles to a group"""
         db_session = db_session or super().get_db().session
@@ -130,7 +135,11 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
         return False
 
     async def bulk_create(
-        self, *, groups: List[IRoleGroupCreate], current_user: User, db_session: AsyncSession | None = None
+        self,
+        *,
+        groups: List[IRoleGroupCreate],
+        current_user: User,
+        db_session: AsyncSession | None = None,
     ) -> List[RoleGroup]:
         """Create multiple role groups in a single transaction"""
         db_session = db_session or super().get_db().session
@@ -166,7 +175,11 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
         return new_groups
 
     async def bulk_delete(
-        self, *, group_ids: List[UUID], current_user: User, db_session: AsyncSession | None = None
+        self,
+        *,
+        group_ids: List[UUID],
+        current_user: User,
+        db_session: AsyncSession | None = None,
     ) -> None:
         """Delete multiple role groups in a single transaction"""
         db_session = db_session or super().get_db().session
@@ -199,7 +212,10 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
         await db_session.commit()
 
     async def sync_roles_with_role_groups(
-        self, *, db_session: AsyncSession | None = None, current_user: User | None = None
+        self,
+        *,
+        db_session: AsyncSession | None = None,
+        current_user: User | None = None,
     ) -> Dict[str, int]:
         """
         Synchronize roles with their role groups based on the role_group_id field.
@@ -228,7 +244,10 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
             query = (
                 select(1)
                 .select_from(RoleGroupMap)
-                .where(RoleGroupMap.role_id == role.id, RoleGroupMap.role_group_id == role.role_group_id)
+                .where(
+                    RoleGroupMap.role_id == role.id,
+                    RoleGroupMap.role_group_id == role.role_group_id,
+                )
             )
             existing_mapping = await db_session.execute(query)
 

@@ -18,7 +18,7 @@ class ServiceSettings:
     Redis, and other external services.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.mode = settings.MODE
 
     @property

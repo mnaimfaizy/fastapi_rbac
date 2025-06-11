@@ -32,24 +32,41 @@ def get_uuid_type():
 
 def upgrade() -> None:
     # Add other fields
-    op.add_column("UserPasswordHistory", sa.Column("password_hash", sa.String(), nullable=False))
-    op.add_column("UserPasswordHistory", sa.Column("salt", sa.String(), nullable=False, server_default=""))
+    op.add_column(
+        "UserPasswordHistory", sa.Column("password_hash", sa.String(), nullable=False)
+    )
     op.add_column(
         "UserPasswordHistory",
-        sa.Column("pepper_used", sa.Boolean(), nullable=False, server_default=sa.false()),
+        sa.Column("salt", sa.String(), nullable=False, server_default=""),
     )
-    op.add_column("UserPasswordHistory", sa.Column("created_by_ip", sa.String(), nullable=True))
-    op.add_column("UserPasswordHistory", sa.Column("reset_token_id", get_uuid_type(), nullable=True))
+    op.add_column(
+        "UserPasswordHistory",
+        sa.Column(
+            "pepper_used", sa.Boolean(), nullable=False, server_default=sa.false()
+        ),
+    )
+    op.add_column(
+        "UserPasswordHistory", sa.Column("created_by_ip", sa.String(), nullable=True)
+    )
+    op.add_column(
+        "UserPasswordHistory",
+        sa.Column("reset_token_id", get_uuid_type(), nullable=True),
+    )
 
     # Add index to created_at (assuming created_at column exists from BaseUUIDModel).
     # The model UserPasswordHistoryBase redefines it with index=True.
     op.create_index(
-        op.f("ix_UserPasswordHistory_created_at"), "UserPasswordHistory", ["created_at"], unique=False
+        op.f("ix_UserPasswordHistory_created_at"),
+        "UserPasswordHistory",
+        ["created_at"],
+        unique=False,
     )
 
 
 def downgrade() -> None:
-    op.drop_index(op.f("ix_UserPasswordHistory_created_at"), table_name="UserPasswordHistory")
+    op.drop_index(
+        op.f("ix_UserPasswordHistory_created_at"), table_name="UserPasswordHistory"
+    )
     op.drop_column("UserPasswordHistory", "password")
     op.drop_column("UserPasswordHistory", "reset_token_id")
     op.drop_column("UserPasswordHistory", "created_by_ip")

@@ -92,7 +92,9 @@ async def get_role_group_by_id(
     """
     try:
         role_group = await role_group_deps.get_group_by_id(
-            group_id=group_id, db_session=db_session, include_roles_recursive=include_nested_roles
+            group_id=group_id,
+            db_session=db_session,
+            include_roles_recursive=include_nested_roles,
         )
 
         # The model will now have the parent relationship properly loaded
@@ -327,7 +329,10 @@ async def bulk_create_role_groups(
         # Invalidate role groups list cache
         background_tasks.add_task(redis_client.delete, "role_groups:list")
 
-        return create_response(data=new_groups, message=f"Successfully created {len(new_groups)} role groups")
+        return create_response(
+            data=new_groups,
+            message=f"Successfully created {len(new_groups)} role groups",
+        )
     except NameExistException as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except Exception as e:
@@ -430,7 +435,9 @@ async def add_roles_to_group(
 
             # Invalidate user permissions caches for each role
             background_tasks.add_task(
-                crud.role.invalidate_user_permission_caches, role_id=role_id, redis_client=redis_client
+                crud.role.invalidate_user_permission_caches,
+                role_id=role_id,
+                redis_client=redis_client,
             )
 
         # Get updated group
@@ -438,7 +445,8 @@ async def add_roles_to_group(
         return create_response(data=updated_group)
     except ValueError as e:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid UUID format in role_ids: {str(e)}"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid UUID format in role_ids: {str(e)}",
         )
     except CircularDependencyException as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
@@ -499,7 +507,9 @@ async def remove_roles_from_group(
 
             # Invalidate user permissions caches for each role
             background_tasks.add_task(
-                crud.role.invalidate_user_permission_caches, role_id=role_id, redis_client=redis_client
+                crud.role.invalidate_user_permission_caches,
+                role_id=role_id,
+                redis_client=redis_client,
             )
 
         # Get updated group
@@ -508,7 +518,8 @@ async def remove_roles_from_group(
     except ValueError as e:
         # Handle invalid UUID format
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid UUID format in role_ids: {str(e)}"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid UUID format in role_ids: {str(e)}",
         )
     except Exception as e:
         # Handle other exceptions
@@ -570,7 +581,9 @@ async def clone_role_group(
 
             # Invalidate user permissions caches for each role
             background_tasks.add_task(
-                crud.role.invalidate_user_permission_caches, role_id=role_id, redis_client=redis_client
+                crud.role.invalidate_user_permission_caches,
+                role_id=role_id,
+                redis_client=redis_client,
             )
 
         # Get updated group with roles

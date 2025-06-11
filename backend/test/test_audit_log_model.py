@@ -31,7 +31,11 @@ async def test_create_audit_log(db: AsyncSession) -> None:
     details = {"ip_address": "192.168.1.1", "user_agent": "Test Browser"}
 
     audit_log = AuditLog(
-        actor_id=user.id, action=action, resource_type=resource_type, resource_id=resource_id, details=details
+        actor_id=user.id,
+        action=action,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        details=details,
     )
 
     # Add audit log to database
@@ -108,13 +112,25 @@ async def test_filter_audit_logs_by_action(db: AsyncSession) -> None:
     target_action = "security_event"
     logs = [
         AuditLog(
-            actor_id=user.id, action="login", resource_type="user", resource_id=str(user.id), details={}
+            actor_id=user.id,
+            action="login",
+            resource_type="user",
+            resource_id=str(user.id),
+            details={},
         ),
         AuditLog(
-            actor_id=user.id, action=target_action, resource_type="user", resource_id=str(user.id), details={}
+            actor_id=user.id,
+            action=target_action,
+            resource_type="user",
+            resource_id=str(user.id),
+            details={},
         ),
         AuditLog(
-            actor_id=user.id, action=target_action, resource_type="user", resource_id=str(user.id), details={}
+            actor_id=user.id,
+            action=target_action,
+            resource_type="user",
+            resource_id=str(user.id),
+            details={},
         ),
     ]
 

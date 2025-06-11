@@ -11,6 +11,36 @@ The test factory pattern provides a consistent, maintainable way to create model
 3. **Clean Test Code**: Tests focus on assertions instead of setup details
 4. **Easier Maintenance**: When models change, update only the factory classes
 
+## Test Organization
+
+### Unit & Integration Tests
+
+Most test files in this directory follow the factory pattern for clean data creation:
+
+- `test_api_*.py` - API endpoint tests
+- `test_crud_*.py` - CRUD operation tests
+- `test_models_*.py` - Database model tests
+
+### Security Validation Tests
+
+Special standalone test files for security validation:
+
+- `test_csrf_implementation.py` - CSRF protection validation (run manually)
+- `test_sanitization.py` - Input sanitization testing (run manually)
+
+These security tests are designed to run against a live server to validate security implementations work correctly in the full application context.
+
+**Usage:**
+
+```bash
+# Start the backend server first
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+# Then run security tests
+python test/test_csrf_implementation.py
+python test/test_sanitization.py
+```
+
 ## Factory Components
 
 ### Model Factories

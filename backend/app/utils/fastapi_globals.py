@@ -57,7 +57,7 @@ class Globals:
         object.__setattr__(self, "_vars", {})
         object.__setattr__(self, "_defaults", {})
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Clear all variables and free memory."""
 
         self._vars.clear()

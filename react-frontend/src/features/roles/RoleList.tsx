@@ -45,6 +45,7 @@ const RoleList: React.FC = () => {
 
   // Verify required permissions
   const canReadRoles = hasPermission('role.read');
+  const canCreateRoles = hasPermission('role.create');
   const canUpdateRoles = hasPermission('role.update');
   const canDeleteRoles = hasPermission('role.delete');
   const canReadRoleGroups = hasPermission('role_group.read');
@@ -74,6 +75,14 @@ const RoleList: React.FC = () => {
       return;
     }
     navigate(`/dashboard/roles/edit/${roleId}`);
+  };
+
+  const handleCreate = () => {
+    if (!canCreateRoles) {
+      toast.error('You do not have permission to create roles');
+      return;
+    }
+    navigate('/dashboard/roles/new');
   };
 
   const handleDelete = (roleId: string) => {
@@ -161,11 +170,16 @@ const RoleList: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold">Roles</h2>
+        {canCreateRoles && <Button onClick={handleCreate}>Create Role</Button>}
+      </div>
       <Table>
         <TableHeader>
           <TableRow>
             <TableHead>Name</TableHead>
             <TableHead>Description</TableHead>
+            <TableHead>Permissions</TableHead>
             <TableHead>Role Group</TableHead>
             <TableHead>Created At</TableHead>
             <TableHead className="text-right">Actions</TableHead>
@@ -174,27 +188,37 @@ const RoleList: React.FC = () => {
         <TableBody>
           {loading ? (
             <TableRow>
-              <TableCell colSpan={5} className="text-center py-8">
-                <div className="flex items-center justify-center space-x-2">
+              <TableCell colSpan={6} className="text-center py-8">
+                <div
+                  className="flex items-center justify-center space-x-2"
+                  data-testid="loading-spinner"
+                >
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
                   <span>Loading roles...</span>
                 </div>
               </TableCell>
             </TableRow>
-          ) : roles.length === 0 ? (
+          ) : !roles || roles.length === 0 ? (
             <TableRow>
               <TableCell
-                colSpan={5}
+                colSpan={6}
                 className="text-center py-8 text-muted-foreground"
               >
                 No roles found
               </TableCell>
             </TableRow>
           ) : (
+            roles &&
             roles.map((role: Role) => (
               <TableRow key={role.id}>
                 <TableCell className="font-medium">{role.name}</TableCell>
                 <TableCell>{role.description || '-'}</TableCell>
+                <TableCell>
+                  <span className="text-sm text-muted-foreground">
+                    {role.permissions?.length || 0} permission
+                    {role.permissions?.length === 1 ? '' : 's'}
+                  </span>
+                </TableCell>
                 <TableCell>
                   {role.role_group_id && canReadRoleGroups ? (
                     <button
@@ -247,6 +271,7 @@ const RoleList: React.FC = () => {
                             size="sm"
                             onClick={() => handleDelete(role.id)}
                             title="Delete role"
+                            data-testid="delete-role-button"
                           >
                             <Trash2 className="h-4 w-4" />
                             <span className="sr-only">Delete role</span>

@@ -1,7 +1,12 @@
 import { useEffect } from 'react';
 import { useAppSelector, useAppDispatch } from '../store/hooks';
 import { getStoredRefreshToken } from '../lib/tokenStorage';
-import { refreshAccessToken, getCurrentUser } from '../store/slices/authSlice';
+import {
+  refreshAccessToken,
+  getCurrentUser,
+  loginUser,
+  logoutUser,
+} from '../store/slices/authSlice';
 
 /**
  * Custom hook for authentication management
@@ -27,12 +32,22 @@ export const useAuth = () => {
     }
   }, [dispatch, isAuthenticated, isLoading]);
 
+  const login = async (credentials: { email: string; password: string }) => {
+    return dispatch(loginUser(credentials));
+  };
+
+  const logout = () => {
+    dispatch(logoutUser());
+  };
+
   return {
     user,
     isAuthenticated,
     accessToken,
-    isLoading,
+    loading: isLoading,
     error,
+    login,
+    logout,
   };
 };
 

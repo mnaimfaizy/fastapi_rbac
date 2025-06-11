@@ -113,6 +113,10 @@ class UserService {
    * Delete a user
    */
   async deleteUser(userId: string): Promise<void> {
+    if (!userId || userId.trim() === '') {
+      throw new Error('User ID is required for deletion');
+    }
+
     try {
       await api.delete(`${BASE_URL}/${userId}`);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

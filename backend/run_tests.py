@@ -48,7 +48,14 @@ def run_docker_tests() -> int:
     """Run tests in Docker containers"""
     print("Running tests in Docker environment...")
     result = subprocess.run(
-        ["docker-compose", "-f", "docker-compose.test.yml", "up", "--build", "--abort-on-container-exit"],
+        [
+            "docker-compose",
+            "-f",
+            "docker-compose.test.yml",
+            "up",
+            "--build",
+            "--abort-on-container-exit",
+        ],
         check=False,
     )
     # Clean up containers after test
