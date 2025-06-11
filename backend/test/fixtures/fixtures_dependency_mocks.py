@@ -26,9 +26,7 @@ class DependencyOverrider:
     ```
     """
 
-    def __init__(
-        self, app: FastAPI, overrides: Dict[Callable[..., Any], Callable[..., Any]]
-    ):
+    def __init__(self, app: FastAPI, overrides: Dict[Callable[..., Any], Callable[..., Any]]):
         """
         Initialize with app and overrides dictionary.
 

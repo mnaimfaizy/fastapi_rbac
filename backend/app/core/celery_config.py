@@ -51,9 +51,7 @@ def get_celery_config() -> Dict[str, Any]:
         "task_routes": settings.CELERY_TASK_ROUTES,
         # Task Execution
         "task_always_eager": getattr(settings, "CELERY_TASK_ALWAYS_EAGER", False),
-        "task_eager_propagates": getattr(
-            settings, "CELERY_TASK_EAGER_PROPAGATES", False
-        ),
+        "task_eager_propagates": getattr(settings, "CELERY_TASK_EAGER_PROPAGATES", False),
         # Security and Other Settings
         "security_key": settings.SECRET_KEY,
         "timezone": settings.CELERY_TIMEZONE,

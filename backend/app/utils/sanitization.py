@@ -7,7 +7,7 @@ Cross-Site Scripting (XSS) attacks and clean user input data.
 
 import html
 import re
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 import bleach
 
@@ -63,9 +63,7 @@ def sanitize_html(
     tags = allowed_tags or ALLOWED_TAGS
     attributes = allowed_attributes or ALLOWED_ATTRIBUTES
 
-    return bleach.clean(
-        value, tags=tags, attributes=attributes, protocols=ALLOWED_PROTOCOLS, strip=True
-    )
+    return bleach.clean(value, tags=tags, attributes=attributes, protocols=ALLOWED_PROTOCOLS, strip=True)
 
 
 def sanitize_text(value: str) -> str:
@@ -322,8 +320,6 @@ def sanitize_input(value: Any, field_type: str = "text") -> Any:
     return default_sanitizer.sanitize(value, field_type)
 
 
-def sanitize_form_data(
-    data: Dict[str, Any], field_types: Optional[Dict[str, str]] = None
-) -> Dict[str, Any]:
+def sanitize_form_data(data: Dict[str, Any], field_types: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     """Convenience function for sanitizing form data using default sanitizer."""
     return default_sanitizer.sanitize_dict(data, field_types)

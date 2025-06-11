@@ -89,9 +89,7 @@ class Settings(BaseSettings):
     MAX_LOGIN_ATTEMPTS: int = Field(default=5)
     LOCKOUT_DURATION_MINUTES: int = Field(default=15)
     PASSWORD_HISTORY_SIZE: int = Field(default=5)  # Number of old passwords to store
-    PREVENT_PASSWORD_REUSE: int = Field(
-        default=5
-    )  # Number of recent passwords to check against
+    PREVENT_PASSWORD_REUSE: int = Field(default=5)  # Number of recent passwords to check against
     TOKEN_ISSUER: Optional[str] = None  # Added
     TOKEN_AUDIENCE: Optional[str] = None  # Added
 
@@ -202,9 +200,7 @@ class Settings(BaseSettings):
         "password123",
     ]
     PREVENT_COMMON_PASSWORDS: bool = True  # Prevent use of common passwords
-    PREVENT_SEQUENTIAL_CHARS: bool = (
-        True  # Prevent use of sequential characters (e.g., abc, 123)
-    )
+    PREVENT_SEQUENTIAL_CHARS: bool = True  # Prevent use of sequential characters (e.g., abc, 123)
     PASSWORD_PEPPER: Optional[str] = None  # Optional pepper for password hashing
     PREVENT_REPEATED_CHARS: bool = True  # Prevent use of too many repeated characters
 
@@ -289,9 +285,7 @@ class Settings(BaseSettings):
     # Token Security
     ACCESS_TOKEN_ENTROPY_BITS: int = 256  # Entropy for token generation
     VERIFY_TOKEN_ON_EVERY_REQUEST: bool = True
-    TOKEN_VERSION_ON_PASSWORD_CHANGE: bool = (
-        True  # Invalidate tokens on password change
-    )
+    TOKEN_VERSION_ON_PASSWORD_CHANGE: bool = True  # Invalidate tokens on password change
     VALIDATE_TOKEN_IP: bool = True  # Validate token against original IP
     TOKEN_BLACKLIST_ON_LOGOUT: bool = True  # Add tokens to blacklist on logout
     TOKEN_BLACKLIST_EXPIRY: int = 86400  # Keep blacklisted tokens for 24 hours
@@ -334,11 +328,7 @@ class Settings(BaseSettings):
                 return ""
 
         # For production, these fields should be provided
-        if (
-            mode == ModeEnum.production
-            and not v
-            and field_name in ["SMTP_HOST", "SMTP_PORT"]
-        ):
+        if mode == ModeEnum.production and not v and field_name in ["SMTP_HOST", "SMTP_PORT"]:
             raise ValueError(f"{field_name} must be set in production mode")
 
         return v
@@ -401,9 +391,7 @@ class Settings(BaseSettings):
     SYNC_CELERY_BEAT_DATABASE_URI: PostgresDsn | str = ""
 
     @field_validator("SYNC_CELERY_BEAT_DATABASE_URI", mode="after")
-    def assemble_celery_beat_db_connection(
-        cls, v: str | None, info: ValidationInfo
-    ) -> Any:
+    def assemble_celery_beat_db_connection(cls, v: str | None, info: ValidationInfo) -> Any:
         if isinstance(v, str) and v == "":
             db_type = info.data.get("DATABASE_TYPE", DatabaseTypeEnum.postgresql)
 
@@ -430,9 +418,7 @@ class Settings(BaseSettings):
     ASYNC_CELERY_BEAT_DATABASE_URI: PostgresDsn | str = ""
 
     @field_validator("ASYNC_CELERY_BEAT_DATABASE_URI", mode="after")
-    def assemble_async_celery_beat_db_connection(
-        cls, v: str | None, info: ValidationInfo
-    ) -> Any:
+    def assemble_async_celery_beat_db_connection(cls, v: str | None, info: ValidationInfo) -> Any:
         if isinstance(v, str) and v == "":
             db_type = info.data.get("DATABASE_TYPE", DatabaseTypeEnum.postgresql)
 
@@ -479,18 +465,12 @@ class Settings(BaseSettings):
         """Validate that critical settings are properly set in production mode"""
         if self.MODE == ModeEnum.production:
             # Ensure critical settings are set for production
-            assert (
-                self.SECRET_KEY != "development_secret"
-            ), "Change the SECRET_KEY for production"
-            assert (
-                len(self.SECRET_KEY) >= 32
-            ), "SECRET_KEY should be at least 32 characters in production"
+            assert self.SECRET_KEY != "development_secret", "Change the SECRET_KEY for production"
+            assert len(self.SECRET_KEY) >= 32, "SECRET_KEY should be at least 32 characters in production"
 
             # Validate database configuration if using PostgreSQL
             if self.DATABASE_TYPE == DatabaseTypeEnum.postgresql:
-                assert (
-                    self.DATABASE_HOST != "localhost"
-                ), "Use a proper DATABASE_HOST in production"
+                assert self.DATABASE_HOST != "localhost", "Use a proper DATABASE_HOST in production"
 
             # Validate security settings
             assert (
@@ -507,12 +487,8 @@ class Settings(BaseSettings):
                 len(self.JWT_RESET_SECRET_KEY) >= 32
             ), "JWT_RESET_SECRET_KEY should be at least 32 characters in production"
 
-            assert (
-                self.ENCRYPT_KEY is not None
-            ), "ENCRYPT_KEY must be set in .env for production mode"
-            assert (
-                len(self.ENCRYPT_KEY) >= 32
-            ), "ENCRYPT_KEY should be at least 32 characters in production"
+            assert self.ENCRYPT_KEY is not None, "ENCRYPT_KEY must be set in .env for production mode"
+            assert len(self.ENCRYPT_KEY) >= 32, "ENCRYPT_KEY should be at least 32 characters in production"
         return self
 
     @model_validator(mode="after")

@@ -21,14 +21,10 @@ from app.schemas.user_schema import IUserCreate, IUserUpdate
 
 
 class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
-    async def get_by_email(
-        self, *, email: str, db_session: AsyncSession | None = None
-    ) -> User | None:
+    async def get_by_email(self, *, email: str, db_session: AsyncSession | None = None) -> User | None:
         resolved_session = db_session or self.db.session
         if resolved_session is None:
-            raise HTTPException(
-                status_code=503, detail="Database service temporarily unavailable"
-            )
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
 
         stmt = (
             select(self.model)
@@ -52,14 +48,10 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
 
         return user
 
-    async def create_with_role(
-        self, *, obj_in: IUserCreate, db_session: AsyncSession | None = None
-    ) -> User:
+    async def create_with_role(self, *, obj_in: IUserCreate, db_session: AsyncSession | None = None) -> User:
         resolved_session: AsyncSession = db_session or self.db.session  # type: ignore[assignment]
         if resolved_session is None:
-            raise HTTPException(
-                status_code=503, detail="Database service temporarily unavailable"
-            )
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
 
         user_data = obj_in.model_dump(exclude={"role_id", "password"})
         user_data["roles"] = []  # Ensure roles is an empty list for User constructor
@@ -110,9 +102,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
             raise
         except Exception as e:
             await resolved_session.rollback()
-            raise HTTPException(
-                status_code=500, detail=f"An unexpected error occurred: {e}"
-            )
+            raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
 
         return db_obj
 
@@ -125,17 +115,13 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
     ) -> User:
         resolved_session: AsyncSession = db_session or self.db.session  # type: ignore[assignment]
         if resolved_session is None:
-            raise HTTPException(
-                status_code=503, detail="Database service temporarily unavailable"
-            )
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
 
         role_ids = []  # Initialize role_ids for later conditional refresh
         if isinstance(obj_in, IUserCreate):
             role_ids = obj_in.role_id if obj_in.role_id is not None else []
             obj_in_data = obj_in.model_dump(exclude={"password", "role_id"})
-            obj_in_data["roles"] = (
-                []
-            )  # Ensure roles is an empty list for User constructor
+            obj_in_data["roles"] = []  # Ensure roles is an empty list for User constructor
             db_obj = User(**obj_in_data)
             db_obj.password = PasswordValidator.get_password_hash(obj_in.password)
         else:  # isinstance(obj_in, User)
@@ -166,11 +152,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
             await resolved_session.commit()  # Single commit
             await resolved_session.refresh(db_obj)
             # Conditionally refresh roles attribute if they were involved
-            if role_ids or (
-                isinstance(obj_in, User)
-                and obj_in.roles is not None
-                and len(obj_in.roles) > 0
-            ):
+            if role_ids or (isinstance(obj_in, User) and obj_in.roles is not None and len(obj_in.roles) > 0):
                 await resolved_session.refresh(db_obj, attribute_names=["roles"])
 
         except exc.IntegrityError as e:
@@ -192,9 +174,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
             raise
         except Exception as e:
             await resolved_session.rollback()
-            raise HTTPException(
-                status_code=500, detail=f"An unexpected error occurred: {e}"
-            )
+            raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
 
         # Ensure this refresh is inside the try block or handled after confirming success.
         # The logic above now includes conditional refresh of roles inside the try block.
@@ -212,9 +192,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
     ) -> User:
         resolved_session: AsyncSession = db_session or self.db.session  # type: ignore[assignment]
         if resolved_session is None:
-            raise HTTPException(
-                status_code=503, detail="Database service temporarily unavailable"
-            )
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
 
         if isinstance(obj_new, dict):
             update_data = obj_new
@@ -222,9 +200,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
             update_data = obj_new.model_dump(exclude_unset=True)
 
         if "password" in update_data and update_data["password"]:
-            hashed_password = PasswordValidator.get_password_hash(
-                update_data["password"]
-            )
+            hashed_password = PasswordValidator.get_password_hash(update_data["password"])
             obj_current.password = hashed_password
             obj_current.last_changed_password_date = datetime.utcnow()
             del update_data["password"]
@@ -284,14 +260,10 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
     def has_verified(self, user: User) -> bool:
         return getattr(user, "is_verified", True)
 
-    async def update_is_active(
-        self, *, db_obj: list[User], obj_in: IUserUpdate
-    ) -> list[User] | None:
+    async def update_is_active(self, *, db_obj: list[User], obj_in: IUserUpdate) -> list[User] | None:
         db_session: AsyncSession = self.db.session  # type: ignore[assignment]
         if db_session is None:
-            raise HTTPException(
-                status_code=503, detail="Database service temporarily unavailable"
-            )
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
 
         for x in db_obj:
             if hasattr(obj_in, "is_active") and obj_in.is_active is not None:
@@ -310,9 +282,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
     ) -> User | None:
         resolved_session: AsyncSession = db_session or self.db.session  # type: ignore[assignment]
         if resolved_session is None:
-            raise HTTPException(
-                status_code=503, detail="Database service temporarily unavailable"
-            )
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
 
         user = await self.get_by_email(email=email, db_session=resolved_session)
 
@@ -322,18 +292,10 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         if user.password is None:
             return None
 
-        if (
-            user.is_locked
-            and user.locked_until
-            and user.locked_until > datetime.utcnow()
-        ):
+        if user.is_locked and user.locked_until and user.locked_until > datetime.utcnow():
             return None
 
-        if (
-            user.is_locked
-            and user.locked_until
-            and user.locked_until <= datetime.utcnow()
-        ):
+        if user.is_locked and user.locked_until and user.locked_until <= datetime.utcnow():
             await self.unlock_account(user=user, db_session=resolved_session)
 
         if not user.is_active:
@@ -346,14 +308,10 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         await self.reset_failed_attempts(user=user, db_session=resolved_session)
         return user
 
-    async def remove(
-        self, *, id: UUID | str, db_session: AsyncSession | None = None
-    ) -> User:
+    async def remove(self, *, id: UUID | str, db_session: AsyncSession | None = None) -> User:
         resolved_session: AsyncSession = db_session or self.db.session  # type: ignore[assignment]
         if resolved_session is None:
-            raise HTTPException(
-                status_code=503, detail="Database service temporarily unavailable"
-            )
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
         response = await resolved_session.execute(
             select(self.model).where(self.model.id == id)  # type: ignore[attr-defined]
         )
@@ -375,9 +333,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
     ) -> None:
         resolved_session: AsyncSession = db_session or self.db.session  # type: ignore[assignment]
         if resolved_session is None:
-            raise HTTPException(
-                status_code=503, detail="Database service temporarily unavailable"
-            )
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
 
         history_entry_data = {
             "user_id": user_id,
@@ -400,9 +356,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
     ) -> bool:
         resolved_session: AsyncSession = db_session or self.db.session  # type: ignore[assignment]
         if resolved_session is None:
-            raise HTTPException(
-                status_code=503, detail="Database service temporarily unavailable"
-            )
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
 
         limit = settings.PREVENT_PASSWORD_REUSE
         if limit <= 0:
@@ -425,9 +379,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
     ) -> bool:
         resolved_session: AsyncSession = db_session or self.db.session  # type: ignore[assignment]
         if resolved_session is None:
-            raise HTTPException(
-                status_code=503, detail="Database service temporarily unavailable"
-            )
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
 
         limit = settings.PASSWORD_HISTORY_SIZE
         if limit <= 0:
@@ -441,8 +393,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         history_entries = result.scalars().all()
 
         return any(
-            PasswordValidator.verify_password(new_password, entry.password_hash)
-            for entry in history_entries
+            PasswordValidator.verify_password(new_password, entry.password_hash) for entry in history_entries
         )
 
     async def update_password(
@@ -456,16 +407,12 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
     ) -> User:
         resolved_session: AsyncSession = db_session or self.db.session  # type: ignore[assignment]
         if resolved_session is None:
-            raise HTTPException(
-                status_code=503, detail="Database service temporarily unavailable"
-            )
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
 
         if settings.PASSWORD_HISTORY_SIZE > 0 and await self.is_password_in_history(
             user_id=user.id, new_password=new_password, db_session=resolved_session
         ):
-            raise ValueError(
-                f"Cannot reuse any of your last {settings.PASSWORD_HISTORY_SIZE} passwords."
-            )
+            raise ValueError(f"Cannot reuse any of your last {settings.PASSWORD_HISTORY_SIZE} passwords.")
 
         new_password_hash = PasswordValidator.get_password_hash(new_password)
 
@@ -474,9 +421,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
             new_password_hash=new_password_hash,
             db_session=resolved_session,
         ):
-            raise ValueError(
-                "This password has been used too recently. Please choose a different one."
-            )
+            raise ValueError("This password has been used too recently. Please choose a different one.")
         if user.password is None:
             raise ValueError("Current user password is not set. Cannot add to history.")
 
@@ -497,14 +442,10 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
 
         return user
 
-    async def increment_failed_attempts(
-        self, *, user: User, db_session: AsyncSession | None = None
-    ) -> User:
+    async def increment_failed_attempts(self, *, user: User, db_session: AsyncSession | None = None) -> User:
         resolved_session: AsyncSession = db_session or self.db.session  # type: ignore[assignment]
         if resolved_session is None:
-            raise HTTPException(
-                status_code=503, detail="Database service temporarily unavailable"
-            )
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
 
         if user.number_of_failed_attempts is None:
             user.number_of_failed_attempts = 1
@@ -513,9 +454,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
 
         if user.number_of_failed_attempts >= settings.MAX_LOGIN_ATTEMPTS:
             user.is_locked = True
-            user.locked_until = datetime.utcnow() + timedelta(
-                minutes=settings.ACCOUNT_LOCKOUT_MINUTES
-            )
+            user.locked_until = datetime.utcnow() + timedelta(minutes=settings.ACCOUNT_LOCKOUT_MINUTES)
         try:
             resolved_session.add(user)
             await resolved_session.commit()
@@ -523,19 +462,13 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         except Exception as e:
             await resolved_session.rollback()
             # Consider logging 'e'
-            raise HTTPException(
-                status_code=500, detail=f"Error updating failed attempts: {str(e)}"
-            )
+            raise HTTPException(status_code=500, detail=f"Error updating failed attempts: {str(e)}")
         return user
 
-    async def reset_failed_attempts(
-        self, *, user: User, db_session: AsyncSession | None = None
-    ) -> User:
+    async def reset_failed_attempts(self, *, user: User, db_session: AsyncSession | None = None) -> User:
         resolved_session: AsyncSession = db_session or self.db.session  # type: ignore[assignment]
         if resolved_session is None:
-            raise HTTPException(
-                status_code=503, detail="Database service temporarily unavailable"
-            )
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
 
         user.number_of_failed_attempts = 0
         resolved_session.add(user)
@@ -543,14 +476,10 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         await resolved_session.refresh(user)
         return user
 
-    async def unlock_account(
-        self, *, user: User, db_session: AsyncSession | None = None
-    ) -> User:
+    async def unlock_account(self, *, user: User, db_session: AsyncSession | None = None) -> User:
         resolved_session: AsyncSession = db_session or self.db.session  # type: ignore[assignment]
         if resolved_session is None:
-            raise HTTPException(
-                status_code=503, detail="Database service temporarily unavailable"
-            )
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
 
         user.is_locked = False
         user.locked_until = None
@@ -570,15 +499,11 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
     ) -> User:
         resolved_session: AsyncSession = db_session or self.db.session  # type: ignore[assignment]
         if resolved_session is None:
-            raise HTTPException(
-                status_code=503, detail="Database service temporarily unavailable"
-            )
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
 
         user = await self.get(id=user_id, db_session=resolved_session)  # type: ignore[arg-type]
         if not user:
-            raise HTTPException(
-                status_code=404, detail=f"User with id {user_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"User with id {user_id} not found")
 
         roles_result = await resolved_session.execute(
             select(Role).where(Role.id.in_(role_ids))  # type: ignore[attr-defined]

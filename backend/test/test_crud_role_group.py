@@ -95,9 +95,7 @@ async def test_update_role_group(db: AsyncSession) -> None:
     # Update the role group name
     new_name = f"updated-group-{random_lower_string(8)}"
     group_update = IRoleGroupUpdate(name=new_name)
-    updated_group = await role_group.update(
-        obj_current=group, obj_new=group_update, db_session=db
-    )
+    updated_group = await role_group.update(obj_current=group, obj_new=group_update, db_session=db)
     # Check that the role group was updated
     assert updated_group.id == group.id
     assert updated_group.name == new_name
@@ -159,9 +157,7 @@ async def test_hierarchical_role_groups(db: AsyncSession) -> None:
     assert len(parent_group_refreshed.children) > 0
 
     # Now let's check using the get_with_hierarchy method
-    stored_parent = await role_group.get_with_hierarchy(
-        id=parent_group.id, db_session=db
-    )
+    stored_parent = await role_group.get_with_hierarchy(id=parent_group.id, db_session=db)
 
     # Check the parent-child relationship
     assert stored_parent
@@ -207,9 +203,7 @@ async def test_add_roles_to_group(db: AsyncSession) -> None:
     role_ids = [role.id for role in roles]
 
     # Add roles to group
-    role_group_maps = await role_group.add_roles_to_group(
-        group_id=group.id, role_ids=role_ids, db_session=db
-    )
+    role_group_maps = await role_group.add_roles_to_group(group_id=group.id, role_ids=role_ids, db_session=db)
 
     # Check that the mapping was created
     assert len(role_group_maps) == 3
@@ -250,9 +244,7 @@ async def test_remove_roles_from_group(db: AsyncSession) -> None:
     role_ids = [role.id for role in roles]
 
     # Add roles to group
-    await role_group.add_roles_to_group(
-        group_id=group.id, role_ids=role_ids, db_session=db
-    )
+    await role_group.add_roles_to_group(group_id=group.id, role_ids=role_ids, db_session=db)
 
     # Verify all roles were added initially
     for role_id in role_ids:
@@ -266,9 +258,7 @@ async def test_remove_roles_from_group(db: AsyncSession) -> None:
 
     # Remove two roles from the group
     roles_to_remove = role_ids[:2]
-    await role_group.remove_roles_from_group(
-        group_id=group.id, role_ids=roles_to_remove, db_session=db
-    )
+    await role_group.remove_roles_from_group(group_id=group.id, role_ids=roles_to_remove, db_session=db)
 
     # Verify that removed roles no longer have mappings
     for role_id in roles_to_remove:
@@ -298,9 +288,7 @@ async def test_bulk_create_role_groups(db: AsyncSession, test_user: User) -> Non
     groups_in = [IRoleGroupCreate(name=name) for name in group_names]
 
     # Bulk create role groups
-    groups = await role_group.bulk_create(
-        groups=groups_in, current_user=test_user, db_session=db
-    )
+    groups = await role_group.bulk_create(groups=groups_in, current_user=test_user, db_session=db)
 
     # Check that all groups were created correctly
     assert len(groups) == 3
@@ -323,9 +311,7 @@ async def test_bulk_delete_role_groups(db: AsyncSession, test_user: User) -> Non
     group_ids = [group.id for group in groups]
 
     # Bulk delete role groups
-    await role_group.bulk_delete(
-        group_ids=group_ids, current_user=test_user, db_session=db
-    )
+    await role_group.bulk_delete(group_ids=group_ids, current_user=test_user, db_session=db)
 
     # Verify that the groups were deleted
     for group_id in group_ids:
@@ -349,14 +335,10 @@ async def test_circular_dependency_detection(db: AsyncSession) -> None:
     group2 = await role_group.create(obj_in=group2_in, db_session=db)
 
     # Create roles
-    role1_in = IRoleCreate(
-        name=f"test-role-1-{random_lower_string(5)}", description="Test Role 1"
-    )
+    role1_in = IRoleCreate(name=f"test-role-1-{random_lower_string(5)}", description="Test Role 1")
     role1 = await role_crud.create(obj_in=role1_in, db_session=db)
 
-    role2_in = IRoleCreate(
-        name=f"test-role-2-{random_lower_string(5)}", description="Test Role 2"
-    )
+    role2_in = IRoleCreate(name=f"test-role-2-{random_lower_string(5)}", description="Test Role 2")
     role2 = await role_crud.create(obj_in=role2_in, db_session=db)
 
     # Manually create the mappings to set up a circular dependency scenario
@@ -384,9 +366,7 @@ async def test_circular_dependency_detection(db: AsyncSession) -> None:
     assert has_circular is True
 
     # Test a non-circular case
-    role3_in = IRoleCreate(
-        name=f"test-role-3-{random_lower_string(5)}", description="Test Role 3"
-    )
+    role3_in = IRoleCreate(name=f"test-role-3-{random_lower_string(5)}", description="Test Role 3")
     role3 = await role_crud.create(obj_in=role3_in, db_session=db)
 
     has_circular = await role_group.validate_circular_dependency(
@@ -415,17 +395,13 @@ async def test_sync_roles_with_role_groups(db: AsyncSession, test_user: User) ->
         await role_crud.create(obj_in=role_in, db_session=db)
 
     # Sync roles with role groups
-    stats = await role_group.sync_roles_with_role_groups(
-        db_session=db, current_user=test_user
-    )
+    stats = await role_group.sync_roles_with_role_groups(db_session=db, current_user=test_user)
 
     # Check that roles were synchronized
     assert stats["created"] >= 3
 
     # Run sync again to test the skipping of existing mappings
-    stats2 = await role_group.sync_roles_with_role_groups(
-        db_session=db, current_user=test_user
-    )
+    stats2 = await role_group.sync_roles_with_role_groups(db_session=db, current_user=test_user)
 
     # The second sync should not create any new mappings for these roles
     assert stats2["skipped"] >= 3
@@ -440,9 +416,7 @@ async def test_check_role_exists_in_group(db: AsyncSession) -> None:
     group = await role_group.create(obj_in=group_in, db_session=db)
 
     # Check if group has roles (should be false)
-    has_roles = await role_group.check_role_exists_in_group(
-        group_id=group.id, db_session=db
-    )
+    has_roles = await role_group.check_role_exists_in_group(group_id=group.id, db_session=db)
     assert has_roles is False
 
     # Create a role
@@ -453,21 +427,15 @@ async def test_check_role_exists_in_group(db: AsyncSession) -> None:
     role = await role_crud.create(obj_in=role_in, db_session=db)
 
     # Add role to group
-    await role_group.add_roles_to_group(
-        group_id=group.id, role_ids=[role.id], db_session=db
-    )
+    await role_group.add_roles_to_group(group_id=group.id, role_ids=[role.id], db_session=db)
 
     # Check if group has roles (should be true now)
-    has_roles = await role_group.check_role_exists_in_group(
-        group_id=group.id, db_session=db
-    )
+    has_roles = await role_group.check_role_exists_in_group(group_id=group.id, db_session=db)
     assert has_roles is True
 
 
 @pytest.mark.asyncio
-async def test_bulk_delete_with_roles_conflict(
-    db: AsyncSession, test_user: User
-) -> None:
+async def test_bulk_delete_with_roles_conflict(db: AsyncSession, test_user: User) -> None:
     """Test that deleting a group with roles raises an exception"""
     # Create a role group
     group_name = f"test-group-{random_lower_string(8)}"
@@ -482,15 +450,11 @@ async def test_bulk_delete_with_roles_conflict(
     role = await role_crud.create(obj_in=role_in, db_session=db)
 
     # Add role to group
-    await role_group.add_roles_to_group(
-        group_id=group.id, role_ids=[role.id], db_session=db
-    )
+    await role_group.add_roles_to_group(group_id=group.id, role_ids=[role.id], db_session=db)
 
     # Attempt to delete group that has roles
     with pytest.raises(HTTPException) as excinfo:
-        await role_group.bulk_delete(
-            group_ids=[group.id], current_user=test_user, db_session=db
-        )
+        await role_group.bulk_delete(group_ids=[group.id], current_user=test_user, db_session=db)
 
     # Check that the correct exception was raised
     assert excinfo.value.status_code == 409

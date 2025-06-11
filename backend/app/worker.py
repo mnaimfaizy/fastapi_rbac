@@ -101,12 +101,9 @@ def process_account_lockout_task(user_id: str, lock_duration_hours: int = 24) ->
                 # Create a dict with the updates to use as obj_new
                 updates = {
                     "is_locked": True,
-                    "locked_until": datetime.utcnow()
-                    + timedelta(hours=lock_duration_hours),
+                    "locked_until": datetime.utcnow() + timedelta(hours=lock_duration_hours),
                 }
-                await crud.user.update(
-                    obj_current=user, obj_new=updates, db_session=db_session
-                )
+                await crud.user.update(obj_current=user, obj_new=updates, db_session=db_session)
             break
 
     asyncio.run(async_process_lockout(user_id, lock_duration_hours))

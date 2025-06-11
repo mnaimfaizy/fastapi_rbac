@@ -8,10 +8,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.crud.base_crud import CRUDBase
 from app.models.permission_group_model import PermissionGroup
-from app.schemas.permission_group_schema import (
-    IPermissionGroupCreate,
-    IPermissionGroupUpdate,
-)
+from app.schemas.permission_group_schema import IPermissionGroupCreate, IPermissionGroupUpdate
 from app.schemas.response_schema import IGetResponsePaginated
 
 
@@ -20,9 +17,7 @@ class PermissionGroupData(TypedDict):
     groups: list[PermissionGroup]
 
 
-class CRUDPermissionGroup(
-    CRUDBase[PermissionGroup, IPermissionGroupCreate, IPermissionGroupUpdate]
-):
+class CRUDPermissionGroup(CRUDBase[PermissionGroup, IPermissionGroupCreate, IPermissionGroupUpdate]):
     async def get_group_by_name(
         self, *, name: str, db_session: AsyncSession | None = None
     ) -> PermissionGroup | None:
@@ -59,13 +54,9 @@ class CRUDPermissionGroup(
         self, *, name: str, db_session: AsyncSession | None = None
     ) -> PermissionGroup | None:
         """Get a permission group by name."""
-        return await self.get_group_by_name(
-            name=name, db_session=db_session
-        )  # Delegates to existing method
+        return await self.get_group_by_name(name=name, db_session=db_session)  # Delegates to existing method
 
-    async def get(
-        self, *, id: UUID | str, db_session: AsyncSession | None = None
-    ) -> PermissionGroup | None:
+    async def get(self, *, id: UUID | str, db_session: AsyncSession | None = None) -> PermissionGroup | None:
         return await self.get_group_by_id(group_id=id, db_session=db_session)
 
     async def get_multi(

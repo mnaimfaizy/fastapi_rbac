@@ -52,7 +52,7 @@ def test_csrf_token_generation() -> Tuple[Optional[str], Optional[requests.Sessi
 
                 return csrf_token, session
             else:
-                print(f"❌ CSRF token generation failed: Invalid response format")
+                print("❌ CSRF token generation failed: Invalid response format")
                 return None, None
         else:
             print(f"❌ CSRF token generation failed: HTTP {response.status_code}")
@@ -188,11 +188,11 @@ def main() -> None:
         response = requests.get(f"{BASE_URL}/api/v1/health")
         if response.status_code != 200:
             print("❌ FastAPI server is not responding. Please start the server first.")
-            return sys.exit(1)
+            sys.exit(1)
         print("✅ FastAPI server is responding")
     except requests.ConnectionError:
         print("❌ Cannot connect to FastAPI server. Please start the server first.")
-        return sys.exit(1)
+        sys.exit(1)
 
     print("🚀 Starting CSRF Protection Implementation Tests")
     print("=" * 60)
@@ -201,7 +201,7 @@ def main() -> None:
     csrf_token, session = test_csrf_token_generation()
     if not csrf_token or not session:
         print("❌ Cannot proceed without CSRF token")
-        return sys.exit(1)
+        sys.exit(1)
 
     all_tests_passed = True
 
@@ -239,7 +239,7 @@ def main() -> None:
         print("❌ Some CSRF protection tests FAILED!")
         print("Please review the implementation and server logs")
 
-    return sys.exit(0 if all_tests_passed else 1)
+    sys.exit(0 if all_tests_passed else 1)
 
 
 if __name__ == "__main__":

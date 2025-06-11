@@ -50,8 +50,7 @@ def wait_for_database() -> None:
                 else:
                     # Build connection string manually
                     database_uri = (
-                        f"postgresql+psycopg2://{db_user}:{db_pass}"
-                        f"@{db_host}:{db_port}/{db_name}"
+                        f"postgresql+psycopg2://{db_user}:{db_pass}" f"@{db_host}:{db_port}/{db_name}"
                     )
             except ImportError:
                 # Try asyncpg driver if psycopg2 fails
@@ -62,27 +61,15 @@ def wait_for_database() -> None:
                         database_uri = str(settings.ASYNC_DATABASE_URI)
                     else:
                         # Fall back to direct PostgreSQL connection
-                        database_uri = (
-                            f"postgresql://{db_user}:{db_pass}"
-                            f"@{db_host}:{db_port}/{db_name}"
-                        )
+                        database_uri = f"postgresql://{db_user}:{db_pass}" f"@{db_host}:{db_port}/{db_name}"
                 except ImportError:
-                    logger.warning(
-                        "Neither psycopg2 nor asyncpg found, using default URI"
-                    )
+                    logger.warning("Neither psycopg2 nor asyncpg found, using default URI")
                     # Generic connection string as last resort
-                    database_uri = (
-                        f"postgresql://{db_user}:{db_pass}"
-                        f"@{db_host}:{db_port}/{db_name}"
-                    )
+                    database_uri = f"postgresql://{db_user}:{db_pass}" f"@{db_host}:{db_port}/{db_name}"
 
         # Mask password for logging
-        password_to_mask = (
-            settings.DATABASE_PASSWORD if settings.DATABASE_PASSWORD else ""
-        )
-        masked_uri = (
-            database_uri.replace(password_to_mask, "****") if database_uri else "None"
-        )
+        password_to_mask = settings.DATABASE_PASSWORD if settings.DATABASE_PASSWORD else ""
+        masked_uri = database_uri.replace(password_to_mask, "****") if database_uri else "None"
         logger.info(f"Connecting to database using URI: {masked_uri}")
 
         # Create engine and test connection
@@ -116,9 +103,7 @@ def wait_for_redis() -> None:
         # Get Redis connection details based on environment mode
         if settings.MODE == ModeEnum.development:
             redis_host = "localhost"  # Use local Redis for development
-            redis_port_str = str(
-                default_redis_port
-            )  # Ensure it's a string for consistency
+            redis_port_str = str(default_redis_port)  # Ensure it's a string for consistency
             redis_ssl = False
             logger.info("Development mode: Using local Redis without SSL.")
         elif settings.MODE == ModeEnum.testing:
@@ -133,17 +118,11 @@ def wait_for_redis() -> None:
             redis_port_str = os.getenv("REDIS_PORT", str(redis_port_from_settings))
             # In production, get SSL setting from environment or default to True
             redis_ssl = os.getenv("REDIS_SSL", "true").lower() == "true"
-            logger.info(
-                f"{settings.MODE.value} mode: Using configured Redis with SSL={redis_ssl}."
-            )
+            logger.info(f"{settings.MODE.value} mode: Using configured Redis with SSL={redis_ssl}.")
 
         # Convert port to int, with a default if None or invalid
         try:
-            redis_port = (
-                int(redis_port_str)
-                if redis_port_str is not None
-                else default_redis_port
-            )
+            redis_port = int(redis_port_str) if redis_port_str is not None else default_redis_port
         except (ValueError, TypeError):
             logger.warning(
                 f"Invalid REDIS_PORT value '{redis_port_str}'. Defaulting to {default_redis_port}."
@@ -167,12 +146,8 @@ def wait_for_redis() -> None:
 
             # For local development or when running outside container
             if not os.path.exists(base_cert_path):
-                base_cert_path = os.path.join(
-                    os.path.dirname(os.path.dirname(__file__)), "certs"
-                )
-                logger.info(
-                    f"Certificate path not found at {base_cert_path}, using local certs directory"
-                )
+                base_cert_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "certs")
+                logger.info(f"Certificate path not found at {base_cert_path}, using local certs directory")
 
             ssl_ca_certs = os.path.join(base_cert_path, "ca.crt")
             ssl_certfile = os.path.join(base_cert_path, "redis.crt")
@@ -180,23 +155,15 @@ def wait_for_redis() -> None:
 
             # Verify certificates exist
             if not os.path.exists(ssl_ca_certs):
-                logger.warning(
-                    f"CA certificate not found at {ssl_ca_certs}, SSL might not work properly"
-                )
+                logger.warning(f"CA certificate not found at {ssl_ca_certs}, SSL might not work properly")
             if not os.path.exists(ssl_certfile):
-                logger.warning(
-                    f"Certificate not found at {ssl_certfile}, SSL might not work properly"
-                )
+                logger.warning(f"Certificate not found at {ssl_certfile}, SSL might not work properly")
             if not os.path.exists(ssl_keyfile):
-                logger.warning(
-                    f"Key not found at {ssl_keyfile}, SSL might not work properly"
-                )
+                logger.warning(f"Key not found at {ssl_keyfile}, SSL might not work properly")
 
             logger.info(f"Using SSL certificates at {base_cert_path}")
 
-        logger.info(
-            f"Attempting to connect to Redis at {redis_host}:{redis_port} with SSL={redis_ssl}"
-        )
+        logger.info(f"Attempting to connect to Redis at {redis_host}:{redis_port} with SSL={redis_ssl}")
 
         # Create connection configuration based on whether SSL is enabled
         if redis_ssl:

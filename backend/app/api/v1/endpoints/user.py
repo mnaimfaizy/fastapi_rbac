@@ -25,9 +25,7 @@ router = APIRouter()
 @router.get("/list")
 async def read_users_list(
     params: Params = Depends(),
-    current_user: User = Depends(
-        deps.get_current_user(required_permissions=["users.read"])
-    ),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["users.read"])),
 ) -> IGetResponsePaginated[Any]:
     """
     Retrieve users. Requires admin or manager role
@@ -52,9 +50,7 @@ async def read_users_list(
 @router.get("/order_by_created_at")
 async def get_user_list_order_by_created_at(
     params: Params = Depends(),
-    current_user: User = Depends(
-        deps.get_current_user(required_permissions=["users.read"])
-    ),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["users.read"])),
 ) -> IGetResponsePaginated[Any]:
     """
     Gets a paginated list of users ordered by created datetime
@@ -63,9 +59,7 @@ async def get_user_list_order_by_created_at(
     - admin
     - manager
     """
-    users = await crud.user.get_multi_paginated_ordered(
-        params=params, order_by="created_at"
-    )
+    users = await crud.user.get_multi_paginated_ordered(params=params, order_by="created_at")
 
     # Convert to a response format that includes roles
     response_data = {
@@ -81,9 +75,7 @@ async def get_user_list_order_by_created_at(
 @router.get("/{user_id}")
 async def get_user_by_id(
     user: User = Depends(user_deps.is_valid_user),
-    current_user: User = Depends(
-        deps.get_current_user(required_permissions=["users.read"])
-    ),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["users.read"])),
 ) -> IGetResponseBase[IUserRead]:
     """
     Gets a user by his/her id
@@ -108,9 +100,7 @@ async def get_my_data(
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_user(
     new_user: IUserCreate = Depends(user_deps.user_exists),
-    current_user: User = Depends(
-        deps.get_current_user(required_permissions=["users.create"])
-    ),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["users.create"])),
 ) -> IPostResponseBase[IUserRead]:
     """
     Creates a new user
@@ -126,9 +116,7 @@ async def create_user(
 async def update_user(
     user_update: IUserUpdate,
     user: User = Depends(user_deps.is_valid_user),
-    current_user: User = Depends(
-        deps.get_current_user(required_permissions=["users.update"])
-    ),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["users.update"])),
 ) -> IPostResponseBase[IUserRead]:
     """
     Updates a user by id
@@ -139,9 +127,7 @@ async def update_user(
     # If password is being updated, use password history management
     if user_update.password:
         try:
-            await crud.user.update_password(
-                user=user, new_password=user_update.password
-            )
+            await crud.user.update_password(user=user, new_password=user_update.password)
             # Remove password from update data since it's already been handled
             user_update.password = None
         except ValueError as e:
@@ -150,9 +136,7 @@ async def update_user(
     # Update other fields if any
     if any(getattr(user_update, field) is not None for field in user_update.__fields__):
         updated_user = await crud.user.update(obj_current=user, obj_new=user_update)
-        return create_response(
-            data=serialize_user(updated_user), message="User updated successfully"
-        )
+        return create_response(data=serialize_user(updated_user), message="User updated successfully")
 
     return create_response(data=serialize_user(user), message="No changes to update")
 
@@ -160,9 +144,7 @@ async def update_user(
 @router.delete("/{user_id}")
 async def remove_user(
     user_id: UUID = Depends(user_deps.is_valid_user_id),
-    current_user: User = Depends(
-        deps.get_current_user(required_permissions=["users.delete"])
-    ),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["users.delete"])),
 ) -> IDeleteResponseBase[IUserRead]:
     """
     Deletes a user by his/her id

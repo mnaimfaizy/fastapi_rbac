@@ -28,9 +28,7 @@ async def test_create_permission(db: AsyncSession) -> None:
     name = f"test-permission-{random_lower_string(8)}"
     description = "Test Permission Description"
     # Create permission schema
-    permission_in = IPermissionCreate(
-        name=name, description=description, group_id=group.id
-    )
+    permission_in = IPermissionCreate(name=name, description=description, group_id=group.id)
     # Create permission in DB
     permission = await permission_crud.create(obj_in=permission_in, db_session=db)
     # Check that permission was created correctly
@@ -50,9 +48,7 @@ async def test_get_permission(db: AsyncSession) -> None:
 
     # Create a permission
     name = f"test-permission-{random_lower_string(8)}"
-    permission_in = IPermissionCreate(
-        name=name, description="Test Permission", group_id=group.id
-    )
+    permission_in = IPermissionCreate(name=name, description="Test Permission", group_id=group.id)
     permission = await permission_crud.create(obj_in=permission_in, db_session=db)
     # Get the permission by ID
     stored_permission = await permission_crud.get(id=permission.id, db_session=db)
@@ -74,14 +70,10 @@ async def test_get_permission_by_name(db: AsyncSession) -> None:
 
     # Create a permission
     name = f"test-permission-{random_lower_string(8)}"
-    permission_in = IPermissionCreate(
-        name=name, description="Test Permission", group_id=group.id
-    )
+    permission_in = IPermissionCreate(name=name, description="Test Permission", group_id=group.id)
     permission = await permission_crud.create(obj_in=permission_in, db_session=db)
     # Get the permission by name
-    stored_permission = await permission_crud.get_permission_by_name(
-        name=name, db_session=db
-    )
+    stored_permission = await permission_crud.get_permission_by_name(name=name, db_session=db)
     # Check that the retrieved permission matches
     assert stored_permission
     assert stored_permission.id == permission.id
@@ -99,9 +91,7 @@ async def test_permission_exists(db: AsyncSession) -> None:
 
     # Create a permission
     name = f"test-permission-{random_lower_string(8)}"
-    permission_in = IPermissionCreate(
-        name=name, description="Test Permission", group_id=group.id
-    )
+    permission_in = IPermissionCreate(name=name, description="Test Permission", group_id=group.id)
     await permission_crud.create(obj_in=permission_in, db_session=db)
 
     # Check that the permission exists
@@ -110,9 +100,7 @@ async def test_permission_exists(db: AsyncSession) -> None:
 
     # Check that a non-existent permission does not exist
     non_existent_name = f"non-existent-{random_lower_string(8)}"
-    exists = await permission_crud.permission_exists(
-        name=non_existent_name, db_session=db
-    )
+    exists = await permission_crud.permission_exists(name=non_existent_name, db_session=db)
     assert exists is False
 
 
@@ -126,15 +114,11 @@ async def test_get_permission_by_id(db: AsyncSession) -> None:
 
     # Create a permission
     name = f"test-permission-{random_lower_string(8)}"
-    permission_in = IPermissionCreate(
-        name=name, description="Test Permission", group_id=group.id
-    )
+    permission_in = IPermissionCreate(name=name, description="Test Permission", group_id=group.id)
     permission = await permission_crud.create(obj_in=permission_in, db_session=db)
 
     # Get the permission by ID with relationships
-    stored_permission = await permission_crud.get_permission_by_id(
-        permission_id=permission.id, db_session=db
-    )
+    stored_permission = await permission_crud.get_permission_by_id(permission_id=permission.id, db_session=db)
 
     # Check that the retrieved permission matches and relationships are loaded
     assert stored_permission
@@ -155,9 +139,7 @@ async def test_update_permission(db: AsyncSession) -> None:
 
     # Create a permission
     name = f"test-permission-{random_lower_string(8)}"
-    permission_in = IPermissionCreate(
-        name=name, description="Original Description", group_id=group.id
-    )
+    permission_in = IPermissionCreate(name=name, description="Original Description", group_id=group.id)
     permission = await permission_crud.create(obj_in=permission_in, db_session=db)
     # Update the permission description
     new_description = "Updated Description"
@@ -181,9 +163,7 @@ async def test_update_permission_name(db: AsyncSession) -> None:
 
     # Create a permission
     name = f"test-permission-{random_lower_string(8)}"
-    permission_in = IPermissionCreate(
-        name=name, description="Test Permission", group_id=group.id
-    )
+    permission_in = IPermissionCreate(name=name, description="Test Permission", group_id=group.id)
     permission = await permission_crud.create(obj_in=permission_in, db_session=db)
     # Update the permission name
     new_name = f"updated-permission-{random_lower_string(8)}"
@@ -196,9 +176,7 @@ async def test_update_permission_name(db: AsyncSession) -> None:
     assert updated_permission.name == new_name
     assert updated_permission.description == permission.description
     # Verify the update by getting the permission with the new name
-    stored_permission = await permission_crud.get_permission_by_name(
-        name=new_name, db_session=db
-    )
+    stored_permission = await permission_crud.get_permission_by_name(name=new_name, db_session=db)
     assert stored_permission
     assert stored_permission.id == permission.id
 
@@ -263,16 +241,12 @@ async def test_get_permissions_by_group(db: AsyncSession) -> None:
         await permission_crud.create(obj_in=permission_in, db_session=db)
 
     # Get permissions for group 1
-    group1_permissions = await permission_crud.get_permissions_by_group(
-        group_id=group1.id, db_session=db
-    )
+    group1_permissions = await permission_crud.get_permissions_by_group(group_id=group1.id, db_session=db)
     # Check that we got the right number of permissions
     assert len(group1_permissions) == 3
 
     # Get permissions for group 2
-    group2_permissions = await permission_crud.get_permissions_by_group(
-        group_id=group2.id, db_session=db
-    )
+    group2_permissions = await permission_crud.get_permissions_by_group(group_id=group2.id, db_session=db)
     # Check that we got the right number of permissions
     assert len(group2_permissions) == 5
 
@@ -323,9 +297,7 @@ async def test_search_permissions(db: AsyncSession) -> None:
         await permission_crud.create(obj_in=permission_in, db_session=db)
 
     # Search permissions with the unique term
-    search_results = await permission_crud.search_permissions(
-        search_term=unique_term, db_session=db
-    )
+    search_results = await permission_crud.search_permissions(search_term=unique_term, db_session=db)
 
     # Should find 5 permissions (3 in name + 2 in description)
     assert len(search_results) == 5
@@ -347,9 +319,7 @@ async def test_delete_permission(db: AsyncSession) -> None:
 
     # Create a permission
     name = f"test-permission-{random_lower_string(8)}"
-    permission_in = IPermissionCreate(
-        name=name, description="Test Permission", group_id=group.id
-    )
+    permission_in = IPermissionCreate(name=name, description="Test Permission", group_id=group.id)
     permission = await permission_crud.create(obj_in=permission_in, db_session=db)
     # Delete the permission
     deleted_permission = await permission_crud.remove(id=permission.id, db_session=db)
@@ -514,9 +484,7 @@ async def test_create_bulk_permissions(db: AsyncSession) -> None:
     ]
 
     # Create permissions in bulk
-    created_permissions = await permission_crud.create_bulk(
-        obj_in_list=permission_schemas, db_session=db
-    )
+    created_permissions = await permission_crud.create_bulk(obj_in_list=permission_schemas, db_session=db)
 
     # Check that all permissions were created
     assert len(created_permissions) == 5

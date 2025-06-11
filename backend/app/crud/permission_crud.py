@@ -30,9 +30,7 @@ class CRUDPermission(CRUDBase[Permission, IPermissionCreate, IPermissionUpdate])
         result = await db_session.execute(stmt)
         return result.unique().scalar_one_or_none()
 
-    async def get_by_name(
-        self, *, name: str, db_session: AsyncSession | None = None
-    ) -> Permission | None:
+    async def get_by_name(self, *, name: str, db_session: AsyncSession | None = None) -> Permission | None:
         """Alias for get_permission_by_name."""
         return await self.get_permission_by_name(name=name, db_session=db_session)
 
@@ -82,12 +80,7 @@ class CRUDPermission(CRUDBase[Permission, IPermissionCreate, IPermissionUpdate])
             List of permissions belonging to the specified group
         """
         db_session = db_session or super().get_db().session
-        stmt = (
-            select(Permission)
-            .where(Permission.group_id == group_id)
-            .offset(skip)
-            .limit(limit)
-        )
+        stmt = select(Permission).where(Permission.group_id == group_id).offset(skip).limit(limit)
         result = await db_session.execute(stmt)
         return list(result.unique().scalars().all())
 
@@ -118,11 +111,7 @@ class CRUDPermission(CRUDBase[Permission, IPermissionCreate, IPermissionUpdate])
             .where(
                 or_(
                     Permission.name.ilike(search),
-                    (
-                        Permission.description.ilike(search)
-                        if Permission.description
-                        else False
-                    ),
+                    (Permission.description.ilike(search) if Permission.description else False),
                 )
             )
             .offset(skip)
@@ -131,9 +120,7 @@ class CRUDPermission(CRUDBase[Permission, IPermissionCreate, IPermissionUpdate])
         result = await db_session.execute(stmt)
         return list(result.unique().scalars().all())
 
-    async def permission_exists(
-        self, *, name: str, db_session: AsyncSession | None = None
-    ) -> bool:
+    async def permission_exists(self, *, name: str, db_session: AsyncSession | None = None) -> bool:
         """
         Check if a permission with the given name already exists.
 
@@ -231,8 +218,7 @@ class CRUDPermission(CRUDBase[Permission, IPermissionCreate, IPermissionUpdate])
 
         # Create all role_permission objects
         role_permissions = [
-            RolePermission(role_id=role_id, permission_id=permission_id)
-            for permission_id in permissions
+            RolePermission(role_id=role_id, permission_id=permission_id) for permission_id in permissions
         ]
 
         try:
@@ -292,9 +278,7 @@ class CRUDPermission(CRUDBase[Permission, IPermissionCreate, IPermissionUpdate])
             True if the permission is in use by at least one role, False otherwise.
         """
         db_session = db_session or super().get_db().session
-        stmt = select(func.count(RolePermission.role_id)).where(
-            RolePermission.permission_id == permission_id
-        )
+        stmt = select(func.count(RolePermission.role_id)).where(RolePermission.permission_id == permission_id)
         result = await db_session.execute(stmt)
         count = result.scalar_one()
         return count > 0

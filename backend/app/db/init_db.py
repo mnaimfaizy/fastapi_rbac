@@ -247,21 +247,13 @@ async def get_or_create_superuser(db_session: AsyncSession) -> UserModel:
     user = await crud.user.get_by_email(email=SUPERUSER_EMAIL, db_session=db_session)
     if not user:
         superuser_data_entry = next(
-            (
-                u["user_data"]
-                for u in INITIAL_USERS_DATA
-                if u["user_data"].email == SUPERUSER_EMAIL
-            ),
+            (u["user_data"] for u in INITIAL_USERS_DATA if u["user_data"].email == SUPERUSER_EMAIL),
             None,
         )
         if not superuser_data_entry:
-            raise Exception(
-                f"Superuser email {SUPERUSER_EMAIL} not found in INITIAL_USERS_DATA."
-            )
+            raise Exception(f"Superuser email {SUPERUSER_EMAIL} not found in INITIAL_USERS_DATA.")
 
-        user = await crud.user.create(
-            obj_in=superuser_data_entry, db_session=db_session
-        )
+        user = await crud.user.create(obj_in=superuser_data_entry, db_session=db_session)
         if not user:
             raise Exception(f"Could not create superuser {SUPERUSER_EMAIL}")
     return user
@@ -273,24 +265,18 @@ async def init_db(db_session: AsyncSession) -> None:
 
     created_permission_groups: Dict[str, PermissionGroupModel] = {}
     for pg_data in INITIAL_PERMISSION_GROUPS:
-        pg_obj = await crud.permission_group.get_by_name(
-            name=pg_data["name"], db_session=db_session
-        )
+        pg_obj = await crud.permission_group.get_by_name(name=pg_data["name"], db_session=db_session)
         if not pg_obj:
             pg_create_schema = IPermissionGroupCreate(
                 name=pg_data["name"],
                 description=pg_data["description"],
                 created_by_id=admin_user_id,
             )
-            pg_obj = await crud.permission_group.create(
-                obj_in=pg_create_schema, db_session=db_session
-            )
+            pg_obj = await crud.permission_group.create(obj_in=pg_create_schema, db_session=db_session)
         if pg_obj:
             created_permission_groups[pg_data["name"]] = pg_obj
         else:
-            print(
-                f"Warning: Could not create/retrieve permission group {pg_data['name']}"
-            )
+            print(f"Warning: Could not create/retrieve permission group {pg_data['name']}")
 
     created_permissions: Dict[str, PermissionModel] = {}
     for perm_data in INITIAL_PERMISSIONS:
@@ -306,46 +292,32 @@ async def init_db(db_session: AsyncSession) -> None:
             continue
 
         # Format the permission name using the utility function
-        formatted_permission_name = format_permission_name(
-            action_name, permission_group_obj.name
-        )
+        formatted_permission_name = format_permission_name(action_name, permission_group_obj.name)
 
-        perm_obj = await crud.permission.get_by_name(
-            name=formatted_permission_name, db_session=db_session
-        )
+        perm_obj = await crud.permission.get_by_name(name=formatted_permission_name, db_session=db_session)
         if not perm_obj:
             perm_create_schema = IPermissionCreate(
                 name=formatted_permission_name,
                 description=perm_data["description"],
                 group_id=permission_group_obj.id,
             )
-            perm_obj = await crud.permission.create(
-                obj_in=perm_create_schema, db_session=db_session
-            )
+            perm_obj = await crud.permission.create(obj_in=perm_create_schema, db_session=db_session)
 
         if perm_obj:
-            created_permissions[formatted_permission_name] = (
-                perm_obj  # Use formatted name as key
-            )
+            created_permissions[formatted_permission_name] = perm_obj  # Use formatted name as key
         else:
-            print(
-                f"Warning: Could not create/retrieve permission {formatted_permission_name}"
-            )
+            print(f"Warning: Could not create/retrieve permission {formatted_permission_name}")
 
     created_role_groups: Dict[str, RoleGroupModel] = {}
     for rg_data in INITIAL_ROLE_GROUPS:
-        rg_obj = await crud.role_group.get_by_name(
-            name=rg_data["name"], db_session=db_session
-        )
+        rg_obj = await crud.role_group.get_by_name(name=rg_data["name"], db_session=db_session)
         if not rg_obj:
             rg_create_schema = IRoleGroupCreate(
                 name=rg_data["name"],
                 description=rg_data["description"],
                 created_by_id=admin_user_id,
             )
-            rg_obj = await crud.role_group.create(
-                obj_in=rg_create_schema, db_session=db_session
-            )
+            rg_obj = await crud.role_group.create(obj_in=rg_create_schema, db_session=db_session)
         if rg_obj:
             created_role_groups[rg_data["name"]] = rg_obj
         else:
@@ -353,16 +325,12 @@ async def init_db(db_session: AsyncSession) -> None:
 
     created_roles: Dict[str, RoleModel] = {}
     for role_data in INITIAL_ROLES:
-        role_obj = await crud.role.get_role_by_name(
-            name=role_data["name"], db_session=db_session
-        )
+        role_obj = await crud.role.get_role_by_name(name=role_data["name"], db_session=db_session)
         if not role_obj:
             role_group_name = role_data["group_name"]
             role_group = created_role_groups.get(role_group_name)
             if not role_group:
-                print(
-                    f"Warning: RG '{role_group_name}' not found for role '{role_data['name']}'. Skip."
-                )
+                print(f"Warning: RG '{role_group_name}' not found for role '{role_data['name']}'. Skip.")
                 continue
 
             permission_ids_for_role: List[UUID] = []
@@ -371,9 +339,7 @@ async def init_db(db_session: AsyncSession) -> None:
                 if permission:
                     permission_ids_for_role.append(permission.id)
                 else:
-                    print(
-                        f"Warning: Perm '{perm_name}' not found for role '{role_data['name']}'. Skip."
-                    )
+                    print(f"Warning: Perm '{perm_name}' not found for role '{role_data['name']}'. Skip.")
 
             role_create_schema = IRoleCreate(
                 name=role_data["name"],
@@ -381,9 +347,7 @@ async def init_db(db_session: AsyncSession) -> None:
                 role_group_id=role_group.id,
                 permissions=permission_ids_for_role,
             )
-            role_obj = await crud.role.create(
-                obj_in=role_create_schema, db_session=db_session
-            )
+            role_obj = await crud.role.create(obj_in=role_create_schema, db_session=db_session)
         if role_obj:
             created_roles[role_data["name"]] = role_obj
         else:
@@ -391,20 +355,14 @@ async def init_db(db_session: AsyncSession) -> None:
 
     for user_entry in INITIAL_USERS_DATA:
         user_data_schema = user_entry["user_data"]
-        user_obj = await crud.user.get_by_email(
-            email=user_data_schema.email, db_session=db_session
-        )
+        user_obj = await crud.user.get_by_email(email=user_data_schema.email, db_session=db_session)
 
         if not user_obj:
             if user_data_schema.email != SUPERUSER_EMAIL:  # Superuser already handled
-                user_obj = await crud.user.create(
-                    obj_in=user_data_schema, db_session=db_session
-                )
+                user_obj = await crud.user.create(obj_in=user_data_schema, db_session=db_session)
 
         if not user_obj:
-            print(
-                f"Warning: User {user_data_schema.email} not found/created. Skip role assignment."
-            )
+            print(f"Warning: User {user_data_schema.email} not found/created. Skip role assignment.")
             continue
 
         role_names_for_user = user_entry["role_names"]
@@ -415,9 +373,7 @@ async def init_db(db_session: AsyncSession) -> None:
             if role_to_assign:
                 role_ids_to_assign.append(role_to_assign.id)
             else:
-                print(
-                    f"Warning: Role '{role_name}' not found for user '{user_obj.email}'. Skip role."
-                )
+                print(f"Warning: Role '{role_name}' not found for user '{user_obj.email}'. Skip role.")
 
         if role_ids_to_assign:
             try:

@@ -170,9 +170,7 @@ class MockRedisClient:
         return (0, filtered_keys[:count])
 
     # Pipeline operations
-    def _add_pipeline_command(
-        self, command: str, *args: Any, **kwargs: Any
-    ) -> "MockRedisClient":
+    def _add_pipeline_command(self, command: str, *args: Any, **kwargs: Any) -> "MockRedisClient":
         """Add a command to the pipeline."""
         self._pipeline_commands.append((command, args, kwargs))
         return self

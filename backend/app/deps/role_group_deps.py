@@ -7,21 +7,14 @@ from typing_extensions import Annotated
 from app import crud
 from app.api.deps import get_async_db
 from app.models.role_group_model import RoleGroup
-from app.utils.exceptions.common_exception import (
-    IdNotFoundException,
-    NameNotFoundException,
-)
+from app.utils.exceptions.common_exception import IdNotFoundException, NameNotFoundException
 
 
 async def get_group_by_name(
-    group_name: Annotated[
-        str, Query(description="String compare with role group name")
-    ] = "",
+    group_name: Annotated[str, Query(description="String compare with role group name")] = "",
     db_session: AsyncSession = Depends(get_async_db),
 ) -> str:
-    group = await crud.role_group.get_group_by_name(
-        name=group_name, db_session=db_session
-    )
+    group = await crud.role_group.get_group_by_name(name=group_name, db_session=db_session)
     if not group:
         raise NameNotFoundException(RoleGroup, name=group_name)
     return group

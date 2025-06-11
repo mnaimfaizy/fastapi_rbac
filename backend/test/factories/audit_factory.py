@@ -24,12 +24,8 @@ class AuditLogFactory(SQLAlchemyModelFactory):
 
     id = factory.LazyFunction(uuid7)
     user_id = factory.LazyFunction(uuid7)  # Default to random UUID
-    action = factory.Faker(
-        "word", ext_word_list=["create", "read", "update", "delete", "login", "logout"]
-    )
-    resource_type = factory.Faker(
-        "word", ext_word_list=["user", "role", "permission", "group"]
-    )
+    action = factory.Faker("word", ext_word_list=["create", "read", "update", "delete", "login", "logout"])
+    resource_type = factory.Faker("word", ext_word_list=["user", "role", "permission", "group"])
     resource_id = factory.LazyFunction(uuid7)
     timestamp = factory.LazyFunction(lambda: datetime.now(timezone.utc))
     ip_address = factory.Faker("ipv4")
@@ -58,15 +54,11 @@ class AuditLogFactory(SQLAlchemyModelFactory):
         return json.dumps(details)
 
     @classmethod
-    def for_user(
-        cls: Type["AuditLogFactory"], user_id: UUID, **kwargs: Any
-    ) -> "AuditLogFactory":
+    def for_user(cls: Type["AuditLogFactory"], user_id: UUID, **kwargs: Any) -> "AuditLogFactory":
         """Create an audit log entry for a specific user."""
         return cls(user_id=user_id, **kwargs)
 
     @classmethod
-    def for_action(
-        cls: Type["AuditLogFactory"], action_type: str, **kwargs: Any
-    ) -> "AuditLogFactory":
+    def for_action(cls: Type["AuditLogFactory"], action_type: str, **kwargs: Any) -> "AuditLogFactory":
         """Create an audit log entry for a specific action type."""
         return cls(action=action_type, **kwargs)

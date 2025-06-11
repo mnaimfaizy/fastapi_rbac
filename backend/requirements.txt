@@ -139,3 +139,4 @@ wcwidth==0.2.13
 websockets==15.0.1
 zxcvbn==4.5.0
 types-requests==2.32.4.20250611
+types-bleach==6.2.0.20250514

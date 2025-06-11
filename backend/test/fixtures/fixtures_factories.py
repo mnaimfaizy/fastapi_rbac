@@ -25,10 +25,7 @@ FactoryCallable = Callable[..., Any]
 
 class HeadersCallable(Protocol):
     def __call__(
-        self,
-        user_id: Optional[str] = None,
-        is_superuser: bool = False,
-        **token_kwargs: Any
+        self, user_id: Optional[str] = None, is_superuser: bool = False, **token_kwargs: Any
     ) -> Dict[str, str]: ...
 
 
@@ -118,9 +115,7 @@ async def make_role_with_permissions(db_factories: None) -> FactoryCallable:
         permissions: Optional[List[Any]] = None, count: int = 2, **kwargs: Any
     ) -> Any:
         """Create and return a Role instance with permissions."""
-        return RoleFactory.with_permissions(
-            permissions=permissions, count=count, **kwargs
-        )
+        return RoleFactory.with_permissions(permissions=permissions, count=count, **kwargs)
 
     return _make_role_with_permissions
 
@@ -167,8 +162,6 @@ def auth_headers() -> HeadersCallable:
         user_id: Optional[str] = None, is_superuser: bool = False, **token_kwargs: Any
     ) -> Dict[str, str]:
         """Create and return authentication headers."""
-        return TokenFactory.create_auth_headers(
-            user_id=user_id, is_superuser=is_superuser, **token_kwargs
-        )
+        return TokenFactory.create_auth_headers(user_id=user_id, is_superuser=is_superuser, **token_kwargs)
 
     return _make_headers

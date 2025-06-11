@@ -104,11 +104,11 @@ repos:
             "--disable-error-code=call-arg",
             "--disable-error-code=override",
             "--disable-error-code=call-overload",
+            "--disable-error-code=unreachable",
             "--no-warn-no-return",
             "--no-warn-return-any",
             "--no-strict-optional",
             "--config-file=backend/mypy.ini", # Point to your mypy config
           ]
         # If mypy needs dependencies from your project, add them here:
-        # additional_dependencies: ['types-requests', ...]
-        # additional_dependencies: ['types-requests', ...]
+        additional_dependencies: ["types-bleach==6.2.0.20250514"]

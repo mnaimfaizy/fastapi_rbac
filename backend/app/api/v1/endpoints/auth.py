@@ -6,6 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
+from fastapi_csrf_protect import CsrfProtect
 from jwt import DecodeError, ExpiredSignatureError, MissingRequiredClaimError
 from pydantic import EmailStr
 from redis.asyncio import Redis as AsyncRedis
@@ -64,9 +65,7 @@ async def login(
     """
     Login for all users
     """
-    ip_address = (
-        request.client.host if request.client else "Unknown"
-    )  # Sanitize inputs for security
+    ip_address = request.client.host if request.client else "Unknown"  # Sanitize inputs for security
     try:
         sanitized_email = sanitizer.sanitize(str(email), "email")
         # Password should not be sanitized as it needs to remain exactly as entered
@@ -83,15 +82,11 @@ async def login(
             event_type="login_input_sanitization_failed",
             details={
                 "error": str(e),
-                "email": (
-                    str(email)[:50] + "..." if len(str(email)) > 50 else str(email)
-                ),
+                "email": (str(email)[:50] + "..." if len(str(email)) > 50 else str(email)),
                 "ip_address": ip_address,
             },
         )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid input format"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid input format")
 
     try:
         # Get user record - use sanitized email
@@ -157,8 +152,7 @@ async def login(
             lock_message = "Account is locked due to multiple failed login attempts. "
             if remaining_hours > 0:
                 lock_message += (
-                    f"Try again in {int(remaining_hours)} hours and "
-                    f"{int(remaining_minutes)} minutes."
+                    f"Try again in {int(remaining_hours)} hours and " f"{int(remaining_minutes)} minutes."
                 )
             else:
                 lock_message += f"Try again in {int(remaining_minutes)} minutes."
@@ -177,14 +171,10 @@ async def login(
 
         # Show warning one attempt before lockout
         if max_login_attempts > 1 and attempts_count == max_login_attempts - 1:
-            warning_message = (
-                "Warning: This is your last attempt before account lockout."
-            )
+            warning_message = "Warning: This is your last attempt before account lockout."
 
         try:
-            authenticated_user = await crud.user.authenticate(
-                email=email, password=password
-            )
+            authenticated_user = await crud.user.authenticate(email=email, password=password)
         except Exception as e:
             background_tasks.add_task(
                 log_security_event,
@@ -239,34 +229,23 @@ async def login(
                     await process_account_lockout(
                         background_tasks=background_tasks,
                         user=updated_user,
-                        lock_duration_hours=int(
-                            lockout_duration_in_hours
-                        ),  # Cast to int
+                        lock_duration_hours=int(lockout_duration_in_hours),  # Cast to int
                     )
-                    if (
-                        updated_user.locked_until
-                    ):  # Re-check after process_account_lockout
+                    if updated_user.locked_until:  # Re-check after process_account_lockout
                         remaining_time = updated_user.locked_until - datetime.utcnow()
                         remaining_hours = remaining_time.total_seconds() // 3600
-                        remaining_minutes = (
-                            remaining_time.total_seconds() % 3600
-                        ) // 60
-                        lock_message = (
-                            "Account locked due to too many failed attempts. "
-                        )
+                        remaining_minutes = (remaining_time.total_seconds() % 3600) // 60
+                        lock_message = "Account locked due to too many failed attempts. "
                         if remaining_hours > 0:
                             lock_message += (
                                 f"Try again in {int(remaining_hours)} hours and "
                                 f"{int(remaining_minutes)} minutes."
                             )
                         else:
-                            lock_message += (
-                                f"Try again in {int(remaining_minutes)} minutes."
-                            )
+                            lock_message += f"Try again in {int(remaining_minutes)} minutes."
                     else:  # Should have locked_until if is_locked
                         lock_message = (
-                            "Account locked due to too many failed attempts. "
-                            "Please contact support."
+                            "Account locked due to too many failed attempts. " "Please contact support."
                         )
                     raise HTTPException(
                         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -278,9 +257,7 @@ async def login(
                 else:
                     failed_attempts = updated_user.number_of_failed_attempts or 0
                     max_login_attempts = (
-                        settings.MAX_LOGIN_ATTEMPTS
-                        if hasattr(settings, "MAX_LOGIN_ATTEMPTS")
-                        else 3
+                        settings.MAX_LOGIN_ATTEMPTS if hasattr(settings, "MAX_LOGIN_ATTEMPTS") else 3
                     )
                     attempts_left = max_login_attempts - failed_attempts
                     message = "Username or password is incorrect"
@@ -291,10 +268,7 @@ async def login(
                             "Account will be locked after the next failed attempt."
                         )
                     elif attempts_left > 0:
-                        message = (
-                            f"{message}. {attempts_left} attempts remaining before "
-                            "account lockout."
-                        )
+                        message = f"{message}. {attempts_left} attempts remaining before " "account lockout."
                     # If attempts_left is 0 or less, it means account should be locked.
                     # This is handled by the is_locked check above after process_account_lockout
                     # or if MAX_LOGIN_ATTEMPTS is reached and crud.user.authenticate handles locking.
@@ -352,12 +326,8 @@ async def login(
             )
 
         try:
-            access_token_expires = timedelta(
-                minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
-            )
-            refresh_token_expires = timedelta(
-                minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES
-            )
+            access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+            refresh_token_expires = timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES)
             access_token = security.create_access_token(
                 authenticated_user.id,
                 authenticated_user.email,
@@ -464,9 +434,7 @@ async def register(
                     "password_length": len(user_in.password),
                 },
             )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Password too long"
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password too long")
 
         # Sanitize name fields
         sanitized_first_name = sanitizer.sanitize(user_in.first_name, "text")
@@ -484,9 +452,7 @@ async def register(
             event_type="registration_input_sanitization_failed",
             details={"error": str(e), "ip_address": ip_address},
         )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid input data"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid input data")
 
     try:
         # Use specific settings for registration rate limits if they exist
@@ -527,10 +493,7 @@ async def register(
             )
 
         email_domain = user_in.email.split("@")[1].lower()
-        if (
-            settings.EMAIL_DOMAIN_BLACKLIST
-            and email_domain in settings.EMAIL_DOMAIN_BLACKLIST
-        ):
+        if settings.EMAIL_DOMAIN_BLACKLIST and email_domain in settings.EMAIL_DOMAIN_BLACKLIST:
             background_tasks.add_task(
                 log_security_event,
                 background_tasks=background_tasks,
@@ -546,10 +509,7 @@ async def register(
                 detail="This email domain is not allowed for registration.",
             )
 
-        if (
-            settings.EMAIL_DOMAIN_ALLOWLIST
-            and email_domain not in settings.EMAIL_DOMAIN_ALLOWLIST
-        ):
+        if settings.EMAIL_DOMAIN_ALLOWLIST and email_domain not in settings.EMAIL_DOMAIN_ALLOWLIST:
             background_tasks.add_task(
                 log_security_event,
                 background_tasks=background_tasks,
@@ -603,9 +563,7 @@ async def register(
 
         # Create user with retry on conflict
         try:
-            new_user = await crud.user.create(
-                obj_in=user_create
-            )  # Renamed to new_user for clarity
+            new_user = await crud.user.create(obj_in=user_create)  # Renamed to new_user for clarity
         except Exception as e:
             background_tasks.add_task(
                 log_security_event,
@@ -667,13 +625,9 @@ async def register(
 
         # Implement rate limiting
         await redis_client.incr(ip_rate_limit_key)
-        await redis_client.expire(
-            ip_rate_limit_key, rate_limit_period
-        )  # Use the defined variable
+        await redis_client.expire(ip_rate_limit_key, rate_limit_period)  # Use the defined variable
         await redis_client.incr(email_rate_limit_key)
-        await redis_client.expire(
-            email_rate_limit_key, rate_limit_period
-        )  # Use the defined variable
+        await redis_client.expire(email_rate_limit_key, rate_limit_period)  # Use the defined variable
 
         # Schedule cleanup of unverified accounts
         background_tasks.add_task(
@@ -746,9 +700,7 @@ async def verify_email(
             event_type="verify_email_input_sanitization_failed",
             details={"error": str(e), "ip_address": ip_address},
         )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid input data"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid input data")
 
     try:
         # First validate the token structure and signature
@@ -788,9 +740,7 @@ async def verify_email(
                 event_type="verify_email_token_missing_sub",
                 details={"token_used": body.token, "ip_address": ip_address},
             )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token payload."
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token payload.")
 
         user = await crud.user.get_by_email(email=str(email_from_token_str))
 
@@ -913,11 +863,7 @@ async def verify_email(
                 "Unexpected error in verify_email for IP %s, Token Sub: %s"
                 % (
                     ip_address,
-                    (
-                        email_from_token_str
-                        if "email_from_token_str" in locals()
-                        else "N/A"
-                    ),
+                    (email_from_token_str if "email_from_token_str" in locals() else "N/A"),
                 )
             ),
             exc_info=True,
@@ -929,11 +875,7 @@ async def verify_email(
             details={
                 "error": str(e),
                 "ip_address": ip_address,
-                "token_subject": (
-                    email_from_token_str
-                    if "email_from_token_str" in locals()
-                    else "N/A"
-                ),
+                "token_subject": (email_from_token_str if "email_from_token_str" in locals() else "N/A"),
             },  # Log token if available
         )
         raise HTTPException(
@@ -970,9 +912,7 @@ async def resend_verification_email(
             else 3600
         )
 
-        rate_limit_key = (
-            f"resend_verification_rate_limit:{email_to_verify}:{ip_address}"
-        )
+        rate_limit_key = f"resend_verification_rate_limit:{email_to_verify}:{ip_address}"
         attempts_raw = await redis_client.get(rate_limit_key)
         attempts = int(attempts_raw) if attempts_raw else 0
 
@@ -1123,9 +1063,7 @@ async def change_password(
         if current_user.password is None:
             # This case should ideally not happen if password is a required field
             # and properly managed. Logging it as a server-side issue.
-            logger.error(
-                f"User {current_user.email} (ID: {current_user.id}) has no password set."
-            )
+            logger.error(f"User {current_user.email} (ID: {current_user.id}) has no password set.")
             background_tasks.add_task(
                 log_security_event,
                 background_tasks=background_tasks,
@@ -1138,9 +1076,7 @@ async def change_password(
                 detail="An internal error occurred. Please try again later.",
             )
 
-        if not PasswordValidator.verify_password(
-            current_password, current_user.password
-        ):
+        if not PasswordValidator.verify_password(current_password, current_user.password):
             background_tasks.add_task(
                 log_security_event,
                 background_tasks=background_tasks,
@@ -1239,9 +1175,7 @@ async def change_password(
         access_token = security.create_access_token(
             current_user.id, current_user.email, expires_delta=access_token_expires
         )
-        refresh_token = security.create_refresh_token(
-            current_user.id, expires_delta=refresh_token_expires
-        )
+        refresh_token = security.create_refresh_token(current_user.id, expires_delta=refresh_token_expires)
 
         # Serialize the updated user to IUserRead for the Token response
         user_payload_for_token = serialize_user(current_user)
@@ -1309,9 +1243,7 @@ async def change_password(
             event_type="password_change_unexpected_error",
             user_id=current_user.id,  # Ensure current_user is valid
             details={
-                "email": (
-                    current_user.email if current_user else "N/A"
-                ),  # Add a check for current_user
+                "email": (current_user.email if current_user else "N/A"),  # Add a check for current_user
                 "error": str(e),
                 "ip_address": ip_address,
             },
@@ -1389,9 +1321,7 @@ async def get_new_access_token(
 
         if payload["type"] == "refresh":
             user_id_from_token = payload["sub"]
-            valid_refresh_tokens = await get_valid_tokens(
-                redis_client, user_id_from_token, TokenType.REFRESH
-            )
+            valid_refresh_tokens = await get_valid_tokens(redis_client, user_id_from_token, TokenType.REFRESH)
             if valid_refresh_tokens and body.refresh_token not in valid_refresh_tokens:
                 background_tasks.add_task(
                     log_security_event,
@@ -1404,9 +1334,7 @@ async def get_new_access_token(
                     detail={"status": False, "message": "Refresh token invalid"},
                 )
 
-            access_token_expires = timedelta(
-                minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
-            )
+            access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
             user: User | None = None
             try:
                 user_uuid = UUID(user_id_from_token)
@@ -1435,12 +1363,8 @@ async def get_new_access_token(
                 # It's debatable whether to add the new access token to redis
                 # if only refresh tokens are strictly managed this way.
                 # The existing code had this logic, so keeping it.
-                valid_access_tokens = await get_valid_tokens(
-                    redis_client, user.id, TokenType.ACCESS
-                )
-                if (
-                    valid_access_tokens is not None
-                ):  # Check if Redis list exists (even if empty)
+                valid_access_tokens = await get_valid_tokens(redis_client, user.id, TokenType.ACCESS)
+                if valid_access_tokens is not None:  # Check if Redis list exists (even if empty)
                     await add_token_to_redis(
                         redis_client,
                         user,
@@ -1549,11 +1473,7 @@ async def login_access_token(
         )
 
     # Check for locked account before attempting authentication
-    if (
-        user_record.is_locked
-        and user_record.locked_until
-        and user_record.locked_until > datetime.utcnow()
-    ):
+    if user_record.is_locked and user_record.locked_until and user_record.locked_until > datetime.utcnow():
         # Calculate remaining lock time
         remaining_time = user_record.locked_until - datetime.utcnow()
         remaining_hours = remaining_time.total_seconds() // 3600
@@ -1574,8 +1494,7 @@ async def login_access_token(
         lock_message = "Account is locked due to multiple failed login attempts. "
         if remaining_hours > 0:
             lock_message += (
-                f"Try again in {int(remaining_hours)} hours and "
-                f"{int(remaining_minutes)} minutes."
+                f"Try again in {int(remaining_hours)} hours and " f"{int(remaining_minutes)} minutes."
             )
         else:
             lock_message += f"Try again in {int(remaining_minutes)} minutes."
@@ -1588,14 +1507,10 @@ async def login_access_token(
     # Check if this is the user's last attempt before locking
     warning_message = None
     attempts_count = (
-        0
-        if user_record.number_of_failed_attempts is None
-        else user_record.number_of_failed_attempts
+        0 if user_record.number_of_failed_attempts is None else user_record.number_of_failed_attempts
     )
 
-    print(
-        f"Current OAuth2 failed attempts for user {user_record.email}: {attempts_count}"
-    )
+    print(f"Current OAuth2 failed attempts for user {user_record.email}: {attempts_count}")
 
     if attempts_count == 2:
         warning_message = (
@@ -1605,9 +1520,7 @@ async def login_access_token(
         )
 
     # Now attempt to authenticate
-    user = await crud.user.authenticate(
-        email=form_data.username, password=form_data.password
-    )
+    user = await crud.user.authenticate(email=form_data.username, password=form_data.password)
 
     if not user:
         # Failed authentication attempt
@@ -1640,13 +1553,10 @@ async def login_access_token(
             remaining_hours = remaining_time.total_seconds() // 3600
             remaining_minutes = (remaining_time.total_seconds() % 3600) // 60
 
-            lock_message = (
-                "Your account has been locked due to too many failed login attempts. "
-            )
+            lock_message = "Your account has been locked due to too many failed login attempts. "
             if remaining_hours > 0:
                 lock_message += (
-                    f"Try again in {int(remaining_hours)} hours and "
-                    f"{int(remaining_minutes)} minutes."
+                    f"Try again in {int(remaining_hours)} hours and " f"{int(remaining_minutes)} minutes."
                 )
             else:
                 lock_message += f"Try again in {int(remaining_minutes)} minutes."
@@ -1669,10 +1579,7 @@ async def login_access_token(
                     "Account will be locked after the next failed attempt."
                 )
             elif attempts_left > 0:
-                message = (
-                    f"{message}. {attempts_left} attempts remaining before "
-                    "account lockout."
-                )
+                message = f"{message}. {attempts_left} attempts remaining before " "account lockout."
 
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -1694,12 +1601,8 @@ async def login_access_token(
         )
 
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = security.create_access_token(
-        user.id, user.email, expires_delta=access_token_expires
-    )
-    valid_access_tokens = await get_valid_tokens(
-        redis_client, user.id, TokenType.ACCESS
-    )
+    access_token = security.create_access_token(user.id, user.email, expires_delta=access_token_expires)
+    valid_access_tokens = await get_valid_tokens(redis_client, user.id, TokenType.ACCESS)
     if valid_access_tokens:
         await add_token_to_redis(
             redis_client,
@@ -1771,8 +1674,7 @@ async def logout(
     except Exception as e:
         error_type = type(e).__name__
         logger.error(
-            f"Unexpected error in logout for user {current_user.email} "
-            f"from IP {ip_address}: {str(e)}",
+            f"Unexpected error in logout for user {current_user.email} " f"from IP {ip_address}: {str(e)}",
             exc_info=True,
         )
         background_tasks.add_task(
@@ -1820,9 +1722,7 @@ async def request_password_reset(
                 event_type="password_reset_request_sanitization_failed",
                 details={"error": str(e), "ip_address": ip_address},
             )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email format"
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email format")
         user = await crud.user.get_by_email(email=email_for_reset)
         if not user:
             background_tasks.add_task(
@@ -1849,12 +1749,8 @@ async def request_password_reset(
                 message="If the email exists and the account is active, a password reset link has been sent.",
             )
 
-        reset_token_expires = timedelta(
-            minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
-        )
-        reset_token = security.create_reset_token(
-            user.email, expires_delta=reset_token_expires
-        )
+        reset_token_expires = timedelta(minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
+        reset_token = security.create_reset_token(user.email, expires_delta=reset_token_expires)
 
         await add_token_to_redis(
             redis_client,
@@ -1939,9 +1835,7 @@ async def confirm_password_reset(
 
     try:
         # Validate new password complexity before anything else
-        is_valid, errors = PasswordValidator.validate_complexity(
-            reset_confirm.new_password
-        )
+        is_valid, errors = PasswordValidator.validate_complexity(reset_confirm.new_password)
         if not is_valid:
             background_tasks.add_task(
                 log_security_event,
@@ -1997,9 +1891,7 @@ async def confirm_password_reset(
                 event_type="password_reset_token_missing_sub",
                 details={"token_used": reset_confirm.token, "ip_address": ip_address},
             )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token payload."
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token payload.")
 
         user = await crud.user.get_by_email(email=str(email_from_token_str))
 
@@ -2035,9 +1927,7 @@ async def confirm_password_reset(
             )
 
         # Verify token in Redis
-        valid_reset_tokens = await get_valid_tokens(
-            redis_client, user.id, TokenType.RESET
-        )
+        valid_reset_tokens = await get_valid_tokens(redis_client, user.id, TokenType.RESET)
         if not valid_reset_tokens or reset_confirm.token not in valid_reset_tokens:
             # Log invalid token in Redis as a background task
             background_tasks.add_task(
@@ -2058,9 +1948,7 @@ async def confirm_password_reset(
         try:
             # This will check history, update password,
             # and update last_changed_password_date
-            await crud.user.update_password(
-                user=user, new_password=reset_confirm.new_password
-            )
+            await crud.user.update_password(user=user, new_password=reset_confirm.new_password)
         except ValueError as e:
             # Log password history violation as a background task
             background_tasks.add_task(
@@ -2171,9 +2059,7 @@ async def reset_password(
                     "password_length": len(body_in.new_password),
                 },
             )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Password too long"
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password too long")
     except Exception as e:
         background_tasks.add_task(
             log_security_event,
@@ -2181,9 +2067,7 @@ async def reset_password(
             event_type="password_reset_input_sanitization_failed",
             details={"error": str(e), "ip_address": ip_address},
         )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid input data"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid input data")
 
     try:
         # Validate new password complexity before anything else
@@ -2243,9 +2127,7 @@ async def reset_password(
                 event_type="password_reset_token_missing_sub",
                 details={"token_used": body_in.token, "ip_address": ip_address},
             )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token payload."
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token payload.")
 
         user = await crud.user.get_by_email(email=str(email_from_token_str))
 
@@ -2281,9 +2163,7 @@ async def reset_password(
             )
 
         # Verify token in Redis
-        valid_reset_tokens = await get_valid_tokens(
-            redis_client, user.id, TokenType.RESET
-        )
+        valid_reset_tokens = await get_valid_tokens(redis_client, user.id, TokenType.RESET)
         if not valid_reset_tokens or body_in.token not in valid_reset_tokens:
             # Log invalid token in Redis as a background task
             background_tasks.add_task(
@@ -2304,9 +2184,7 @@ async def reset_password(
         try:
             # This will check history, update password,
             # and update last_changed_password_date
-            await crud.user.update_password(
-                user=user, new_password=body_in.new_password
-            )
+            await crud.user.update_password(user=user, new_password=body_in.new_password)
         except ValueError as e:
             # Log password history violation as a background task
             background_tasks.add_task(
@@ -2387,7 +2265,7 @@ async def reset_password(
 
 @router.get("/csrf-token")
 async def get_csrf_token(
-    request: Request, response: Response, csrf_protect=Depends(deps.get_csrf_protect)
+    request: Request, response: Response, csrf_protect: CsrfProtect = Depends(deps.get_csrf_protect)
 ) -> IPostResponseBase[dict]:
     """
     Get CSRF token for frontend to use in state-changing operations.
@@ -2412,9 +2290,7 @@ async def get_csrf_token(
             max_age=3600,  # 1 hour expiration
         )
 
-        return create_response(
-            message="CSRF token generated successfully", data=response_data
-        )
+        return create_response(message="CSRF token generated successfully", data=response_data)
     except Exception as e:
         logger.error(f"Error generating CSRF token: {e}")
         raise HTTPException(

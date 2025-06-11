@@ -31,9 +31,7 @@ class UserSummaryForTable(BaseModel):
 class DashboardData(BaseModel):
     stats: DashboardStats
     recent_logins: Optional[List[RecentLoginUser]] = None
-    system_users_summary: Optional[List[UserSummaryForTable]] = (
-        None  # For the DataTable
-    )
+    system_users_summary: Optional[List[UserSummaryForTable]] = None  # For the DataTable
     # Add other role-specific data sections
 
 

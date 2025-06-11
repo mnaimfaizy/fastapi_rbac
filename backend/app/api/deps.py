@@ -31,9 +31,7 @@ csrf_protect = None  # Will be set by main.py during startup
 # from app.schemas.role_schema import IRoleEnum # If still used elsewhere or for default roles
 
 
-reusable_oauth2 = OAuth2PasswordBearer(
-    tokenUrl=f"{settings.API_V1_STR}/auth/access-token"
-)
+reusable_oauth2 = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/access-token")
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -97,9 +95,7 @@ def get_current_user(
                 detail="Invalid user identifier in token.",
             )
 
-        valid_access_tokens = await get_valid_tokens(
-            redis_client, user_id_str, TokenType.ACCESS
-        )
+        valid_access_tokens = await get_valid_tokens(redis_client, user_id_str, TokenType.ACCESS)
         if valid_access_tokens and access_token not in valid_access_tokens:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -109,14 +105,10 @@ def get_current_user(
         user_from_db = await crud.user.get(id=user_id, db_session=db_session)
 
         if not user_from_db:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="User not found."
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
 
         if not user_from_db.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user."
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user.")
 
         if hasattr(user_from_db, "is_superuser") and user_from_db.is_superuser:
             return user_from_db
@@ -131,16 +123,10 @@ def get_current_user(
                             if hasattr(perm, "name"):
                                 user_perms_set.add(perm.name)
 
-            missing_perms = [
-                p_name
-                for p_name in required_permissions
-                if p_name not in user_perms_set
-            ]
+            missing_perms = [p_name for p_name in required_permissions if p_name not in user_perms_set]
 
             if missing_perms:
-                detail_msg = (
-                    f"Insufficient permissions. Missing: {', '.join(missing_perms)}"
-                )
+                detail_msg = f"Insufficient permissions. Missing: {', '.join(missing_perms)}"
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=detail_msg,
@@ -151,9 +137,7 @@ def get_current_user(
     return current_user
 
 
-def get_input_sanitizer(
-    strict_mode: bool = True, max_length: int = 10000
-) -> InputSanitizer:
+def get_input_sanitizer(strict_mode: bool = True, max_length: int = 10000) -> InputSanitizer:
     """
     Get input sanitizer instance for dependency injection.
 
@@ -187,7 +171,7 @@ def get_permissive_sanitizer() -> InputSanitizer:
     return InputSanitizer(strict_mode=False, max_length=50000)
 
 
-def set_csrf_protect_instance(csrf_instance):
+def set_csrf_protect_instance(csrf_instance: CsrfProtect) -> None:
     """
     Set the global CSRF protect instance.
     Called from main.py during application startup.
@@ -196,7 +180,7 @@ def set_csrf_protect_instance(csrf_instance):
     csrf_protect = csrf_instance
 
 
-def get_csrf_protect():
+def get_csrf_protect() -> CsrfProtect:
     """
     Get the CSRF protection instance for dependency injection.
 
@@ -211,9 +195,7 @@ def get_csrf_protect():
     return csrf_protect
 
 
-async def validate_csrf_token(
-    request: Request, csrf: CsrfProtect = Depends(get_csrf_protect)
-):
+async def validate_csrf_token(request: Request, csrf: CsrfProtect = Depends(get_csrf_protect)) -> None:
     """
     Validate CSRF token for state-changing operations.
 

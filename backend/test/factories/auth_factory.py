@@ -41,9 +41,7 @@ class TokenFactory:
         # Default values
         user_id = user_id or str(uuid7())
         scopes = scopes or ["user:read"]
-        expires = expires_delta or timedelta(
-            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
-        )
+        expires = expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
 
         to_encode = {
             "sub": user_id,
@@ -54,9 +52,7 @@ class TokenFactory:
             **extra_claims,
         }
 
-        encoded_jwt = jwt.encode(
-            to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
-        )
+        encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
         return encoded_jwt
 
     @staticmethod
@@ -87,9 +83,7 @@ class TokenFactory:
             **extra_claims,
         }
 
-        encoded_jwt = jwt.encode(
-            to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
-        )
+        encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
         return encoded_jwt
 
     @staticmethod
@@ -110,9 +104,7 @@ class TokenFactory:
             Dict containing Authorization header
         """
         if not access_token:
-            access_token = TokenFactory.create_access_token(
-                user_id=user_id, is_superuser=is_superuser
-            )
+            access_token = TokenFactory.create_access_token(user_id=user_id, is_superuser=is_superuser)
 
         return {"Authorization": f"Bearer {access_token}"}
 

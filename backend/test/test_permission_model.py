@@ -34,9 +34,7 @@ async def test_permission_group(db: AsyncSession, test_user: User) -> Permission
 
 
 @pytest_asyncio.fixture
-async def test_permission(
-    db: AsyncSession, test_permission_group: PermissionGroup
-) -> Permission:
+async def test_permission(db: AsyncSession, test_permission_group: PermissionGroup) -> Permission:
     """Fixture to create a test permission"""
     permission = Permission(
         name="Test Permission",
@@ -50,9 +48,7 @@ async def test_permission(
 
 
 @pytest.mark.asyncio
-async def test_create_permission(
-    db: AsyncSession, test_permission_group: PermissionGroup
-) -> None:
+async def test_create_permission(db: AsyncSession, test_permission_group: PermissionGroup) -> None:
     """Test creating a permission in the database"""
     permission = Permission(
         name="New Permission",
@@ -70,13 +66,9 @@ async def test_create_permission(
 
 
 @pytest.mark.asyncio
-async def test_permission_relationships(
-    db: AsyncSession, test_permission: Permission
-) -> None:
+async def test_permission_relationships(db: AsyncSession, test_permission: Permission) -> None:
     """Test relationships of the permission"""
-    test_permission_group_instance = (
-        test_permission.group
-    )  # Use the group directly from the permission
+    test_permission_group_instance = test_permission.group  # Use the group directly from the permission
 
     assert test_permission_group_instance is not None
     assert test_permission_group_instance.name == "Test Permission Group"

@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi import APIRouter, BackgroundTasks, Depends
 from redis.asyncio import Redis
 
@@ -12,7 +14,7 @@ router = APIRouter()
 async def health_check(
     background_tasks: BackgroundTasks,
     redis_client: Redis = Depends(get_redis_client),
-):
+) -> dict[str, Any]:
     """
     Perform a health check of all critical system components, including:
     - API Server
@@ -42,9 +44,7 @@ async def health_check(
         inspection = celery_app.control.inspect().ping()
         if not inspection:
             health_status["background_tasks"]["status"] = "unhealthy"
-            health_status["background_tasks"][
-                "error"
-            ] = "No active Celery workers found"
+            health_status["background_tasks"]["error"] = "No active Celery workers found"
             health_status["status"] = "unhealthy"
         else:
             health_status["background_tasks"]["workers"] = list(inspection.keys())

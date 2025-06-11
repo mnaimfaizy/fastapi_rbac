@@ -27,11 +27,7 @@ async def user_exists(new_user: IUserCreate) -> IUserCreate:
         # Check if all roles were found
         if len(found_roles) != len(new_user.role_id):
             found_role_ids = {role.id for role in found_roles}
-            missing_role_ids = [
-                str(role_id)
-                for role_id in new_user.role_id
-                if role_id not in found_role_ids
-            ]
+            missing_role_ids = [str(role_id) for role_id in new_user.role_id if role_id not in found_role_ids]
             raise IdNotFoundException(Role, id=", ".join(missing_role_ids))
 
     return new_user

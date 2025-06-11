@@ -26,9 +26,7 @@ async def test_create_password_history(db: AsyncSession) -> None:
 
     # Create password history entry
     hashed_password = "hashed_password_value"
-    password_history = UserPasswordHistory(
-        user_id=user.id, password_hash=hashed_password
-    )
+    password_history = UserPasswordHistory(user_id=user.id, password_hash=hashed_password)
 
     # Add password history to database
     db.add(password_history)
@@ -61,9 +59,7 @@ async def test_retrieve_user_password_history(db: AsyncSession) -> None:
     # Create multiple password history entries
     histories = []
     for i in range(3):
-        password_history = UserPasswordHistory(
-            user_id=user.id, password_hash=f"old_password_{i}"
-        )
+        password_history = UserPasswordHistory(user_id=user.id, password_hash=f"old_password_{i}")
         histories.append(password_history)
 
     db.add_all(histories)

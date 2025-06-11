@@ -44,18 +44,13 @@ def send_email(
             smtp_options["password"] = settings.SMTP_PASSWORD
 
     # Log connection attempt for debugging
-    logging.info(
-        f"Attempting to connect to SMTP server at {settings.SMTP_HOST}:"
-        f"{settings.SMTP_PORT}"
-    )
+    logging.info(f"Attempting to connect to SMTP server at {settings.SMTP_HOST}:" f"{settings.SMTP_PORT}")
 
     response = message.send(to=email_to, render=environment, smtp=smtp_options)
 
     # Log the appropriate response based on success or failure
     if response.status_code not in [250, 235]:
-        logging.error(
-            f"Failed to send email to {email_to}, status code: {response.status_code}"
-        )
+        logging.error(f"Failed to send email to {email_to}, status code: {response.status_code}")
     else:
         logging.info(f"Email sent successfully to {email_to}")
 

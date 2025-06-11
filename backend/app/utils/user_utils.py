@@ -35,16 +35,11 @@ def serialize_user(user: User) -> dict[str, Any]:
         "locked_until": user.locked_until,
         "verified": user.verified,
         "roles": (
-            [
-                {"id": str(role.id), "name": role.name, "description": role.description}
-                for role in user.roles
-            ]
+            [{"id": str(role.id), "name": role.name, "description": role.description} for role in user.roles]
             if user.roles
             else []
         ),
-        "permissions": sorted(
-            list(user_permissions_set)
-        ),  # Add sorted list of unique permissions
+        "permissions": sorted(list(user_permissions_set)),  # Add sorted list of unique permissions
         "created_at": user.created_at,
         "updated_at": user.updated_at,
     }

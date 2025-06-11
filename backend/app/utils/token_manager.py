@@ -162,9 +162,7 @@ class TokenManager:
 
             # Check concurrent session limit
             if settings.CONCURRENT_SESSION_LIMIT:
-                active_sessions = await self._count_active_sessions(
-                    UUID(payload["sub"]), token_type
-                )
+                active_sessions = await self._count_active_sessions(UUID(payload["sub"]), token_type)
                 if active_sessions > settings.CONCURRENT_SESSION_LIMIT:
                     raise HTTPException(
                         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -201,9 +199,7 @@ class TokenManager:
         """Invalidate a specific token."""
         try:
             # Decode token without verification to get jti
-            payload = jwt.get_unverified_claims(
-                token
-            )  # MODIFIED: Use get_unverified_claims
+            payload = jwt.get_unverified_claims(token)  # MODIFIED: Use get_unverified_claims
             jti = payload.get("jti")
             if jti:
                 # Add to blacklist with expiry matching token
@@ -279,6 +275,4 @@ class TokenManager:
     @staticmethod
     def _hash_ip(ip: str) -> str:
         """Create a secure hash of an IP address."""
-        return hmac.new(
-            settings.SECRET_KEY.encode(), ip.encode(), hashlib.sha256
-        ).hexdigest()
+        return hmac.new(settings.SECRET_KEY.encode(), ip.encode(), hashlib.sha256).hexdigest()

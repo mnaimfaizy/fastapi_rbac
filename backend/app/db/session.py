@@ -40,9 +40,7 @@ SessionLocal = async_sessionmaker(
 
 # Configure Celery database connection if needed
 # Use the main database URI as fallback if Celery-specific URI is not defined
-celery_db_uri = (
-    getattr(settings, "ASYNC_CELERY_DATABASE_URI", None) or settings.ASYNC_DATABASE_URI
-)
+celery_db_uri = getattr(settings, "ASYNC_CELERY_DATABASE_URI", None) or settings.ASYNC_DATABASE_URI
 
 # Use separate engine to avoid conflicts with main connection pool
 if settings.MODE == ModeEnum.testing:

@@ -33,9 +33,7 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
         # Handle both IRoleCreate schema and Role model instances
         if isinstance(obj_in, IRoleCreate):
             # Extract permissions from the input data
-            permission_ids = (
-                obj_in.permissions or []
-            )  # Create role data without permissions
+            permission_ids = obj_in.permissions or []  # Create role data without permissions
             role_data = obj_in.model_dump(exclude={"permissions"})
 
             # Create the role
@@ -59,9 +57,7 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
             if permission_ids:
                 for permission_id in permission_ids:
                     # Create RolePermission mapping
-                    role_permission = RolePermission(
-                        role_id=role.id, permission_id=permission_id
-                    )
+                    role_permission = RolePermission(role_id=role.id, permission_id=permission_id)
                     db_session.add(role_permission)
 
             await db_session.commit()
@@ -75,9 +71,7 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
         await db_session.refresh(role)
         return role
 
-    async def get_role_by_name(
-        self, *, name: str, db_session: AsyncSession | None = None
-    ) -> Role | None:
+    async def get_role_by_name(self, *, name: str, db_session: AsyncSession | None = None) -> Role | None:
         db_session = db_session or super().get_db().session
         role = await db_session.execute(select(Role).where(Role.name == name))
         return role.scalar_one_or_none()
@@ -85,9 +79,7 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
     async def get_all(self, *, db_session: AsyncSession | None = None) -> List[Role]:
         """Fetch all roles without pagination."""
         db_session = db_session or super().get_db().session
-        result = await db_session.execute(
-            select(Role).order_by(Role.name)
-        )  # Order by name for consistency
+        result = await db_session.execute(select(Role).order_by(Role.name))  # Order by name for consistency
         return result.scalars().all()
 
     async def add_role_to_user(
@@ -108,15 +100,11 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
         self, *, role_id: UUID, db_session: AsyncSession | None = None
     ) -> bool:
         db_session = db_session or super().get_db().session
-        result = await db_session.execute(
-            select(RolePermission).where(RolePermission.role_id == role_id)
-        )
+        result = await db_session.execute(select(RolePermission).where(RolePermission.role_id == role_id))
         permissions = result.scalars().all()
         return len(permissions) > 0
 
-    async def user_exist_in_role(
-        self, *, role_id: UUID, db_session: AsyncSession | None = None
-    ) -> bool:
+    async def user_exist_in_role(self, *, role_id: UUID, db_session: AsyncSession | None = None) -> bool:
         """Check if any user is assigned to the role."""
         db_session = db_session or super().get_db().session
         role = await self.get(id=role_id, db_session=db_session)
@@ -145,8 +133,7 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
         for permission_id in permission_ids:
             # Check if relationship already exists
             stmt = select(RolePermission).where(
-                (RolePermission.role_id == role_id)
-                & (RolePermission.permission_id == permission_id)
+                (RolePermission.role_id == role_id) & (RolePermission.permission_id == permission_id)
             )
             result = await db_session.execute(stmt)
             existing = result.scalar_one_or_none()
@@ -154,9 +141,7 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
             # Only create if it doesn't exist
             if not existing:
                 # Create a new RolePermission instance with required fields
-                role_permission = RolePermission(
-                    role_id=role_id, permission_id=permission_id
-                )
+                role_permission = RolePermission(role_id=role_id, permission_id=permission_id)
                 db_session.add(role_permission)
 
         # Create audit log
@@ -192,8 +177,7 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
         for permission_id in permission_ids:
             # First find the mapping
             stmt = select(RolePermission).where(
-                (RolePermission.role_id == role_id)
-                & (RolePermission.permission_id == permission_id)
+                (RolePermission.role_id == role_id) & (RolePermission.permission_id == permission_id)
             )
             result = await db_session.execute(stmt)
             role_permission = result.scalar_one_or_none()
@@ -216,9 +200,7 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
         await db_session.refresh(role)
         return role
 
-    async def validate_system_role(
-        self, *, role_id: UUID, db_session: AsyncSession | None = None
-    ) -> bool:
+    async def validate_system_role(self, *, role_id: UUID, db_session: AsyncSession | None = None) -> bool:
         """Check if a role is a system role that shouldn't be modified"""
         db_session = db_session or super().get_db().session
         role = await self.get(id=role_id, db_session=db_session)

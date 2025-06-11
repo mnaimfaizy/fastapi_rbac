@@ -2,11 +2,12 @@
 """
 Test script for input sanitization functionality.
 """
+from typing import Any, Dict, List
 
 import requests  # type: ignore
 
 # Test data with potentially malicious content
-test_cases = [
+test_cases: List[Dict[str, Any]] = [
     {
         "name": "Normal login",
         "data": {"email": "admin@example.com", "password": "admin123"},
@@ -41,8 +42,11 @@ def test_login_sanitization() -> None:
 
     for i, test_case in enumerate(test_cases, 1):
         print(f"\n{i}. {test_case['name']}")
-        print(f"Input email: {test_case['data']['email'][:50]}...")
-        print(f"Password length: {len(test_case['data']['password'])}")
+        email_data = test_case["data"]
+        if isinstance(email_data, dict) and "email" in email_data:
+            print(f"Input email: {str(email_data['email'])[:50]}...")
+        if isinstance(email_data, dict) and "password" in email_data:
+            print(f"Password length: {len(str(email_data['password']))}")
 
         try:
             response = requests.post(
@@ -71,7 +75,7 @@ def test_register_sanitization() -> None:
         "last_name": "Normal'Last\"Name",
     }
 
-    print(f"Input data:")
+    print("Input data:")
     for key, value in register_test.items():
         print(f"  {key}: {value}")
 

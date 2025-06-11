@@ -54,14 +54,10 @@ class IRoleEnum(str, Enum):
 class IRolePermissionAssign(IBaseSchema):
     """Schema for assigning permissions to a role"""
 
-    permission_ids: List[
-        UUID
-    ]  # Changed from UUID4 to UUID for more flexible validation
+    permission_ids: List[UUID]  # Changed from UUID4 to UUID for more flexible validation
 
 
 class IRolePermissionUnassign(IBaseSchema):
     """Schema for unassigning permissions from a role"""
 
-    permission_ids: List[
-        UUID
-    ]  # Changed from UUID4 to UUID for more flexible validation
+    permission_ids: List[UUID]  # Changed from UUID4 to UUID for more flexible validation
