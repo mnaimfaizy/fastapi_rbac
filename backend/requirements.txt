@@ -138,3 +138,4 @@ watchfiles==1.0.5
 wcwidth==0.2.13
 websockets==15.0.1
 zxcvbn==4.5.0
+types-requests==2.32.4.20250611

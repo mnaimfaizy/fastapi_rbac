@@ -9,12 +9,10 @@ This script tests:
 4. Integration with input sanitization and rate limiting
 """
 
-import json
 import sys
-import time
 from typing import Any, Dict, Optional, Tuple
 
-import requests
+import requests  # type: ignore
 
 # Configuration
 BASE_URL = "http://localhost:8000"
@@ -78,9 +76,7 @@ def test_endpoint_without_csrf(endpoint: str, test_data: Dict[str, Any]) -> bool
         )
 
         if response.status_code == 403:
-            print(
-                f"✅ CSRF protection working: {endpoint} rejected without token (403)"
-            )
+            print(f"✅ CSRF protection working: {endpoint} rejected without token (403)")
             return True
         else:
             print(
@@ -113,9 +109,7 @@ def test_endpoint_with_invalid_csrf(endpoint: str, test_data: Dict[str, Any]) ->
         )
 
         if response.status_code == 403:
-            print(
-                f"✅ CSRF protection working: {endpoint} rejected with invalid token (403)"
-            )
+            print(f"✅ CSRF protection working: {endpoint} rejected with invalid token (403)")
             return True
         else:
             print(
@@ -149,9 +143,7 @@ def test_endpoint_with_csrf(
             print(f"Response: {response.text}")
             return False
         else:
-            print(
-                f"✅ CSRF validation passed for {endpoint} (HTTP {response.status_code})"
-            )
+            print(f"✅ CSRF validation passed for {endpoint} (HTTP {response.status_code})")
             return True
 
     except Exception as e:
@@ -186,7 +178,7 @@ def get_test_data(endpoint: str) -> Dict[str, Any]:
         return {"dummy": "data"}
 
 
-def main():
+def main() -> None:
     """Main test function."""
     print("CSRF Protection Implementation Test")
     print("=" * 60)
@@ -232,9 +224,7 @@ def main():
             all_tests_passed = False
 
     print("\n" + "=" * 60)
-    print(
-        "📋 Testing endpoints WITH VALID CSRF tokens (should pass CSRF validation)..."
-    )
+    print("📋 Testing endpoints WITH VALID CSRF tokens (should pass CSRF validation)...")
 
     # Test all endpoints with valid CSRF tokens
     for endpoint in AUTH_ENDPOINTS:

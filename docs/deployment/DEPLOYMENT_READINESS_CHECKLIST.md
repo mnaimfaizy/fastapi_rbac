@@ -203,8 +203,8 @@ docker-compose -f docker-compose.prod-test.yml ps
 docker exec fastapi_rbac_db pg_isready -U postgres
 
 # Validate security features
-python test_csrf_implementation.py
-python test_sanitization.py
+python backend/test/test_csrf_implementation.py
+python backend/test/test_sanitization.py
 
 # Run comprehensive test suites
 cd backend && python run_tests.py --coverage
@@ -222,8 +222,8 @@ Your deployment is successful when:
 - [ ] PgAdmin connects to database
 - [ ] Celery tasks are processing
 - [ ] No error logs in any services
-- [ ] CSRF protection is functional (test_csrf_implementation.py passes)
-- [ ] Input sanitization is working (test_sanitization.py passes)
+- [ ] CSRF protection is functional (backend/test/test_csrf_implementation.py passes)
+- [ ] Input sanitization is working (backend/test/test_sanitization.py passes)
 - [ ] All security headers are present
 - [ ] Rate limiting is active on sensitive endpoints
 - [ ] Backend test suite passes (90+ tests)

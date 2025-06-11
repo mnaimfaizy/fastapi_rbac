@@ -3,9 +3,7 @@
 Test script for input sanitization functionality.
 """
 
-import json
-
-import requests
+import requests  # type: ignore
 
 # Test data with potentially malicious content
 test_cases = [
@@ -36,7 +34,7 @@ test_cases = [
 base_url = "http://localhost:8000/api/v1"
 
 
-def test_login_sanitization():
+def test_login_sanitization() -> None:
     """Test login endpoint input sanitization."""
     print("Testing Login Endpoint Input Sanitization")
     print("=" * 50)
@@ -61,7 +59,7 @@ def test_login_sanitization():
             print(f"Request failed: {e}")
 
 
-def test_register_sanitization():
+def test_register_sanitization() -> None:
     """Test register endpoint input sanitization."""
     print("\n\nTesting Register Endpoint Input Sanitization")
     print("=" * 50)

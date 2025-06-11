@@ -134,15 +134,15 @@ npm test
 
 ## 🔧 Common Operations
 
-| Task                     | Command                                      | Documentation                                              |
-| ------------------------ | -------------------------------------------- | ---------------------------------------------------------- |
-| **Start development**    | `docker-compose up -d`                       | [Getting Started](docs/getting-started/GETTING_STARTED.md) |
-| **Run backend tests**    | `.\scripts\dev\run-tests.ps1`                | [Testing Guide](docs/development/TESTING.md)               |
-| **Run frontend tests**   | `cd react-frontend && npm test`              | [Frontend Testing](react-frontend/README.md#testing)       |
-| **Security validation**  | `python test_csrf_implementation.py`         | [Security Features](#-enterprise-security)                 |
-| **Deploy to production** | `.\scripts\deployment\push-to-dockerhub.ps1` | [Deployment](docs/deployment/PRODUCTION_SETUP.md)          |
-| **Troubleshoot CORS**    | `.\scripts\docker\diagnose-cors.ps1`         | [CORS Guide](docs/troubleshooting/CORS_TROUBLESHOOTING.md) |
-| **Database migration**   | `.\scripts\database\migrate-db.ps1`          | [DB Reference](docs/reference/DATABASE_SCHEMA.md)          |
+| Task                     | Command                                           | Documentation                                              |
+| ------------------------ | ------------------------------------------------- | ---------------------------------------------------------- |
+| **Start development**    | `docker-compose up -d`                            | [Getting Started](docs/getting-started/GETTING_STARTED.md) |
+| **Run backend tests**    | `.\scripts\dev\run-tests.ps1`                     | [Testing Guide](docs/development/TESTING.md)               |
+| **Run frontend tests**   | `cd react-frontend && npm test`                   | [Frontend Testing](react-frontend/README.md#testing)       |
+| **Security validation**  | `python backend/test/test_csrf_implementation.py` | [Security Features](#-enterprise-security)                 |
+| **Deploy to production** | `.\scripts\deployment\push-to-dockerhub.ps1`      | [Deployment](docs/deployment/PRODUCTION_SETUP.md)          |
+| **Troubleshoot CORS**    | `.\scripts\docker\diagnose-cors.ps1`              | [CORS Guide](docs/troubleshooting/CORS_TROUBLESHOOTING.md) |
+| **Database migration**   | `.\scripts\database\migrate-db.ps1`               | [DB Reference](docs/reference/DATABASE_SCHEMA.md)          |
 
 ## 🆘 Need Help?
 

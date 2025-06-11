@@ -82,6 +82,13 @@ When adding new documentation:
 - Link to related documentation
 - Follow the established markdown style guide
 
+### Internal Development
+
+- [`internal/`](./internal/) - Internal development tracking and implementation summaries
+  - `ANALYSIS_FINDINGS.md` - Comprehensive project analysis and security assessment (772 lines)
+  - `FRONTEND_SECURITY_INTEGRATION.md` - Security integration technical details
+  - `DOCUMENTATION_UPDATE_SUMMARY.md` - Documentation update audit trail
+
 ## 📊 Documentation Status
 
 **Last Updated**: June 11, 2025

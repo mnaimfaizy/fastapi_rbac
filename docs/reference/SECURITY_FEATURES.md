@@ -164,8 +164,8 @@ audit_log = AuditLog(
 
 **Files**:
 
-- `test_csrf_implementation.py`: CSRF protection validation
-- `test_sanitization.py`: Input sanitization testing
+- `backend/test/test_csrf_implementation.py`: CSRF protection validation
+- `backend/test/test_sanitization.py`: Input sanitization testing
 - Backend test suite includes security-focused test cases
 
 ### Frontend Security Tests
@@ -258,10 +258,10 @@ read_only: true
 
 ```powershell
 # Test CSRF protection
-python test_csrf_implementation.py
+python backend/test/test_csrf_implementation.py
 
 # Test input sanitization
-python test_sanitization.py
+python backend/test/test_sanitization.py
 
 # Run security-focused backend tests
 pytest test/ -k "security or auth or csrf" -v

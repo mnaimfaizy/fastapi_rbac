@@ -113,8 +113,8 @@ pytest test/test_crud_*.py # CRUD tests
 pytest test/test_models_*.py # Model tests
 
 # Run security tests
-python ../test_csrf_implementation.py  # CSRF protection
-python ../test_sanitization.py         # Input sanitization
+python test/test_csrf_implementation.py  # CSRF protection
+python test/test_sanitization.py         # Input sanitization
 ```
 
 ## Docker Compose Structure
