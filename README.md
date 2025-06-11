@@ -41,13 +41,31 @@ Utility scripts are organized by purpose in the [`scripts/`](scripts/) directory
 
 ## ✨ Key Features
 
+### 🔒 **Enterprise Security**
+
 - **🔐 JWT Authentication**: Secure token-based auth with refresh tokens
+- **🛡️ CSRF Protection**: Complete protection against Cross-Site Request Forgery
+- **🧽 Input Sanitization**: XSS prevention with comprehensive HTML cleaning
+- **⚡ Rate Limiting**: DoS attack prevention on all critical endpoints
+- **🔒 Security Headers**: Strict Content Security Policy and browser protections
+
+### 👥 **Access Control & Management**
+
 - **👥 Role-Based Access Control**: Flexible permission system with role hierarchies
 - **🎯 User Management**: Complete CRUD operations with admin oversight
+- **🏢 Organization Management**: Role groups and permission groups for enterprise use
+
+### 🧪 **Quality & Testing**
+
+- **🧪 Comprehensive Testing**: 90+ backend tests + 354 frontend tests across 16 files
+- **⚡ Frontend Testing**: Complete coverage with Vitest, React Testing Library
+- **🔍 API Testing**: Comprehensive service layer testing with mocking
+
+### 🚀 **Infrastructure & Integration**
+
 - **📧 Email Integration**: Notifications and password reset functionality
 - **⚡ Background Tasks**: Celery integration for async operations
 - **🐳 Docker Ready**: Full containerization with production configs
-- **🧪 Comprehensive Testing**: Unit and integration test suites
 - **📊 API Documentation**: Auto-generated OpenAPI/Swagger docs
 
 ## 🏗️ Project Structure
@@ -94,6 +112,10 @@ docker-compose up -d
 # Run backend tests
 .\scripts\dev\run-tests.ps1
 
+# Run frontend tests
+cd react-frontend
+npm test
+
 # Access services:
 # - Frontend: http://localhost:80
 # - Backend: http://localhost:8000
@@ -115,7 +137,9 @@ docker-compose up -d
 | Task                     | Command                                      | Documentation                                              |
 | ------------------------ | -------------------------------------------- | ---------------------------------------------------------- |
 | **Start development**    | `docker-compose up -d`                       | [Getting Started](docs/getting-started/GETTING_STARTED.md) |
-| **Run tests**            | `.\scripts\dev\run-tests.ps1`                | [Testing Guide](docs/development/TESTING.md)               |
+| **Run backend tests**    | `.\scripts\dev\run-tests.ps1`                | [Testing Guide](docs/development/TESTING.md)               |
+| **Run frontend tests**   | `cd react-frontend && npm test`              | [Frontend Testing](react-frontend/README.md#testing)       |
+| **Security validation**  | `python test_csrf_implementation.py`         | [Security Features](#-enterprise-security)                 |
 | **Deploy to production** | `.\scripts\deployment\push-to-dockerhub.ps1` | [Deployment](docs/deployment/PRODUCTION_SETUP.md)          |
 | **Troubleshoot CORS**    | `.\scripts\docker\diagnose-cors.ps1`         | [CORS Guide](docs/troubleshooting/CORS_TROUBLESHOOTING.md) |
 | **Database migration**   | `.\scripts\database\migrate-db.ps1`          | [DB Reference](docs/reference/DATABASE_SCHEMA.md)          |

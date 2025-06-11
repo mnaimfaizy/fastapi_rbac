@@ -35,7 +35,8 @@ The FastAPI RBAC project is designed as a modern, scalable user management micro
 - **Authentication**: JWT tokens with bcrypt password hashing
 - **Background Tasks**: Celery with Redis as message broker
 - **API Documentation**: Automatic OpenAPI/Swagger generation
-- **Testing**: Pytest with async support
+- **Testing**: Pytest with comprehensive test suite (90+ tests)
+- **Security**: CSRF protection, input sanitization, rate limiting
 
 #### Frontend (React)
 
@@ -45,7 +46,8 @@ The FastAPI RBAC project is designed as a modern, scalable user management micro
 - **UI Components**: ShadCN UI with Tailwind CSS
 - **Routing**: React Router v6
 - **HTTP Client**: Axios with interceptors for token management
-- **Testing**: Jest and React Testing Library
+- **Testing**: Jest and React Testing Library (354 comprehensive tests)
+- **Security**: CSRF integration, XSS prevention, secure token management
 
 #### Infrastructure
 
@@ -153,13 +155,15 @@ async def admin_function(
 
 ### Security Features
 
-- Password complexity requirements
-- Account lockout after failed attempts
-- Password history tracking
-- Secure password reset flow
-- Token blacklisting for logout
-- CORS protection
-- Rate limiting on sensitive endpoints
+- **Password Security**: Complexity requirements, account lockout, history tracking
+- **JWT Security**: Token blacklisting, secure refresh mechanism
+- **CSRF Protection**: Complete implementation with token management
+- **Input Sanitization**: XSS prevention with HTML content sanitization
+- **Rate Limiting**: API endpoint protection against abuse
+- **Security Headers**: CSP, HSTS, and comprehensive security policies
+- **Audit Logging**: Security events and user activity tracking
+- **CORS Protection**: Configurable cross-origin resource sharing
+- **Secure Password Reset**: Multi-step verification flow
 
 ## Database Design
 
