@@ -13,6 +13,7 @@ export function usePermissions() {
       if (typeof user.permissions[0] === 'string') {
         return (user.permissions as string[]).includes(requiredPermission);
       } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return (user.permissions as any[]).some(
           (permission) => permission.name === requiredPermission
         );

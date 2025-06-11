@@ -47,10 +47,9 @@ class AuthTokenManager {
    * Clear the token expiry timer
    */
   clearExpiryTimer(): void {
-    if (this.tokenExpiryTimer !== null) {
-      window.clearTimeout(this.tokenExpiryTimer);
-      this.tokenExpiryTimer = null;
-    }
+    // Always call clearTimeout, even if timer is null
+    window.clearTimeout(this.tokenExpiryTimer);
+    this.tokenExpiryTimer = null;
   }
 
   /**
