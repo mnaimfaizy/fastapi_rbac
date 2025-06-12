@@ -27,10 +27,9 @@ class ServiceSettings:
         Get the Redis URL based on current environment
         """
         if self.mode == ModeEnum.development:
-            # For local development, use localhost or
-            # a containerized Redis with port mapping
-            host = os.getenv("REDIS_HOST_DEV", "localhost")
-            port = os.getenv("REDIS_PORT_DEV", "6379")
+            # For development, use the configured Redis host (Docker container or localhost)
+            host = os.getenv("REDIS_HOST", settings.REDIS_HOST)
+            port = os.getenv("REDIS_PORT", settings.REDIS_PORT)
             return f"redis://{host}:{port}/0"
         elif self.mode == ModeEnum.testing:
             # For testing, use an in-memory mock or a test-specific Redis

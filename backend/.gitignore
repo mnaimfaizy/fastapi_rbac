@@ -21,3 +21,4 @@ dev.db-shm
 *.log
 *.crt
 *.key
+*.db

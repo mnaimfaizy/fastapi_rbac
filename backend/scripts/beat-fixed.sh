@@ -1,4 +1,4 @@
-﻿#!/bin/bash
+#!/bin/bash
 set -e
 
 # Change to the backend directory
@@ -13,19 +13,12 @@ else
     export PYTHONPATH="$BACKEND_DIR:$PYTHONPATH"
 fi
 
-# On Windows, convert PYTHONPATH to use appropriate path separator
-case "$(uname -s)" in
-    *NT* | CYGWIN* | MINGW* | MSYS*)
-        export PYTHONPATH=$(echo $PYTHONPATH | tr ':' ';')
-        ;;
-esac
-
-# Activate virtual environment if it exists
-if [ -f ".venv/bin/activate" ]; then
-    source .venv/bin/activate
-elif [ -f ".venv/Scripts/activate" ]; then
-    source .venv/Scripts/activate
-fi
+# Virtual environment not needed in Docker container
+# if [ -f ".venv/bin/activate" ]; then
+#     source .venv/bin/activate
+# elif [ -f ".venv/Scripts/activate" ]; then
+#     source .venv/Scripts/activate
+# fi
 
 # Set PYTHONPATH directly before executing python
 PYTHONPATH=$PYTHONPATH python -c "import sys; print('Python path:', sys.path)"

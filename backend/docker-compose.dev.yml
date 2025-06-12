@@ -1,0 +1,145 @@
+# Backend Development Docker Compose
+# Optimized for local development with hot-reload and debugging
+
+services:
+  # FastAPI Backend Development Service
+  fastapi_rbac_dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - NODE_ENV=development
+    image: fastapi_rbac:dev
+    container_name: fastapi_rbac_dev
+    environment:
+      - MODE=development
+      - ENVIRONMENT=development
+      - FASTAPI_ENV=development
+      - DATABASE_HOST=fastapi_rbac_db_dev
+      - REDIS_HOST=fastapi_rbac_redis_dev
+      - SMTP_HOST=mailhog_dev
+    env_file:
+      - .env.development
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - /app/node_modules # Exclude node_modules from bind mount
+    command:
+      [
+        "uvicorn",
+        "app.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--reload",
+      ]
+    networks:
+      - fastapi_rbac_dev_network
+    depends_on:
+      fastapi_rbac_db_dev:
+        condition: service_healthy
+      fastapi_rbac_redis_dev:
+        condition: service_healthy
+    restart: on-failure
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Celery worker for background tasks - Development
+  fastapi_rbac_worker_dev:
+    build:
+      context: .
+      dockerfile: queue.dockerfile
+      args:
+        - NODE_ENV=development
+    image: fastapi_rbac_worker:dev
+    container_name: fastapi_rbac_worker_dev
+    volumes:
+      - .:/app
+    environment:
+      - MODE=development
+      - ENVIRONMENT=development
+      - C_FORCE_ROOT=true
+      - DATABASE_HOST=fastapi_rbac_db_dev
+      - REDIS_HOST=fastapi_rbac_redis_dev
+      - SMTP_HOST=mailhog_dev
+    env_file:
+      - .env.development
+    command: ["/bin/bash", "/app/scripts/worker-fixed.sh"]
+    depends_on:
+      fastapi_rbac_redis_dev:
+        condition: service_healthy
+      fastapi_rbac_dev:
+        condition: service_healthy
+    restart: on-failure
+    networks:
+      - fastapi_rbac_dev_network
+
+  # Celery beat scheduler for periodic tasks - Development
+  fastapi_rbac_beat_dev:
+    build:
+      context: .
+      dockerfile: queue.dockerfile
+      args:
+        - NODE_ENV=development
+    image: fastapi_rbac_worker:dev
+    container_name: fastapi_rbac_beat_dev
+    volumes:
+      - .:/app
+      - fastapi_rbac_celery_beat_dev_schedule:/app/celerybeat-schedule
+    environment:
+      - MODE=development
+      - ENVIRONMENT=development
+      - C_FORCE_ROOT=true
+      - DATABASE_HOST=fastapi_rbac_db_dev
+      - REDIS_HOST=fastapi_rbac_redis_dev
+      - SMTP_HOST=mailhog_dev
+    env_file:
+      - .env.development
+    command: ["/bin/bash", "/app/scripts/beat-fixed.sh"]
+    depends_on:
+      fastapi_rbac_redis_dev:
+        condition: service_healthy
+      fastapi_rbac_worker_dev:
+        condition: service_started
+    restart: on-failure
+    networks:
+      - fastapi_rbac_dev_network
+
+  # Celery Flower monitoring dashboard - Development
+  fastapi_rbac_flower_dev:
+    build:
+      context: .
+      dockerfile: queue.dockerfile
+      args:
+        - NODE_ENV=development
+    image: fastapi_rbac_worker:dev
+    container_name: fastapi_rbac_flower_dev
+    volumes:
+      - .:/app
+    environment:
+      - MODE=development
+      - ENVIRONMENT=development
+      - DATABASE_HOST=fastapi_rbac_db_dev
+      - REDIS_HOST=fastapi_rbac_redis_dev
+    env_file:
+      - .env.development
+    ports:
+      - "5555:5555" # Flower web interface
+    command: ["/bin/bash", "/app/scripts/flower-start.sh"]
+    depends_on:
+      fastapi_rbac_redis_dev:
+        condition: service_healthy
+      fastapi_rbac_worker_dev:
+        condition: service_started
+    restart: on-failure
+    networks:
+      - fastapi_rbac_dev_network
+
+volumes:
+  fastapi_rbac_celery_beat_dev_schedule:
+    name: fastapi_rbac_celery_beat_dev_schedule

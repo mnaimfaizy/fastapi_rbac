@@ -1,4 +1,4 @@
-#!/bin/bash
+﻿#!/bin/bash
 
 echo "=== FastAPI RBAC System Development Mode ==="
 

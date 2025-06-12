@@ -1,5 +1,5 @@
 # Docker Compose for Local Development Environment
-# This is the main development compose file that includes all services needed for local development
+# This configuration is optimized for development with hot-reload and debugging features
 
 include:
   - path: ./backend/docker-compose.dev.yml
@@ -30,7 +30,8 @@ services:
       - POSTGRESQL_USERNAME=${DATABASE_USER:-postgres}
       - POSTGRESQL_PASSWORD=${DATABASE_PASSWORD:-postgres}
       - POSTGRESQL_DATABASE=${DATABASE_NAME:-fastapi_dev_db}
-      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL:-admin@example.com}      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD:-admin}
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL:-admin@example.com}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD:-admin}
       - ALLOW_EMPTY_PASSWORD=yes
     user: root
     volumes:

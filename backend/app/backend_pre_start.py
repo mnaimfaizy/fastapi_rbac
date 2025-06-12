@@ -98,14 +98,15 @@ def wait_for_redis() -> None:
         redis_port_from_settings = settings.REDIS_PORT
 
         # Check if running in a container environment (useful for Docker)
-        in_container = os.getenv("CONTAINER_MODE", "").lower() == "true"
-
-        # Get Redis connection details based on environment mode
+        in_container = (
+            os.getenv("CONTAINER_MODE", "").lower() == "true"
+        )  # Get Redis connection details based on environment mode
         if settings.MODE == ModeEnum.development:
-            redis_host = "localhost"  # Use local Redis for development
-            redis_port_str = str(default_redis_port)  # Ensure it's a string for consistency
+            # In Docker development, use the container name from settings
+            redis_host = os.getenv("REDIS_HOST", str(redis_host_from_settings))
+            redis_port_str = os.getenv("REDIS_PORT", str(redis_port_from_settings))
             redis_ssl = False
-            logger.info("Development mode: Using local Redis without SSL.")
+            logger.info("Development mode: Using configured Redis without SSL.")
         elif settings.MODE == ModeEnum.testing:
             # Use configured Redis for testing (likely Docker)
             redis_host = os.getenv("REDIS_HOST", str(redis_host_from_settings))

@@ -1,93 +1,186 @@
+# Backend Testing Docker Compose
+# This is used for integration testing and CI/CD pipelines
+
 services:
-  fastapi_rbac:
+  fastapi_rbac_test:
     build:
       context: .
       dockerfile: Dockerfile
-    image: fastapi_rbac:latest
-    container_name: fastapi_rbac
+      args:
+        - NODE_ENV=testing
+    image: fastapi_rbac:test
+    container_name: fastapi_rbac_test
     environment:
       - MODE=testing
+      - ENVIRONMENT=testing
+      - DATABASE_HOST=fastapi_rbac_db_test
+      - REDIS_HOST=fastapi_rbac_redis_test
+      - SMTP_HOST=mailhog_test
     env_file:
       - .env.test
     ports:
-      - "8000:8000"
+      - "8002:8000" # Different port for testing
     volumes:
       - .:/app
     networks:
-      - fastapi_rbac_network
+      - fastapi_rbac_test_network
+    depends_on:
+      fastapi_rbac_db_test:
+        condition: service_healthy
+      fastapi_rbac_redis_test:
+        condition: service_healthy
 
-  # Celery worker for background tasks
-  fastapi_rbac_worker:
+  # Celery worker for background tasks - Testing
+  fastapi_rbac_worker_test:
     build:
       context: .
       dockerfile: queue.dockerfile
-    image: fastapi_rbac_worker:latest
-    container_name: fastapi_rbac_worker
+      args:
+        - NODE_ENV=testing
+    image: fastapi_rbac_worker:test
+    container_name: fastapi_rbac_worker_test
     volumes:
       - .:/app
     environment:
       - MODE=testing
+      - ENVIRONMENT=testing
       - C_FORCE_ROOT=true
+      - DATABASE_HOST=fastapi_rbac_db_test
+      - REDIS_HOST=fastapi_rbac_redis_test
+      - SMTP_HOST=mailhog_test
     env_file:
       - .env.test
     command: ["/bin/bash", "/app/scripts/worker-start.sh"]
     depends_on:
-      - fastapi_rbac_redis_server
+      fastapi_rbac_redis_test:
+        condition: service_healthy
+      fastapi_rbac_test:
+        condition: service_started
     restart: on-failure
     networks:
-      - fastapi_rbac_network
+      - fastapi_rbac_test_network
 
-  # Celery beat scheduler for periodic tasks
-  fastapi_rbac_beat:
+  # Celery beat scheduler for periodic tasks - Testing
+  fastapi_rbac_beat_test:
     build:
       context: .
       dockerfile: queue.dockerfile
-    image: fastapi_rbac_worker:latest
-    container_name: fastapi_rbac_beat
+      args:
+        - NODE_ENV=testing
+    image: fastapi_rbac_worker:test
+    container_name: fastapi_rbac_beat_test
     volumes:
       - .:/app
-      # Use a file-based volume for Celery beat
-      - celery-beat-schedule:/app/celerybeat-schedule
+      - fastapi_rbac_celery_beat_test_schedule:/app/celerybeat-schedule
     environment:
       - MODE=testing
+      - ENVIRONMENT=testing
       - C_FORCE_ROOT=true
+      - DATABASE_HOST=fastapi_rbac_db_test
+      - REDIS_HOST=fastapi_rbac_redis_test
+      - SMTP_HOST=mailhog_test
     env_file:
       - .env.test
     command: ["/bin/bash", "/app/scripts/beat-start.sh"]
     depends_on:
-      - fastapi_rbac_redis_server
-      - fastapi_rbac_worker
+      fastapi_rbac_redis_test:
+        condition: service_healthy
+      fastapi_rbac_worker_test:
+        condition: service_started
     restart: on-failure
     networks:
-      - fastapi_rbac_network
+      - fastapi_rbac_test_network
 
-  # Celery Flower monitoring dashboard
-  fastapi_rbac_flower:
+  # Celery Flower monitoring dashboard - Testing
+  fastapi_rbac_flower_test:
     build:
       context: .
       dockerfile: queue.dockerfile
-    image: fastapi_rbac_worker:latest
-    container_name: fastapi_rbac_flower
+      args:
+        - NODE_ENV=testing
+    image: fastapi_rbac_worker:test
+    container_name: fastapi_rbac_flower_test
     volumes:
       - .:/app
     environment:
       - MODE=testing
+      - ENVIRONMENT=testing
+      - DATABASE_HOST=fastapi_rbac_db_test
+      - REDIS_HOST=fastapi_rbac_redis_test
     env_file:
       - .env.test
     ports:
-      - "5555:5555" # Flower web interface
+      - "5556:5555" # Different port for testing
     command: ["/bin/bash", "/app/scripts/flower-start.sh"]
     depends_on:
-      - fastapi_rbac_redis_server
-      - fastapi_rbac_worker
+      fastapi_rbac_redis_test:
+        condition: service_healthy
+      fastapi_rbac_worker_test:
+        condition: service_started
     restart: on-failure
     networks:
-      - fastapi_rbac_network
+      - fastapi_rbac_test_network
+
+  # Supporting services for testing
+  fastapi_rbac_db_test:
+    image: bitnami/postgresql:15
+    container_name: fastapi_rbac_db_test
+    restart: always
+    ports:
+      - "5435:5432" # Different port for testing
+    env_file:
+      - .env.test
+    environment:
+      - POSTGRESQL_USERNAME=${DATABASE_USER:-postgres}
+      - POSTGRESQL_PASSWORD=${DATABASE_PASSWORD:-postgres}
+      - POSTGRESQL_DATABASE=${DATABASE_NAME:-fastapi_test_db}
+      - ALLOW_EMPTY_PASSWORD=yes
+    volumes:
+      - fastapi_rbac_db_test_data:/bitnami/postgresql
+    networks:
+      - fastapi_rbac_test_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  fastapi_rbac_redis_test:
+    image: redis:7-alpine
+    container_name: fastapi_rbac_redis_test
+    restart: always
+    ports:
+      - "6381:6379" # Different port for testing
+    command: redis-server --appendonly yes
+    volumes:
+      - fastapi_rbac_redis_test_data:/data
+    networks:
+      - fastapi_rbac_test_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  mailhog_test:
+    image: mailhog/mailhog:latest
+    container_name: fastapi_rbac_mailhog_test
+    ports:
+      - "1027:1025" # Different port for testing
+      - "8027:8025" # Web UI on different port
+    restart: unless-stopped
+    networks:
+      - fastapi_rbac_test_network
 
 networks:
-  fastapi_rbac_network:
-    name: fastapi_rbac_network
-    external: true
+  fastapi_rbac_test_network:
+    name: fastapi_rbac_test_network
+    driver: bridge
 
 volumes:
-  celery-beat-schedule:
+  fastapi_rbac_celery_beat_test_schedule:
+    name: fastapi_rbac_celery_beat_test_schedule
+  fastapi_rbac_db_test_data:
+    name: fastapi_rbac_db_test_data
+  fastapi_rbac_redis_test_data:
+    name: fastapi_rbac_redis_test_data

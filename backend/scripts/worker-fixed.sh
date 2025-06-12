@@ -1,4 +1,4 @@
-﻿#!/bin/bash
+#!/bin/bash
 set -e
 
 # Change to the backend directory
@@ -13,19 +13,12 @@ else
     export PYTHONPATH="$BACKEND_DIR:$PYTHONPATH"
 fi
 
-# On Windows, convert PYTHONPATH to use appropriate path separator
-case "$(uname -s)" in
-    *NT* | CYGWIN* | MINGW* | MSYS*)
-        export PYTHONPATH=$(echo $PYTHONPATH | tr ':' ';')
-        ;;
-esac
-
-# Activate virtual environment if it exists
-if [ -f ".venv/bin/activate" ]; then
-    source .venv/bin/activate
-elif [ -f ".venv/Scripts/activate" ]; then
-    source .venv/Scripts/activate
-fi
+# Virtual environment not needed in Docker container
+# if [ -f ".venv/bin/activate" ]; then
+#     source .venv/bin/activate
+# elif [ -f ".venv/Scripts/activate" ]; then
+#     source .venv/Scripts/activate
+# fi
 
 # Set PYTHONPATH directly before executing python
 PYTHONPATH=$PYTHONPATH python -c "import sys; print('Python path:', sys.path)"
@@ -34,7 +27,3 @@ python ./app/backend_pre_start.py
 
 echo "Starting Celery worker..."
 celery -A app.celery_app worker --loglevel=info -Q emails,maintenance,logging,user_management,default,periodic_tasks --concurrency=2
-
-# If you want to run Celery beat (scheduler) in the same container
-# Start with:
-# celery -A app.main.celery beat --loglevel=info

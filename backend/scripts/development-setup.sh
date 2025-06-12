@@ -1,4 +1,4 @@
-#!/bin/bash
+﻿#!/bin/bash
 # Development setup script for FastAPI RBAC project
 
 # Ensure the script exits on any error

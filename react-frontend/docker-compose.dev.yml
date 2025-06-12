@@ -1,0 +1,40 @@
+# React Frontend Development Docker Compose
+# Optimized for development with hot-reload and debugging
+
+services:
+  react_frontend_dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - NODE_ENV=development
+    image: react_frontend:dev
+    container_name: react_frontend_dev
+    environment:
+      - NODE_ENV=development
+    env_file:
+      - .env.development
+    ports:
+      - '3000:5173' # Vite dev server default port
+    volumes:
+      - .:/app
+      - /app/node_modules # Exclude node_modules from bind mount
+    command: ['npm', 'run', 'dev', '--', '--host', '0.0.0.0']
+    networks:
+      - fastapi_rbac_dev_network
+    restart: on-failure
+    depends_on:
+      - fastapi_rbac_dev
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--quiet',
+          '--tries=1',
+          '--spider',
+          'http://127.0.0.1:5173',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3

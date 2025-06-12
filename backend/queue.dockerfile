@@ -42,7 +42,7 @@ RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir psycopg2-binary
 
 # Copy scripts first but don't copy the rest of the app yet
-COPY worker-start.sh beat-start.sh flower-start.sh /app/
+COPY scripts/worker-start.sh scripts/beat-start.sh scripts/flower-start.sh /app/
 
 # Fix line endings for all shell scripts
 # Use dos2unix with -f to force conversion and overwrite original files

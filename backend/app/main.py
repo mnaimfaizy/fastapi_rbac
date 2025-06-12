@@ -86,16 +86,36 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         # HSTS header for HTTPS connections
         if request.url.scheme == "https":
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
-
-        # Content Security Policy for API responses
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; "
-            "object-src 'none'; "
-            "base-uri 'self'; "
-            "form-action 'self'; "
-            "frame-ancestors 'none'"
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains; preload"
+                # Content Security Policy - relaxed for docs endpoints to allow Swagger UI
+            )
+        docs_paths = ["/docs", "/redoc"]
+        is_docs_endpoint = (
+            request.url.path in docs_paths
+            or request.url.path.startswith("/docs/")
+            or request.url.path.startswith("/redoc/")
         )
+
+        if is_docs_endpoint:
+            # Relaxed CSP for API documentation endpoints
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self' 'unsafe-inline'; "
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; "
+                "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+                "img-src 'self' data: https://fastapi.tiangolo.com; "
+                "font-src 'self' https://cdn.jsdelivr.net; "
+                "connect-src 'self'"
+            )
+        else:
+            # Strict CSP for API responses
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; "
+                "object-src 'none'; "
+                "base-uri 'self'; "
+                "form-action 'self'; "
+                "frame-ancestors 'none'"
+            )
 
         return response
 
