@@ -43,12 +43,16 @@ services:
       retries: 5
     networks:
       - fastapi_rbac_test_network
-
   # FastAPI Backend Application for testing
   fastapi_rbac_test:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: testing
+      args:
+        - NODE_ENV=testing
+        - ENVIRONMENT=testing
+    image: fastapi_rbac:test
     restart: always
     container_name: fastapi_rbac_test
     ports:
@@ -77,15 +81,22 @@ services:
       fastapi_rbac_redis_test:
         condition: service_healthy
     networks:
-      - fastapi_rbac_test_network # React Frontend Application for testing
+      - fastapi_rbac_test_network
+
+  # React Frontend Application for testing
   react_frontend_test:
     build:
       context: ./react-frontend
       dockerfile: Dockerfile
+      target: testing
+      args:
+        - NODE_ENV=testing
+        - VITE_MODE=testing
+    image: react_frontend:test
     restart: always
     container_name: react_frontend_test
     ports:
-      - "3001:5173" # Different port for test environment, React dev server runs on 5173
+      - "3001:3000" # Different port for test environment, React dev server runs on 3000
     env_file:
       - ./react-frontend/.env.test
     environment:
@@ -96,7 +107,7 @@ services:
       - ./react-frontend:/app
       - /app/node_modules
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5173"]
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -105,12 +116,16 @@ services:
       - fastapi_rbac_test
     networks:
       - fastapi_rbac_test_network
-
   # Celery Worker for background tasks in test environment
   fastapi_rbac_worker_test:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: testing
+      args:
+        - NODE_ENV=testing
+        - ENVIRONMENT=testing
+    image: fastapi_rbac_worker:test
     restart: always
     container_name: fastapi_rbac_worker_test
     command: celery -A app.celery_app worker --loglevel=info
@@ -133,15 +148,19 @@ services:
         condition: service_healthy
     networks:
       - fastapi_rbac_test_network
-
   # Celery Beat Scheduler for periodic tasks in test environment
   fastapi_rbac_beat_test:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: testing
+      args:
+        - NODE_ENV=testing
+        - ENVIRONMENT=testing
+    image: fastapi_rbac_worker:test
     restart: always
     container_name: fastapi_rbac_beat_test
-    command: celery -A app.celery_app beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    command: celery -A app.celery_app beat --loglevel=info
     env_file:
       - ./backend/.env.test
     environment:

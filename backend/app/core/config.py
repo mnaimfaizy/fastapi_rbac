@@ -228,10 +228,8 @@ class Settings(BaseSettings):
     CELERY_TASK_SERIALIZER: str = "json"
     CELERY_RESULT_SERIALIZER: str = "json"
     CELERY_ACCEPT_CONTENT: List[str] = ["json"]
-    CELERY_TIMEZONE: str = "UTC"
-
-    # Celery Beat Settings
-    CELERY_BEAT_SCHEDULER: str = "django_celery_beat.schedulers:DatabaseScheduler"
+    CELERY_TIMEZONE: str = "UTC"  # Celery Beat Settings
+    CELERY_BEAT_SCHEDULER: str = "celery.beat:PersistentScheduler"
     CELERY_BEAT_MAX_LOOP_INTERVAL: int = 5
 
     # Task Queue Settings

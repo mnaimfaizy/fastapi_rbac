@@ -1,18 +1,20 @@
-FROM python:3.10-slim-buster
+# Multi-stage Dockerfile for FastAPI RBAC Backend
+# Supports development, testing, and production environments
+
+# Base stage with common dependencies
+FROM python:3.10-slim-buster as base
 
 WORKDIR /app
 
 # https://docs.python.org/3/using/cmdline.html#envvar-PYTHONDONTWRITEBYTECODE
 # Prevents Python from writing .pyc files to disk
-ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONDONTWRITEBYTECODE=1
 
 # ensures that the python output is sent straight to terminal (e.g. your container log)
 # without being first buffered and that you can see the output of your application (e.g. django logs)
 # in real time. Equivalent to python -u: https://docs.python.org/3/using/cmdline.html#cmdoption-u
-ENV PYTHONUNBUFFERED 1
-ENV ENVIRONMENT dev
-ENV TESTING 0
-ENV FASTAPI_ENV='development'
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
 
 # Install system dependencies
 RUN apt-get update \
@@ -36,18 +38,21 @@ COPY ./requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
+# Development stage
+FROM base as development
+
+ENV ENVIRONMENT=development
+ENV TESTING=0
+ENV FASTAPI_ENV=development
+
 # Copy openssl config to Docker Container
 COPY ./.docker/openssl.cnf /etc/ssl/openssl.cnf
 
 # Copy source code
 COPY . .
 
-ENV PYTHONPATH=/app
-
 # Fix line endings & execute permissions
-# Ensure dos2unix runs and handle potential errors
-RUN apt-get update && apt-get install -y dos2unix && \
-    find /app -name '*.sh' -exec dos2unix {} \; && \
+RUN find /app -name '*.sh' -exec dos2unix {} \; && \
     find /app -name '*.sh' -exec chmod +x {} \;
 
 # Create the log file to be able to run tail
@@ -55,5 +60,71 @@ RUN touch /var/log/cron.log
 
 EXPOSE 8000
 
-# Use the new consolidated entrypoint script
-CMD ["bash", "/app/entrypoint.sh"]
+# Use the development entrypoint script
+CMD ["bash", "/app/scripts/development-entrypoint.sh"]
+
+# Testing stage
+FROM base as testing
+
+ENV ENVIRONMENT=testing
+ENV TESTING=1
+ENV FASTAPI_ENV=testing
+
+# Install additional testing dependencies
+RUN pip install --no-cache-dir pytest pytest-asyncio pytest-cov httpx
+
+# Copy openssl config to Docker Container
+COPY ./.docker/openssl.cnf /etc/ssl/openssl.cnf
+
+# Copy source code
+COPY . .
+
+# Fix line endings & execute permissions
+RUN find /app -name '*.sh' -exec dos2unix {} \; && \
+    find /app -name '*.sh' -exec chmod +x {} \;
+
+# Create the log file to be able to run tail
+RUN touch /var/log/cron.log
+
+EXPOSE 8000
+
+# Use the testing entrypoint script
+CMD ["bash", "/app/scripts/testing-entrypoint.sh"]
+
+# Production stage
+FROM base as production
+
+ENV ENVIRONMENT=production
+ENV TESTING=0
+ENV FASTAPI_ENV=production
+
+# Copy openssl config to Docker Container
+COPY ./.docker/openssl.cnf /etc/ssl/openssl.cnf
+
+# Copy source code (excluding development files)
+COPY ./app ./app
+COPY ./alembic ./alembic
+COPY ./scripts ./scripts
+COPY ./init-scripts ./init-scripts
+COPY ./email-templates ./email-templates
+COPY ./certs ./certs
+COPY ./alembic.ini ./
+COPY ./logging.ini ./
+COPY ./pyproject.toml ./
+
+# Fix line endings & execute permissions
+RUN find /app -name '*.sh' -exec dos2unix {} \; && \
+    find /app -name '*.sh' -exec chmod +x {} \;
+
+# Create the log file to be able to run tail
+RUN touch /var/log/cron.log
+
+# Create non-root user for security
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+RUN chown -R appuser:appuser /app
+USER appuser
+
+EXPOSE 8000
+
+# Use the production entrypoint script
+CMD ["bash", "/app/scripts/entrypoint.sh"]

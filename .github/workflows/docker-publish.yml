@@ -43,14 +43,14 @@ jobs:
           else
             # This case should ideally not be reached with the current 'on' triggers.
             # If it is, the script will use its own fallback (git describe or 'latest').
-            echo "Workflow: Not a 'v*' tag or main branch push. IMAGE_TAG not set by workflow. Script will use its fallback logic."
-          fi
+            echo "Workflow: Not a 'v*' tag or main branch push. IMAGE_TAG not set by workflow. Script will use its fallback logic."          fi
         shell: bash
+
       - name: Run push script
         # The IMAGE_TAG environment variable is now available to the script
         run: |
-          chmod +x ./scripts/deployment/push-to-dockerhub.sh
-          ./scripts/deployment/push-to-dockerhub.sh
+          chmod +x ./scripts/deployment/production/build-and-push.sh
+          ./scripts/deployment/production/build-and-push.sh
         working-directory: ./ # Ensures script is run from the repo root where it's located
 
       - name: Update Docker Hub Description for Backend

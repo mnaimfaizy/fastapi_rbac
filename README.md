@@ -35,7 +35,7 @@ All documentation has been organized for easy navigation:
 Utility scripts are organized by purpose in the [`scripts/`](scripts/) directory:
 
 - **Development**: [`scripts/dev/`](scripts/dev/) - Local development helpers
-- **Docker**: [`scripts/docker/`](scripts/docker/) - Container operations
+- **Docker**: [`scripts/docker/`](scripts/docker/) - Container operations & production builds
 - **Deployment**: [`scripts/deployment/`](scripts/deployment/) - Release and deployment
 - **Database**: [`scripts/database/`](scripts/database/) - Database management
 

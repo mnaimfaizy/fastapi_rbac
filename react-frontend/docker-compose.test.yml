@@ -1,4 +1,5 @@
-version: '3.8'
+# React Frontend Test Environment
+# This compose file contains the frontend service for testing
 
 services:
   # React Frontend Application for testing
@@ -6,7 +7,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: development
+      target: testing
+      args:
+        - NODE_ENV=testing
+        - VITE_MODE=testing
+    image: react_frontend:test
     restart: always
     container_name: react_frontend_test
     ports:
@@ -26,8 +31,6 @@ services:
       timeout: 10s
       retries: 5
       start_period: 40s
-    depends_on:
-      - fastapi_rbac_test
     networks:
       - fastapi_rbac_test_network
 

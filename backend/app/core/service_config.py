@@ -1,12 +1,9 @@
 """
-Configuration for external services like Celery and
-Redis with environment-specific settings.
-This module provides different configurations based on the current environment
-(development, testing, production).
+Service configuration for environment-specific settings.
+Manages Redis, Celery, and other service configurations.
 """
 
 import os
-from functools import lru_cache
 from typing import Any, Dict
 
 from app.core.config import ModeEnum, settings
@@ -32,8 +29,11 @@ class ServiceSettings:
             port = os.getenv("REDIS_PORT", settings.REDIS_PORT)
             return f"redis://{host}:{port}/0"
         elif self.mode == ModeEnum.testing:
-            # For testing, use an in-memory mock or a test-specific Redis
-            return "redis://localhost:6379/1"  # Use DB 1 for testing
+            # For testing, use the configured Redis host (Docker container or localhost)
+            host = os.getenv("REDIS_HOST", settings.REDIS_HOST)
+            port = os.getenv("REDIS_PORT", settings.REDIS_PORT)
+            db = os.getenv("REDIS_DB", "0")  # Use configured DB or default to 0
+            return f"redis://{host}:{port}/{db}"
         else:
             # For production, use the Docker container's Redis service with TLS
             return f"rediss://{settings.REDIS_HOST}:{settings.REDIS_PORT}/0?ssl_cert_reqs=none"
@@ -57,67 +57,85 @@ class ServiceSettings:
         """
         Determine whether to use Celery based on environment
         """
-        # In testing, you might want to execute tasks synchronously
-        if self.mode == ModeEnum.testing:
-            return os.getenv("USE_CELERY_IN_TESTING", "false").lower() == "true"
+        return self.mode in [ModeEnum.development, ModeEnum.production]
 
-        # In development, you can toggle Celery on/off for easier debugging
-        if self.mode == ModeEnum.development:
-            return os.getenv("USE_CELERY_IN_DEV", "true").lower() == "true"
-
-        # Always use Celery in production
-        return True
-
-    def get_celery_config(self) -> Dict[str, Any]:
+    @property
+    def celery_task_routes(self) -> Dict[str, Any]:
         """
-        Get the Celery configuration based on current environment
+        Get task routing configuration for Celery
         """
-        common_config = {
-            "broker_url": self.celery_broker_url,
-            "result_backend": self.celery_result_backend,
-            "task_serializer": "json",
-            "accept_content": ["json"],
-            "result_serializer": "json",
-            "timezone": "UTC",
-            "enable_utc": True,
+        return {
+            "app.worker.send_email": {"queue": "email"},
+            "app.worker.send_reset_password_email": {"queue": "email"},
+            "app.worker.send_verification_email": {"queue": "email"},
+            "app.worker.cleanup_unverified_accounts": {"queue": "cleanup"},
+            "app.worker.cleanup_expired_tokens": {"queue": "cleanup"},
         }
 
+    @property
+    def celery_beat_schedule(self) -> Dict[str, Any]:
+        """
+        Get scheduled task configuration for Celery Beat
+        """
+        return {
+            "cleanup-unverified-accounts": {
+                "task": "app.worker.cleanup_unverified_accounts",
+                "schedule": 3600.0,  # Run every hour
+            },
+            "cleanup-expired-tokens": {
+                "task": "app.worker.cleanup_expired_tokens",
+                "schedule": 1800.0,  # Run every 30 minutes
+            },
+        }
+
+    @property
+    def email_settings(self) -> Dict[str, Any]:
+        """
+        Get email configuration based on environment
+        """
         if self.mode == ModeEnum.development:
-            # Development-specific settings
-            dev_config = {
-                "worker_concurrency": 1,
-                "task_always_eager": os.getenv("CELERY_TASK_ALWAYS_EAGER", "false").lower() == "true",
-                "task_eager_propagates": True,
+            return {
+                "SMTP_HOST": os.getenv("SMTP_HOST", "mailhog"),
+                "SMTP_PORT": int(os.getenv("SMTP_PORT", "1025")),
+                "SMTP_TLS": os.getenv("SMTP_TLS", "false").lower() == "true",
+                "SMTP_USER": os.getenv("SMTP_USER", ""),
+                "SMTP_PASSWORD": os.getenv("SMTP_PASSWORD", ""),
             }
-            common_config.update(dev_config)
-
         elif self.mode == ModeEnum.testing:
-            # Testing-specific settings - execute tasks synchronously by default
-            test_config = {
-                "task_always_eager": True,
-                "task_eager_propagates": True,
-                "worker_concurrency": 1,
+            return {
+                "SMTP_HOST": os.getenv("SMTP_HOST", "mailhog_test"),
+                "SMTP_PORT": int(os.getenv("SMTP_PORT", "1025")),
+                "SMTP_TLS": os.getenv("SMTP_TLS", "false").lower() == "true",
+                "SMTP_USER": os.getenv("SMTP_USER", ""),
+                "SMTP_PASSWORD": os.getenv("SMTP_PASSWORD", ""),
             }
-            common_config.update(test_config)
-
-        elif self.mode == ModeEnum.production:
-            # Production-specific settings
-            prod_config = {
-                "worker_concurrency": os.getenv("CELERY_CONCURRENCY", "8"),
-                "broker_connection_retry_on_startup": True,
-                "broker_pool_limit": 10,
+        else:
+            # Production settings
+            return {
+                "SMTP_HOST": settings.SMTP_HOST,
+                "SMTP_PORT": settings.SMTP_PORT,
+                "SMTP_TLS": settings.SMTP_TLS,
+                "SMTP_USER": settings.SMTP_USER,
+                "SMTP_PASSWORD": settings.SMTP_PASSWORD,
             }
-            common_config.update(prod_config)
 
-        return common_config
+    @property
+    def database_url(self) -> str:
+        """
+        Get database URL based on environment
+        """
+        if self.mode == ModeEnum.testing:
+            # Use environment variables for testing
+            host = os.getenv("DATABASE_HOST", settings.DATABASE_HOST)
+            port = os.getenv("DATABASE_PORT", str(settings.DATABASE_PORT))
+            user = os.getenv("DATABASE_USER", settings.DATABASE_USER)
+            password = os.getenv("DATABASE_PASSWORD", settings.DATABASE_PASSWORD)
+            db_name = os.getenv("DATABASE_NAME", settings.DATABASE_NAME)
+            return f"postgresql://{user}:{password}@{host}:{port}/{db_name}"
+        else:
+            # Use settings for development and production
+            return str(settings.DATABASE_URL)
 
 
-@lru_cache()
-def get_service_settings() -> ServiceSettings:
-    """
-    Get cached service settings instance.
-    """
-    return ServiceSettings()
-
-
-service_settings = get_service_settings()
+# Global instance
+service_settings = ServiceSettings()

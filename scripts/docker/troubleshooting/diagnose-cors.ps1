@@ -1,7 +1,35 @@
 # Helper script to diagnose CORS issues in the production docker environment
 param (
-    [switch]$Restart = $false
+    [switch]$Restart = $false,
+    [switch]$Help
 )
+
+function Show-Help {
+    Write-Host "`n🌐 CORS Diagnostics Script" -ForegroundColor Cyan
+    Write-Host "===========================" -ForegroundColor Cyan
+    Write-Host "`nThis script helps diagnose CORS configuration issues in Docker environments.`n" -ForegroundColor White
+
+    Write-Host "📋 Parameters:" -ForegroundColor Yellow
+    Write-Host "  -Restart  : Restart containers before running diagnostics" -ForegroundColor White
+    Write-Host "  -Help     : Show this help message" -ForegroundColor White
+
+    Write-Host "`n💡 Examples:" -ForegroundColor Yellow
+    Write-Host "  .\diagnose-cors.ps1           # Run CORS diagnostics" -ForegroundColor White
+    Write-Host "  .\diagnose-cors.ps1 -Restart  # Restart containers and run diagnostics" -ForegroundColor White
+
+    Write-Host "`n🔧 What it checks:" -ForegroundColor Yellow
+    Write-Host "  • Backend CORS configuration in logs" -ForegroundColor White
+    Write-Host "  • Container-to-container connectivity" -ForegroundColor White
+    Write-Host "  • Frontend environment variables" -ForegroundColor White
+    Write-Host "  • API health endpoints" -ForegroundColor White
+    Write-Host ""
+}
+
+# Check for help request
+if ($Help) {
+    Show-Help
+    exit 0
+}
 
 if ($Restart) {
     # Restart containers to apply any config changes

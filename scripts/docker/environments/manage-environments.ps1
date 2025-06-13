@@ -3,15 +3,18 @@
 # This script helps manage different Docker environments with proper separation
 
 param(
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory=$false)]
     [ValidateSet("dev", "test", "prod-test", "prod")]
     [string]$Environment,
-      [Parameter(Mandatory=$true)]
-    [ValidateSet("up", "down", "restart", "logs", "status", "clean", "build")]
+
+    [Parameter(Mandatory=$false)]
+    [ValidateSet("up", "down", "restart", "logs", "status", "clean", "build", "help")]
     [string]$Action,
-      [switch]$Detached,
+
+    [switch]$Detached,
     [switch]$Build,
-    [switch]$VerboseOutput
+    [switch]$VerboseOutput,
+    [switch]$Help
 )
 
 # Set error action preference
@@ -30,7 +33,7 @@ function Write-ColorOutput {
 # Environment configuration
 $environments = @{
     "dev" = @{
-        "compose_files" = @("docker-compose.yml")
+        "compose_files" = @("docker-compose.dev.yml")
         "network" = "fastapi_rbac_dev_network"
         "description" = "Development Environment (Hot-reload, Debug mode)"
         "ports" = @{
@@ -52,6 +55,7 @@ $environments = @{
             "frontend" = "3001"
             "db" = "5435"
             "redis" = "6381"
+            "pgadmin" = "8082"
             "mailhog" = "8027"
             "flower" = "5556"
         }
@@ -83,6 +87,55 @@ $environments = @{
     }
 }
 
+# Handle help request
+if ($Help -or $Action -eq "help") {
+    Write-ColorOutput "🐳 Docker Environment Manager - Help" "Cyan"
+    Write-ColorOutput "======================================" "Cyan"
+    Write-ColorOutput "`nThis script manages Docker environments for the FastAPI RBAC project.`n" "White"
+
+    Write-ColorOutput "📋 Usage:" "Yellow"
+    Write-ColorOutput "  .\manage-environments.ps1 -Environment <env> -Action <action> [options]" "White"
+
+    Write-ColorOutput "`n🌐 Environments:" "Yellow"
+    Write-ColorOutput "  dev        : Development environment with hot reload" "White"
+    Write-ColorOutput "  test       : Testing environment with test data" "White"
+    Write-ColorOutput "  prod-test  : Production-like testing environment" "White"
+    Write-ColorOutput "  prod       : Production environment (secure, optimized)" "White"
+
+    Write-ColorOutput "`n⚡ Actions:" "Yellow"
+    Write-ColorOutput "  up         : Start the environment" "White"
+    Write-ColorOutput "  down       : Stop the environment" "White"
+    Write-ColorOutput "  restart    : Restart the environment" "White"
+    Write-ColorOutput "  logs       : Show container logs" "White"
+    Write-ColorOutput "  status     : Show container status" "White"
+    Write-ColorOutput "  clean      : Stop and remove containers, networks, volumes" "White"
+    Write-ColorOutput "  build      : Build/rebuild container images" "White"
+
+    Write-ColorOutput "`n🔧 Options:" "Yellow"
+    Write-ColorOutput "  -Detached      : Run in detached mode (background)" "White"
+    Write-ColorOutput "  -Build         : Build images before starting" "White"
+    Write-ColorOutput "  -VerboseOutput : Show detailed command output" "White"
+
+    Write-ColorOutput "`n💡 Examples:" "Yellow"
+    Write-ColorOutput "  .\manage-environments.ps1 -Environment test -Action up         # Start test environment" "White"
+    Write-ColorOutput "  .\manage-environments.ps1 -Environment dev -Action up -Build   # Build and start dev" "White"
+    Write-ColorOutput "  .\manage-environments.ps1 -Environment prod -Action status     # Check prod status" "White"
+    Write-ColorOutput "  .\manage-environments.ps1 -Environment test -Action clean      # Full cleanup" "White"
+    Write-ColorOutput "`n"
+    exit 0
+}
+
+# Validate required parameters
+if (-not $Environment) {
+    Write-ColorOutput "❌ Environment parameter is required. Use -Help for usage information." "Red"
+    exit 1
+}
+
+if (-not $Action) {
+    Write-ColorOutput "❌ Action parameter is required. Use -Help for usage information." "Red"
+    exit 1
+}
+
 # Get environment configuration
 $envConfig = $environments[$Environment]
 if (-not $envConfig) {
@@ -109,9 +162,16 @@ function Invoke-DockerCompose {
     & $fullCommand[0] $fullCommand[1..($fullCommand.Length-1)]
 }
 
-# Create network if it doesn't exist
+# Create network if it doesn't exist (for environments that need manual network creation)
 function Ensure-Network {
     $networkName = $envConfig.network
+
+    # For test environment, let Docker Compose manage the network
+    if ($Environment -eq "test") {
+        Write-ColorOutput "Network will be managed by Docker Compose" "Blue"
+        return
+    }
+
     $networkExists = docker network ls --format "{{.Name}}" | Where-Object { $_ -eq $networkName }
     if (-not $networkExists) {
         Write-ColorOutput "Creating network: $networkName" "Yellow"

@@ -1,4 +1,5 @@
-version: "3.8"
+# Backend Test Environment
+# This compose file contains backend services for testing
 
 services:
   # FastAPI Backend Application for testing
@@ -6,6 +7,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: testing
+      args:
+        - NODE_ENV=testing
+        - ENVIRONMENT=testing
+    image: fastapi_rbac:test
     restart: always
     container_name: fastapi_rbac_test
     ports:
@@ -35,12 +41,16 @@ services:
         condition: service_healthy
     networks:
       - fastapi_rbac_test_network
-
   # Celery Worker for background tasks in test environment
   fastapi_rbac_worker_test:
     build:
       context: .
       dockerfile: Dockerfile
+      target: testing
+      args:
+        - NODE_ENV=testing
+        - ENVIRONMENT=testing
+    image: fastapi_rbac_worker:test
     restart: always
     container_name: fastapi_rbac_worker_test
     command: celery -A app.celery_app worker --loglevel=info
@@ -63,12 +73,16 @@ services:
         condition: service_healthy
     networks:
       - fastapi_rbac_test_network
-
   # Celery Beat Scheduler for periodic tasks in test environment
   fastapi_rbac_beat_test:
     build:
       context: .
       dockerfile: Dockerfile
+      target: testing
+      args:
+        - NODE_ENV=testing
+        - ENVIRONMENT=testing
+    image: fastapi_rbac_worker:test
     restart: always
     container_name: fastapi_rbac_beat_test
     command: celery -A app.celery_app beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
@@ -164,12 +178,16 @@ services:
       - "8027:8025" # Web UI port - Different for test
     networks:
       - fastapi_rbac_test_network
-
   # Flower for monitoring Celery tasks in test environment
   fastapi_rbac_flower_test:
     build:
       context: .
       dockerfile: Dockerfile
+      target: testing
+      args:
+        - NODE_ENV=testing
+        - ENVIRONMENT=testing
+    image: fastapi_rbac_worker:test
     restart: always
     container_name: fastapi_rbac_flower_test
     command: celery -A app.celery_app flower --port=5555
