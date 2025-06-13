@@ -121,9 +121,12 @@ python test/test_sanitization.py         # Input sanitization
 
 The project uses a modular Docker Compose structure:
 
-1. **Root `docker-compose.yml`**: Contains shared services (PostgreSQL, Redis, Mailhog)
-2. **`backend/docker-compose.yml`**: Contains backend-specific services
-3. **`react-frontend/docker-compose.yml`**: Contains frontend-specific services
+1. **Root `docker-compose.dev.yml`**: Development environment with shared services (PostgreSQL, Redis, Mailhog)
+2. **Root `docker-compose.test.yml`**: Testing environment for integration tests
+3. **Root `docker-compose.prod-test.yml`**: Production testing environment
+4. **`backend/docker-compose.dev.yml`**: Backend development services
+5. **`backend/docker-compose.test.yml`**: Backend testing services
+6. **`backend/docker-compose.prod.yml`**: Backend production services
 
 To run only the backend services:
 

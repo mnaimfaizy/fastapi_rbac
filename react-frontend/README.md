@@ -42,7 +42,9 @@ react-frontend/
 │   │   └── *.test.tsx  # Component and feature tests
 │   ├── App.tsx         # Main application component
 │   └── main.tsx        # Entry point
-├── docker-compose.yml  # Docker configuration for frontend services
+├── docker-compose.dev.yml   # Development Docker configuration
+├── docker-compose.test.yml  # Testing Docker configuration
+├── docker-compose.prod.yml  # Production Docker configuration
 ├── Dockerfile          # Docker configuration
 ├── nginx.conf          # Nginx configuration for Docker
 └── vite.config.ts      # Vite configuration
@@ -85,8 +87,14 @@ These files can be created from the provided `.env.example` template.
 
 The project uses a modular Docker Compose structure:
 
-1. Root docker-compose.yml: Contains shared services
-2. react-frontend/docker-compose.yml: Contains frontend-specific services
+1. **Root environments**:
+   - `docker-compose.dev.yml`: Development environment with shared services
+   - `docker-compose.test.yml`: Testing environment
+   - `docker-compose.prod-test.yml`: Production testing environment
+2. **Frontend-specific services**:
+   - `react-frontend/docker-compose.dev.yml`: Frontend development service
+   - `react-frontend/docker-compose.test.yml`: Frontend testing service
+   - `react-frontend/docker-compose.prod.yml`: Frontend production service
 
 Run just the frontend with:
 

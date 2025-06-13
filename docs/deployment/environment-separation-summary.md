@@ -17,21 +17,21 @@ The project now supports four distinct environments with complete isolation:
 
 #### Main Project Root
 
-- **`docker-compose.yml`** - Updated for development environment
-- **`docker-compose.dev.yml`** - New development environment file
-- **`docker-compose.prod-test.yml`** - Updated production testing environment
+- **`docker-compose.dev.yml`** - Development environment
+- **`docker-compose.test.yml`** - Testing environment
+- **`docker-compose.prod-test.yml`** - Production testing environment
 
 #### Backend Directory
 
-- **`backend/docker-compose.dev.yml`** - New backend development services
-- **`backend/docker-compose.yml`** - Updated for testing environment
-- **`backend/docker-compose.prod.yml`** - Completely rewritten for production
+- **`backend/docker-compose.dev.yml`** - Backend development services
+- **`backend/docker-compose.test.yml`** - Backend testing environment
+- **`backend/docker-compose.prod.yml`** - Backend production services
 
 #### Frontend Directory
 
-- **`react-frontend/docker-compose.dev.yml`** - New frontend development service
-- **`react-frontend/docker-compose.yml`** - Updated for testing environment
-- **`react-frontend/docker-compose.prod.yml`** - Updated for production
+- **`react-frontend/docker-compose.dev.yml`** - Frontend development service
+- **`react-frontend/docker-compose.test.yml`** - Frontend testing environment
+- **`react-frontend/docker-compose.prod.yml`** - Frontend production service
 
 ### 2. Environment Files
 

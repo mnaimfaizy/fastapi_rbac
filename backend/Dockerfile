@@ -106,7 +106,6 @@ COPY ./app ./app
 COPY ./alembic ./alembic
 COPY ./scripts ./scripts
 COPY ./init-scripts ./init-scripts
-COPY ./email-templates ./email-templates
 COPY ./certs ./certs
 COPY ./alembic.ini ./
 COPY ./logging.ini ./

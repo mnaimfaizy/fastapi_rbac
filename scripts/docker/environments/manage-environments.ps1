@@ -166,22 +166,27 @@ function Invoke-DockerCompose {
 function Ensure-Network {
     $networkName = $envConfig.network
 
-    # For test environment, let Docker Compose manage the network
-    if ($Environment -eq "test") {
-        Write-ColorOutput "Network will be managed by Docker Compose" "Blue"
+    # For 'dev' and 'test' environments, let Docker Compose manage the network
+    # as it's defined within their respective docker-compose.yml files.
+    if ($Environment -eq "dev" -or $Environment -eq "test") {
+        Write-ColorOutput "Network '$networkName' for '$Environment' environment will be managed by Docker Compose." "Blue"
         return
     }
 
+    # Fallback logic for other environments (if any) that might require manual network creation.
+    # This part remains from the original script structure but might be less relevant
+    # if all environments define networks in their compose files.
     $networkExists = docker network ls --format "{{.Name}}" | Where-Object { $_ -eq $networkName }
     if (-not $networkExists) {
-        Write-ColorOutput "Creating network: $networkName" "Yellow"
+        Write-ColorOutput "Creating network: $networkName (script is attempting manual creation)" "Yellow"
         docker network create $networkName
         if ($LASTEXITCODE -ne 0) {
             Write-ColorOutput "Failed to create network: $networkName" "Red"
             exit 1
         }
     } else {
-        Write-ColorOutput "Network exists: $networkName" "Green"
+        # If script sees network, it will let compose verify/use it.
+        Write-ColorOutput "Network '$networkName' already exists. Docker Compose will manage it." "Green"
     }
 }
 

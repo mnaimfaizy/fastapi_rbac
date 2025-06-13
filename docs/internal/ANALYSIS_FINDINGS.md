@@ -324,7 +324,9 @@ add_header Content-Security-Policy "
 - `backend/Dockerfile.prod` - Production backend container
 - `react-frontend/Dockerfile.prod` - Production frontend container
 - `react-frontend/nginx.conf` - Reverse proxy configuration
-- `docker-compose.yml` - Development environment
+- `docker-compose.dev.yml` - Development environment
+- `docker-compose.test.yml` - Testing environment
+- `docker-compose.prod-test.yml` - Production testing environment
 - `.github/workflows/backend-ci.yml` - CI/CD pipeline
 
 **CI/CD Pipeline Features:**

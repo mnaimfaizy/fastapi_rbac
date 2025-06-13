@@ -90,7 +90,9 @@ fastapi_rbac/
 │   ├── docker/            # Container operations
 │   ├── deployment/        # Release scripts
 │   └── database/          # DB management
-└── 📄 docker-compose.yml   # Development environment
+├── 📄 docker-compose.dev.yml      # Development environment
+├── 📄 docker-compose.test.yml     # Testing environment
+└── 📄 docker-compose.prod-test.yml # Production testing environment
 ```
 
 ## 🎯 Development Workflow

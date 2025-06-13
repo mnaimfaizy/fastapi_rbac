@@ -294,7 +294,9 @@ react-frontend/
 ├── .env.test                 # Test environment config
 ├── Dockerfile                # Development Docker configuration
 ├── Dockerfile.prod           # Production Docker configuration
-└── docker-compose.yml        # Development Docker Compose
+├── docker-compose.dev.yml    # Development Docker Compose
+├── docker-compose.test.yml   # Testing Docker Compose
+└── docker-compose.prod.yml   # Production Docker Compose
 ```
 
 ## Core Data Models

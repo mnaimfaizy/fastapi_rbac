@@ -87,10 +87,10 @@ docker-compose -f docker-compose.dev.yml down
 docker network create fastapi_rbac_test_network
 
 # Start services
-docker-compose -f docker-compose.yml up -d
+docker-compose -f docker-compose.dev.yml up -d
 
 # Stop services
-docker-compose -f docker-compose.yml down
+docker-compose -f docker-compose.dev.yml down
 ```
 
 #### Production Testing Environment

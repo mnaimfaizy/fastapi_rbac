@@ -107,13 +107,13 @@ function Install-Dependencies {
     }
 
     Write-ColorOutput "Installing Backend Dependencies..." "Blue"
-    Push-Location "$PSScriptRoot\..\..\..\backend"
+    Push-Location "$PSScriptRoot\\..\\..\\backend"
     & pip install -r requirements.txt
     Pop-Location
 
     if (-not $SkipFrontend) {
         Write-ColorOutput "Installing Frontend Dependencies..." "Blue"
-        Push-Location "$PSScriptRoot\..\..\..\react-frontend"
+        Push-Location "$PSScriptRoot\\..\\..\\react-frontend"
         & npm install
         Pop-Location
     }

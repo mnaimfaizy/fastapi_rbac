@@ -70,8 +70,8 @@ docker-compose -f docker-compose.prod.yml up --build
 **Command to start:**
 
 ```powershell
-cd d:\Projects\fastapi_rbac\backend
-docker-compose -f docker-compose.yml up --build
+cd d:\Projects\fastapi_rbac
+docker-compose -f docker-compose.dev.yml up --build
 ```
 
 ## Manual Database Operations

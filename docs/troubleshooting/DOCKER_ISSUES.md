@@ -236,7 +236,7 @@ This guide covers common Docker-related issues and their solutions for the FastA
 
 2. **Change Port Mappings**
    ```yaml
-   # In docker-compose.yml, change port mappings
+   # In docker-compose.dev.yml, change port mappings
    services:
      fastapi_rbac:
        ports:

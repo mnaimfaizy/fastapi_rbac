@@ -13,12 +13,14 @@ The project now supports three distinct environments, each with complete isolati
 ## Docker Image Naming Convention
 
 ### Backend Images
+
 - **Development**: `fastapi_rbac:dev`, `fastapi_rbac_worker:dev`
 - **Testing**: `fastapi_rbac:test`, `fastapi_rbac_worker:test`
 - **Production**: `fastapi_rbac:prod`, `fastapi_rbac_worker:prod`
 - **Production Testing**: `fastapi_rbac:prod-test`, `fastapi_rbac_worker:prod-test`
 
 ### Frontend Images
+
 - **Development**: `react_frontend:dev`
 - **Testing**: `react_frontend:test`
 - **Production**: `react_frontend:prod`
@@ -27,6 +29,7 @@ The project now supports three distinct environments, each with complete isolati
 ## Container Naming Convention
 
 ### Development Environment
+
 - `fastapi_rbac_dev`
 - `fastapi_rbac_worker_dev`
 - `fastapi_rbac_beat_dev`
@@ -38,6 +41,7 @@ The project now supports three distinct environments, each with complete isolati
 - `react_frontend_dev`
 
 ### Testing Environment
+
 - `fastapi_rbac_test`
 - `fastapi_rbac_worker_test`
 - `fastapi_rbac_beat_test`
@@ -48,6 +52,7 @@ The project now supports three distinct environments, each with complete isolati
 - `react_frontend_test`
 
 ### Production Environment
+
 - `fastapi_rbac_prod`
 - `fastapi_rbac_worker_prod`
 - `fastapi_rbac_beat_prod`
@@ -57,6 +62,7 @@ The project now supports three distinct environments, each with complete isolati
 - `react_frontend_prod`
 
 ### Production Testing Environment
+
 - `fastapi_rbac_prod_test`
 - `fastapi_rbac_worker_prod_test`
 - `fastapi_rbac_beat_prod_test`
@@ -69,6 +75,7 @@ The project now supports three distinct environments, each with complete isolati
 ## Port Separation
 
 ### Development Environment
+
 - Backend API: `8000`
 - Frontend: `3000` (Vite dev server on `5173`)
 - PostgreSQL: `5433`
@@ -78,6 +85,7 @@ The project now supports three distinct environments, each with complete isolati
 - Flower: `5555`
 
 ### Testing Environment
+
 - Backend API: `8002`
 - Frontend: `3001`
 - PostgreSQL: `5435`
@@ -86,6 +94,7 @@ The project now supports three distinct environments, each with complete isolati
 - Flower: `5556`
 
 ### Production Testing Environment
+
 - Backend API: `8001`
 - Frontend: `81`
 - PostgreSQL: `5434`
@@ -94,6 +103,7 @@ The project now supports three distinct environments, each with complete isolati
 - MailHog SMTP: `1026`, Web UI: `8026`
 
 ### Production Environment
+
 - Backend API: `8000`
 - Frontend: `80`
 - PostgreSQL: `5432`
@@ -110,23 +120,27 @@ The project now supports three distinct environments, each with complete isolati
 ## Volume Separation
 
 ### Development Environment
+
 - `fastapi_rbac_db_dev_data`
 - `fastapi_rbac_redis_dev_data`
 - `fastapi_rbac_pgadmin_dev_data`
 - `fastapi_rbac_celery_beat_dev_schedule`
 
 ### Testing Environment
+
 - `fastapi_rbac_db_test_data`
 - `fastapi_rbac_redis_test_data`
 - `fastapi_rbac_celery_beat_test_schedule`
 
 ### Production Testing Environment
+
 - `fastapi_rbac_db_prod_test_data`
 - `fastapi_rbac_redis_prod_test_data`
 - `fastapi_rbac_pgadmin_prod_test_data`
 - `fastapi_rbac_celery_beat_prod_test_data`
 
 ### Production Environment
+
 - `fastapi_rbac_postgres_prod_data`
 - `fastapi_rbac_redis_prod_data`
 - `fastapi_rbac_pgadmin_prod_data`
@@ -135,12 +149,14 @@ The project now supports three distinct environments, each with complete isolati
 ## Environment Files
 
 ### Backend Environment Files
+
 - `.env.development` - Development configuration
 - `.env.test` - Testing configuration
 - `.env.production` - Production configuration
 - `.env.example` - Template for environment variables
 
 ### Frontend Environment Files
+
 - `.env.development` - Development configuration
 - `.env.test` - Testing configuration
 - `.env.production` - Production configuration
@@ -149,6 +165,7 @@ The project now supports three distinct environments, each with complete isolati
 ## Running Each Environment
 
 ### Development Environment
+
 ```bash
 # Create development network
 docker network create fastapi_rbac_dev_network
@@ -161,18 +178,20 @@ docker-compose -f docker-compose.dev.yml logs -f
 ```
 
 ### Testing Environment
+
 ```bash
 # Create testing network
 docker network create fastapi_rbac_test_network
 
 # Start testing environment
-docker-compose -f docker-compose.yml up -d
+docker-compose -f docker-compose.test.yml up -d
 
 # Run tests
-docker-compose -f docker-compose.yml exec fastapi_rbac_test pytest
+docker-compose -f docker-compose.test.yml exec fastapi_rbac_test pytest
 ```
 
 ### Production Testing Environment
+
 ```bash
 # Start production testing environment
 docker-compose -f docker-compose.prod-test.yml up -d
@@ -182,6 +201,7 @@ docker-compose -f docker-compose.prod-test.yml logs -f
 ```
 
 ### Production Environment
+
 ```bash
 # Start production environment (individual service compose files)
 docker-compose -f backend/docker-compose.prod.yml -f react-frontend/docker-compose.prod.yml up -d
@@ -190,6 +210,7 @@ docker-compose -f backend/docker-compose.prod.yml -f react-frontend/docker-compo
 ## Key Configuration Differences
 
 ### Development Environment
+
 - Hot-reload enabled
 - Debug mode on
 - Longer token expiration times
@@ -200,12 +221,14 @@ docker-compose -f backend/docker-compose.prod.yml -f react-frontend/docker-compo
 - SQLite option available (configurable)
 
 ### Testing Environment
+
 - Similar to development but with testing-specific settings
 - Shorter timeouts for faster tests
 - Test database isolation
 - CI/CD optimized configurations
 
 ### Production Testing Environment
+
 - Production-like settings
 - Security configurations enabled
 - Redis with TLS
@@ -214,6 +237,7 @@ docker-compose -f backend/docker-compose.prod.yml -f react-frontend/docker-compo
 - Error tracking enabled
 
 ### Production Environment
+
 - Maximum security settings
 - Optimized performance configurations
 - TLS encryption for Redis
@@ -224,6 +248,7 @@ docker-compose -f backend/docker-compose.prod.yml -f react-frontend/docker-compo
 ## Environment Variable Synchronization
 
 All environment files are synchronized with:
+
 - Backend configuration (`app/core/config.py`)
 - Docker service names and ports
 - Database connection strings
@@ -243,25 +268,33 @@ All environment files are synchronized with:
 ## Troubleshooting
 
 ### Port Conflicts
+
 If ports are already in use, check which environment is running:
+
 ```bash
 docker ps --format "table {{.Names}}\t{{.Ports}}\t{{.Status}}"
 ```
 
 ### Network Issues
+
 Ensure networks are created before starting services:
+
 ```bash
 docker network ls | grep fastapi_rbac
 ```
 
 ### Volume Persistence
+
 Check volume status:
+
 ```bash
 docker volume ls | grep fastapi_rbac
 ```
 
 ### Environment Variable Issues
+
 Verify environment file loading:
+
 ```bash
 docker-compose -f <compose-file> config
 ```
