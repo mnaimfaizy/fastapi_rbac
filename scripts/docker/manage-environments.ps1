@@ -30,7 +30,7 @@ function Write-ColorOutput {
 # Environment configuration
 $environments = @{
     "dev" = @{
-        "compose_files" = @("docker-compose.dev.yml")
+        "compose_files" = @("docker-compose.yml")
         "network" = "fastapi_rbac_dev_network"
         "description" = "Development Environment (Hot-reload, Debug mode)"
         "ports" = @{
@@ -44,7 +44,7 @@ $environments = @{
         }
     }
     "test" = @{
-        "compose_files" = @("docker-compose.yml")
+        "compose_files" = @("docker-compose.test.yml")
         "network" = "fastapi_rbac_test_network"
         "description" = "Testing Environment (CI/CD, Integration tests)"
         "ports" = @{

@@ -1,5 +1,6 @@
 # Backend Development Docker Compose
 # Optimized for local development with hot-reload and debugging
+# Note: Database and Redis services are defined in the root docker-compose.dev.yml
 
 services:
   # FastAPI Backend Development Service
@@ -25,16 +26,7 @@ services:
     volumes:
       - .:/app
       - /app/node_modules # Exclude node_modules from bind mount
-    command:
-      [
-        "uvicorn",
-        "app.main:app",
-        "--host",
-        "0.0.0.0",
-        "--port",
-        "8000",
-        "--reload",
-      ]
+    command: ["bash", "/app/scripts/development-entrypoint.sh"]
     networks:
       - fastapi_rbac_dev_network
     depends_on:
