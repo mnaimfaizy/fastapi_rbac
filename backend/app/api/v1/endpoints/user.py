@@ -1,11 +1,13 @@
+import logging
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi_pagination import Params
 
 from app import crud
 from app.api import deps
+from app.core.config import settings
 from app.deps import user_deps
 from app.models import User
 from app.schemas.response_schema import (
@@ -16,8 +18,11 @@ from app.schemas.response_schema import (
     create_response,
 )
 from app.schemas.user_schema import IUserCreate, IUserRead, IUserUpdate
+from app.utils.background_tasks import send_verification_email
 from app.utils.exceptions.user_exceptions import UserSelfDeleteException
 from app.utils.user_utils import serialize_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -99,6 +104,7 @@ async def get_my_data(
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_user(
+    background_tasks: BackgroundTasks,
     new_user: IUserCreate = Depends(user_deps.user_exists),
     current_user: User = Depends(deps.get_current_user(required_permissions=["users.create"])),
 ) -> IPostResponseBase[IUserRead]:
@@ -107,9 +113,43 @@ async def create_user(
 
     Required roles:
     - admin
+
+    Note: Admin-created users behavior depends on configuration:
+    - ADMIN_CREATED_USERS_AUTO_VERIFIED: Auto-verify admin-created users
+    - ADMIN_CREATED_USERS_SEND_EMAIL: Send verification email to admin-created users
     """
+    from app.core.security import create_verification_token
+
+    # Configure user verification based on settings
+    if settings.ADMIN_CREATED_USERS_AUTO_VERIFIED:
+        new_user.verified = True
+        new_user.needs_to_change_password = False
+        message = "User created successfully and verified"
+    else:
+        new_user.verified = False
+        new_user.needs_to_change_password = True
+        message = "User created successfully"
+
+    # Create the user
     user = await crud.user.create_with_role(obj_in=new_user)
-    return create_response(data=serialize_user(user))
+
+    # Send verification email if configured and user is not auto-verified
+    if settings.ADMIN_CREATED_USERS_SEND_EMAIL and not settings.ADMIN_CREATED_USERS_AUTO_VERIFIED:
+        try:
+            verification_token = create_verification_token(user.email)
+            await send_verification_email(
+                background_tasks=background_tasks,
+                user_email=user.email,
+                verification_token=verification_token,
+                verification_url=settings.EMAIL_VERIFICATION_URL,
+            )
+            message += ". Verification email sent"
+        except Exception as e:
+            # Log the error but don't fail user creation
+            logger.error(f"Failed to send verification email to {user.email}: {e}")
+            message += ". Note: Verification email could not be sent"
+
+    return create_response(data=serialize_user(user), message=message)
 
 
 @router.put("/{user_id}")
@@ -123,19 +163,25 @@ async def update_user(
 
     Required roles:
     - admin
-    """
-    # If password is being updated, use password history management
+    """  # If password is being updated, use password history management
     if user_update.password:
         try:
             await crud.user.update_password(user=user, new_password=user_update.password)
-            # Remove password from update data since it's already been handled
-            user_update.password = None
+            # Create a new update object without the password field
+            update_data = user_update.model_dump(exclude_unset=True)
+            update_data.pop("password", None)  # Remove password from update data
+            user_update_without_password = IUserUpdate(
+                **{k: v for k, v in update_data.items() if k != "password"}
+            )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
+    else:
+        user_update_without_password = user_update
 
     # Update other fields if any
-    if any(getattr(user_update, field) is not None for field in user_update.__fields__):
-        updated_user = await crud.user.update(obj_current=user, obj_new=user_update)
+    update_fields = user_update_without_password.__fields__
+    if any(getattr(user_update_without_password, field) is not None for field in update_fields):
+        updated_user = await crud.user.update(obj_current=user, obj_new=user_update_without_password)
         return create_response(data=serialize_user(updated_user), message="User updated successfully")
 
     return create_response(data=serialize_user(user), message="No changes to update")

@@ -20,12 +20,12 @@ class RoleSchemaBase(BaseModel):
 # Properties to receive via API on Creation
 class IRoleCreate(RoleSchemaBase):
     name: str = Field(..., min_length=1)
-    permissions: Optional[List[UUID]] = []  # Add permissions field
+    permission_ids: Optional[List[UUID]] = []  # Add permission_ids field for consistency
 
 
 @optional()
 class IRoleUpdate(RoleSchemaBase):
-    pass
+    permission_ids: Optional[List[UUID]] = None
 
 
 # Output paginated data

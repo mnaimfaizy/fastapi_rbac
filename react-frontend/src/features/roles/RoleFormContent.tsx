@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import { AppDispatch, RootState } from '../../store';
 import {
   createRole,
@@ -11,6 +12,7 @@ import {
 } from '../../store/slices/roleSlice';
 import { fetchRoleGroups } from '../../store/slices/roleGroupSlice';
 import RoleForm, { RoleFormData } from './RoleForm';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -59,6 +61,10 @@ const RoleFormContent: React.FC = () => {
     }
   };
 
+  const handleCancel = () => {
+    navigate('/dashboard/roles');
+  };
+
   if (isEditMode && loading && !currentRole) {
     return (
       <Card>
@@ -87,6 +93,13 @@ const RoleFormContent: React.FC = () => {
   return (
     <Card>
       <CardHeader>
+        <Button
+          variant="ghost"
+          className="mb-2 p-0 h-8 w-8"
+          onClick={handleCancel}
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
         <CardTitle>
           {isEditMode ? `Edit Role: ${currentRole?.name}` : 'Create New Role'}
         </CardTitle>
@@ -94,6 +107,7 @@ const RoleFormContent: React.FC = () => {
       <CardContent>
         <RoleForm
           onSubmit={handleSubmit}
+          onCancel={handleCancel}
           initialData={isEditMode ? currentRole : null}
           isLoading={loading}
           roleGroups={roleGroups || []}

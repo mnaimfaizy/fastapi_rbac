@@ -26,7 +26,7 @@ import {
 // Define form schema with Zod
 const roleGroupSchema = z.object({
   name: z.string().min(1, 'Name is required'),
-  parent_id: z.string().optional(),
+  parent_id: z.string().nullable().optional(), // Allow null, undefined, or string
 });
 
 // Define form value types
@@ -52,7 +52,7 @@ const RoleGroupForm: React.FC<RoleGroupFormProps> = ({
     resolver: zodResolver(roleGroupSchema),
     defaultValues: {
       name: initialData?.name || '',
-      parent_id: initialData?.parent_id || undefined,
+      parent_id: initialData?.parent_id || null, // Use null instead of undefined for root groups
     },
   });
 
@@ -61,7 +61,7 @@ const RoleGroupForm: React.FC<RoleGroupFormProps> = ({
     if (initialData) {
       form.reset({
         name: initialData.name,
-        parent_id: initialData.parent_id,
+        parent_id: initialData.parent_id, // Keep the original value (null for root groups)
       });
     }
   }, [initialData, form]);
@@ -113,9 +113,10 @@ const RoleGroupForm: React.FC<RoleGroupFormProps> = ({
                 <FormLabel>Parent Group (Optional)</FormLabel>
                 <Select
                   onValueChange={(value) =>
-                    field.onChange(value === 'root' ? undefined : value)
+                    field.onChange(value === 'root' ? null : value)
                   }
                   defaultValue={field.value || 'root'}
+                  value={field.value || 'root'}
                 >
                   <FormControl>
                     <SelectTrigger>

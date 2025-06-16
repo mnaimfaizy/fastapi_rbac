@@ -16,7 +16,7 @@ export interface RoleGroup {
   updated_at?: string;
   created_by_id?: string;
   creator?: UserBasic;
-  parent_id?: string; // ID of the parent role group
+  parent_id?: string | null; // ID of the parent role group (null for root groups)
   children?: RoleGroup[]; // Child role groups
 }
 
@@ -37,7 +37,7 @@ export interface RoleGroupCreate {
 // Interface for updating a role group
 export interface RoleGroupUpdate {
   name?: string;
-  parent_id?: string;
+  parent_id?: string | null; // Allow null for root groups
   description?: string;
 }
 

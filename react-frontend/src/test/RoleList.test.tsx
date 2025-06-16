@@ -244,7 +244,7 @@ describe('RoleList Component', () => {
     it('renders correctly with default store state', () => {
       renderRoleList();
 
-      expect(screen.getByText('Roles')).toBeInTheDocument();
+      // RoleList no longer has the "Roles" heading - it's handled by parent component
       expect(screen.getByRole('table')).toBeInTheDocument();
     });
 
@@ -337,8 +337,12 @@ describe('RoleList Component', () => {
       // Should not show loading spinner when there's an error
       expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
 
-      // Should NOT show the table when there's an error - component shows error instead of table
-      expect(screen.queryByRole('table')).not.toBeInTheDocument();
+      // Should STILL show the table when there's an error - improved UX allows interaction
+      expect(screen.getByRole('table')).toBeInTheDocument();
+
+      // Check that error has retry and dismiss buttons
+      expect(screen.getByText('Retry')).toBeInTheDocument();
+      expect(screen.getByText('Dismiss')).toBeInTheDocument();
     });
 
     it('renders roles table with data from store', () => {
@@ -393,27 +397,6 @@ describe('RoleList Component', () => {
   });
 
   describe('Permission-Based Behavior', () => {
-    it('shows "Create Role" button when user has create permission', () => {
-      renderRoleList();
-
-      expect(screen.getByText('Create Role')).toBeInTheDocument();
-    });
-
-    it('hides "Create Role" button when user lacks create permission', () => {
-      const mockUsePermissions = vi.mocked(usePermissions);
-      mockUsePermissions.mockReturnValue({
-        hasPermission: (permission: string) => permission === 'role.read',
-        hasAnyPermission: () => true,
-        hasRole: () => true,
-        hasAnyRole: () => true,
-        hasPermissions: () => true,
-      });
-
-      renderRoleList();
-
-      expect(screen.queryByText('Create Role')).not.toBeInTheDocument();
-    });
-
     it('shows edit button when user has update permission', () => {
       renderRoleList();
 
@@ -777,18 +760,6 @@ describe('RoleList Component', () => {
         `/dashboard/roles/edit/${mockRoles[0].id}`
       );
     });
-
-    it('calls handleCreate when Create Role button is clicked', async () => {
-      const mockNavigateFunction = vi.fn();
-      mockNavigate.mockReturnValue(mockNavigateFunction);
-
-      renderRoleList();
-
-      const createButton = screen.getByText('Create Role');
-      await user.click(createButton);
-
-      expect(mockNavigateFunction).toHaveBeenCalledWith('/dashboard/roles/new');
-    });
   });
 
   describe('Delete Functionality', () => {
@@ -1136,6 +1107,63 @@ describe('RoleList Component', () => {
       // Should show view buttons for each role
       const viewButtons = screen.getAllByTitle('View role details');
       expect(viewButtons).toHaveLength(mockRoles.length);
+    });
+  });
+
+  describe('Error Handling', () => {
+    it('displays error message when error state is present', () => {
+      const errorMessage = 'Failed to fetch roles';
+
+      // Override the selector mock to return error state
+      const mockUseSelector = vi.mocked(useSelector);
+      mockUseSelector.mockImplementation((selector: any) => {
+        const mockState = {
+          role: {
+            roles: [mockRoles[0]], // Provide one role to prevent useEffect fetch
+            allRoles: [],
+            currentRole: null,
+            loading: false,
+            error: errorMessage,
+            pagination: {
+              total: 1,
+              page: 1,
+              size: 10,
+              pages: 1,
+            },
+          },
+          roleGroup: {
+            roleGroups: mockRoleGroups,
+            currentRoleGroup: null,
+            loading: false,
+            error: null,
+            pagination: {
+              total: mockRoleGroups.length,
+              page: 1,
+              size: 10,
+              pages: 1,
+              previousPage: null,
+              nextPage: null,
+            },
+          },
+        };
+        return selector(mockState);
+      });
+
+      renderRoleList();
+
+      // The error message should be displayed in a styled alert
+      expect(screen.getByText(errorMessage)).toBeInTheDocument();
+      expect(screen.getByText('Error')).toBeInTheDocument();
+
+      // Should not show loading spinner when there's an error
+      expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
+
+      // Should STILL show the table when there's an error - improved UX allows interaction
+      expect(screen.getByRole('table')).toBeInTheDocument();
+
+      // Check that error has retry and dismiss buttons
+      expect(screen.getByText('Retry')).toBeInTheDocument();
+      expect(screen.getByText('Dismiss')).toBeInTheDocument();
     });
   });
 });

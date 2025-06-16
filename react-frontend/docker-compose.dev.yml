@@ -6,6 +6,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: development
       args:
         - NODE_ENV=development
     image: react_frontend:dev

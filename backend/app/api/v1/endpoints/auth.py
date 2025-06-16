@@ -129,11 +129,11 @@ async def login(
         is_locked = (
             user_record.is_locked
             and user_record.locked_until
-            and user_record.locked_until > datetime.utcnow()
+            and user_record.locked_until > datetime.now(timezone.utc)
         )
 
         if is_locked and user_record.locked_until:
-            remaining_time = user_record.locked_until - datetime.utcnow()
+            remaining_time = user_record.locked_until - datetime.now(timezone.utc)
             remaining_hours = remaining_time.total_seconds() // 3600
             remaining_minutes = (remaining_time.total_seconds() % 3600) // 60
 
@@ -232,7 +232,7 @@ async def login(
                         lock_duration_hours=int(lockout_duration_in_hours),  # Cast to int
                     )
                     if updated_user.locked_until:  # Re-check after process_account_lockout
-                        remaining_time = updated_user.locked_until - datetime.utcnow()
+                        remaining_time = updated_user.locked_until - datetime.now(timezone.utc)
                         remaining_hours = remaining_time.total_seconds() // 3600
                         remaining_minutes = (remaining_time.total_seconds() % 3600) // 60
                         lock_message = "Account locked due to too many failed attempts. "
@@ -558,7 +558,7 @@ async def register(
             verified=False,
             verification_code=verification_token,  # For sending email
             roles=[],  # Default roles can be assigned here or later
-            last_changed_password_date=datetime.now(timezone.utc),
+            last_changed_password_date=datetime.now(timezone.utc).replace(tzinfo=None),
         )
 
         # Create user with retry on conflict
@@ -1142,7 +1142,7 @@ async def change_password(
 
         user_update_data = IUserUpdate(  # type: ignore
             password=hashed_password,
-            last_changed_password_date=datetime.now(timezone.utc),
+            last_changed_password_date=datetime.now(timezone.utc).replace(tzinfo=None),
             number_of_failed_attempts=0,
             is_locked=False,
             locked_until=None,
@@ -1470,12 +1470,14 @@ async def login_access_token(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"field_name": "username", "message": "Incorrect email or password"},
-        )
-
-    # Check for locked account before attempting authentication
-    if user_record.is_locked and user_record.locked_until and user_record.locked_until > datetime.utcnow():
+        )  # Check for locked account before attempting authentication
+    if (
+        user_record.is_locked
+        and user_record.locked_until
+        and user_record.locked_until > datetime.now(timezone.utc)
+    ):
         # Calculate remaining lock time
-        remaining_time = user_record.locked_until - datetime.utcnow()
+        remaining_time = user_record.locked_until - datetime.now(timezone.utc)
         remaining_hours = remaining_time.total_seconds() // 3600
         remaining_minutes = (remaining_time.total_seconds() % 3600) // 60
 
@@ -1546,10 +1548,8 @@ async def login_access_token(
                 background_tasks=background_tasks,
                 user=updated_user,
                 lock_duration_hours=24,
-            )
-
-            # Calculate message for user
-            remaining_time = updated_user.locked_until - datetime.utcnow()
+            )  # Calculate message for user
+            remaining_time = updated_user.locked_until - datetime.now(timezone.utc)
             remaining_hours = remaining_time.total_seconds() // 3600
             remaining_minutes = (remaining_time.total_seconds() % 3600) // 60
 

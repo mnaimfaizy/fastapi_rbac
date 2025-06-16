@@ -138,6 +138,10 @@ class Settings(BaseSettings):
     EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
     EMAIL_VERIFICATION_URL: str = FRONTEND_URL + "/verify-email"
 
+    # Admin User Creation Settings
+    ADMIN_CREATED_USERS_AUTO_VERIFIED: bool = True  # Auto-verify admin-created users
+    ADMIN_CREATED_USERS_SEND_EMAIL: bool = False  # Send verification email to admin-created users
+
     # Logging settings
     LOG_LEVEL: str = "INFO"
 

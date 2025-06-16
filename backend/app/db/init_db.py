@@ -345,7 +345,7 @@ async def init_db(db_session: AsyncSession) -> None:
                 name=role_data["name"],
                 description=role_data["description"],
                 role_group_id=role_group.id,
-                permissions=permission_ids_for_role,
+                permission_ids=permission_ids_for_role,
             )
             role_obj = await crud.role.create(obj_in=role_create_schema, db_session=db_session)
         if role_obj:

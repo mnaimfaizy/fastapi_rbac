@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 from uuid import UUID
 
@@ -23,7 +23,7 @@ async def create_audit_log(
         resource_type=resource_type,
         resource_id=resource_id,
         details=details,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
     db_session.add(audit_log)

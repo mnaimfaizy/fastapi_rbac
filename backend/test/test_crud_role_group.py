@@ -3,7 +3,7 @@ from uuid import UUID
 import pytest
 import pytest_asyncio
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.crud.role_crud import role_crud

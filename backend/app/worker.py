@@ -83,7 +83,7 @@ def log_security_event_task(
 def process_account_lockout_task(user_id: str, lock_duration_hours: int = 24) -> None:
     """Celery task for processing account lockouts"""
     import asyncio
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
     from uuid import UUID
 
     async def async_process_lockout(user_id_str: str, lock_duration_hours: int) -> None:
@@ -97,11 +97,12 @@ def process_account_lockout_task(user_id: str, lock_duration_hours: int = 24) ->
         async for db_session in get_async_session():
             assert isinstance(db_session, AsyncSession)
             user = await crud.user.get(id=user_id_obj, db_session=db_session)
-            if user:
-                # Create a dict with the updates to use as obj_new
+            if user:  # Create a dict with the updates to use as obj_new
                 updates = {
                     "is_locked": True,
-                    "locked_until": datetime.utcnow() + timedelta(hours=lock_duration_hours),
+                    "locked_until": (
+                        datetime.now(timezone.utc) + timedelta(hours=lock_duration_hours)
+                    ).replace(tzinfo=None),
                 }
                 await crud.user.update(obj_current=user, obj_new=updates, db_session=db_session)
             break

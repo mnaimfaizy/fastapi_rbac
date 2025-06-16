@@ -40,6 +40,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true, // Essential for CSRF cookies to be sent
 });
 
 // Request interceptor

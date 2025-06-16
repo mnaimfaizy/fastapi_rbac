@@ -1,3 +1,4 @@
+from .audit_log_model import AuditLog
 from .password_history_model import UserPasswordHistory
 from .permission_group_model import PermissionGroup
 from .permission_model import Permission

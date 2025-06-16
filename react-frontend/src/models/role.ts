@@ -23,6 +23,7 @@ export interface RoleCreate {
 export interface RoleUpdate {
   name?: string;
   description?: string;
+  role_group_id?: string;
   permission_ids?: string[];
 }
 

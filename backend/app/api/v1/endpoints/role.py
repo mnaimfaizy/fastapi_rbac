@@ -107,6 +107,7 @@ async def update_role(
     role: IRoleUpdate,
     current_role: Role = Depends(role_deps.get_user_role_by_id),
     current_user: User = Depends(deps.get_current_user(required_permissions=["role.update"])),
+    db_session: AsyncSession = Depends(deps.get_db),
 ) -> IPutResponseBase[IRoleRead]:
     """
     Updates a role by its id
@@ -114,17 +115,31 @@ async def update_role(
     Required roles:
     - admin
     """
-    if current_role.name == role.name and current_role.description == role.description:
+    # Check if the role has meaningful changes
+    basic_fields_changed = (
+        current_role.name != role.name
+        or current_role.description != role.description
+        or current_role.role_group_id != role.role_group_id
+    )
+
+    # Check if permissions changed
+    current_permission_ids = (
+        {str(p.id) for p in current_role.permissions} if current_role.permissions else set()
+    )
+    new_permission_ids = {str(p) for p in role.permission_ids} if role.permission_ids else set()
+    permissions_changed = current_permission_ids != new_permission_ids
+
+    if not basic_fields_changed and not permissions_changed:
         raise ContentNoChangeException()
 
     # Only check for name conflicts if the name is being changed
-    if role.name != current_role.name:
-        exist_role = await crud.role.get_role_by_name(name=role.name)
+    if role.name and role.name != current_role.name:
+        exist_role = await crud.role.get_role_by_name(name=role.name, db_session=db_session)
         if exist_role:
             raise NameExistException(Role, name=role.name)
 
-    updated_role = await crud.role.update(obj_current=current_role, obj_new=role)
-    return create_response(data=updated_role)
+    updated_role = await crud.role.update(obj_current=current_role, obj_new=role, db_session=db_session)
+    return create_response(data=serialize_role(updated_role))
 
 
 @router.delete("/{role_id}", status_code=status.HTTP_204_NO_CONTENT)

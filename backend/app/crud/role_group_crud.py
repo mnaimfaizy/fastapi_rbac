@@ -447,11 +447,71 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
             if hasattr(group, "roles"):
                 await db_session.refresh(group, ["roles"])
             else:
-                group.roles = []
-
-            # Recursively load roles for children
+                group.roles = []  # Recursively load roles for children
             if hasattr(group, "children") and group.children:
                 await self._load_roles_recursive(group.children, db_session)
+
+    async def create(
+        self,
+        *,
+        obj_in: IRoleGroupCreate | RoleGroup,
+        created_by_id: UUID | str | None = None,
+        db_session: AsyncSession | None = None,
+    ) -> RoleGroup:
+        """
+        Create a role group and ensure all relationships are properly loaded
+        to avoid lazy loading issues during response serialization.
+        """
+        db_session = db_session or super().get_db().session
+
+        # Call the base create method
+        created_group = await super().create(
+            obj_in=obj_in, created_by_id=created_by_id, db_session=db_session
+        )
+
+        # Reload the group with all relationships to avoid lazy loading issues
+        # This ensures the parent, children, creator, and roles relationships are loaded
+        reloaded_group = await self.get_with_hierarchy(
+            id=created_group.id, db_session=db_session, include_roles_recursive=True
+        )
+
+        if not reloaded_group:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Role group with id {created_group.id} not found after creation",
+            )
+
+        return reloaded_group
+
+    async def update(
+        self,
+        *,
+        obj_current: RoleGroup,
+        obj_new: IRoleGroupUpdate | dict[str, Any] | RoleGroup,
+        db_session: AsyncSession | None = None,
+    ) -> RoleGroup:
+        """
+        Update a role group and ensure all relationships are properly loaded
+        to avoid lazy loading issues during response serialization.
+        """
+        db_session = db_session or super().get_db().session
+
+        # Call the base update method
+        updated_group = await super().update(
+            obj_current=obj_current, obj_new=obj_new, db_session=db_session
+        )  # Reload the group with all relationships to avoid lazy loading issues
+        # This ensures the parent, children, creator, and roles relationships are loaded
+        reloaded_group = await self.get_with_hierarchy(
+            id=updated_group.id, db_session=db_session, include_roles_recursive=True
+        )
+        if not reloaded_group:
+            # This should not happen since we just updated the group
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Role group with id {updated_group.id} not found after update",
+            )
+
+        return reloaded_group
 
 
 role_group = CRUDRoleGroup(RoleGroup)

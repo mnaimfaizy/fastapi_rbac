@@ -14,4 +14,4 @@ $RedisHost = $env:REDIS_HOST
 $RedisPort = $env:REDIS_PORT
 # Start the Flower dashboard using Invoke-Expression
 # Note the backtick ` before :$RedisPort to escape the colon if needed, though often not required in Invoke-Expression
-Invoke-Expression "celery -A app.celery_app flower --port=5555 --broker=redis://$RedisHost`:$RedisPort/0 --address=0.0.0.0"
+Invoke-Expression "celery --broker=redis://$RedisHost`:$RedisPort/0 -A app.celery_app flower --port=5555 --address=0.0.0.0"

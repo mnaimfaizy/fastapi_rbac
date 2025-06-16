@@ -23,11 +23,13 @@ class BaseUUIDModel(SQLModel):
         index=True,
         nullable=False,
     )
-    updated_at: datetime = Field(  # Made non-nullable
-        default_factory=datetime.utcnow,
-        sa_column_kwargs={"onupdate": datetime.utcnow},
+
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
-    created_at: datetime = Field(default_factory=datetime.utcnow)  # Made non-nullable
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
 
     @field_validator("created_at", "updated_at", mode="before")  # Updated to use field_validator
     @classmethod  # Required for class methods in Pydantic V2

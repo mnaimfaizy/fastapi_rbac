@@ -1,7 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '../../store';
-import { fetchRoles, deleteRole } from '../../store/slices/roleSlice';
+import {
+  fetchRoles,
+  deleteRole,
+  clearRoleError,
+} from '../../store/slices/roleSlice';
 import { fetchRoleGroups } from '../../store/slices/roleGroupSlice';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
@@ -45,7 +49,6 @@ const RoleList: React.FC = () => {
 
   // Verify required permissions
   const canReadRoles = hasPermission('role.read');
-  const canCreateRoles = hasPermission('role.create');
   const canUpdateRoles = hasPermission('role.update');
   const canDeleteRoles = hasPermission('role.delete');
   const canReadRoleGroups = hasPermission('role_group.read');
@@ -77,14 +80,6 @@ const RoleList: React.FC = () => {
     navigate(`/dashboard/roles/edit/${roleId}`);
   };
 
-  const handleCreate = () => {
-    if (!canCreateRoles) {
-      toast.error('You do not have permission to create roles');
-      return;
-    }
-    navigate('/dashboard/roles/new');
-  };
-
   const handleDelete = (roleId: string) => {
     if (!canDeleteRoles) {
       toast.error('You do not have permission to delete roles');
@@ -92,6 +87,14 @@ const RoleList: React.FC = () => {
     }
     setDeleteRoleId(roleId);
     setIsDeleteDialogOpen(true);
+  };
+  const handleRetry = () => {
+    dispatch(clearRoleError());
+    dispatch(fetchRoles({ page: currentPage, size: pageSize }));
+  };
+
+  const handleClearError = () => {
+    dispatch(clearRoleError());
   };
 
   const handleDeleteConfirm = async () => {
@@ -157,23 +160,31 @@ const RoleList: React.FC = () => {
       </div>
     );
   }
-
-  if (error) {
-    return (
-      <Alert variant="destructive" className="mb-4">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Error</AlertTitle>
-        <AlertDescription>{error}</AlertDescription>
-      </Alert>
-    );
-  }
-
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">Roles</h2>
-        {canCreateRoles && <Button onClick={handleCreate}>Create Role</Button>}
-      </div>
+      {error && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription className="flex items-center justify-between">
+            <span>{error}</span>
+            <div className="flex gap-2 ml-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRetry}
+                disabled={loading}
+              >
+                Retry
+              </Button>
+              <Button variant="ghost" size="sm" onClick={handleClearError}>
+                Dismiss
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <Table>
         <TableHeader>
           <TableRow>

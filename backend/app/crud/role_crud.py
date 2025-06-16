@@ -1,4 +1,4 @@
-from typing import List
+from typing import Any, List
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -32,9 +32,9 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
 
         # Handle both IRoleCreate schema and Role model instances
         if isinstance(obj_in, IRoleCreate):
-            # Extract permissions from the input data
-            permission_ids = obj_in.permissions or []  # Create role data without permissions
-            role_data = obj_in.model_dump(exclude={"permissions"})
+            # Extract permission_ids from the input data
+            permission_ids = obj_in.permission_ids or []  # Create role data without permission_ids
+            role_data = obj_in.model_dump(exclude={"permission_ids"})
 
             # Create the role
             role = Role(**role_data)
@@ -284,6 +284,61 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
         await db_session.refresh(role, ["permissions"])
 
         return role.permissions
+
+    async def update(
+        self,
+        *,
+        obj_current: Role,
+        obj_new: IRoleUpdate | dict[str, Any],
+        db_session: AsyncSession | None = None,
+    ) -> Role:
+        """Update a role with permissions"""
+        if not db_session:
+            raise ValueError("db_session must be provided to CRUD update method")
+
+        # Handle both IRoleUpdate schema and dict instances
+        if isinstance(obj_new, IRoleUpdate):
+            # Extract permission_ids from the input data
+            permission_ids = obj_new.permission_ids
+            # Get update data without permission_ids
+            update_data = obj_new.model_dump(exclude_unset=True, exclude={"permission_ids"})
+        elif isinstance(obj_new, dict):
+            permission_ids = obj_new.pop("permission_ids", None)
+            update_data = obj_new
+        else:
+            # Fallback for other types
+            update_data = obj_new.model_dump(exclude_unset=True) if hasattr(obj_new, "model_dump") else {}
+            permission_ids = None
+
+        # Update basic fields
+        for field, value in update_data.items():
+            setattr(obj_current, field, value)
+
+        # Handle permission updates if provided
+        if permission_ids is not None:
+            # Clear existing permissions
+            await db_session.execute(select(RolePermission).where(RolePermission.role_id == obj_current.id))
+            # Remove existing permissions
+            result = await db_session.execute(
+                select(RolePermission).where(RolePermission.role_id == obj_current.id)
+            )
+            existing_permissions = result.scalars().all()
+            for rp in existing_permissions:
+                await db_session.delete(rp)
+
+            # Add new permissions
+            for permission_id in permission_ids:
+                role_permission = RolePermission(role_id=obj_current.id, permission_id=permission_id)
+                db_session.add(role_permission)
+        try:
+            # Use merge instead of add to handle session attachment issues
+            merged_obj = await db_session.merge(obj_current)
+            await db_session.commit()
+            await db_session.refresh(merged_obj)
+            return merged_obj
+        except Exception as e:
+            await db_session.rollback()
+            raise e
 
 
 role_crud = CRUDRole(Role)

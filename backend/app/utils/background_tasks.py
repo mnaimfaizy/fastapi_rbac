@@ -12,7 +12,7 @@ and Celery for more complex, long-running, or scheduled tasks.
 """
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -260,10 +260,11 @@ async def _process_account_lockout_task(
 ) -> None:
     """
     The actual task that processes an account lockout.
-    """
-    # Set account as locked
+    """  # Set account as locked
     user.is_locked = True
-    user.locked_until = datetime.utcnow() + timedelta(hours=lock_duration_hours)
+    user.locked_until = (datetime.now(timezone.utc) + timedelta(hours=lock_duration_hours)).replace(
+        tzinfo=None
+    )
 
     # Save to database
     if db_session is None:

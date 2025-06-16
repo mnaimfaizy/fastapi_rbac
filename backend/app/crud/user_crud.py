@@ -202,7 +202,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         if "password" in update_data and update_data["password"]:
             hashed_password = PasswordValidator.get_password_hash(update_data["password"])
             obj_current.password = hashed_password
-            obj_current.last_changed_password_date = datetime.utcnow()
+            obj_current.last_changed_password_date = datetime.now(timezone.utc).replace(tzinfo=None)
             del update_data["password"]
         elif "password" in update_data:
             del update_data["password"]
@@ -292,10 +292,10 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         if user.password is None:
             return None
 
-        if user.is_locked and user.locked_until and user.locked_until > datetime.utcnow():
+        if user.is_locked and user.locked_until and user.locked_until > datetime.now(timezone.utc):
             return None
 
-        if user.is_locked and user.locked_until and user.locked_until <= datetime.utcnow():
+        if user.is_locked and user.locked_until and user.locked_until <= datetime.now(timezone.utc):
             await self.unlock_account(user=user, db_session=resolved_session)
 
         if not user.is_active:
@@ -434,7 +434,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         )
 
         user.password = new_password_hash
-        user.last_changed_password_date = datetime.now(timezone.utc)
+        user.last_changed_password_date = datetime.now(timezone.utc).replace(tzinfo=None)
         user.password_version += 1
         resolved_session.add(user)
         await resolved_session.commit()
@@ -454,7 +454,9 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
 
         if user.number_of_failed_attempts >= settings.MAX_LOGIN_ATTEMPTS:
             user.is_locked = True
-            user.locked_until = datetime.utcnow() + timedelta(minutes=settings.ACCOUNT_LOCKOUT_MINUTES)
+            user.locked_until = (
+                datetime.now(timezone.utc) + timedelta(minutes=settings.ACCOUNT_LOCKOUT_MINUTES)
+            ).replace(tzinfo=None)
         try:
             resolved_session.add(user)
             await resolved_session.commit()

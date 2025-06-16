@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 from uuid import UUID
 
@@ -14,7 +14,7 @@ class AuditLogBase(SQLModel):
     resource_type: str = Field(...)
     resource_id: str = Field(...)
     details: Dict[str, Any] = Field(default_factory=dict, sa_type=JSON)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
 
 class AuditLog(BaseUUIDModel, AuditLogBase, table=True):

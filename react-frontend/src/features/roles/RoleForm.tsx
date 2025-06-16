@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -44,6 +45,7 @@ export type RoleFormData = z.infer<typeof roleSchema>;
 
 interface RoleFormProps {
   onSubmit: SubmitHandler<RoleFormData>;
+  onCancel?: () => void;
   initialData?: Role | null;
   isLoading?: boolean;
   roleGroups: RoleGroup[];
@@ -51,6 +53,7 @@ interface RoleFormProps {
 
 const RoleForm: React.FC<RoleFormProps> = ({
   onSubmit,
+  onCancel,
   initialData,
   isLoading,
   roleGroups,
@@ -215,13 +218,26 @@ const RoleForm: React.FC<RoleFormProps> = ({
           </div>
         </div>
 
-        <Button type="submit" disabled={isLoading}>
-          {isLoading
-            ? 'Saving...'
-            : initialData
-              ? 'Save Changes'
-              : 'Create Role'}
-        </Button>
+        <div className="flex justify-end space-x-4">
+          {onCancel && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onCancel}
+              disabled={isLoading}
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Cancel
+            </Button>
+          )}
+          <Button type="submit" disabled={isLoading}>
+            {isLoading
+              ? 'Saving...'
+              : initialData
+                ? 'Save Changes'
+                : 'Create Role'}
+          </Button>
+        </div>
       </form>
     </Form>
   );
