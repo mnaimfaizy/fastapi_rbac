@@ -20,4 +20,6 @@ pytest_plugins = [
     "test.fixtures.fixtures_dependency_mocks",
     "test.fixtures.fixtures_factories",
     "test.fixtures.fixtures_token",
+    # Improved async fixtures
+    "test.fixtures.async_factory_fixtures",
 ]
