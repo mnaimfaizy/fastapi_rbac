@@ -9,7 +9,7 @@ from app.models.base_uuid_model import BaseUUIDModel
 
 
 # Create a test model that inherits from BaseUUIDModel
-class TestModel(BaseUUIDModel, table=True):
+class SampleModel(BaseUUIDModel, table=True):
     name: str = Field(index=True)
     description: str | None = None
 
@@ -18,7 +18,7 @@ class TestModel(BaseUUIDModel, table=True):
 async def test_base_uuid_model_create(db: AsyncSession) -> None:
     """Test creating an entity with BaseUUIDModel as base class"""
     # Create test model instance
-    test_model = TestModel(name="test", description="A test model")
+    test_model = SampleModel(name="test", description="A test model")
 
     # Add to database
     db.add(test_model)
@@ -42,7 +42,7 @@ async def test_base_uuid_model_create(db: AsyncSession) -> None:
 async def test_base_uuid_model_update(db: AsyncSession) -> None:
     """Test updating an entity with BaseUUIDModel as base class"""
     # Create test model instance
-    test_model = TestModel(name="original", description="Original description")
+    test_model = SampleModel(name="original", description="Original description")
 
     # Add to database
     db.add(test_model)
@@ -83,8 +83,8 @@ async def test_base_uuid_model_update(db: AsyncSession) -> None:
 async def test_uuid_generation(db: AsyncSession) -> None:
     """Test that UUIDs are unique for each instance"""
     # Create multiple test models
-    model1 = TestModel(name="model1")
-    model2 = TestModel(name="model2")
+    model1 = SampleModel(name="model1")
+    model2 = SampleModel(name="model2")
 
     # Add to database
     db.add_all([model1, model2])

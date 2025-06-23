@@ -9,7 +9,7 @@ import os
 # Set testing mode
 os.environ["MODE"] = "testing"
 
-# Register fixture modules - support both originasl and improved fixtures
+# Register fixture modules - support both original and improved fixtures
 pytest_plugins = [
     # Original fixtures
     "test.fixtures.fixtures_db",
@@ -22,4 +22,6 @@ pytest_plugins = [
     "test.fixtures.fixtures_token",
     # Improved async fixtures
     "test.fixtures.async_factory_fixtures",
+    # Enhanced service mocks for integration testing
+    "test.fixtures.enhanced_service_mocks",
 ]

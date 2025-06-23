@@ -1,4 +1,5 @@
 from datetime import datetime
+from test.utils import random_lower_string
 from uuid import UUID
 
 import pytest
@@ -7,8 +8,6 @@ from sqlmodel import select
 
 from app.models.audit_log_model import AuditLog
 from app.models.user_model import User
-
-from .utils import random_lower_string
 
 
 @pytest.mark.asyncio

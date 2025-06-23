@@ -1,3 +1,4 @@
+from test.utils import random_lower_string
 from uuid import UUID
 
 import pytest
@@ -12,8 +13,6 @@ from app.models import RolePermission
 from app.schemas.permission_group_schema import IPermissionGroupCreate
 from app.schemas.permission_schema import IPermissionCreate, IPermissionUpdate
 from app.schemas.role_schema import IRoleCreate
-
-from .utils import random_lower_string
 
 
 @pytest.mark.asyncio

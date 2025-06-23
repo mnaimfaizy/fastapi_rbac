@@ -1,0 +1,310 @@
+"""
+Comprehensive test runner for the refactored test suite.
+
+This script provides easy ways to run different types of tests:
+- All tests
+- Unit tests only
+- Integration tests only
+- Specific test modules
+- With coverage reporting
+"""
+
+import argparse
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+
+def run_command(cmd: list[str], cwd: str = None) -> int:
+    """Run a command and return the exit code."""
+    print(f"Running: {' '.join(cmd)}")
+    if cwd:
+        print(f"Working directory: {cwd}")
+
+    result = subprocess.run(cmd, cwd=cwd)
+    return result.returncode
+
+
+def run_unit_tests(
+    test_path: str = None, verbose: bool = False, coverage: bool = False, parallel: bool = False
+) -> int:
+    """Run unit tests."""
+    cmd = ["python", "-m", "pytest"]
+
+    # Test path
+    if test_path:
+        cmd.append(test_path)
+    else:
+        cmd.append("test/unit/")
+
+    # Verbose output
+    if verbose:
+        cmd.extend(["-v", "-s"])
+
+    # Coverage
+    if coverage:
+        cmd.extend(
+            [
+                "--cov=app",
+                "--cov-report=html:htmlcov",
+                "--cov-report=term-missing",
+                "--cov-report=xml:coverage.xml",
+            ]
+        )
+
+    # Parallel execution
+    if parallel:
+        cmd.extend(["-n", "auto"])
+
+    # Additional pytest options
+    cmd.extend(["--tb=short", "--strict-markers", "--disable-warnings"])
+
+    return run_command(cmd)
+
+
+def run_integration_tests(
+    test_path: str = None, verbose: bool = False, coverage: bool = False, parallel: bool = False
+) -> int:
+    """Run integration tests."""
+    cmd = ["python", "-m", "pytest"]
+
+    # Test path
+    if test_path:
+        cmd.append(test_path)
+    else:
+        cmd.append("test/integration/")
+
+    # Verbose output
+    if verbose:
+        cmd.extend(["-v", "-s"])
+
+    # Coverage
+    if coverage:
+        cmd.extend(
+            [
+                "--cov=app",
+                "--cov-report=html:htmlcov",
+                "--cov-report=term-missing",
+                "--cov-report=xml:coverage.xml",
+            ]
+        )
+
+    # Integration tests might need more time
+    cmd.extend(
+        [
+            "--timeout=300",  # 5 minutes per test
+            "--tb=short",
+            "--strict-markers",
+        ]
+    )
+
+    # Parallel execution (careful with integration tests)
+    if parallel:
+        cmd.extend(["-n", "2"])  # Limit parallel workers for integration tests
+
+    return run_command(cmd)
+
+
+def run_all_tests(
+    verbose: bool = False, coverage: bool = False, parallel: bool = False, fast: bool = False
+) -> int:
+    """Run all tests."""
+    cmd = ["python", "-m", "pytest"]
+
+    # Test paths
+    cmd.extend(["test/unit/", "test/integration/"])
+
+    # Verbose output
+    if verbose:
+        cmd.extend(["-v", "-s"])
+
+    # Coverage
+    if coverage:
+        cmd.extend(
+            [
+                "--cov=app",
+                "--cov-report=html:htmlcov",
+                "--cov-report=term-missing",
+                "--cov-report=xml:coverage.xml",
+                "--cov-fail-under=80",  # Require 80% coverage
+            ]
+        )
+
+    # Fast mode (skip slow tests)
+    if fast:
+        cmd.extend(["-m", "not slow"])
+
+    # Parallel execution
+    if parallel:
+        cmd.extend(["-n", "auto"])
+
+    # Additional options
+    cmd.extend(
+        [
+            "--tb=short",
+            "--strict-markers",
+            "--maxfail=5",  # Stop after 5 failures
+        ]
+    )
+
+    return run_command(cmd)
+
+
+def run_specific_test(
+    test_path: str, verbose: bool = False, coverage: bool = False, debug: bool = False
+) -> int:
+    """Run a specific test or test method."""
+    cmd = ["python", "-m", "pytest", test_path]
+
+    # Verbose output
+    if verbose:
+        cmd.extend(["-v", "-s"])
+
+    # Debug mode
+    if debug:
+        cmd.extend(["--pdb", "--capture=no"])
+
+    # Coverage
+    if coverage:
+        cmd.extend(["--cov=app", "--cov-report=term-missing"])
+
+    return run_command(cmd)
+
+
+def lint_code() -> int:
+    """Run code linting."""
+    print("Running code linting...")
+
+    # Run flake8
+    flake8_result = run_command(
+        [
+            "python",
+            "-m",
+            "flake8",
+            "app/",
+            "test/",
+            "--max-line-length=100",
+            "--exclude=alembic/versions/,__pycache__/",
+            "--ignore=E203,W503",
+        ]
+    )
+
+    # Run mypy
+    mypy_result = run_command(
+        ["python", "-m", "mypy", "app/", "--ignore-missing-imports", "--no-strict-optional"]
+    )
+
+    return max(flake8_result, mypy_result)
+
+
+def format_code() -> int:
+    """Format code using black and isort."""
+    print("Formatting code...")
+
+    # Run black
+    black_result = run_command(
+        ["python", "-m", "black", "app/", "test/", "--line-length=100", "--target-version=py310"]
+    )
+
+    # Run isort
+    isort_result = run_command(
+        ["python", "-m", "isort", "app/", "test/", "--profile=black", "--line-length=100"]
+    )
+
+    return max(black_result, isort_result)
+
+
+def clean_cache() -> int:
+    """Clean pytest and Python cache files."""
+    print("Cleaning cache files...")
+
+    import shutil
+
+    # Remove pytest cache
+    pytest_cache = Path(".pytest_cache")
+    if pytest_cache.exists():
+        shutil.rmtree(pytest_cache)
+        print("Removed .pytest_cache")
+
+    # Remove __pycache__ directories
+    for pycache in Path(".").rglob("__pycache__"):
+        shutil.rmtree(pycache)
+        print(f"Removed {pycache}")
+
+    # Remove coverage files
+    coverage_files = [".coverage", "htmlcov", "coverage.xml"]
+    for file in coverage_files:
+        path = Path(file)
+        if path.exists():
+            if path.is_dir():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
+            print(f"Removed {file}")
+
+    return 0
+
+
+def main():
+    """Main entry point for the test runner."""
+    parser = argparse.ArgumentParser(description="FastAPI RBAC Test Runner")
+    parser.add_argument(
+        "command",
+        choices=["unit", "integration", "all", "specific", "lint", "format", "clean", "health"],
+        help="Test command to run",
+    )
+    parser.add_argument("--path", "-p", help="Specific test path (for 'specific' command)")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
+    parser.add_argument("--coverage", "-c", action="store_true", help="Generate coverage report")
+    parser.add_argument("--parallel", "-j", action="store_true", help="Run tests in parallel")
+    parser.add_argument("--fast", "-f", action="store_true", help="Skip slow tests")
+    parser.add_argument("--debug", "-d", action="store_true", help="Enable debug mode")
+
+    args = parser.parse_args()
+
+    # Change to backend directory
+    backend_dir = Path(__file__).parent.parent
+    os.chdir(backend_dir)
+
+    exit_code = 0
+
+    if args.command == "unit":
+        exit_code = run_unit_tests(
+            test_path=args.path, verbose=args.verbose, coverage=args.coverage, parallel=args.parallel
+        )
+    elif args.command == "integration":
+        exit_code = run_integration_tests(
+            test_path=args.path, verbose=args.verbose, coverage=args.coverage, parallel=args.parallel
+        )
+    elif args.command == "all":
+        exit_code = run_all_tests(
+            verbose=args.verbose, coverage=args.coverage, parallel=args.parallel, fast=args.fast
+        )
+    elif args.command == "specific":
+        if not args.path:
+            print("Error: --path is required for 'specific' command")
+            return 1
+        exit_code = run_specific_test(
+            test_path=args.path, verbose=args.verbose, coverage=args.coverage, debug=args.debug
+        )
+    elif args.command == "lint":
+        exit_code = lint_code()
+    elif args.command == "format":
+        exit_code = format_code()
+    elif args.command == "clean":
+        exit_code = clean_cache()
+    elif args.command == "health":
+        print("Running test health check...")
+        # Run a quick smoke test
+        exit_code = run_command(["python", "-m", "pytest", "test/unit/test_config.py", "-v", "--tb=short"])
+        if exit_code == 0:
+            print("✅ Test suite health check passed!")
+        else:
+            print("❌ Test suite health check failed!")
+
+    return exit_code
+
+
+if __name__ == "__main__":
+    sys.exit(main())

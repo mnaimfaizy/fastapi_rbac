@@ -1,3 +1,4 @@
+from test.utils import random_email, random_lower_string
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID
 
@@ -14,8 +15,6 @@ from app.schemas.permission_schema import IPermissionCreate
 from app.schemas.role_schema import IRoleCreate, IRoleUpdate
 from app.schemas.user_schema import IUserCreate
 from app.utils.exceptions.common_exception import ResourceNotFoundException
-
-from .utils import random_email, random_lower_string
 
 
 @pytest.mark.asyncio

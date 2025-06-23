@@ -1,3 +1,5 @@
+from test.utils import random_email, random_lower_string
+
 import pytest
 from fastapi import HTTPException
 from sqlmodel.ext.asyncio.session import AsyncSession  # Changed import
@@ -6,8 +8,6 @@ from app.core.security import PasswordValidator
 from app.crud.user_crud import user_crud
 from app.models.role_model import Role
 from app.schemas.user_schema import IUserCreate, IUserUpdate
-
-from .utils import random_email, random_lower_string
 
 
 @pytest.mark.asyncio

@@ -1,3 +1,4 @@
+from test.utils import random_email, random_lower_string
 from uuid import UUID
 
 import pytest
@@ -15,8 +16,6 @@ from app.models.user_model import User
 from app.schemas.role_group_schema import IRoleGroupCreate, IRoleGroupUpdate
 from app.schemas.role_schema import IRoleCreate
 from app.schemas.user_schema import IUserCreate
-
-from .utils import random_email, random_lower_string
 
 
 @pytest_asyncio.fixture

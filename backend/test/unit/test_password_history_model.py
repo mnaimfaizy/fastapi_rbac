@@ -1,3 +1,4 @@
+from test.utils import random_lower_string
 from uuid import UUID
 
 import pytest
@@ -6,8 +7,6 @@ from sqlmodel import select
 
 from app.models.password_history_model import UserPasswordHistory
 from app.models.user_model import User
-
-from .utils import random_lower_string
 
 
 @pytest.mark.asyncio

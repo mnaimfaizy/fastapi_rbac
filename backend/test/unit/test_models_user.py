@@ -1,3 +1,4 @@
+from test.utils import random_email, random_lower_string
 from uuid import UUID
 
 import pytest
@@ -8,8 +9,6 @@ from sqlmodel import select
 from app.models.role_model import Role
 from app.models.user_model import User
 from app.models.user_role_model import UserRole
-
-from .utils import random_email, random_lower_string
 
 
 @pytest.mark.asyncio

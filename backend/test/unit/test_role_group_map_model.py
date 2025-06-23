@@ -1,3 +1,5 @@
+from test.utils import random_lower_string
+
 import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,8 +8,6 @@ from sqlmodel import select
 from app.models.role_group_map_model import RoleGroupMap
 from app.models.role_group_model import RoleGroup
 from app.models.role_model import Role
-
-from .utils import random_lower_string
 
 
 @pytest.mark.asyncio

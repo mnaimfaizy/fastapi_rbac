@@ -1,3 +1,5 @@
+from test.utils import random_email
+
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -5,8 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.permission_group_model import PermissionGroup
 from app.models.permission_model import Permission
 from app.models.user_model import User
-
-from .utils import random_email
 
 
 @pytest_asyncio.fixture(scope="function")
