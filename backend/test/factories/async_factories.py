@@ -5,10 +5,11 @@ This module provides factories that work with async SQLModel sessions
 for testing purposes.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Union
 from uuid import UUID
 
+from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.security import PasswordValidator
@@ -92,9 +93,9 @@ class AsyncUserFactory(AsyncFactoryBase):
             "is_superuser": is_superuser,
             "verified": verified,
             "needs_to_change_password": needs_to_change_password,
-            "created_at": datetime.now(timezone.utc),
-            "updated_at": datetime.now(timezone.utc),
-            "last_changed_password_date": datetime.now(timezone.utc),
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
+            "last_changed_password_date": datetime.utcnow(),
             **kwargs,
         }
 
@@ -111,14 +112,27 @@ class AsyncUserFactory(AsyncFactoryBase):
         return user
 
     async def create_admin(self, **kwargs: Any) -> User:
-        """Create an admin user."""
-        kwargs.setdefault("email", "admin@example.com")
+        """Create an admin user with a compliant password by default, or return existing if present."""
+        # Use SQLModel's select for compatibility with .exec()
+        admin_email = kwargs.get("email", "admin@example.com")
+        existing_admin = None
+        try:
+            result = await self.session.exec(select(User).where(User.email == admin_email))
+            existing_admin = result.first()
+        except Exception:
+            pass  # If DB error, fallback to create
+
+        if existing_admin:
+            return existing_admin
+
+        kwargs.setdefault("email", admin_email)
         kwargs.setdefault("is_superuser", True)
+        kwargs.setdefault("password", "admin123")
         return await self.create(**kwargs)
 
     async def create_locked(self, **kwargs: Any) -> User:
         """Create a locked user."""
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()
         kwargs.update(
             {"is_locked": True, "number_of_failed_attempts": 5, "locked_until": now + timedelta(hours=1)}
         )
@@ -166,8 +180,8 @@ class AsyncRoleFactory(AsyncFactoryBase):
             "name": name,
             "description": description,
             "role_group_id": role_group_id,
-            "created_at": datetime.now(timezone.utc),
-            "updated_at": datetime.now(timezone.utc),
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
             **kwargs,
         }
 
@@ -235,8 +249,8 @@ class AsyncPermissionFactory(AsyncFactoryBase):
             "name": name,
             "description": description,
             "group_id": group_id,  # This is now a UUID object
-            "created_at": datetime.now(timezone.utc),
-            "updated_at": datetime.now(timezone.utc),
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
             **kwargs,
         }
 
@@ -304,8 +318,8 @@ class AsyncPermissionGroupFactory(AsyncFactoryBase):
             "id": uuid7(),
             "name": name,
             "description": description,
-            "created_at": datetime.now(timezone.utc),
-            "updated_at": datetime.now(timezone.utc),
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
             **kwargs,
         }
 
@@ -335,8 +349,8 @@ class AsyncRoleGroupFactory(AsyncFactoryBase):
             "id": uuid7(),
             "name": name,
             "parent_id": parent_id,
-            "created_at": datetime.now(timezone.utc),
-            "updated_at": datetime.now(timezone.utc),
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
             **kwargs,
         }
 

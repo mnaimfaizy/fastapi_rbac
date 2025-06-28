@@ -102,7 +102,8 @@ def get_current_user(
                 detail="Could not validate credentials, token invalid or revoked.",
             )
 
-        user_from_db = await crud.user.get(id=user_id, db_session=db_session)
+        # Use eager loading to ensure roles and permissions are loaded
+        user_from_db = await crud.user.get_with_roles_permissions(id=user_id, db_session=db_session)
 
         if not user_from_db:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")

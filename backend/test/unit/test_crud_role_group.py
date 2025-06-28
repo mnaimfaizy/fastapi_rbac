@@ -74,8 +74,14 @@ async def test_get_group_by_name(db: AsyncSession) -> None:
         name=name,
     )
     group = await role_group.create(obj_in=group_in, db_session=db)
+    # Enforce unique name: try to create another group with the same name and expect failure
+    with pytest.raises(HTTPException) as excinfo:
+        await role_group.create(obj_in=group_in, db_session=db)
+    assert excinfo.value.status_code == 409
+    assert "already exists" in str(excinfo.value.detail).lower()
     # Get the role group by name
     stored_group = await role_group.get_group_by_name(name=name, db_session=db)
+    print("DEBUG: type(stored_group)", type(stored_group))
     # Check that the retrieved role group matches
     assert stored_group
     assert stored_group.id == group.id
@@ -100,6 +106,14 @@ async def test_update_role_group(db: AsyncSession) -> None:
     assert updated_group.name == new_name
     # Verify the update by getting the role group with the new name
     stored_group = await role_group.get_group_by_name(name=new_name, db_session=db)
+    print("DEBUG: type(stored_group)", type(stored_group))
+    # The following code is unreachable and flagged by mypy
+    # if (
+    #     stored_group is not None
+    #     and not isinstance(stored_group, RoleGroup)
+    #     and hasattr(stored_group, "_mapping")
+    # ):
+    #     stored_group = RoleGroup(**dict(stored_group._mapping))
     assert stored_group
     assert stored_group.id == group.id
 
@@ -213,12 +227,12 @@ async def test_add_roles_to_group(db: AsyncSession) -> None:
     # Check that each role was correctly assigned to the group
     # Use a different approach that works with SQLAlchemy/SQLModel
     for role_id in role_ids:
-        result = await db.execute(
+        result = await db.exec(
             select(RoleGroupMap)
             .where(RoleGroupMap.role_id == role_id)
             .where(RoleGroupMap.role_group_id == group.id)  # type: ignore
         )
-        exists = result.scalar()
+        exists = result.first()
         assert exists
 
 
@@ -247,12 +261,12 @@ async def test_remove_roles_from_group(db: AsyncSession) -> None:
 
     # Verify all roles were added initially
     for role_id in role_ids:
-        result = await db.execute(
+        result = await db.exec(
             select(RoleGroupMap)
             .where(RoleGroupMap.role_id == role_id)
             .where(RoleGroupMap.role_group_id == group.id)  # type: ignore
         )
-        exists = result.scalar()
+        exists = result.first()
         assert exists
 
     # Remove two roles from the group
@@ -261,21 +275,21 @@ async def test_remove_roles_from_group(db: AsyncSession) -> None:
 
     # Verify that removed roles no longer have mappings
     for role_id in roles_to_remove:
-        result = await db.execute(
+        result = await db.exec(
             select(RoleGroupMap)
             .where(RoleGroupMap.role_id == role_id)
             .where(RoleGroupMap.role_group_id == group.id)  # type: ignore
         )
-        exists = result.scalar()
+        exists = result.first()
         assert not exists  # Mapping should not exist now
 
     # Verify that the remaining role still has mapping
-    result = await db.execute(
+    result = await db.exec(
         select(RoleGroupMap)
         .where(RoleGroupMap.role_id == role_ids[2])
         .where(RoleGroupMap.role_group_id == group.id)  # type: ignore
     )
-    exists = result.scalar()
+    exists = result.first()
     assert exists  # This mapping should still exist
 
 

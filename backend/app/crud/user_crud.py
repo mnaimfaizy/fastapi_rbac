@@ -22,10 +22,11 @@ from app.schemas.user_schema import IUserCreate, IUserUpdate
 
 class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
     async def get_by_email(self, *, email: str, db_session: AsyncSession | None = None) -> User | None:
-        resolved_session = db_session or self.db.session
-        if resolved_session is None:
-            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
-
+        """
+        Retrieve a user by email. Requires db_session to be provided explicitly.
+        """
+        if db_session is None:
+            raise ValueError("db_session must be provided")
         stmt = (
             select(self.model)
             .where(self.model.email == email)  # type: ignore[attr-defined]
@@ -35,41 +36,61 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
                 )
             )
         )
-        result = await resolved_session.execute(stmt)
+        result = await db_session.exec(stmt)
         unique_result = result.unique()
         return unique_result.scalar_one_or_none()
 
-    async def get_by_id_active(self, *, id: UUID) -> User | None:
-        user = await super().get(id=id)
+    async def get_multi_by_email(self, *, email: str, db_session: AsyncSession | None = None) -> list[User]:
+        """
+        Retrieve all users matching the given email (case-insensitive, exact match).
+        """
+        if db_session is None:
+            raise ValueError("db_session must be provided")
+        stmt = (
+            select(self.model)
+            .where(self.model.email == email)  # type: ignore[attr-defined]
+            .options(
+                selectinload(self.model.roles).selectinload(  # type: ignore[attr-defined]
+                    Role.permissions  # type: ignore[arg-type]
+                )
+            )
+        )
+        result = await db_session.exec(stmt)
+        return result.unique().scalars().all()
+
+    async def get_by_id_active(self, *, id: UUID, db_session: AsyncSession | None = None) -> User | None:
+        """
+        Retrieve an active user by ID. Requires db_session to be provided explicitly.
+        """
+        if db_session is None:
+            raise ValueError("db_session must be provided")
+        user = await super().get(id=id, db_session=db_session)
         if not user:
             return None
         if user.is_active is False:
             return None
-
         return user
 
     async def create_with_role(self, *, obj_in: IUserCreate, db_session: AsyncSession | None = None) -> User:
-        resolved_session: AsyncSession = db_session or self.db.session  # type: ignore[assignment]
-        if resolved_session is None:
-            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
-
+        """
+        Create a user with roles. Requires db_session to be provided explicitly.
+        """
+        if db_session is None:
+            raise ValueError("db_session must be provided")
         user_data = obj_in.model_dump(exclude={"role_id", "password"})
-        user_data["roles"] = []  # Ensure roles is an empty list for User constructor
+        user_data["roles"] = []
         db_obj = User(**user_data)
         db_obj.password = PasswordValidator.get_password_hash(obj_in.password)
-
         try:
-            resolved_session.add(db_obj)
-            # Defer commit until roles are handled for atomicity
-
+            db_session.add(db_obj)
             role_ids = obj_in.role_id if obj_in.role_id is not None else []
             if role_ids:
-                result = await resolved_session.execute(
+                result = await db_session.exec(
                     select(Role).where(Role.id.in_(role_ids))  # type: ignore[attr-defined]
                 )
                 roles_to_assign = list(result.scalars().all())
                 if len(roles_to_assign) != len(role_ids):
-                    await resolved_session.rollback()  # Rollback before raising
+                    await db_session.rollback()
                     found_role_ids = {r.id for r in roles_to_assign}
                     missing_ids = [rid for rid in role_ids if rid not in found_role_ids]
                     raise HTTPException(
@@ -77,14 +98,12 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
                         detail=f"One or more roles not found for IDs: {missing_ids}",
                     )
                 db_obj.roles = roles_to_assign
-
-            await resolved_session.commit()  # Single commit for user and roles
-            await resolved_session.refresh(db_obj)
-            if role_ids:  # Refresh roles attribute if they were processed
-                await resolved_session.refresh(db_obj, attribute_names=["roles"])
-
+            await db_session.commit()
+            await db_session.refresh(db_obj)
+            if role_ids:
+                await db_session.refresh(db_obj, attribute_names=["roles"])
         except exc.IntegrityError as e:
-            await resolved_session.rollback()
+            await db_session.rollback()
             is_unique_constraint_violation = "UNIQUE constraint failed" in str(
                 e
             ) or "duplicate key value violates unique constraint" in str(e)
@@ -101,9 +120,8 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         except HTTPException:
             raise
         except Exception as e:
-            await resolved_session.rollback()
+            await db_session.rollback()
             raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
-
         return db_obj
 
     async def create(
@@ -113,50 +131,44 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         created_by_id: UUID | str | None = None,
         db_session: AsyncSession | None = None,
     ) -> User:
-        resolved_session: AsyncSession = db_session or self.db.session  # type: ignore[assignment]
-        if resolved_session is None:
-            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
-
-        role_ids = []  # Initialize role_ids for later conditional refresh
+        """
+        Create a user. Requires db_session to be provided explicitly.
+        """
+        if db_session is None:
+            raise ValueError("db_session must be provided")
+        role_ids = []
         if isinstance(obj_in, IUserCreate):
             role_ids = obj_in.role_id if obj_in.role_id is not None else []
             obj_in_data = obj_in.model_dump(exclude={"password", "role_id"})
-            obj_in_data["roles"] = []  # Ensure roles is an empty list for User constructor
+            obj_in_data["roles"] = []
             db_obj = User(**obj_in_data)
             db_obj.password = PasswordValidator.get_password_hash(obj_in.password)
-        else:  # isinstance(obj_in, User)
+        else:
             db_obj = obj_in
             if db_obj.roles is None:
                 db_obj.roles = []
-
         if created_by_id:
             db_obj.created_by_id = created_by_id
-
         try:
-            resolved_session.add(db_obj)
-            # Defer commit until roles are handled for atomicity (if any)
-
-            if role_ids:  # Only if obj_in was IUserCreate and had role_ids
-                result = await resolved_session.execute(
+            db_session.add(db_obj)
+            if role_ids:
+                result = await db_session.exec(
                     select(Role).where(Role.id.in_(role_ids))  # type: ignore[attr-defined]
                 )
                 roles = list(result.scalars().all())
                 if len(roles) != len(role_ids):
-                    await resolved_session.rollback()  # Rollback before raising
+                    await db_session.rollback()
                     raise HTTPException(
                         status_code=404,
                         detail=f"One or more roles not found for IDs: {role_ids}",
                     )
                 db_obj.roles = roles
-
-            await resolved_session.commit()  # Single commit
-            await resolved_session.refresh(db_obj)
-            # Conditionally refresh roles attribute if they were involved
+            await db_session.commit()
+            await db_session.refresh(db_obj)
             if role_ids or (isinstance(obj_in, User) and obj_in.roles is not None and len(obj_in.roles) > 0):
-                await resolved_session.refresh(db_obj, attribute_names=["roles"])
-
+                await db_session.refresh(db_obj, attribute_names=["roles"])
         except exc.IntegrityError as e:
-            await resolved_session.rollback()
+            await db_session.rollback()
             is_unique_constraint_violation = "UNIQUE constraint failed" in str(
                 e
             ) or "duplicate key value violates unique constraint" in str(e)
@@ -173,14 +185,8 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         except HTTPException:
             raise
         except Exception as e:
-            await resolved_session.rollback()
+            await db_session.rollback()
             raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
-
-        # Ensure this refresh is inside the try block or handled after confirming success.
-        # The logic above now includes conditional refresh of roles inside the try block.
-        # So, the standalone refresh below might be redundant or needs re-evaluation.
-        # For now, I'll keep it as per the original structure but note it.
-        # await resolved_session.refresh(db_obj, attribute_names=["roles"])  # Original position
         return db_obj
 
     async def update(
@@ -190,15 +196,15 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         obj_new: IUserUpdate | dict[str, Any] | User,
         db_session: AsyncSession | None = None,
     ) -> User:
-        resolved_session: AsyncSession = db_session or self.db.session  # type: ignore[assignment]
-        if resolved_session is None:
-            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
-
+        """
+        Update a user. Requires db_session to be provided explicitly.
+        """
+        if db_session is None:
+            raise ValueError("db_session must be provided")
         if isinstance(obj_new, dict):
             update_data = obj_new
         else:
             update_data = obj_new.model_dump(exclude_unset=True)
-
         if "password" in update_data and update_data["password"]:
             hashed_password = PasswordValidator.get_password_hash(update_data["password"])
             obj_current.password = hashed_password
@@ -206,11 +212,10 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
             del update_data["password"]
         elif "password" in update_data:
             del update_data["password"]
-
         if "role_id" in update_data:
             role_ids = update_data.pop("role_id", [])
             if role_ids:
-                result = await resolved_session.execute(
+                result = await db_session.exec(
                     select(Role).where(Role.id.in_(role_ids))  # type: ignore[attr-defined]
                 )
                 roles = list(result.scalars().all())
@@ -222,15 +227,13 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
                 obj_current.roles = roles
             else:
                 obj_current.roles = []
-
         for field, value in update_data.items():
             setattr(obj_current, field, value)
-
         try:
-            resolved_session.add(obj_current)
-            await resolved_session.commit()
+            db_session.add(obj_current)
+            await db_session.commit()
         except exc.IntegrityError as e:
-            await resolved_session.rollback()
+            await db_session.rollback()
             is_unique_constraint_violation = "UNIQUE constraint failed" in str(
                 e
             ) or "duplicate key value violates unique constraint" in str(e)
@@ -247,105 +250,116 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         except HTTPException:
             raise
         except Exception as e:
-            await resolved_session.rollback()
+            await db_session.rollback()
             raise HTTPException(
                 status_code=500,
                 detail=f"An unexpected error occurred during update: {e}",
             )
-
-        await resolved_session.refresh(obj_current)
-        await resolved_session.refresh(obj_current, attribute_names=["roles"])
+        await db_session.refresh(obj_current)
+        await db_session.refresh(obj_current, attribute_names=["roles"])
         return obj_current
 
     def has_verified(self, user: User) -> bool:
         return getattr(user, "is_verified", True)
 
-    async def update_is_active(self, *, db_obj: list[User], obj_in: IUserUpdate) -> list[User] | None:
-        db_session: AsyncSession = self.db.session  # type: ignore[assignment]
+    async def update_is_active(
+        self, *, db_obj: list[User], obj_in: IUserUpdate, db_session: AsyncSession | None = None
+    ) -> list[User] | None:
+        """
+        Update is_active for a list of users. Requires db_session to be provided explicitly.
+        """
         if db_session is None:
-            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
-
+            raise ValueError("db_session must be provided")
         for x in db_obj:
             if hasattr(obj_in, "is_active") and obj_in.is_active is not None:
                 x.is_active = obj_in.is_active
             db_session.add(x)
-
         await db_session.commit()
-
         for x in db_obj:
             await db_session.refresh(x)
-
         return db_obj
 
     async def authenticate(
         self, *, email: EmailStr, password: str, db_session: AsyncSession | None = None
     ) -> User | None:
-        resolved_session: AsyncSession = db_session or self.db.session  # type: ignore[assignment]
-        if resolved_session is None:
-            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
-
-        user = await self.get_by_email(email=email, db_session=resolved_session)
-
+        """
+        Authenticate a user by email and password. Requires db_session to be provided explicitly.
+        """
+        if db_session is None:
+            raise ValueError("db_session must be provided")
+        user = await self.get_by_email(email=email, db_session=db_session)
         if not user:
             return None
-
         if user.password is None:
             return None
-
         if user.is_locked and user.locked_until and user.locked_until > datetime.now(timezone.utc):
             return None
-
         if user.is_locked and user.locked_until and user.locked_until <= datetime.now(timezone.utc):
-            await self.unlock_account(user=user, db_session=resolved_session)
+            await self.unlock_account(user=user, db_session=db_session)
+        # Removed is_active check here; let endpoint handle it
+        from app.core.security import PasswordValidator
 
-        if not user.is_active:
+        verify_result = PasswordValidator.verify_password(password, user.password)
+        if not verify_result:
+            await self.increment_failed_attempts(user=user, db_session=db_session)
             return None
-
-        if not PasswordValidator.verify_password(password, user.password):
-            await self.increment_failed_attempts(user=user, db_session=resolved_session)
-            return None
-
-        await self.reset_failed_attempts(user=user, db_session=resolved_session)
+        await self.reset_failed_attempts(user=user, db_session=db_session)
         return user
 
     async def remove(self, *, id: UUID | str, db_session: AsyncSession | None = None) -> User:
-        resolved_session: AsyncSession = db_session or self.db.session  # type: ignore[assignment]
-        if resolved_session is None:
-            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
-        response = await resolved_session.execute(
+        """
+        Remove a user by ID. Requires db_session to be provided explicitly.
+        """
+        if db_session is None:
+            raise ValueError("db_session must be provided")
+        result = await db_session.exec(
             select(self.model).where(self.model.id == id)  # type: ignore[attr-defined]
         )
-        unique_response = response.unique()
-        obj = unique_response.scalar_one()
-
-        await resolved_session.delete(obj)
-        await resolved_session.commit()
+        obj = result.scalars().one_or_none()
+        if obj is None:
+            raise HTTPException(status_code=404, detail=f"User with id {id} not found")
+        assert isinstance(obj, User), f"Expected User instance, got {type(obj)}"
+        await db_session.delete(obj)
+        await db_session.commit()
         return obj
 
-    async def add_password_to_history(
+    async def add_roles_by_ids(
         self,
         *,
         user_id: UUID,
-        hashed_password: str,
-        created_by_ip: str | None = None,
-        reset_token_id: UUID | None = None,
+        role_ids: list[UUID],
         db_session: AsyncSession | None = None,
-    ) -> None:
-        resolved_session: AsyncSession = db_session or self.db.session  # type: ignore[assignment]
-        if resolved_session is None:
-            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
-
-        history_entry_data = {
-            "user_id": user_id,
-            "password_hash": hashed_password,
-            "created_by_ip": created_by_ip,
-        }
-        if reset_token_id:
-            history_entry_data["reset_token_id"] = reset_token_id
-
-        password_history = UserPasswordHistory(**history_entry_data)
-        resolved_session.add(password_history)
-        await resolved_session.commit()
+    ) -> User:
+        """
+        Add roles to a user by IDs. Requires db_session to be provided explicitly.
+        """
+        if db_session is None:
+            raise ValueError("db_session must be provided")
+        user = await self.get(id=user_id, db_session=db_session)  # type: ignore[arg-type]
+        if not user:
+            raise HTTPException(status_code=404, detail=f"User with id {user_id} not found")
+        roles_result = await db_session.exec(
+            select(Role).where(Role.id.in_(role_ids))  # type: ignore[attr-defined]
+        )
+        roles_to_add = list(roles_result.scalars().all())
+        for r in roles_to_add:
+            assert isinstance(r, Role), f"Expected Role instance, got {type(r)}"
+        if len(roles_to_add) != len(role_ids):
+            found_role_ids = {role.id for role in roles_to_add}
+            missing_role_ids = [rid for rid in role_ids if rid not in found_role_ids]
+            raise HTTPException(
+                status_code=404,
+                detail=f"One or more roles not found for IDs: {missing_role_ids}",
+            )
+        if user.roles is None:
+            user.roles = []
+        for role in roles_to_add:
+            if role not in user.roles:
+                user.roles.append(role)
+        db_session.add(user)
+        await db_session.commit()
+        await db_session.refresh(user, attribute_names=["roles"])
+        return user
 
     async def is_password_reused(
         self,
@@ -354,17 +368,18 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         new_password_hash: str,
         db_session: AsyncSession | None = None,
     ) -> bool:
-        resolved_session: AsyncSession = db_session or self.db.session  # type: ignore[assignment]
-        if resolved_session is None:
-            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
-
+        """
+        Check if a password hash has been reused. Requires db_session to be provided explicitly.
+        """
+        if db_session is None:
+            raise ValueError("db_session must be provided")
         limit = settings.PREVENT_PASSWORD_REUSE
         if limit <= 0:
             return False
-        result = await resolved_session.execute(
-            select(UserPasswordHistory.password_hash)  # type: ignore[arg-type]
-            .where(UserPasswordHistory.user_id == user_id)  # type: ignore[attr-defined]
-            .order_by(desc(UserPasswordHistory.created_at))  # type: ignore[attr-defined]
+        result = await db_session.exec(
+            select(UserPasswordHistory.password_hash)
+            .where(UserPasswordHistory.user_id == user_id)
+            .order_by(desc(UserPasswordHistory.created_at))
             .limit(limit)
         )
         history_hashes = result.scalars().all()
@@ -377,21 +392,25 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         new_password: str,
         db_session: AsyncSession | None = None,
     ) -> bool:
-        resolved_session: AsyncSession = db_session or self.db.session  # type: ignore[assignment]
-        if resolved_session is None:
-            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
-
+        """
+        Check if a password is in the user's history. Requires db_session to be provided explicitly.
+        """
+        if db_session is None:
+            raise ValueError("db_session must be provided")
         limit = settings.PASSWORD_HISTORY_SIZE
         if limit <= 0:
             return False
-        result = await resolved_session.execute(
+        result = await db_session.exec(
             select(UserPasswordHistory)
-            .where(UserPasswordHistory.user_id == user_id)  # type: ignore[attr-defined]
-            .order_by(desc(UserPasswordHistory.created_at))  # type: ignore[attr-defined]
+            .where(UserPasswordHistory.user_id == user_id)
+            .order_by(desc(UserPasswordHistory.created_at))
             .limit(limit)
         )
         history_entries = result.scalars().all()
-
+        for entry in history_entries:
+            assert isinstance(
+                entry, UserPasswordHistory
+            ), f"Expected UserPasswordHistory instance, got {type(entry)}"
         return any(
             PasswordValidator.verify_password(new_password, entry.password_hash) for entry in history_entries
         )
@@ -405,134 +424,136 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         created_by_ip: str | None = None,
         reset_token_id: UUID | None = None,
     ) -> User:
-        resolved_session: AsyncSession = db_session or self.db.session  # type: ignore[assignment]
-        if resolved_session is None:
-            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
-
+        """
+        Update a user's password. Requires db_session to be provided explicitly.
+        """
+        if db_session is None:
+            raise ValueError("db_session must be provided")
         if settings.PASSWORD_HISTORY_SIZE > 0 and await self.is_password_in_history(
-            user_id=user.id, new_password=new_password, db_session=resolved_session
+            user_id=user.id, new_password=new_password, db_session=db_session
         ):
             raise ValueError(f"Cannot reuse any of your last {settings.PASSWORD_HISTORY_SIZE} passwords.")
-
         new_password_hash = PasswordValidator.get_password_hash(new_password)
-
         if settings.PREVENT_PASSWORD_REUSE > 0 and await self.is_password_reused(
             user_id=user.id,
             new_password_hash=new_password_hash,
-            db_session=resolved_session,
+            db_session=db_session,
         ):
             raise ValueError("This password has been used too recently. Please choose a different one.")
         if user.password is None:
             raise ValueError("Current user password is not set. Cannot add to history.")
-
         await self.add_password_to_history(
             user_id=user.id,
             hashed_password=user.password,
             created_by_ip=created_by_ip,
             reset_token_id=reset_token_id,
-            db_session=resolved_session,
+            db_session=db_session,
         )
-
         user.password = new_password_hash
         user.last_changed_password_date = datetime.now(timezone.utc).replace(tzinfo=None)
         user.password_version += 1
-        resolved_session.add(user)
-        await resolved_session.commit()
-        await resolved_session.refresh(user)
-
+        db_session.add(user)
+        await db_session.commit()
+        await db_session.refresh(user)
         return user
 
     async def increment_failed_attempts(self, *, user: User, db_session: AsyncSession | None = None) -> User:
-        resolved_session: AsyncSession = db_session or self.db.session  # type: ignore[assignment]
-        if resolved_session is None:
-            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
-
+        """
+        Increment failed login attempts for a user. Requires db_session to be provided explicitly.
+        """
+        if db_session is None:
+            raise ValueError("db_session must be provided")
         if user.number_of_failed_attempts is None:
             user.number_of_failed_attempts = 1
         else:
             user.number_of_failed_attempts += 1
-
         if user.number_of_failed_attempts >= settings.MAX_LOGIN_ATTEMPTS:
             user.is_locked = True
             user.locked_until = (
                 datetime.now(timezone.utc) + timedelta(minutes=settings.ACCOUNT_LOCKOUT_MINUTES)
             ).replace(tzinfo=None)
         try:
-            resolved_session.add(user)
-            await resolved_session.commit()
-            await resolved_session.refresh(user)
+            db_session.add(user)
+            await db_session.commit()
+            await db_session.refresh(user)
         except Exception as e:
-            await resolved_session.rollback()
-            # Consider logging 'e'
+            await db_session.rollback()
             raise HTTPException(status_code=500, detail=f"Error updating failed attempts: {str(e)}")
         return user
 
     async def reset_failed_attempts(self, *, user: User, db_session: AsyncSession | None = None) -> User:
-        resolved_session: AsyncSession = db_session or self.db.session  # type: ignore[assignment]
-        if resolved_session is None:
-            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
-
+        """
+        Reset failed login attempts for a user. Requires db_session to be provided explicitly.
+        """
+        if db_session is None:
+            raise ValueError("db_session must be provided")
         user.number_of_failed_attempts = 0
-        resolved_session.add(user)
-        await resolved_session.commit()
-        await resolved_session.refresh(user)
+        db_session.add(user)
+        await db_session.commit()
+        await db_session.refresh(user)
         return user
 
     async def unlock_account(self, *, user: User, db_session: AsyncSession | None = None) -> User:
-        resolved_session: AsyncSession = db_session or self.db.session  # type: ignore[assignment]
-        if resolved_session is None:
-            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
-
+        """
+        Unlock a user's account. Requires db_session to be provided explicitly.
+        """
+        if db_session is None:
+            raise ValueError("db_session must be provided")
         user.is_locked = False
         user.locked_until = None
         user.number_of_failed_attempts = 0
-
-        resolved_session.add(user)
-        await resolved_session.commit()
-        await resolved_session.refresh(user)
+        db_session.add(user)
+        await db_session.commit()
+        await db_session.refresh(user)
         return user
 
-    async def add_roles_by_ids(
+    async def add_password_to_history(
         self,
         *,
         user_id: UUID,
-        role_ids: list[UUID],
+        hashed_password: str,
+        created_by_ip: str | None = None,
+        reset_token_id: UUID | None = None,
         db_session: AsyncSession | None = None,
-    ) -> User:
-        resolved_session: AsyncSession = db_session or self.db.session  # type: ignore[assignment]
-        if resolved_session is None:
-            raise HTTPException(status_code=503, detail="Database service temporarily unavailable")
-
-        user = await self.get(id=user_id, db_session=resolved_session)  # type: ignore[arg-type]
-        if not user:
-            raise HTTPException(status_code=404, detail=f"User with id {user_id} not found")
-
-        roles_result = await resolved_session.execute(
-            select(Role).where(Role.id.in_(role_ids))  # type: ignore[attr-defined]
+    ) -> None:
+        """
+        Add a password to the user's password history. Requires db_session to be provided explicitly.
+        """
+        if db_session is None:
+            raise ValueError("db_session must be provided")
+        password_history = UserPasswordHistory(
+            user_id=user_id,
+            password_hash=hashed_password,
+            created_by_ip=created_by_ip,
+            reset_token_id=reset_token_id,
         )
-        roles_to_add = list(roles_result.scalars().all())  # Ensure it's a list
+        db_session.add(password_history)
+        await db_session.commit()
+        await db_session.refresh(password_history)
+        return None
 
-        if len(roles_to_add) != len(role_ids):
-            found_role_ids = {role.id for role in roles_to_add}
-            missing_role_ids = [rid for rid in role_ids if rid not in found_role_ids]
-            raise HTTPException(
-                status_code=404,
-                detail=f"One or more roles not found for IDs: {missing_role_ids}",
-            )
-
-        if user.roles is None:  # Ensure user.roles is a list
-            user.roles = []
-
-        for role in roles_to_add:
-            if role not in user.roles:
-                user.roles.append(role)
-
-        resolved_session.add(user)
-        await resolved_session.commit()
-        await resolved_session.refresh(user, attribute_names=["roles"])
+    async def get_with_roles_permissions(
+        self, *, id: UUID | str, db_session: AsyncSession | None = None
+    ) -> User | None:
+        """
+        Retrieve a user by ID, eagerly loading roles and permissions. Ensures relationships are loaded fresh.
+        """
+        if db_session is None:
+            raise ValueError("db_session must be provided to CRUD methods")
+        stmt = (
+            select(self.model)
+            .where(self.model.id == id)
+            .options(selectinload(self.model.roles).selectinload(Role.permissions))  # type: ignore[arg-type]
+        )
+        result = await db_session.exec(stmt)
+        user = result.unique().scalars().first()  # FIX: use .scalars().first() for model instance
+        if user:
+            await db_session.refresh(user, attribute_names=["roles"])
+            # Also refresh permissions for each role
+            for role in getattr(user, "roles", []):
+                await db_session.refresh(role, attribute_names=["permissions"])
         return user
 
 
 user_crud = CRUDUser(User)
-# Keep the original name for backward compatibility
 user = user_crud

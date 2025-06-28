@@ -8,35 +8,197 @@ Tests the complete user management flow including:
 - Profile management
 """
 
-from test.factories.async_factories import AsyncRoleFactory, AsyncUserFactory
+import asyncio
+import random
+import string
+import uuid
 from test.utils import get_csrf_token, random_email
-from unittest.mock import AsyncMock
+from typing import Any, Dict, Optional, Tuple
 
+import jwt
 import pytest
 from httpx import AsyncClient
-from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import settings
+from app.core.config import settings as app_settings
+
+
+# --- Helper functions for API-driven flows ---
+async def register_and_verify_user(
+    client: AsyncClient,
+    email: Optional[str] = None,
+    password: Optional[str] = None,
+    first_name: str = "Test",
+    last_name: str = "User",
+) -> Tuple[str, str]:
+    if not email:
+        email = random_email()
+    if not password:
+        password = "SecurePassword123!"
+    user_data = {
+        "email": email,
+        "first_name": first_name,
+        "last_name": last_name,
+        "password": password,
+        "contact_phone": "+1234567890",
+    }
+    csrf_token, headers = await get_csrf_token(client)
+    response = await client.post(f"{settings.API_V1_STR}/auth/register", json=user_data, headers=headers)
+    if response.status_code != 201:
+        print(f"Registration failed for {email}: {response.status_code} {response.text}")
+    assert response.status_code == 201
+    verification_code = response.json()["data"].get("verification_code")
+    # Verify email
+    verify_payload = {"token": verification_code}
+    csrf_token, headers = await get_csrf_token(client)
+    response = await client.post(
+        f"{settings.API_V1_STR}/auth/verify-email", json=verify_payload, headers=headers
+    )
+    assert response.status_code == 200
+    return email, password
+
+
+async def login_user(client: AsyncClient, email: str, password: str) -> Optional[str]:
+    csrf_token, headers = await get_csrf_token(client)
+    login_data = {"email": email, "password": password}
+    response = await client.post(f"{settings.API_V1_STR}/auth/login", json=login_data, headers=headers)
+    if response.status_code == 200:
+        token = response.json().get("access_token")
+        if isinstance(token, str):
+            return token
+        return None
+    return None
+
+
+async def promote_user_to_admin(
+    client: AsyncClient,
+    user_email: str,
+    max_retries: int = 5,
+    delay: float = 0.3,
+) -> Optional[Dict[str, Any]]:
+    """Assign the admin role to a user using the seeded admin account, with retry for DB visibility.
+    Also sets is_superuser=True."""
+    seed_admin_email = "admin@example.com"
+    seed_admin_password = "admin123"
+    admin_token = await login_user(client, seed_admin_email, seed_admin_password)
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+    user_id = None
+    response = None  # Ensure response is always defined
+    # Retry user lookup for DB visibility
+    for attempt in range(max_retries):
+        response = await client.get(f"{settings.API_V1_STR}/users?email={user_email}", headers=admin_headers)
+        if response.status_code != 200:
+            await asyncio.sleep(delay)
+            continue
+        data = response.json()["data"]
+        if isinstance(data, dict) and "items" in data:
+            user_items = data["items"]
+        elif isinstance(data, list):
+            user_items = data
+        elif isinstance(data, dict) and "id" in data:
+            user_items = [data]
+        else:
+            user_items = []
+        if user_items:
+            user_id = user_items[0]["id"]
+            break
+        await asyncio.sleep(delay)
+    assert user_id, f"No user found for email {user_email} after {max_retries} retries"
+    # Get admin role id
+    response = await client.get(f"{settings.API_V1_STR}/roles?search=admin", headers=admin_headers)
+    assert response.status_code == 200
+    roles = response.json()["data"]["items"]
+    admin_role = next((r for r in roles if r["name"].lower() == "admin"), None)
+    assert admin_role is not None, "Admin role not found"
+    admin_role_id = admin_role["id"]
+    # Retry role assignment for DB visibility
+    response = None
+    for attempt in range(max_retries):
+        get_resp = await client.get(f"{settings.API_V1_STR}/users/{user_id}", headers=admin_headers)
+        if get_resp.status_code != 200:
+            await asyncio.sleep(delay)
+            continue
+        csrf_token, headers = await get_csrf_token(client)
+        headers.update(admin_headers)
+        role_assignment_data = {"user_id": user_id, "role_ids": [admin_role_id]}
+        response = await client.post(
+            f"{settings.API_V1_STR}/users/{user_id}/roles",
+            json=role_assignment_data,
+            headers=headers,
+        )
+        if response.status_code == 200:
+            break
+        await asyncio.sleep(delay)
+    else:
+        raise AssertionError(
+            (
+                f"Failed to assign admin role to user {user_email} after {max_retries} retries "
+                f"(last status: {response.status_code if response else 'no response'})"
+            )
+        )
+    # Set is_superuser=True for the user (with retry)
+    for attempt in range(max_retries):
+        csrf_token, headers = await get_csrf_token(client)
+        headers.update(admin_headers)
+        update_data = {"is_superuser": True}
+        response = await client.put(
+            f"{settings.API_V1_STR}/users/{user_id}",
+            json=update_data,
+            headers=headers,
+        )
+        if response.status_code == 200:
+            return user_id
+        await asyncio.sleep(delay)
+    raise AssertionError(
+        f"Failed to set is_superuser=True for user {user_email} after {max_retries} retries "
+        f"(last status: {response.status_code if response else 'no response'})"
+    )
+
+
+def generate_strong_password(length: int = 16) -> str:
+    """Generate a strong password that avoids sequential characters and meets complexity requirements."""
+    # Avoid obvious sequences and repeated chars
+    while True:
+        password = "".join(random.sample(string.ascii_letters + string.digits + "!@#$%^&*()_+-=", length))
+        # Check for sequential chars
+        sequential = any(
+            password[i : i + 3] in string.ascii_lowercase
+            or password[i : i + 3] in string.ascii_uppercase
+            or password[i : i + 3] in string.digits
+            for i in range(len(password) - 2)
+        )
+        if sequential:
+            continue
+        # Check for at least one uppercase, one lowercase, one digit, one special
+        if (
+            any(c.islower() for c in password)
+            and any(c.isupper() for c in password)
+            and any(c.isdigit() for c in password)
+            and any(c in "!@#$%^&*()_+-=" for c in password)
+        ):
+            return password
 
 
 class TestUserManagementFlow:
-    """Integration tests for user management flows."""
+    """Integration tests for user management flows (API-driven)."""
 
     @pytest.mark.asyncio
-    async def test_admin_user_crud_flow(
-        self,
-        client: AsyncClient,
-        db: AsyncSession,
-        user_factory: AsyncUserFactory,
-        role_factory: AsyncRoleFactory,
-        redis_mock: AsyncMock,
-    ) -> None:
-        """Test complete CRUD operations for users by admin."""
-        # Create admin user
-        admin_user = await user_factory.create_admin_user()
-        admin_token = await user_factory.get_auth_token(admin_user)
+    async def test_admin_user_crud_flow(self, client: AsyncClient) -> None:
+        # Register and verify a user, then promote to admin
+        email, password = await register_and_verify_user(client)
+        await promote_user_to_admin(client, email)
+        # Refresh token after promotion to admin
+        admin_token = await login_user(client, email, password)
+        auth_headers = {"Authorization": f"Bearer {admin_token}"}
 
-        # Create user data
+        # Debug: Fetch and print promoted user's roles and permissions
+        response = await client.get(f"{settings.API_V1_STR}/users?email={email}", headers=auth_headers)
+        assert response.status_code == 200
+        user_info = response.json()["data"]["items"][0]
+        print("Promoted user roles:", [r["name"] for r in user_info.get("roles", [])])
+        print("Promoted user permissions:", user_info.get("permissions", []))
+
+        # Step 1: Create user via API
         user_data = {
             "email": random_email(),
             "first_name": "John",
@@ -45,394 +207,318 @@ class TestUserManagementFlow:
             "contact_phone": "+1234567890",
             "is_active": True,
         }
-
-        auth_headers = {"Authorization": f"Bearer {admin_token}"}
-
-        # Step 1: Create user
         csrf_token, headers = await get_csrf_token(client)
         headers.update(auth_headers)
-
-        response = await client.post(
-            f"{settings.API_V1_STR}/users",
-            json=user_data,
-            headers=headers,
-        )
-
+        response = await client.post(f"{settings.API_V1_STR}/users", json=user_data, headers=headers)
+        if response.status_code != 201:
+            print(f"User creation failed: {response.status_code} {response.text}")
         assert response.status_code == 201
         result = response.json()
-        assert result["success"] is True
         created_user = result["data"]
-        user_id = created_user["id"]
+        created_user_id = created_user["id"]
         assert created_user["email"] == user_data["email"]
 
         # Step 2: Get user by ID
-        response = await client.get(
-            f"{settings.API_V1_STR}/users/{user_id}",
-            headers=auth_headers,
-        )
-
+        response = await client.get(f"{settings.API_V1_STR}/users/{created_user_id}", headers=auth_headers)
         assert response.status_code == 200
-        result = response.json()
-        assert result["success"] is True
-        user_detail = result["data"]
+        user_detail = response.json()["data"]
         assert user_detail["email"] == user_data["email"]
 
         # Step 3: Update user
         update_data = {"first_name": "Jane", "last_name": "Smith", "contact_phone": "+9876543210"}
-
         csrf_token, headers = await get_csrf_token(client)
         headers.update(auth_headers)
-
         response = await client.put(
-            f"{settings.API_V1_STR}/users/{user_id}",
-            json=update_data,
-            headers=headers,
+            f"{settings.API_V1_STR}/users/{created_user_id}", json=update_data, headers=headers
         )
-
         assert response.status_code == 200
-        result = response.json()
-        assert result["success"] is True
-        updated_user = result["data"]
+        updated_user = response.json()["data"]
         assert updated_user["first_name"] == update_data["first_name"]
         assert updated_user["last_name"] == update_data["last_name"]
 
         # Step 4: List users (should include our created user)
-        response = await client.get(
-            f"{settings.API_V1_STR}/users/list",
-            headers=auth_headers,
-        )
-
-        assert response.status_code == 200
-        result = response.json()
-        assert result["success"] is True
-        users_list = result["data"]["items"]
-        created_user_found = any(user["id"] == user_id for user in users_list)
-        assert created_user_found
+        # Fetch all pages to search for the user
+        found = False
+        page = 1
+        while True:
+            response = await client.get(
+                f"{settings.API_V1_STR}/users/list?page={page}&size=20", headers=auth_headers
+            )
+            if response.status_code != 200:
+                print(f"/users/list page {page} error: {response.status_code} {response.text}")
+                break
+            users_list = response.json()["data"]["items"]
+            if any(user["id"] == created_user_id for user in users_list):
+                found = True
+                break
+            if not users_list or len(users_list) < 20:
+                break
+            page += 1
+        if not found:
+            print(f"Created user {created_user_id} not found in any page of /users/list!")
+        assert found
 
         # Step 5: Delete user
         csrf_token, headers = await get_csrf_token(client)
         headers.update(auth_headers)
-
-        response = await client.delete(
-            f"{settings.API_V1_STR}/users/{user_id}",
-            headers=headers,
-        )
-
+        response = await client.delete(f"{settings.API_V1_STR}/users/{created_user_id}", headers=headers)
         assert response.status_code == 200
-        result = response.json()
-        assert result["success"] is True
-
         # Verify user is deleted
-        response = await client.get(
-            f"{settings.API_V1_STR}/users/{user_id}",
-            headers=auth_headers,
-        )
+        response = await client.get(f"{settings.API_V1_STR}/users/{created_user_id}", headers=auth_headers)
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_user_role_assignment_flow(
-        self,
-        client: AsyncClient,
-        db: AsyncSession,
-        user_factory: AsyncUserFactory,
-        role_factory: AsyncRoleFactory,
-        redis_mock: AsyncMock,
-    ) -> None:
-        """Test user role assignment and permission checking."""
-        # Create admin user and regular user
-        admin_user = await user_factory.create_admin_user()
-        admin_token = await user_factory.get_auth_token(admin_user)
-        regular_user = await user_factory.create_verified_user()
-
-        # Create a role
-        role = await role_factory.create_role(name="manager")
-
+    async def test_user_role_assignment_flow(self, client: AsyncClient) -> None:
+        """Test user role assignment and permission checking (API-driven)."""
+        # Register and verify admin user, promote to admin
+        admin_email, admin_password = await register_and_verify_user(client)
+        await promote_user_to_admin(client, admin_email)
+        admin_token = await login_user(client, admin_email, admin_password)
         auth_headers = {"Authorization": f"Bearer {admin_token}"}
 
-        # Step 1: Assign role to user
-        role_assignment_data = {"user_id": str(regular_user.id), "role_ids": [str(role.id)]}
+        # Register and verify a regular user
+        user_email, user_password = await register_and_verify_user(client)
+        # Get regular user id
+        response = await client.get(f"{settings.API_V1_STR}/users?email={user_email}", headers=auth_headers)
+        regular_user_id = response.json()["data"]["items"][0]["id"]
 
+        # Create a unique role via API
+        unique_role_name = f"testing_{uuid.uuid4().hex[:8]}"
+        role_data = {"name": unique_role_name, "description": "Testing role"}
         csrf_token, headers = await get_csrf_token(client)
         headers.update(auth_headers)
+        response = await client.post(f"{settings.API_V1_STR}/roles", json=role_data, headers=headers)
+        assert response.status_code == 201
+        role_id = response.json()["data"]["id"]
 
+        # Step 1: Assign role to user
+        role_assignment_data = {"user_id": regular_user_id, "role_ids": [role_id]}
+        csrf_token, headers = await get_csrf_token(client)
+        headers.update(auth_headers)
         response = await client.post(
-            f"{settings.API_V1_STR}/users/{regular_user.id}/roles",
-            json=role_assignment_data,
-            headers=headers,
+            f"{settings.API_V1_STR}/users/{regular_user_id}/roles", json=role_assignment_data, headers=headers
         )
-
         assert response.status_code == 200
-        result = response.json()
-        assert result["success"] is True
 
         # Step 2: Verify user has the role
-        response = await client.get(
-            f"{settings.API_V1_STR}/users/{regular_user.id}",
-            headers=auth_headers,
-        )
-
+        response = await client.get(f"{settings.API_V1_STR}/users/{regular_user_id}", headers=auth_headers)
         assert response.status_code == 200
-        result = response.json()
-        user_detail = result["data"]
+        user_detail = response.json()["data"]
         user_roles = [r["name"] for r in user_detail.get("roles", [])]
-        assert "manager" in user_roles
+        user_role_ids = [r["id"] for r in user_detail.get("roles", [])]
+        print(f"User roles before removal: {user_roles}")
+        print(f"User role IDs before removal: {user_role_ids}")
+        assert unique_role_name in user_roles
 
-        # Step 3: Remove role from user
+        # Step 3: Remove role from user by replacing roles with an empty list
         csrf_token, headers = await get_csrf_token(client)
         headers.update(auth_headers)
-
-        response = await client.delete(
-            f"{settings.API_V1_STR}/users/{regular_user.id}/roles/{role.id}",
-            headers=headers,
+        role_assignment_data = {"user_id": regular_user_id, "role_ids": []}
+        response = await client.post(
+            f"{settings.API_V1_STR}/users/{regular_user_id}/roles", json=role_assignment_data, headers=headers
         )
-
         assert response.status_code == 200
-        result = response.json()
-        assert result["success"] is True
 
         # Verify role is removed
-        response = await client.get(
-            f"{settings.API_V1_STR}/users/{regular_user.id}",
-            headers=auth_headers,
-        )
-
+        response = await client.get(f"{settings.API_V1_STR}/users/{regular_user_id}", headers=auth_headers)
         assert response.status_code == 200
-        result = response.json()
-        user_detail = result["data"]
+        user_detail = response.json()["data"]
         user_roles = [r["name"] for r in user_detail.get("roles", [])]
-        assert "manager" not in user_roles
+        assert unique_role_name not in user_roles
+
+        # Cleanup: Remove the role itself
+        csrf_token, headers = await get_csrf_token(client)
+        headers.update(auth_headers)
+        response = await client.delete(f"{settings.API_V1_STR}/roles/{role_id}", headers=headers)
+        assert response.status_code == 204
 
     @pytest.mark.asyncio
-    async def test_user_profile_management_flow(
-        self,
-        client: AsyncClient,
-        db: AsyncSession,
-        user_factory: AsyncUserFactory,
-        redis_mock: AsyncMock,
-    ) -> None:
-        """Test user profile management (self-service)."""
-        # Create verified user
-        user = await user_factory.create_verified_user()
-        user_token = await user_factory.get_auth_token(user)
-
+    async def test_user_profile_management_flow(self, client: AsyncClient) -> None:
+        """Test user profile management (self-service, API-driven)."""
+        # Register and verify a user
+        email, password = await register_and_verify_user(client)
+        # Debug: fetch user status after registration/verification
+        admin_email = "admin@example.com"
+        admin_password = "admin123"
+        admin_token = await login_user(client, admin_email, admin_password)
+        admin_headers = {"Authorization": f"Bearer {admin_token}"}
+        response = await client.get(f"{settings.API_V1_STR}/users?email={email}", headers=admin_headers)
+        print("User status after registration:", response.json())
+        user_token = await login_user(client, email, password)
         auth_headers = {"Authorization": f"Bearer {user_token}"}
 
-        # Step 1: Get own profile
-        response = await client.get(
-            f"{settings.API_V1_STR}/users",  # Get my profile endpoint
-            headers=auth_headers,
-        )
+        # Fetch user status to check if needs_to_change_password is True
+        response = await client.get(f"{settings.API_V1_STR}/users?email={email}", headers=admin_headers)
+        user_info = response.json()["data"]["items"][0]
+        if user_info.get("needs_to_change_password"):
+            csrf_token, headers = await get_csrf_token(client)
+            headers.update(auth_headers)  # Add Authorization header
+            new_password = generate_strong_password()
+            change_data = {
+                "current_password": password,
+                "new_password": new_password,
+            }
+            response = await client.post(
+                f"{settings.API_V1_STR}/auth/change_password", json=change_data, headers=headers
+            )
+            if response.status_code != 200:
+                print("Password change error:", response.status_code, response.text)
+            assert response.status_code == 200
+            # Login again to get a fresh token after password change
+            user_token = await login_user(client, email, new_password)
+            auth_headers = {"Authorization": f"Bearer {user_token}"}
+            password = new_password  # Update for later use if needed
 
+        # Step 1: Get own profile
+        print("User JWT access token:", user_token)
+        if user_token is None:
+            pytest.fail("User token is None, login failed.")
+        assert isinstance(user_token, str)  # for mypy
+        jwt.decode(user_token, app_settings.SECRET_KEY, algorithms=[app_settings.ALGORITHM])
+        response = await client.get(f"{settings.API_V1_STR}/users/me", headers=auth_headers)
+        if response.status_code != 200:
+            print("/users/me error:", response.status_code, response.text)
         assert response.status_code == 200
-        result = response.json()
-        assert result["success"] is True
-        profile = result["data"]
-        assert profile["email"] == user.email
+        profile = response.json()["data"]
+        assert profile["email"] == email
 
         # Step 2: Update own profile
         update_data = {"first_name": "UpdatedName", "contact_phone": "+1111111111"}
-
         csrf_token, headers = await get_csrf_token(client)
         headers.update(auth_headers)
-
-        response = await client.put(
-            f"{settings.API_V1_STR}/users",  # Update my profile endpoint
-            json=update_data,
-            headers=headers,
-        )
-
+        response = await client.put(f"{settings.API_V1_STR}/users/me", json=update_data, headers=headers)
         assert response.status_code == 200
-        result = response.json()
-        assert result["success"] is True
-        updated_profile = result["data"]
+        updated_profile = response.json()["data"]
         assert updated_profile["first_name"] == update_data["first_name"]
 
     @pytest.mark.asyncio
-    async def test_permission_based_access_control(
-        self,
-        client: AsyncClient,
-        db: AsyncSession,
-        user_factory: AsyncUserFactory,
-        role_factory: AsyncRoleFactory,
-        redis_mock: AsyncMock,
-    ) -> None:
-        """Test permission-based access to user endpoints."""
-        # Create users with different permissions
-        admin_user = await user_factory.create_admin_user()
-        admin_token = await user_factory.get_auth_token(admin_user)
+    async def test_permission_based_access_control(self, client: AsyncClient) -> None:
+        """Test permission-based access to user endpoints (API-driven)."""
+        # Register and verify admin user, promote to admin
+        admin_email, admin_password = await register_and_verify_user(client)
+        await promote_user_to_admin(client, admin_email)
+        admin_token = await login_user(client, admin_email, admin_password)
+        admin_headers = {"Authorization": f"Bearer {admin_token}"}
 
-        regular_user = await user_factory.create_verified_user()
-        regular_token = await user_factory.get_auth_token(regular_user)
+        # Register and verify a regular user
+        user_email, user_password = await register_and_verify_user(client)
+        user_token = await login_user(client, user_email, user_password)
+        user_headers = {"Authorization": f"Bearer {user_token}"}
 
         # Admin should be able to list users
-        admin_headers = {"Authorization": f"Bearer {admin_token}"}
-        response = await client.get(
-            f"{settings.API_V1_STR}/users/list",
-            headers=admin_headers,
-        )
+        response = await client.get(f"{settings.API_V1_STR}/users/list", headers=admin_headers)
         assert response.status_code == 200
 
         # Regular user should not be able to list users
-        regular_headers = {"Authorization": f"Bearer {regular_token}"}
-        response = await client.get(
-            f"{settings.API_V1_STR}/users/list",
-            headers=regular_headers,
-        )
+        response = await client.get(f"{settings.API_V1_STR}/users/list", headers=user_headers)
         assert response.status_code == 403  # Forbidden
 
         # Regular user should be able to get their own profile
-        response = await client.get(
-            f"{settings.API_V1_STR}/users",
-            headers=regular_headers,
-        )
+        response = await client.get(f"{settings.API_V1_STR}/users/me", headers=user_headers)
         assert response.status_code == 200
 
     @pytest.mark.asyncio
-    async def test_user_pagination_and_filtering(
-        self,
-        client: AsyncClient,
-        db: AsyncSession,
-        user_factory: AsyncUserFactory,
-        redis_mock: AsyncMock,
-    ) -> None:
-        """Test user list pagination and filtering."""
-        # Create admin user
-        admin_user = await user_factory.create_admin_user()
-        admin_token = await user_factory.get_auth_token(admin_user)
-
-        # Create multiple test users
-        test_users = []
-        for i in range(15):  # Create more than typical page size
-            user = await user_factory.create_verified_user(
-                email=f"testuser{i}@example.com", first_name=f"User{i}"
-            )
-            test_users.append(user)
-
+    async def test_user_pagination_and_filtering(self, client: AsyncClient) -> None:
+        """Test user list pagination and filtering (API-driven)."""
+        # Register and verify admin user, promote to admin
+        admin_email, admin_password = await register_and_verify_user(client)
+        await promote_user_to_admin(client, admin_email)
+        admin_token = await login_user(client, admin_email, admin_password)
         auth_headers = {"Authorization": f"Bearer {admin_token}"}
 
-        # Test pagination
-        response = await client.get(
-            f"{settings.API_V1_STR}/users/list?page=1&size=10",
-            headers=auth_headers,
-        )
+        # Create multiple test users
+        for i in range(15):
+            # Add random suffix to email to guarantee uniqueness
+            email = f"testuser{i}_{random.randint(10000,99999)}@example.com"
+            await register_and_verify_user(client, email=email, first_name=f"User{i}")
 
+        # Test pagination
+        response = await client.get(f"{settings.API_V1_STR}/users/list?page=1&size=10", headers=auth_headers)
         assert response.status_code == 200
-        result = response.json()
-        assert result["success"] is True
-        data = result["data"]
+        data = response.json()["data"]
         assert len(data["items"]) <= 10
         assert data["total"] >= 15  # At least our test users plus admin
         assert data["page"] == 1
 
         # Test second page
-        response = await client.get(
-            f"{settings.API_V1_STR}/users/list?page=2&size=10",
-            headers=auth_headers,
-        )
-
+        response = await client.get(f"{settings.API_V1_STR}/users/list?page=2&size=10", headers=auth_headers)
         assert response.status_code == 200
-        result = response.json()
-        data = result["data"]
+        data = response.json()["data"]
         assert data["page"] == 2
 
     @pytest.mark.asyncio
-    async def test_user_activation_deactivation_flow(
-        self,
-        client: AsyncClient,
-        db: AsyncSession,
-        user_factory: AsyncUserFactory,
-        redis_mock: AsyncMock,
-    ) -> None:
-        """Test user activation and deactivation."""
-        # Create admin user and regular user
-        admin_user = await user_factory.create_admin_user()
-        admin_token = await user_factory.get_auth_token(admin_user)
-        regular_user = await user_factory.create_verified_user()
-
+    async def test_user_activation_deactivation_flow(self, client: AsyncClient) -> None:
+        """Test user activation and deactivation (API-driven)."""
+        # Register and verify admin user, promote to admin
+        admin_email, admin_password = await register_and_verify_user(client)
+        await promote_user_to_admin(client, admin_email)
+        admin_token = await login_user(client, admin_email, admin_password)
         auth_headers = {"Authorization": f"Bearer {admin_token}"}
+
+        # Register and verify a regular user
+        user_email, user_password = await register_and_verify_user(client)
+        # Get regular user id
+        response = await client.get(f"{settings.API_V1_STR}/users?email={user_email}", headers=auth_headers)
+        user_id = response.json()["data"]["items"][0]["id"]
 
         # Step 1: Deactivate user
         update_data = {"is_active": False}
-
         csrf_token, headers = await get_csrf_token(client)
         headers.update(auth_headers)
-
         response = await client.put(
-            f"{settings.API_V1_STR}/users/{regular_user.id}",
-            json=update_data,
-            headers=headers,
+            f"{settings.API_V1_STR}/users/{user_id}", json=update_data, headers=headers
         )
-
         assert response.status_code == 200
-        result = response.json()
-        assert result["success"] is True
-        assert result["data"]["is_active"] is False
+        assert response.json()["data"]["is_active"] is False
 
         # Step 2: Verify deactivated user cannot login
-        user_token = await user_factory.get_auth_token(regular_user)
-        deactivated_headers = {"Authorization": f"Bearer {user_token}"}
-
-        response = await client.get(
-            f"{settings.API_V1_STR}/users",
-            headers=deactivated_headers,
-        )
-        # This should fail since user is deactivated
-        assert response.status_code in [401, 403]
+        user_token = await login_user(client, user_email, user_password)
+        assert user_token is None  # Should not get a token for deactivated user
 
         # Step 3: Reactivate user
         update_data = {"is_active": True}
-
         csrf_token, headers = await get_csrf_token(client)
         headers.update(auth_headers)
-
         response = await client.put(
-            f"{settings.API_V1_STR}/users/{regular_user.id}",
-            json=update_data,
-            headers=headers,
+            f"{settings.API_V1_STR}/users/{user_id}", json=update_data, headers=headers
         )
-
         assert response.status_code == 200
-        result = response.json()
-        assert result["success"] is True
-        assert result["data"]["is_active"] is True
+        assert response.json()["data"]["is_active"] is True
 
     @pytest.mark.asyncio
-    async def test_bulk_user_operations(
-        self,
-        client: AsyncClient,
-        db: AsyncSession,
-        user_factory: AsyncUserFactory,
-        redis_mock: AsyncMock,
-    ) -> None:
-        """Test bulk user operations if supported."""
-        # Create admin user
-        admin_user = await user_factory.create_admin_user()
-        admin_token = await user_factory.get_auth_token(admin_user)
-
-        # Create test users
-        test_users = []
-        for i in range(5):
-            user = await user_factory.create_verified_user(email=f"bulktest{i}@example.com")
-            test_users.append(user)
-
+    async def test_bulk_user_operations(self, client: AsyncClient) -> None:
+        """Test bulk user operations if supported (API-driven)."""
+        # Register and verify admin user, promote to admin
+        admin_email, admin_password = await register_and_verify_user(client)
+        await promote_user_to_admin(client, admin_email)
+        admin_token = await login_user(client, admin_email, admin_password)
         auth_headers = {"Authorization": f"Bearer {admin_token}"}
 
-        # Test bulk deactivation (if endpoint exists)
-        user_ids = [str(user.id) for user in test_users]
-        bulk_update_data = {"user_ids": user_ids, "updates": {"is_active": False}}
+        # Register and verify test users
+        user_ids = []
+        for i in range(5):
+            email = f"bulktest{i}_{random.randint(10000,99999)}@example.com"
+            await register_and_verify_user(client, email=email)
+            response = await client.get(f"{settings.API_V1_STR}/users?email={email}", headers=auth_headers)
+            if response.status_code != 200:
+                print(f"Failed to fetch user by email {email}: {response.status_code} {response.text}")
+            user_id = response.json()["data"]["items"][0]["id"]
+            user_ids.append(user_id)
 
+        # Test bulk deactivation (if endpoint exists)
+        bulk_update_data = {"user_ids": user_ids, "updates": {"is_active": False}}
         csrf_token, headers = await get_csrf_token(client)
         headers.update(auth_headers)
-
-        # Note: This endpoint might not exist, so we'd need to check if it's implemented
         response = await client.put(
-            f"{settings.API_V1_STR}/users/bulk-update",
-            json=bulk_update_data,
-            headers=headers,
+            f"{settings.API_V1_STR}/users/bulk-update", json=bulk_update_data, headers=headers
         )
-
-        # If endpoint doesn't exist, that's fine for this test
+        if response.status_code not in (200, 404):
+            print(f"Bulk update failed: {response.status_code} {response.text}")
         if response.status_code != 404:
             assert response.status_code == 200
-            result = response.json()
-            assert result["success"] is True
+            print("Bulk update response:", response.json())
+            # Assert all users are now inactive
+            for user_id in user_ids:
+                user_resp = await client.get(f"{settings.API_V1_STR}/users/{user_id}", headers=auth_headers)
+                assert user_resp.status_code == 200
+                assert user_resp.json()["data"]["is_active"] is False

@@ -82,6 +82,16 @@ export PYTHONPATH=/app
 export TESTING=1
 export FASTAPI_ENV=testing
 
+# If running as test runner, execute pytest and exit
+if [ -n "$TEST_PATH" ]; then
+  echo "TEST_PATH is set: $TEST_PATH"
+  echo "Running targeted tests: pytest $TEST_PATH"
+  pytest "$TEST_PATH"
+  exit $?
+fi
+
+# Default: Start the FastAPI application in testing mode
+
 echo "Starting FastAPI application in testing mode..."
 echo "API will be available at http://0.0.0.0:8000"
 

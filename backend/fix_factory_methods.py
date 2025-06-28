@@ -2,11 +2,10 @@
 """
 Script to fix factory method calls in test files.
 """
-import re
 from pathlib import Path
 
 
-def fix_factory_methods(file_path: Path):
+def fix_factory_methods(file_path: Path) -> None:
     """Fix factory method calls in a single file."""
     with open(file_path, "r", encoding="utf-8") as f:
         content = f.read()
@@ -31,7 +30,7 @@ def fix_factory_methods(file_path: Path):
         print(f"No changes needed in {file_path}")
 
 
-def main():
+def main() -> None:
     """Fix factory method calls in test files."""
     backend_dir = Path(__file__).parent
     test_file = backend_dir / "test" / "unit" / "test_crud_user_enhanced.py"

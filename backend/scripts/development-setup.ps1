@@ -18,13 +18,13 @@ function Check-Redis {
 # Function to start Redis
 function Start-Redis {
     Write-Host "Starting Redis server for development..."
-    
+
     # Check if Redis is already running
     if (Check-Redis) {
         Write-Host "Redis is already running."
         return
     }
-    
+
     # Try to start Redis
     try {
         Start-Process -FilePath "redis-server" -NoNewWindow -RedirectStandardOutput "redis-output.log"
@@ -52,7 +52,7 @@ function Start-CeleryWorker {
     Write-Host "Starting Celery worker for development..."
     # Set the environment variable to ensure Celery uses the development configuration
     $env:MODE = "development"
-    
+
     # Start Celery worker
     try {
         celery -A app.main.celery worker --loglevel=info
@@ -66,7 +66,7 @@ function Start-CeleryWorker {
 function Start-CeleryBeat {
     Write-Host "Starting Celery beat for scheduled tasks..."
     $env:MODE = "development"
-    
+
     try {
         celery -A app.main.celery beat --loglevel=info
     } catch {

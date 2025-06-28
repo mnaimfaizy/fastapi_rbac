@@ -15,7 +15,7 @@ class MockHTTPResponse:
         json_data: Optional[Dict[str, Any]] = None,
         text: str = "",
         headers: Optional[Dict[str, str]] = None,
-    ):
+    ) -> None:
         self.status_code = status_code
         self._json_data = json_data or {}
         self.text = text
@@ -34,7 +34,7 @@ class MockHTTPResponse:
 class MockHTTPClient:
     """Mock HTTP client for testing external API calls."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.requests: List[Dict[str, Any]] = []
         self.default_response = MockHTTPResponse()
         self.response_map: Dict[str, MockHTTPResponse] = {}
@@ -46,7 +46,7 @@ class MockHTTPClient:
         self.patch = AsyncMock(side_effect=self._make_request)
         self.delete = AsyncMock(side_effect=self._make_request)
 
-    async def _make_request(self, url: str, method: str = "GET", **kwargs) -> MockHTTPResponse:
+    async def _make_request(self, url: str, method: str = "GET", **kwargs: Any) -> MockHTTPResponse:
         """Mock HTTP request."""
         request_data = {"method": method, "url": url, "kwargs": kwargs}
         self.requests.append(request_data)
@@ -80,7 +80,7 @@ class MockHTTPClient:
 class MockOAuthProvider:
     """Mock OAuth provider for testing OAuth flows."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.authorization_codes: Dict[str, Dict[str, Any]] = {}
         self.access_tokens: Dict[str, Dict[str, Any]] = {}
         self.user_info: Dict[str, Dict[str, Any]] = {}
@@ -107,7 +107,7 @@ class MockOAuthProvider:
             "expires_in": 3600,
             "refresh_token": f"refresh_token_{code}",
         }
-        self.access_tokens[token_data["access_token"]] = {
+        self.access_tokens[str(token_data["access_token"])] = {
             "code": code,
             "client_id": client_id,
             "expires_in": token_data["expires_in"],

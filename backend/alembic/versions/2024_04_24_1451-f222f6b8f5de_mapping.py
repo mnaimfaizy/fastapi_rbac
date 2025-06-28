@@ -52,18 +52,14 @@ def upgrade() -> None:
             ),
             sa.PrimaryKeyConstraint("id", "role_group_id", "role_id"),
         )
-        op.create_index(
-            op.f("ix_RoleGroupMap_id"), "RoleGroupMap", ["id"], unique=False
-        )
+        op.create_index(op.f("ix_RoleGroupMap_id"), "RoleGroupMap", ["id"], unique=False)
         op.create_index(
             op.f("ix_RoleGroupMap_role_group_id"),
             "RoleGroupMap",
             ["role_group_id"],
             unique=False,
         )
-        op.create_index(
-            op.f("ix_RoleGroupMap_role_id"), "RoleGroupMap", ["role_id"], unique=False
-        )
+        op.create_index(op.f("ix_RoleGroupMap_role_id"), "RoleGroupMap", ["role_id"], unique=False)
 
     # We'll skip these operations as they're no longer needed
     # They were trying to drop the lowercase table and replace with uppercase
@@ -106,12 +102,8 @@ def downgrade() -> None:
             # Check the actual table name with proper capitalization
             actual_tables = inspector.get_table_names()
             if "RoleGroupMap" in actual_tables:
-                op.drop_index(
-                    op.f("ix_RoleGroupMap_role_id"), table_name="RoleGroupMap"
-                )
-                op.drop_index(
-                    op.f("ix_RoleGroupMap_role_group_id"), table_name="RoleGroupMap"
-                )
+                op.drop_index(op.f("ix_RoleGroupMap_role_id"), table_name="RoleGroupMap")
+                op.drop_index(op.f("ix_RoleGroupMap_role_group_id"), table_name="RoleGroupMap")
                 op.drop_index(op.f("ix_RoleGroupMap_id"), table_name="RoleGroupMap")
                 op.drop_table("RoleGroupMap")
         except Exception:

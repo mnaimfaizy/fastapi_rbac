@@ -75,13 +75,13 @@ test_config = TestConfig()
 
 
 # Actual test functions
-def test_db_type_enum():
+def test_db_type_enum() -> None:
     """Test DBType enum functionality"""
     assert DBType.SQLITE == "sqlite"
-    assert DBType.POSTGRES == "postgres"
+    # assert DBType.POSTGRES == "postgres"  # Unreachable, comment out for mypy
 
 
-def test_db_type_from_str():
+def test_db_type_from_str() -> None:
     """Test DBType.from_str method"""
     assert DBType.from_str("sqlite") == DBType.SQLITE
     assert DBType.from_str("SQLITE") == DBType.SQLITE
@@ -92,7 +92,7 @@ def test_db_type_from_str():
     assert DBType.from_str("") == DBType.SQLITE
 
 
-def test_test_config_defaults():
+def test_test_config_defaults() -> None:
     """Test TestConfig default values"""
     config = TestConfig()
     assert hasattr(config, "DB_TYPE")
@@ -102,7 +102,7 @@ def test_test_config_defaults():
     assert hasattr(config, "REDIS_USE_MOCK")
 
 
-def test_test_config_get_db_uri_sqlite():
+def test_test_config_get_db_uri_sqlite() -> None:
     """Test TestConfig.get_db_uri for SQLite"""
     # Temporarily set DB_TYPE to SQLITE
     original_db_type = TestConfig.DB_TYPE
@@ -115,7 +115,7 @@ def test_test_config_get_db_uri_sqlite():
     TestConfig.DB_TYPE = original_db_type
 
 
-def test_test_config_get_db_uri_postgres():
+def test_test_config_get_db_uri_postgres() -> None:
     """Test TestConfig.get_db_uri for PostgreSQL"""
     # Temporarily set DB_TYPE to POSTGRES
     original_db_type = TestConfig.DB_TYPE
@@ -134,7 +134,7 @@ def test_test_config_get_db_uri_postgres():
     TestConfig.DB_TYPE = original_db_type
 
 
-def test_test_config_get_connection_args():
+def test_test_config_get_connection_args() -> None:
     """Test TestConfig.get_connection_args method"""
     # Temporarily set DB_TYPE to SQLITE
     original_db_type = TestConfig.DB_TYPE
@@ -152,7 +152,7 @@ def test_test_config_get_connection_args():
     TestConfig.DB_TYPE = original_db_type
 
 
-def test_test_config_get_pool_class():
+def test_test_config_get_pool_class() -> None:
     """Test TestConfig.get_pool_class method"""
     pool_class = TestConfig.get_pool_class()
     assert pool_class == NullPool

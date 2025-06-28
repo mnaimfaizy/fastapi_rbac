@@ -137,12 +137,8 @@ def upgrade() -> None:
         )
         batch_op.drop_index("ix_role_group_map_role_group_id")
         batch_op.drop_index("ix_role_group_map_role_id")
-        batch_op.create_index(
-            batch_op.f("ix_RoleGroupMap_role_group_id"), ["role_group_id"], unique=False
-        )
-        batch_op.create_index(
-            batch_op.f("ix_RoleGroupMap_role_id"), ["role_id"], unique=False
-        )
+        batch_op.create_index(batch_op.f("ix_RoleGroupMap_role_group_id"), ["role_group_id"], unique=False)
+        batch_op.create_index(batch_op.f("ix_RoleGroupMap_role_id"), ["role_id"], unique=False)
 
     with op.batch_alter_table("RolePermission", schema=None) as batch_op:
         batch_op.alter_column(
@@ -199,9 +195,7 @@ def upgrade() -> None:
         )
         batch_op.alter_column("updated_at", existing_type=sa.DATETIME(), nullable=False)
         batch_op.drop_index("ix_UserPasswordHistory_created_at")
-        batch_op.create_index(
-            batch_op.f("ix_UserPasswordHistory_user_id"), ["user_id"], unique=False
-        )
+        batch_op.create_index(batch_op.f("ix_UserPasswordHistory_user_id"), ["user_id"], unique=False)
         batch_op.drop_column("password")
 
     with op.batch_alter_table("UserRole", schema=None) as batch_op:
@@ -260,9 +254,7 @@ def downgrade() -> None:
     with op.batch_alter_table("UserPasswordHistory", schema=None) as batch_op:
         batch_op.add_column(sa.Column("password", sa.VARCHAR(), nullable=True))
         batch_op.drop_index(batch_op.f("ix_UserPasswordHistory_user_id"))
-        batch_op.create_index(
-            "ix_UserPasswordHistory_created_at", ["created_at"], unique=False
-        )
+        batch_op.create_index("ix_UserPasswordHistory_created_at", ["created_at"], unique=False)
         batch_op.alter_column("updated_at", existing_type=sa.DATETIME(), nullable=True)
         batch_op.alter_column(
             "id",
@@ -321,9 +313,7 @@ def downgrade() -> None:
         batch_op.drop_index(batch_op.f("ix_RoleGroupMap_role_id"))
         batch_op.drop_index(batch_op.f("ix_RoleGroupMap_role_group_id"))
         batch_op.create_index("ix_role_group_map_role_id", ["role_id"], unique=False)
-        batch_op.create_index(
-            "ix_role_group_map_role_group_id", ["role_group_id"], unique=False
-        )
+        batch_op.create_index("ix_role_group_map_role_group_id", ["role_group_id"], unique=False)
         batch_op.alter_column(
             "role_id",
             existing_type=sa.Uuid(),
@@ -407,9 +397,7 @@ def downgrade() -> None:
     with op.batch_alter_table("Permission", schema=None) as batch_op:
         batch_op.drop_index(batch_op.f("ix_Permission_name"))
         batch_op.create_index("ix_Permission_name", ["name"], unique=False)
-        batch_op.create_index(
-            "ix_Permission_description", ["description"], unique=False
-        )
+        batch_op.create_index("ix_Permission_description", ["description"], unique=False)
         batch_op.alter_column(
             "created_by_id",
             existing_type=sa.Uuid(),
@@ -449,9 +437,7 @@ def downgrade() -> None:
     )
     with op.batch_alter_table("AuditLog", schema=None) as batch_op:
         batch_op.create_index("ix_audit_log_timestamp", ["timestamp"], unique=False)
-        batch_op.create_index(
-            "ix_audit_log_resource_type", ["resource_type"], unique=False
-        )
+        batch_op.create_index("ix_audit_log_resource_type", ["resource_type"], unique=False)
         batch_op.create_index("ix_audit_log_actor_id", ["actor_id"], unique=False)
 
     # ### end Alembic commands ###

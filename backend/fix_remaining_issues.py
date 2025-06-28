@@ -6,7 +6,7 @@ Script to fix all remaining issues in test_crud_user_enhanced.py
 import re
 
 
-def fix_all_issues():
+def fix_all_issues() -> None:
     """Fix all remaining issues in the test file."""
     file_path = "test/unit/test_crud_user_enhanced.py"
 
@@ -29,7 +29,8 @@ def fix_all_issues():
     # 2. Fix the password assertion
     content = re.sub(
         r"assert len\(updated_user\.password\) > 50  # Hashed password length",
-        r"assert updated_user.password is not None and len(updated_user.password) > 50  # Hashed password length",
+        r"assert updated_user.password is not None and "
+        r"len(updated_user.password) > 50  # Hashed password length",
         content,
     )
 
@@ -46,20 +47,24 @@ def fix_all_issues():
     # The errors suggest these might be Optional, so let's make the assertions more robust
     content = re.sub(
         r"assert paginated_result\.total >= (\d+)",
-        r"assert hasattr(paginated_result, 'total') and (paginated_result.total is None or paginated_result.total >= \1)",
+        r"assert hasattr(paginated_result, 'total') and "
+        r"(paginated_result.total is None or paginated_result.total >= \1)",
         content,
     )
     content = re.sub(
         r"assert paginated_result\.pages >= (\d+)",
-        r"assert hasattr(paginated_result, 'pages') and (paginated_result.pages is None or paginated_result.pages >= \1)",
+        r"assert hasattr(paginated_result, 'pages') and "
+        r"(paginated_result.pages is None or paginated_result.pages >= \1)",
         content,
     )
 
     # 6. Fix the complex IUserUpdate calls that still have required fields
     # Replace the first_name/last_name update with dict
     content = re.sub(
-        r'update_data = IUserUpdate\(\s*first_name="UpdatedName", last_name="UpdatedLastName", contact_phone="\+9876543210"\s*\)',
-        r'update_data = {"first_name": "UpdatedName", "last_name": "UpdatedLastName", "contact_phone": "+9876543210"}',
+        r'update_data = IUserUpdate\(\s*first_name="UpdatedName", last_name="UpdatedLastName", '
+        r'contact_phone="\+9876543210"\s*\)',
+        r'update_data = {"first_name": "UpdatedName", "last_name": "UpdatedLastName", '
+        r'"contact_phone": "+9876543210"}',
         content,
     )
     content = re.sub(

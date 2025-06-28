@@ -98,24 +98,46 @@ The backend includes several security-focused endpoints:
 - **Rate Limited Auth**: All authentication endpoints have rate limiting protection
 - **Input Sanitization**: All form inputs are automatically sanitized for XSS prevention
 
-## 🧪 Running Tests
+## 🧪 Running Tests (Unified Test Runner)
 
-```bash
-# Run all tests
-pytest
+All backend test running is now managed through a single script: `test_runner.py`.
 
-# Run with coverage
-pytest --cov=app
+- **Run all tests:**
+  ```bash
+  python test_runner.py all
+  ```
+- **Run unit tests only:**
+  ```bash
+  python test_runner.py unit
+  ```
+- **Run integration tests only:**
+  ```bash
+  python test_runner.py integration
+  ```
+- **Run a specific test file:**
+  ```bash
+  python test_runner.py specific --path test/unit/test_crud_user.py
+  ```
+- **Run the comprehensive demo suite:**
+  ```bash
+  python test_runner.py demo
+  ```
+- **Other options:** See `python test_runner.py --help` for more.
 
-# Run specific test categories
-pytest test/test_api_*.py  # API tests
-pytest test/test_crud_*.py # CRUD tests
-pytest test/test_models_*.py # Model tests
+> **Note:** All previous test scripts (`run_tests.py`, `run_comprehensive_tests.py`, `test_all_units.py`, `run_final_tests.py`) have been removed. Use only `test_runner.py` for all test operations.
 
-# Run security tests
-python test/test_csrf_implementation.py  # CSRF protection
-python test/test_sanitization.py         # Input sanitization
-```
+- For full details on test/factory/fixture usage, see [`test/README.md`](test/README.md).
+
+## SQLModel Async Idioms and Test Conventions
+
+- All async DB queries in the backend and tests must use SQLModel’s `.exec()` idiom with `AsyncSession`:
+  ```python
+  result = await db.exec(select(User).where(User.email == email))
+  users = result.all()
+  ```
+- Do NOT use `.execute()` for SQLModel queries in async code.
+- Integration tests should use only API-driven flows for user actions (no direct DB manipulation).
+- See `backend/test/README.md` for full details on test/factory/fixture usage and best practices.
 
 ## Docker Compose Structure
 

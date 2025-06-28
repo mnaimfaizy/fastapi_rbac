@@ -9,14 +9,14 @@ from unittest.mock import AsyncMock
 class MockEmailService:
     """Mock implementation of email service for testing."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.sent_emails: List[Dict[str, Any]] = []
         self.send_email = AsyncMock(side_effect=self._send_email)
         self.send_verification_email = AsyncMock(side_effect=self._send_verification_email)
         self.send_password_reset_email = AsyncMock(side_effect=self._send_password_reset_email)
 
     async def _send_email(
-        self, to: str, subject: str, body: str, template: Optional[str] = None, **kwargs
+        self, to: str, subject: str, body: str, template: Optional[str] = None, **kwargs: Any
     ) -> bool:
         """Mock email sending."""
         email_data = {"to": to, "subject": subject, "body": body, "template": template, "kwargs": kwargs}
@@ -24,7 +24,7 @@ class MockEmailService:
         return True
 
     async def _send_verification_email(
-        self, email: str, verification_code: str, first_name: str = "", **kwargs
+        self, email: str, verification_code: str, first_name: str = "", **kwargs: Any
     ) -> bool:
         """Mock verification email sending."""
         return await self._send_email(
@@ -38,7 +38,7 @@ class MockEmailService:
         )
 
     async def _send_password_reset_email(
-        self, email: str, reset_token: str, first_name: str = "", **kwargs
+        self, email: str, reset_token: str, first_name: str = "", **kwargs: Any
     ) -> bool:
         """Mock password reset email sending."""
         return await self._send_email(

@@ -31,8 +31,8 @@ router = APIRouter()
 @router.get("")
 async def get_permission_groups(
     params: Params = Depends(),
+    db_session: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user(required_permissions=["permission_group.read"])),
-    db_session: AsyncSession = Depends(deps.get_async_db),
 ) -> IGetResponsePaginated[IPermissionGroupReadWithPermissions]:
     """
     Gets a paginated list of permission groups
@@ -44,8 +44,8 @@ async def get_permission_groups(
 @router.get("/{group_id}", response_model=IGetResponseBase[IPermissionGroupWithPermissions])
 async def get_permission_group_by_id(
     group_id: UUID,
+    db_session: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user(required_permissions=["permission_group.read"])),
-    db_session: AsyncSession = Depends(deps.get_async_db),
 ) -> IGetResponseBase[IPermissionGroupWithPermissions]:
     """
     Gets a permission group by its ID

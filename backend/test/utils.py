@@ -1,6 +1,6 @@
 import random
 import string
-from typing import Dict, Tuple
+from typing import Any, Dict, Tuple
 
 from fastapi.testclient import TestClient
 from httpx import AsyncClient
@@ -101,7 +101,7 @@ async def register_user_with_csrf(
 
 async def login_user_with_csrf(
     client: AsyncClient, username: str, password: str
-) -> Tuple[int, Dict[str, str]]:
+) -> Tuple[int, Dict[str, Any]]:
     """
     Login a user with proper CSRF token handling.
 
@@ -115,13 +115,18 @@ async def login_user_with_csrf(
     """
     csrf_token, headers = await get_csrf_token(client)
 
-    # Add form content type header
-    headers["Content-Type"] = "application/x-www-form-urlencoded"
+    login_data = {"email": username, "password": password}
+    print("LOGIN REQUEST:", login_data, headers)
 
     response = await client.post(
         f"{settings.API_V1_STR}/auth/login",
-        data={"username": username, "password": password},
+        json=login_data,
         headers=headers,
     )
 
-    return response.status_code, response.json()
+    try:
+        response_json = response.json()
+    except Exception:
+        response_json = {"error": "Failed to parse JSON response"}
+    print("LOGIN RESPONSE:", response.status_code, response_json)
+    return response.status_code, response_json

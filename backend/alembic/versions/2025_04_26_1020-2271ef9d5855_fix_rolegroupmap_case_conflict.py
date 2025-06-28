@@ -54,9 +54,7 @@ def upgrade() -> None:
         # Add any missing columns
         if "id" not in column_names:
             server_default_text = (
-                sa.text("gen_random_uuid()")
-                if dialect == "postgresql"
-                else sa.text("(hex(randomblob(16)))")
+                sa.text("gen_random_uuid()") if dialect == "postgresql" else sa.text("(hex(randomblob(16)))")
             )
             op.add_column(
                 "rolegroupmap",
@@ -67,19 +65,13 @@ def upgrade() -> None:
                     server_default=server_default_text,
                 ),
             )
-            op.create_index(
-                op.f("ix_rolegroupmap_id"), "rolegroupmap", ["id"], unique=False
-            )
+            op.create_index(op.f("ix_rolegroupmap_id"), "rolegroupmap", ["id"], unique=False)
 
         if "updated_at" not in column_names:
-            op.add_column(
-                "rolegroupmap", sa.Column("updated_at", sa.DateTime(), nullable=True)
-            )
+            op.add_column("rolegroupmap", sa.Column("updated_at", sa.DateTime(), nullable=True))
 
         if "created_at" not in column_names:
-            op.add_column(
-                "rolegroupmap", sa.Column("created_at", sa.DateTime(), nullable=True)
-            )
+            op.add_column("rolegroupmap", sa.Column("created_at", sa.DateTime(), nullable=True))
 
         # Update primary key if needed
         # This is tricky to do in SQLite, so we'll skip for now if not needed

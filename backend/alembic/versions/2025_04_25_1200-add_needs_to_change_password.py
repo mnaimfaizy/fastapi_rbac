@@ -33,25 +33,17 @@ def upgrade() -> None:
     if not has_column("User", "needs_to_change_password"):
         # Add needs_to_change_password column as nullable first
         with op.batch_alter_table("User") as batch_op:
-            batch_op.add_column(
-                sa.Column("needs_to_change_password", sa.Boolean(), nullable=True)
-            )
+            batch_op.add_column(sa.Column("needs_to_change_password", sa.Boolean(), nullable=True))
 
         # Update existing rows to set default value to True
-        op.execute(
-            'UPDATE "User" SET needs_to_change_password = true WHERE needs_to_change_password IS NULL'
-        )
+        op.execute('UPDATE "User" SET needs_to_change_password = true WHERE needs_to_change_password IS NULL')
 
         # Now make it non-nullable using batch operations
         with op.batch_alter_table("User") as batch_op:
-            batch_op.alter_column(
-                "needs_to_change_password", existing_type=sa.Boolean(), nullable=False
-            )
+            batch_op.alter_column("needs_to_change_password", existing_type=sa.Boolean(), nullable=False)
     else:
         # If the column already exists, make sure all rows have a value
-        op.execute(
-            'UPDATE "User" SET needs_to_change_password = true WHERE needs_to_change_password IS NULL'
-        )
+        op.execute('UPDATE "User" SET needs_to_change_password = true WHERE needs_to_change_password IS NULL')
 
 
 def downgrade() -> None:

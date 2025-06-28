@@ -58,28 +58,19 @@ class TestComprehensiveAuth:
         register_data = {"email": email, "password": password, "first_name": "Test", "last_name": "User"}
 
         status_code, response_data = await register_user_with_csrf(client, register_data)
-
         print(f"Registration response: {status_code}, {response_data}")
+        print("After registration call - test is still running")
 
-        # Accept either success (with full services) or expected service errors
-        assert status_code in [201, 500]
+        # Accept only success (201) for registration
+        assert status_code == 201
 
-        if status_code == 201:
-            # Full services available - test complete registration flow
-            assert response_data.get("message") is not None
-            expected_messages = ["verification email sent", "user registered"]
-            assert any(msg in response_data["message"].lower() for msg in expected_messages)
-            mock_send_verification_email.assert_called_once()
-        else:
-            # Service dependencies missing - test that endpoint works but services fail
-            assert "error occurred during registration" in response_data.get("detail", "")
-            print("Registration failed due to missing services - this is expected in test environment")
-            # Continue with validation of endpoint structure rather than full flow
-            await self._test_login_endpoint_structure(client)
-            return
+        # Get user ID from registration response (avoid DB query race)
+        user_id = response_data["data"].get("id")
+        assert user_id is not None, "User ID should be present in registration response."
 
         # Step 2: Try to login before verification (should fail)
-        login_data = {"username": email, "password": password}
+        # Use OAuth2PasswordRequestForm fields if required by backend
+        login_data = {"username": email, "password": password, "grant_type": "password"}
 
         # Get CSRF token for login
         csrf_token, csrf_headers = await get_csrf_token(client)
@@ -94,19 +85,32 @@ class TestComprehensiveAuth:
         # Should not return 404 or 403 (endpoint exists and CSRF is valid)
         assert response.status_code in [400, 401, 422]
         if response.status_code in [400, 401]:
-            response_msg = response.json().get("message", "").lower()
-            assert "not verified" in response_msg or "invalid" in response_msg
+            # Check both 'message' and 'detail' fields for error text
+            resp_json = response.json()
+            msg = resp_json.get("message", "") or resp_json.get("detail", "")
+            msg = msg.lower()
+            assert "not verified" in msg or "invalid" in msg
 
         # Step 3: Mock email verification
+        async def dummy_send_verification_email(*args: object, **kwargs: object) -> None:
+            print("Dummy send_verification_email called")
+            return None
+
+        mock_send_verification_email.side_effect = dummy_send_verification_email
+
         with patch("app.core.security.decode_token") as mock_decode:
             mock_decode.return_value = {"email": email, "type": "email_verification"}
+
+            # Use user ID from registration response instead of querying DB
+            user_id = response_data["data"]["id"]
+            await redis_mock.set(f"verification_token:{user_id}", "mock_verification_token")
 
             response = await client.post(
                 f"{settings.API_V1_STR}/auth/verify-email", json={"token": "mock_verification_token"}
             )
 
-        # Should either succeed or fail due to missing services, not endpoint issues
-        assert response.status_code in [200, 403, 500]
+        # Should only allow 200 or 403 for email verification
+        assert response.status_code in [200, 403]
 
         # If verification endpoint is working, continue with login test
         if response.status_code == 200:
@@ -198,8 +202,8 @@ class TestComprehensiveAuth:
             f"{settings.API_V1_STR}/auth/password-reset/request", json={"email": user.email}
         )
 
-        # Should either succeed or fail due to missing services, not endpoint issues
-        assert response.status_code in [200, 403, 500]
+        # Should only allow 200 or 403 for password reset
+        assert response.status_code in [200, 403]
 
         if response.status_code == 200:
             assert "password reset email sent" in response.json()["message"].lower()
@@ -401,23 +405,24 @@ class TestAuthenticationEdgeCases:
     async def test_register_with_existing_email(self, client: AsyncClient, db: AsyncSession) -> None:
         """Test registration with an email that already exists."""
 
-        # Create existing user
-        user_factory = AsyncUserFactory(db)
-        existing_user = await user_factory.create()
-        await db.commit()  # Try to register with same email
+        # Use a pre-seeded user email from initial data
+        seeded_email = "user@example.com"
         register_data = {
-            "email": existing_user.email,
+            "email": seeded_email,
             "password": "TestPassword123!",
             "first_name": "Test",
             "last_name": "User",
         }
-
+        # Attempt to register with an existing email
         status_code, response_data = await register_user_with_csrf(client, register_data)
 
-        # Should either return proper error, service error, or rate limiting
-        assert status_code in [400, 403, 429, 500]
+        # Should only allow 400, 403, or 429 for registration with existing email
+        assert status_code in [400, 403, 429]
         if status_code == 400:
-            assert "already registered" in response_data.get("message", "").lower()
+            # Check both 'message' and 'detail' fields for error text
+            msg = response_data.get("message", "") or response_data.get("detail", "")
+            msg = msg.lower()
+            assert "already registered" in msg or "unable to process" in msg
         elif status_code == 429:
             # Rate limiting is working - this is expected with many tests
             pass
@@ -450,8 +455,8 @@ class TestAuthenticationEdgeCases:
             f"{settings.API_V1_STR}/auth/verify-email", json={"token": "invalid_token"}
         )
 
-        # Should either return error or require CSRF
-        assert response.status_code in [400, 403, 500]
+        # Should only allow 400 or 403 for invalid email verification
+        assert response.status_code in [400, 403]
 
     @pytest.mark.asyncio
     async def test_verify_email_with_expired_token(self, client: AsyncClient) -> None:
@@ -466,8 +471,8 @@ class TestAuthenticationEdgeCases:
                 f"{settings.API_V1_STR}/auth/verify-email", json={"token": "expired_token"}
             )
 
-        # Should either return error or require CSRF
-        assert response.status_code in [400, 403, 500]
+        # Should only allow 400 or 403 for expired token
+        assert response.status_code in [400, 403]
 
     @pytest.mark.asyncio
     async def test_refresh_token_with_invalid_token(self, client: AsyncClient) -> None:
@@ -544,8 +549,8 @@ class TestAuthenticationEdgeCases:
             f"{settings.API_V1_STR}/auth/resend-verification-email", json={"email": user.email}
         )
 
-        # Should either succeed or fail due to missing services/CSRF
-        assert response.status_code in [200, 403, 404, 500]
+        # Should only allow 200, 403, or 404 for resend verification email
+        assert response.status_code in [200, 403, 404]
         if response.status_code == 200:
             mock_send_verification_email.assert_called_once()
 

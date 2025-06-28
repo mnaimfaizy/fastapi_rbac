@@ -14,9 +14,10 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Optional
 
 
-def run_command(cmd: list[str], cwd: str = None) -> int:
+def run_command(cmd: list[str], cwd: Optional[str] = None) -> int:
     """Run a command and return the exit code."""
     print(f"Running: {' '.join(cmd)}")
     if cwd:
@@ -27,7 +28,7 @@ def run_command(cmd: list[str], cwd: str = None) -> int:
 
 
 def run_unit_tests(
-    test_path: str = None, verbose: bool = False, coverage: bool = False, parallel: bool = False
+    test_path: Optional[str] = None, verbose: bool = False, coverage: bool = False, parallel: bool = False
 ) -> int:
     """Run unit tests."""
     cmd = ["python", "-m", "pytest"]
@@ -64,7 +65,7 @@ def run_unit_tests(
 
 
 def run_integration_tests(
-    test_path: str = None, verbose: bool = False, coverage: bool = False, parallel: bool = False
+    test_path: Optional[str] = None, verbose: bool = False, coverage: bool = False, parallel: bool = False
 ) -> int:
     """Run integration tests."""
     cmd = ["python", "-m", "pytest"]
@@ -246,12 +247,88 @@ def clean_cache() -> int:
     return 0
 
 
-def main():
+def run_demo_suite() -> int:
+    """Run the comprehensive demo test suite (showcase)."""
+    demo_tests = [
+        {
+            "cmd": [
+                "python",
+                "-m",
+                "pytest",
+                "test/test_api_rbac_comprehensive.py::TestUserEndpoints::test_user_crud_operations",
+                "-v",
+            ],
+            "description": "User CRUD Operations Test",
+        },
+        {
+            "cmd": [
+                "python",
+                "-m",
+                "pytest",
+                "test/test_api_rbac_comprehensive.py::TestRoleEndpoints::test_role_crud_operations",
+                "-v",
+            ],
+            "description": "Role CRUD Operations Test",
+        },
+        {
+            "cmd": [
+                "python",
+                "-m",
+                "pytest",
+                (
+                    "test/test_api_rbac_comprehensive.py::"
+                    "TestPermissionEndpoints::test_permission_crud_operations"
+                ),
+                "-v",
+            ],
+            "description": "Permission CRUD Operations Test",
+        },
+        {
+            "cmd": ["python", "-m", "pytest", "test/test_simple_mock.py", "-v"],
+            "description": "Simple Mock Test (Baseline)",
+        },
+    ]
+    print("\n🚀 FastAPI RBAC Comprehensive Test Suite Demonstration")
+    print("=" * 70)
+    passed_tests = 0
+    total_tests = len(demo_tests)
+    for test in demo_tests:
+        print(f"\n{'='*60}")
+        print(f"Running: {test['description']}")
+        print(f"Command: {' '.join(test['cmd'])}")
+        print("=" * 60)
+        result = subprocess.run(test["cmd"])
+        if result.returncode == 0:
+            print(f"✅ {test['description']} - PASSED")
+            passed_tests += 1
+        else:
+            print(f"❌ {test['description']} - FAILED")
+    # Summary
+    print(f"\n{'='*70}")
+    print("🎯 TEST SUMMARY")
+    print(f"{'='*70}")
+    print(f"Passed: {passed_tests}/{total_tests}")
+    print(f"Success Rate: {(passed_tests/total_tests)*100:.1f}%")
+    if passed_tests == total_tests:
+        print("🎉 ALL TESTS PASSED! Comprehensive test suite is functional!")
+        print("\n✨ Key Achievements:")
+        print("   ✅ Base test infrastructure working")
+        print("   ✅ Authentication mocking framework in place")
+        print("   ✅ Multiple test classes with proper inheritance")
+        print("   ✅ Graceful handling of authentication challenges")
+        print("   ✅ Foundation ready for full RBAC testing")
+        return 0
+    else:
+        print(f"❌ {total_tests - passed_tests} tests failed. Check output above.")
+        return 1
+
+
+def main() -> int:
     """Main entry point for the test runner."""
     parser = argparse.ArgumentParser(description="FastAPI RBAC Test Runner")
     parser.add_argument(
         "command",
-        choices=["unit", "integration", "all", "specific", "lint", "format", "clean", "health"],
+        choices=["unit", "integration", "all", "specific", "lint", "format", "clean", "health", "demo"],
         help="Test command to run",
     )
     parser.add_argument("--path", "-p", help="Specific test path (for 'specific' command)")
@@ -302,7 +379,8 @@ def main():
             print("✅ Test suite health check passed!")
         else:
             print("❌ Test suite health check failed!")
-
+    elif args.command == "demo":
+        exit_code = run_demo_suite()
     return exit_code
 
 

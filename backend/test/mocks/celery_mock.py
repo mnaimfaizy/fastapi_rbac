@@ -9,18 +9,18 @@ from unittest.mock import MagicMock
 class MockCeleryTask(MagicMock):
     """Mock Celery task for testing."""
 
-    def __init__(self, name: str = "mock_task", *args, **kwargs):
+    def __init__(self, name: str = "mock_task", *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.name = name
         self.called_tasks: List[Dict[str, Any]] = []
 
-    def delay(self, *args, **kwargs) -> "MockCeleryResult":
+    def delay(self, *args: Any, **kwargs: Any) -> "MockCeleryResult":
         """Mock task.delay() method."""
         task_call = {"task_name": self.name, "args": args, "kwargs": kwargs, "method": "delay"}
         self.called_tasks.append(task_call)
         return MockCeleryResult(task_id=f"task_{len(self.called_tasks)}")
 
-    def apply_async(self, args=None, kwargs=None, **options) -> "MockCeleryResult":
+    def apply_async(self, args: Any = None, kwargs: Any = None, **options: Any) -> "MockCeleryResult":
         """Mock task.apply_async() method."""
         task_call = {
             "task_name": self.name,
@@ -40,7 +40,7 @@ class MockCeleryTask(MagicMock):
 class MockCeleryResult:
     """Mock Celery AsyncResult for testing."""
 
-    def __init__(self, task_id: str, state: str = "SUCCESS", result: Any = None):
+    def __init__(self, task_id: str, state: str = "SUCCESS", result: Any = None) -> None:
         self.task_id = task_id
         self.state = state
         self.result = result
@@ -65,11 +65,11 @@ class MockCeleryResult:
 class MockCeleryApp:
     """Mock Celery application for testing."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.tasks: Dict[str, MockCeleryTask] = {}
         self.task_calls: List[Dict[str, Any]] = []
 
-    def task(self, name: Optional[str] = None, **kwargs) -> Callable:
+    def task(self, name: Optional[str] = None, **kwargs: Any) -> Callable:
         """Mock task decorator."""
 
         def decorator(func: Callable) -> MockCeleryTask:
@@ -81,7 +81,7 @@ class MockCeleryApp:
 
         return decorator
 
-    def send_task(self, name: str, args=None, kwargs=None, **options) -> MockCeleryResult:
+    def send_task(self, name: str, args: Any = None, kwargs: Any = None, **options: Any) -> MockCeleryResult:
         """Mock send_task method."""
         task_call = {
             "task_name": name,

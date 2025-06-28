@@ -8,14 +8,14 @@ to ensure consistent testing across integration tests.
 from test.mocks.celery_mock import MockCeleryApp, MockCeleryTask
 from test.mocks.email_mock import MockEmailService
 from test.mocks.external_api_mock import MockHTTPClient, MockOAuthProvider
-from typing import AsyncGenerator, Generator
+from typing import Any, AsyncGenerator, Generator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import pytest_asyncio
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest_asyncio.fixture()
 async def email_mock() -> AsyncGenerator[MockEmailService, None]:
     """Provide a mock email service for testing."""
     mock_service = MockEmailService()
@@ -23,7 +23,7 @@ async def email_mock() -> AsyncGenerator[MockEmailService, None]:
     mock_service.clear_sent_emails()
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def celery_mock() -> Generator[MockCeleryApp, None, None]:
     """Provide a mock Celery application for testing."""
     mock_app = MockCeleryApp()
@@ -31,7 +31,7 @@ def celery_mock() -> Generator[MockCeleryApp, None, None]:
     mock_app.clear_calls()
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def celery_task_mock() -> Generator[MockCeleryTask, None, None]:
     """Provide a mock Celery task for testing."""
     mock_task = MockCeleryTask(name="test_task")
@@ -39,7 +39,7 @@ def celery_task_mock() -> Generator[MockCeleryTask, None, None]:
     mock_task.clear_calls()
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest_asyncio.fixture()
 async def http_client_mock() -> AsyncGenerator[MockHTTPClient, None]:
     """Provide a mock HTTP client for testing external API calls."""
     mock_client = MockHTTPClient()
@@ -47,15 +47,15 @@ async def http_client_mock() -> AsyncGenerator[MockHTTPClient, None]:
     mock_client.clear_requests()
 
 
-@pytest.fixture(scope="function")
-def oauth_provider_mock() -> Generator[MockOAuthProvider, None, None]:
+@pytest.fixture
+def oauth_provider_mock() -> MockOAuthProvider:
     """Provide a mock OAuth provider for testing OAuth flows."""
     mock_provider = MockOAuthProvider()
-    yield mock_provider
+    return mock_provider
 
 
-@pytest_asyncio.fixture(scope="function")
-async def background_tasks_mock() -> AsyncGenerator[AsyncMock, None]:
+@pytest_asyncio.fixture()
+async def background_tasks_mock() -> AsyncGenerator[dict[str, AsyncMock], None]:
     """Provide a mock for FastAPI background tasks."""
     with patch("app.utils.background_tasks.send_verification_email") as mock_verify:
         with patch("app.utils.background_tasks.send_password_reset_email") as mock_reset:
@@ -74,7 +74,7 @@ async def background_tasks_mock() -> AsyncGenerator[AsyncMock, None]:
                     }
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def service_mocks() -> Generator[dict, None, None]:
     """Provide all service mocks in a single fixture."""
     email_service = MockEmailService()
@@ -97,8 +97,8 @@ def service_mocks() -> Generator[dict, None, None]:
     http_client.clear_requests()
 
 
-@pytest.fixture(scope="function")
-def patched_external_services():
+@pytest.fixture
+def patched_external_services() -> Generator[dict, None, None]:
     """Patch all external services with mocks."""
     with (
         patch("app.utils.background_tasks.send_verification_email") as mock_verify,
@@ -120,7 +120,7 @@ def patched_external_services():
         }
 
 
-@pytest_asyncio.fixture(scope="function")
+@pytest_asyncio.fixture()
 async def comprehensive_mocks() -> AsyncGenerator[dict, None]:
     """Provide comprehensive mocks for integration testing."""
     email_service = MockEmailService()
@@ -159,12 +159,12 @@ async def comprehensive_mocks() -> AsyncGenerator[dict, None]:
 # Helper fixtures for specific mock scenarios
 
 
-@pytest.fixture(scope="function")
-def email_failure_mock():
+@pytest.fixture
+def email_failure_mock() -> MockEmailService:
     """Mock email service that simulates failures."""
     mock_service = MockEmailService()
 
-    async def failing_send_email(*args, **kwargs):
+    async def failing_send_email(*args: Any, **kwargs: Any) -> bool:
         raise Exception("Email service unavailable")
 
     mock_service.send_email = AsyncMock(side_effect=failing_send_email)
@@ -174,12 +174,12 @@ def email_failure_mock():
     return mock_service
 
 
-@pytest.fixture(scope="function")
-def slow_external_service_mock():
+@pytest.fixture
+def slow_external_service_mock() -> Generator[dict, None, None]:
     """Mock external services with slow responses."""
     import asyncio
 
-    async def slow_response(*args, **kwargs):
+    async def slow_response(*args: Any, **kwargs: Any) -> bool:
         await asyncio.sleep(2)  # Simulate slow response
         return True
 
@@ -196,11 +196,11 @@ def slow_external_service_mock():
         }
 
 
-@pytest.fixture(scope="function")
-def redis_connection_failure_mock():
+@pytest.fixture
+def redis_connection_failure_mock() -> AsyncMock:
     """Mock Redis connection failures."""
 
-    async def failing_redis_operation(*args, **kwargs):
+    async def failing_redis_operation(*args: Any, **kwargs: Any) -> None:
         raise ConnectionError("Redis connection failed")
 
     mock_redis = AsyncMock()
@@ -211,8 +211,8 @@ def redis_connection_failure_mock():
     return mock_redis
 
 
-@pytest.fixture(scope="function")
-def database_transaction_mock():
+@pytest.fixture
+def database_transaction_mock() -> MagicMock:
     """Mock database transaction scenarios."""
     from unittest.mock import Mock
 

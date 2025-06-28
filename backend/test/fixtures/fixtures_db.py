@@ -2,31 +2,36 @@
 Database-related test fixtures.
 """
 
-from typing import AsyncGenerator
+import os
+from collections.abc import AsyncGenerator
 
 import pytest_asyncio
-from sqlalchemy import Connection
+from sqlalchemy import Connection, text
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.db.init_db import init_db
 
-# Set test database URI to use a shared in-memory SQLite database
-TEST_SQLALCHEMY_DATABASE_URI = "sqlite+aiosqlite:///file:memory_test_db?cache=shared&uri=true"
-
-# Create engine instance for testing
-engine = create_async_engine(
-    TEST_SQLALCHEMY_DATABASE_URI, echo=False, connect_args={"check_same_thread": False}
+# Set test database URI to use DATABASE_URL if provided, else fallback to shared in-memory SQLite database
+TEST_SQLALCHEMY_DATABASE_URI = os.getenv(
+    "DATABASE_URL", "sqlite+aiosqlite:///file:memory_test_db?cache=shared&uri=true"
 )
+print(f"DEBUG: Using TEST_SQLALCHEMY_DATABASE_URI = {TEST_SQLALCHEMY_DATABASE_URI}")
 
 
 # Use pytest-asyncio's built-in event_loop fixture instead of defining our own
 # The session-scoped loop is configured through the pytest.ini or markers
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def db_engine() -> AsyncGenerator[AsyncEngine, None]:
     """Create test database tables and return engine."""
+    # Determine connect_args based on driver
+    if TEST_SQLALCHEMY_DATABASE_URI.startswith("sqlite"):
+        connect_args = {"check_same_thread": False}
+    else:
+        connect_args = {}
+    engine = create_async_engine(TEST_SQLALCHEMY_DATABASE_URI, echo=False, connect_args=connect_args)
     # Import all models to ensure they are registered with SQLAlchemy
     from app.models.audit_log_model import AuditLog  # noqa: F401
     from app.models.base_uuid_model import SQLModel
@@ -65,13 +70,21 @@ async def db_engine() -> AsyncGenerator[AsyncEngine, None]:
 
     # Cleanup - drop all tables
     async with engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.drop_all)
+        if TEST_SQLALCHEMY_DATABASE_URI.startswith("postgresql"):
+            # Use CASCADE for PostgreSQL to drop dependent objects
+            await conn.execute(text("DROP SCHEMA public CASCADE;"))
+            await conn.execute(text("CREATE SCHEMA public;"))
+        else:
+            from app.models.base_uuid_model import SQLModel
+
+            await conn.run_sync(SQLModel.metadata.drop_all)
+    await engine.dispose()
 
 
 @pytest_asyncio.fixture(scope="function")
-async def db() -> AsyncGenerator[AsyncSession, None]:
+async def db(db_engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
     """Provide a database session for tests."""
-    async with engine.connect() as connection:
+    async with db_engine.connect() as connection:
         await connection.begin()
         await connection.begin_nested()
 
@@ -90,7 +103,7 @@ async def db() -> AsyncGenerator[AsyncSession, None]:
 
 
 @pytest_asyncio.fixture(autouse=True)
-async def initialize_db() -> AsyncGenerator[None, None]:
+async def initialize_db(db_engine: AsyncEngine) -> AsyncGenerator[None, None]:
     """Initialize the database for the test session."""
     # Import all models to ensure they are registered
     from app.models.audit_log_model import AuditLog  # noqa: F401
@@ -105,7 +118,7 @@ async def initialize_db() -> AsyncGenerator[None, None]:
     from app.models.user_model import User  # noqa: F401
     from app.models.user_role_model import UserRole  # noqa: F401
 
-    async with engine.begin() as conn:
+    async with db_engine.begin() as conn:
         print("DEBUG CONTEXT: Initializing database - creating all tables...")
         await conn.run_sync(SQLModel.metadata.create_all)
         print("DEBUG CONTEXT: Database initialized.")

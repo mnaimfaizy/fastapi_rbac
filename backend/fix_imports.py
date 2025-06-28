@@ -2,12 +2,11 @@
 """
 Script to fix relative imports in test files.
 """
-import os
 import re
 from pathlib import Path
 
 
-def fix_relative_imports(file_path: Path):
+def fix_relative_imports(file_path: Path) -> None:
     """Fix relative imports in a single file."""
     with open(file_path, "r", encoding="utf-8") as f:
         content = f.read()
@@ -33,7 +32,7 @@ def fix_relative_imports(file_path: Path):
         print(f"No changes needed in {file_path}")
 
 
-def main():
+def main() -> None:
     """Fix relative imports in all test files."""
     backend_dir = Path(__file__).parent
     test_unit_dir = backend_dir / "test" / "unit"

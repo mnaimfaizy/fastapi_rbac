@@ -6,7 +6,7 @@ Script to fix CRUD method calls in test_crud_user_enhanced.py
 import re
 
 
-def fix_crud_calls():
+def fix_crud_calls() -> None:
     """Fix CRUD method calls in the test file."""
     file_path = "test/unit/test_crud_user_enhanced.py"
 

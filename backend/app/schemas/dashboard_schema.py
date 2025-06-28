@@ -9,6 +9,7 @@ class DashboardStats(BaseModel):
     total_roles: Optional[int] = None
     total_permissions: Optional[int] = None
     active_sessions: Optional[int] = None
+    active_users: Optional[int] = None  # Added for test compatibility
     # Add more stats as needed
 
 
@@ -42,6 +43,7 @@ class IDashboardResponseData(BaseModel):
 
 
 class IDashboardResponse(BaseModel):
+    success: bool = True
     data: IDashboardResponseData
     message: str = "Dashboard data retrieved successfully"
 

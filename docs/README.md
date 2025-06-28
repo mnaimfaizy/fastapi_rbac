@@ -17,6 +17,7 @@ This directory contains all project documentation organized by purpose and audie
   - `CODING_STANDARDS.md` - Code style and contribution guidelines
   - `TESTING.md` - How to run tests and write new ones
   - `API_DOCUMENTATION.md` - API endpoints and usage examples
+  - `INTEGRATION_TEST_REFACTOR_GUIDE.md` - Required standards and step-by-step instructions for writing and refactoring integration tests (see backend/test/integration/)
 
 ### Deployment & Operations
 

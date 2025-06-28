@@ -58,6 +58,8 @@ Utility scripts are organized by purpose in the [`scripts/`](scripts/) directory
 ### 🧪 **Quality & Testing**
 
 - **🧪 Comprehensive Testing**: 90+ backend tests + 354 frontend tests across 16 files
+- **All async DB queries in backend and tests use SQLModel’s `.exec()` idiom with `AsyncSession` (not `.execute()`).**
+- **See [`backend/test/README.md`](backend/test/README.md) for full test/factory/fixture/optimization details.**
 - **⚡ Frontend Testing**: Complete coverage with Vitest, React Testing Library
 - **🔍 API Testing**: Comprehensive service layer testing with mocking
 
@@ -145,6 +147,68 @@ npm test
 | **Deploy to production** | `.\scripts\deployment\push-to-dockerhub.ps1`      | [Deployment](docs/deployment/PRODUCTION_SETUP.md)          |
 | **Troubleshoot CORS**    | `.\scripts\docker\diagnose-cors.ps1`              | [CORS Guide](docs/troubleshooting/CORS_TROUBLESHOOTING.md) |
 | **Database migration**   | `.\scripts\database\migrate-db.ps1`               | [DB Reference](docs/reference/DATABASE_SCHEMA.md)          |
+
+## 🧪 Integration Testing Environments
+
+This project supports both Docker Compose-based and local integration testing for the backend.
+
+- **Docker Compose-based testing** (recommended for CI and team consistency):
+
+  - Uses `backend/.env.test` for environment variables.
+  - Database and Redis hostnames:
+    - `DATABASE_HOST=fastapi_rbac_db_test`
+    - `REDIS_HOST=fastapi_rbac_redis_test`
+    - `REDIS_URL=redis://fastapi_rbac_redis_test:6379/0`
+  - Run with:
+    ```powershell
+    docker-compose -f docker-compose.test.yml up --build --abort-on-container-exit
+    ```
+
+- **Local testing** (if you want to run tests outside Docker):
+  - Uses `backend/.env.test.local` for environment variables.
+  - Database and Redis hostnames:
+    - `DATABASE_HOST=localhost`
+    - `REDIS_HOST=localhost`
+    - `REDIS_URL=redis://localhost:6379/0`
+  - Make sure Postgres and Redis are running locally.
+  - Run tests with:
+    ```powershell
+    pytest backend/test/integration/
+    ```
+
+**See comments in `backend/.env.example` for more details.**
+
+## Running Tests with test_runner.py
+
+All backend test running is now managed through a single script: `backend/test_runner.py`.
+
+- **Run all tests:**
+  ```powershell
+  python backend/test_runner.py all
+  ```
+- **Run unit tests only:**
+  ```powershell
+  python backend/test_runner.py unit
+  ```
+- **Run integration tests only:**
+  ```powershell
+  python backend/test_runner.py integration
+  ```
+- **Run a specific test file:**
+  ```powershell
+  python backend/test_runner.py specific --path backend/test/unit/test_crud_user.py
+  ```
+- **Run the comprehensive demo suite:**
+  ```powershell
+  python backend/test_runner.py demo
+  ```
+- **Other options:** See `python backend/test_runner.py --help` for more.
+
+> **Note:** All previous test scripts (`run_tests.py`, `run_comprehensive_tests.py`, `test_all_units.py`, `run_final_tests.py`) have been removed. Use only `test_runner.py` for all test operations.
+
+- For full details on test/factory/fixture usage, see [`backend/test/README.md`](backend/test/README.md).
+
+---
 
 ## 🆘 Need Help?
 

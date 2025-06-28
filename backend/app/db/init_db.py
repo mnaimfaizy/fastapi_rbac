@@ -371,7 +371,14 @@ async def init_db(db_session: AsyncSession) -> None:
         for role_name in role_names_for_user:
             role_to_assign = created_roles.get(role_name)
             if role_to_assign:
-                role_ids_to_assign.append(role_to_assign.id)
+                if hasattr(role_to_assign, "id"):
+                    role_ids_to_assign.append(role_to_assign.id)
+                else:
+                    print(
+                        f"Error: Role object for '{role_name}' does not have an 'id' attribute. "
+                        f"Value: {role_to_assign}. "
+                        f"Skipping role assignment for user '{user_obj.email}'.",
+                    )
             else:
                 print(f"Warning: Role '{role_name}' not found for user '{user_obj.email}'. Skip role.")
 

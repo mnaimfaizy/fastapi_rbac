@@ -1,5 +1,5 @@
-from sqlalchemy import desc, func, select  # Import select
-from sqlalchemy.ext.asyncio import AsyncSession  # Import AsyncSession
+from sqlalchemy import Boolean, cast, desc, func, select
+from sqlmodel.ext.asyncio.session import AsyncSession  # Use SQLModel's AsyncSession
 
 from app.models.permission_model import Permission
 from app.models.role_model import Role
@@ -12,22 +12,21 @@ from app.models.user_model import User
 async def get_total_users_count(
     db: AsyncSession,
 ) -> int:  # Changed Session to AsyncSession
-    result = await db.execute(select(func.count(User.id)))
+    result = await db.execute(select(func.count(User.__table__.c.id)))
     return result.scalar_one_or_none() or 0
 
 
 async def get_total_roles_count(
     db: AsyncSession,
 ) -> int:  # Changed Session to AsyncSession
-    result = await db.execute(select(func.count(Role.id)))
+    result = await db.execute(select(func.count(Role.__table__.c.id)))
     return result.scalar_one_or_none() or 0
 
 
 async def get_total_permissions_count(
     db: AsyncSession,
 ) -> int:  # Changed Session to AsyncSession
-    # This might need adjustment if permissions are complex (e.g. grouped)
-    result = await db.execute(select(func.count(Permission.id)))
+    result = await db.execute(select(func.count(Permission.__table__.c.id)))
     return result.scalar_one_or_none() or 0
 
 
@@ -60,7 +59,8 @@ async def get_recent_logins(
 
     if stmt is not None:
         result = await db.execute(stmt)
-        return result.scalars().all()
+        items = result.scalars().all()
+        return items
     return []
 
 
@@ -71,4 +71,11 @@ async def get_system_users_summary(
     # You might want to add pagination, filtering, sorting in a real app.
     stmt = select(User).order_by(User.created_at.desc()).offset(offset).limit(limit)
     result = await db.execute(stmt)
-    return result.scalars().all()
+    items = result.scalars().all()
+    return items
+
+
+async def get_active_users_count(db: AsyncSession) -> int:
+    """Return the count of users where is_active=True."""
+    result = await db.execute(select(func.count()).select_from(User).where(cast(User.is_active, Boolean)))
+    return result.scalar_one_or_none() or 0

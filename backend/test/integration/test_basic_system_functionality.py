@@ -1,8 +1,8 @@
 """
-Basic functionality tests to verify core system components are working.
+Integration test: Basic system functionality for FastAPI RBAC backend.
 
-This test module provides simple, reliable tests that verify the core components
-of the RBAC system are functioning correctly without complex dependencies.
+This module provides integration tests for core system components (DB, endpoints, CORS, config, "
+"error handling)."
 """
 
 import pytest
@@ -69,17 +69,14 @@ class TestBasicFunctionality:
     @pytest.mark.asyncio
     async def test_database_tables_exist(self, db: AsyncSession) -> None:
         """Test that core database tables exist."""
-        # Test that we can query table info (this will fail if tables don't exist)
-        tables_to_check = ["User", "Role", "Permission"]
-
-        for table in tables_to_check:
-            # SQLite specific query to check if table exists
-            result = await db.execute(
-                text(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table}'")
-            )
-            row = result.fetchone()
-            assert row is not None, f"Table {table} does not exist"
-            assert row[0] == table
+        # Use exec() idiom and check for all required tables, case-insensitive
+        tables_to_check = {"user", "role", "permission"}
+        result = await db.execute(
+            text("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
+        )
+        all_tables = {row[0].lower() for row in result.fetchall()}
+        missing = tables_to_check - all_tables
+        assert not missing, f"Missing tables: {missing}. Found tables: {all_tables}"
 
     @pytest.mark.asyncio
     async def test_environment_config(self) -> None:

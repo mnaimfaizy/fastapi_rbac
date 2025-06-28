@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from fastapi_pagination import Params
 from redis.asyncio import Redis
+from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app import crud
@@ -39,22 +40,19 @@ router = APIRouter()
 @router.get("")
 async def get_roles(
     params: Params = Depends(),
+    name_pattern: Optional[str] = Query(None, description="Pattern to filter role names (use * as wildcard)"),
+    db_session: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user(required_permissions=["role.read"])),
 ) -> IGetResponsePaginated[IRoleRead]:
     """
-    Gets a paginated list of roles
+    Gets a paginated list of roles, optionally filtered by name pattern
     """
-    paginated_roles = await crud.role.get_multi_paginated(params=params)
-
-    response_data = {
-        "items": [serialize_role(role) for role in paginated_roles.items],
-        "total": paginated_roles.total,
-        "page": paginated_roles.page,
-        "size": paginated_roles.size,
-        "pages": paginated_roles.pages,
-    }
-
-    return create_response(data=response_data)
+    query = None
+    if name_pattern:
+        pattern = name_pattern.replace("*", "%")
+        query = select(Role).where(getattr(Role, "name").like(pattern)).order_by(Role.name)
+    response_page = await crud.role.get_multi_paginated(params=params, db_session=db_session, query=query)
+    return create_response(data=response_page)
 
 
 @router.get("/list", response_model=IGetResponseBase[List[IRoleRead]])
@@ -145,6 +143,7 @@ async def update_role(
 @router.delete("/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_role(
     role: Role = Depends(role_deps.get_user_role_by_id),
+    db_session: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user(required_permissions=["role.delete"])),
 ) -> None:
     """
@@ -164,7 +163,7 @@ async def delete_role(
         )
 
     # Check if the role is assigned to any users
-    user_exists = await crud.role.user_exist_in_role(role_id=role.id)
+    user_exists = await crud.role.user_exist_in_role(role_id=role.id, db_session=db_session)
     if user_exists:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -185,7 +184,7 @@ async def delete_role(
     #     )
 
     try:
-        await crud.role.remove(id=role.id)
+        await crud.role.remove(id=role.id, db_session=db_session)
     except Exception as e:
         # Catch potential DB errors or other issues during deletion
         raise HTTPException(
@@ -200,6 +199,7 @@ async def delete_role(
 async def assign_permissions_to_role(
     role_id: UUID,
     permissions: IRolePermissionAssign,
+    db_session: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user(required_permissions=["role.update"])),
     redis_client: Redis = Depends(get_redis_client),
     background_tasks: BackgroundTasks = BackgroundTasks(),
@@ -211,7 +211,7 @@ async def assign_permissions_to_role(
     - admin
     """
     # Check if it's a system role
-    is_system_role = await crud.role.validate_system_role(role_id=role_id)
+    is_system_role = await crud.role.validate_system_role(role_id=role_id, db_session=db_session)
     if is_system_role:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -223,6 +223,7 @@ async def assign_permissions_to_role(
             role_id=role_id,
             permission_ids=permissions.permission_ids,
             current_user=current_user,
+            db_session=db_session,
         )
 
         # Comprehensive cache invalidation
@@ -263,6 +264,7 @@ async def remove_permissions_from_role(
     permission_ids: Optional[List[UUID]] = Query(
         None, description="IDs of permissions to remove from the role"
     ),
+    db_session: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user(required_permissions=["role.update"])),
     redis_client: Redis = Depends(get_redis_client),
     background_tasks: BackgroundTasks = BackgroundTasks(),
@@ -278,7 +280,7 @@ async def remove_permissions_from_role(
     2. JSON body: {"permission_ids": [uuid1, uuid2]}
     """
     # Check if it's a system role
-    is_system_role = await crud.role.validate_system_role(role_id=role_id)
+    is_system_role = await crud.role.validate_system_role(role_id=role_id, db_session=db_session)
     if is_system_role:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -300,6 +302,7 @@ async def remove_permissions_from_role(
             role_id=role_id,
             permission_ids=ids_to_remove,
             current_user=current_user,
+            db_session=db_session,
         )
 
         # Comprehensive cache invalidation
@@ -330,4 +333,54 @@ async def remove_permissions_from_role(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error removing permissions: {str(e)}",
+        )
+
+
+@router.delete("/{role_id}/permissions/{permission_id}")
+async def remove_permission_from_role_by_id(
+    role_id: UUID,
+    permission_id: UUID,
+    db_session: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["role.update"])),
+    redis_client: Redis = Depends(get_redis_client),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+) -> IPostResponseBase[IRoleRead]:
+    """
+    Remove a single permission from a role by permission ID (path param).
+
+    Required roles:
+    - admin
+    """
+    # Check if it's a system role
+    is_system_role = await crud.role.validate_system_role(role_id=role_id, db_session=db_session)
+    if is_system_role:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot modify system role permissions",
+        )
+    try:
+        role = await crud.role.remove_permissions(
+            role_id=role_id,
+            permission_ids=[permission_id],
+            current_user=current_user,
+            db_session=db_session,
+        )
+        # Cache invalidation (same as bulk endpoint)
+        await redis_client.delete(f"role:{role_id}")
+        await redis_client.delete("roles:list")
+        if role.role_group_id:
+            await redis_client.delete(f"role_group:{role.role_group_id}")
+            await redis_client.delete("role_groups:list")
+        background_tasks.add_task(
+            crud.role.invalidate_user_permission_caches,
+            role_id=role_id,
+            redis_client=redis_client,
+        )
+        return create_response(data=serialize_role(role), message="Permission removed successfully")
+    except ResourceNotFoundException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error removing permission: {str(e)}",
         )

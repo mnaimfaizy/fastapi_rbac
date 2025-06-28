@@ -60,7 +60,6 @@ The following environment files have been updated with these new variables:
 ### Testing Environment
 
 - `backend/.env.test` - Test environment configuration
-- `backend/.env.testing` - Unit testing configuration
 
 ### Production Environment
 

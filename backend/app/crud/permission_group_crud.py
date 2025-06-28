@@ -18,10 +18,7 @@ class PermissionGroupData(TypedDict):
 
 
 class CRUDPermissionGroup(CRUDBase[PermissionGroup, IPermissionGroupCreate, IPermissionGroupUpdate]):
-    async def get_group_by_name(
-        self, *, name: str, db_session: AsyncSession | None = None
-    ) -> PermissionGroup | None:
-        db_session = db_session or super().get_db().session
+    async def get_group_by_name(self, *, name: str, db_session: AsyncSession) -> PermissionGroup | None:
         stmt = (
             select(PermissionGroup)
             .options(
@@ -31,13 +28,12 @@ class CRUDPermissionGroup(CRUDBase[PermissionGroup, IPermissionGroupCreate, IPer
             )
             .where(PermissionGroup.name == name)
         )
-        result = await db_session.execute(stmt)
-        return result.unique().scalar_one_or_none()
+        result = await db_session.exec(stmt)
+        return result.unique().one_or_none()
 
     async def get_group_by_id(
-        self, *, group_id: UUID | str, db_session: AsyncSession | None = None
+        self, *, group_id: UUID | str, db_session: AsyncSession
     ) -> PermissionGroup | None:
-        db_session = db_session or super().get_db().session
         query = (
             select(PermissionGroup)
             .options(
@@ -47,26 +43,19 @@ class CRUDPermissionGroup(CRUDBase[PermissionGroup, IPermissionGroupCreate, IPer
             )
             .where(PermissionGroup.id == group_id)
         )
-        result = await db_session.execute(query)
-        return result.unique().scalar_one_or_none()
+        result = await db_session.exec(query)
+        return result.unique().one_or_none()
 
-    async def get_by_name(
-        self, *, name: str, db_session: AsyncSession | None = None
-    ) -> PermissionGroup | None:
+    async def get_by_name(self, *, name: str, db_session: AsyncSession) -> PermissionGroup | None:
         """Get a permission group by name."""
         return await self.get_group_by_name(name=name, db_session=db_session)  # Delegates to existing method
 
-    async def get(self, *, id: UUID | str, db_session: AsyncSession | None = None) -> PermissionGroup | None:
+    async def get(self, *, id: UUID | str, db_session: AsyncSession) -> PermissionGroup | None:
         return await self.get_group_by_id(group_id=id, db_session=db_session)
 
     async def get_multi(
-        self,
-        *,
-        skip: int = 0,
-        limit: int = 100,
-        db_session: AsyncSession | None = None,
+        self, *, skip: int = 0, limit: int = 100, db_session: AsyncSession
     ) -> List[PermissionGroup]:
-        db_session = db_session or super().get_db().session
         query = (
             select(PermissionGroup)
             .options(
@@ -77,8 +66,8 @@ class CRUDPermissionGroup(CRUDBase[PermissionGroup, IPermissionGroupCreate, IPer
             .offset(skip)
             .limit(limit)
         )
-        result = await db_session.execute(query)
-        return list(result.unique().scalars().all())  # Explicitly convert to list
+        result = await db_session.exec(query)
+        return list(result.unique().all())  # Explicitly convert to list
 
     # Override the get_multi_paginated method to load permissions and other relationships
     async def get_multi_paginated(
@@ -86,11 +75,9 @@ class CRUDPermissionGroup(CRUDBase[PermissionGroup, IPermissionGroupCreate, IPer
         *,
         params: Params | None = None,
         query_filter: Any | None = None,
-        db_session: AsyncSession | None = None,
+        db_session: AsyncSession,
         **kwargs: Any,
     ) -> IGetResponsePaginated[PermissionGroup]:
-        db_session = db_session or super().get_db().session
-
         # Start with the base query
         base_query = select(self.model)
 

@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 
 
-def fix_password_in_user_create():
+def fix_password_in_user_create() -> None:
     """Fix missing password field in IUserCreate instances."""
 
     test_file = Path("test/unit/test_crud_user_enhanced.py")
@@ -27,7 +27,7 @@ def fix_password_in_user_create():
     # Look for IUserCreate with parentheses and capture the content
     pattern = r"(IUserCreate\s*\(\s*)((?:[^)]*\n?)*?)(\s*\))"
 
-    def add_password_if_missing(match):
+    def add_password_if_missing(match: re.Match) -> str:
         prefix = match.group(1)
         content = match.group(2)
         suffix = match.group(3)

@@ -1,5 +1,5 @@
-# Backend Test Environment
-# This compose file contains backend services for testing
+# Minimal Backend Test Environment for Fast Integration Testing
+# Only essential services are enabled. Optional services are commented out for speed.
 
 services:
   # FastAPI Backend Application for testing
@@ -15,7 +15,7 @@ services:
     restart: always
     container_name: fastapi_rbac_test
     ports:
-      - "8002:8000" # Different port for test environment
+      - "8002:8000"
     env_file:
       - .env.test
     environment:
@@ -26,6 +26,8 @@ services:
       - REDIS_PORT=6379
       - CELERY_BROKER_URL=redis://fastapi_rbac_redis_test:6379/0
       - CELERY_RESULT_BACKEND=redis://fastapi_rbac_redis_test:6379/0
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@fastapi_rbac_db_test:5432/fastapi_rbac_test
+      - INIT_TEST_DATA=true
     volumes:
       - .:/app
     healthcheck:
@@ -41,70 +43,7 @@ services:
         condition: service_healthy
     networks:
       - fastapi_rbac_test_network
-  # Celery Worker for background tasks in test environment
-  fastapi_rbac_worker_test:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: testing
-      args:
-        - NODE_ENV=testing
-        - ENVIRONMENT=testing
-    image: fastapi_rbac_worker:test
-    restart: always
-    container_name: fastapi_rbac_worker_test
-    command: celery -A app.celery_app worker --loglevel=info
-    env_file:
-      - .env.test
-    environment:
-      - MODE=testing
-      - DATABASE_HOST=fastapi_rbac_db_test
-      - DATABASE_PORT=5432
-      - REDIS_HOST=fastapi_rbac_redis_test
-      - REDIS_PORT=6379
-      - CELERY_BROKER_URL=redis://fastapi_rbac_redis_test:6379/0
-      - CELERY_RESULT_BACKEND=redis://fastapi_rbac_redis_test:6379/0
-    volumes:
-      - .:/app
-    depends_on:
-      fastapi_rbac_db_test:
-        condition: service_healthy
-      fastapi_rbac_redis_test:
-        condition: service_healthy
-    networks:
-      - fastapi_rbac_test_network
-  # Celery Beat Scheduler for periodic tasks in test environment
-  fastapi_rbac_beat_test:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: testing
-      args:
-        - NODE_ENV=testing
-        - ENVIRONMENT=testing
-    image: fastapi_rbac_worker:test
-    restart: always
-    container_name: fastapi_rbac_beat_test
-    command: celery -A app.celery_app beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
-    env_file:
-      - .env.test
-    environment:
-      - MODE=testing
-      - DATABASE_HOST=fastapi_rbac_db_test
-      - DATABASE_PORT=5432
-      - REDIS_HOST=fastapi_rbac_redis_test
-      - REDIS_PORT=6379
-      - CELERY_BROKER_URL=redis://fastapi_rbac_redis_test:6379/0
-      - CELERY_RESULT_BACKEND=redis://fastapi_rbac_redis_test:6379/0
-    volumes:
-      - .:/app
-    depends_on:
-      fastapi_rbac_db_test:
-        condition: service_healthy
-      fastapi_rbac_redis_test:
-        condition: service_healthy
-    networks:
-      - fastapi_rbac_test_network
+
   # Test Runner for integration tests (runs pytest and exits)
   fastapi_rbac_test_runner:
     build:
@@ -127,9 +66,15 @@ services:
       - CELERY_BROKER_URL=redis://fastapi_rbac_redis_test:6379/0
       - CELERY_RESULT_BACKEND=redis://fastapi_rbac_redis_test:6379/0
       - TEST_PATH=${TEST_PATH}
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@fastapi_rbac_db_test:5432/fastapi_rbac_test_runner
+      - INIT_TEST_DATA=true
+      - USE_HTTP_TEST_CLIENT=1
+      - TEST_API_BASE_URL=http://fastapi_rbac_test:8000
     volumes:
       - .:/app
     depends_on:
+      fastapi_rbac_test:
+        condition: service_healthy
       fastapi_rbac_db_test:
         condition: service_healthy
       fastapi_rbac_redis_test:
@@ -144,7 +89,7 @@ services:
     restart: always
     container_name: fastapi_rbac_db_test
     ports:
-      - "5435:5432" # Different port for test environment
+      - "5435:5432"
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
@@ -152,6 +97,8 @@ services:
     volumes:
       - postgres_test_data:/var/lib/postgresql/data
       - ./init-scripts:/docker-entrypoint-initdb.d
+      - ./init-scripts/01-init-user.sh:/docker-entrypoint-initdb.d/01-init-user.sh:ro
+      - ./init-scripts/02-init-test-runner-db.sh:/docker-entrypoint-initdb.d/02-init-test-runner-db.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d fastapi_rbac_test"]
       interval: 10s
@@ -167,7 +114,7 @@ services:
     restart: always
     container_name: fastapi_rbac_redis_test
     ports:
-      - "6381:6379" # Different port for test environment
+      - "6381:6379"
     command: redis-server --appendonly yes
     volumes:
       - redis_test_data:/data
@@ -180,38 +127,19 @@ services:
     networks:
       - fastapi_rbac_test_network
 
-  # PgAdmin for database management in test environment
-  fastapi_rbac_pgadmin_test:
-    image: dpage/pgadmin4:latest
-    restart: always
-    container_name: fastapi_rbac_pgadmin_test
-    ports:
-      - "8082:80" # Different port for test environment
-    environment:
-      - PGADMIN_DEFAULT_EMAIL=admin@example.com
-      - PGADMIN_DEFAULT_PASSWORD=admin
-      - PGADMIN_CONFIG_SERVER_MODE=False
-    volumes:
-      - pgadmin_test_data:/var/lib/pgadmin
-      - ../pgadmin/servers.json:/pgadmin4/servers.json
-    depends_on:
-      fastapi_rbac_db_test:
-        condition: service_healthy
-    networks:
-      - fastapi_rbac_test_network
-
-  # MailHog for email testing in test environment
+  # MailHog for email testing in test environment (needed for /registration and /reset-password)
   fastapi_rbac_mailhog_test:
     image: mailhog/mailhog:latest
     restart: always
     container_name: fastapi_rbac_mailhog_test
     ports:
-      - "1026:1025" # SMTP port - Different for test
-      - "8027:8025" # Web UI port - Different for test
+      - "1026:1025"
+      - "8027:8025"
     networks:
       - fastapi_rbac_test_network
-  # Flower for monitoring Celery tasks in test environment
-  fastapi_rbac_flower_test:
+
+  # Optional/Non-essential services for most integration tests (commented out for speed)
+  fastapi_rbac_worker_test:
     build:
       context: .
       dockerfile: Dockerfile
@@ -219,12 +147,8 @@ services:
       args:
         - NODE_ENV=testing
         - ENVIRONMENT=testing
-    image: fastapi_rbac_worker:test
-    restart: always
-    container_name: fastapi_rbac_flower_test
-    command: celery -A app.celery_app flower --port=5555
-    ports:
-      - "5557:5555" # Different port for test environment
+    image: fastapi_rbac:test
+    container_name: fastapi_rbac_worker_test
     env_file:
       - .env.test
     environment:
@@ -238,12 +162,15 @@ services:
     volumes:
       - .:/app
     depends_on:
+      fastapi_rbac_db_test:
+        condition: service_healthy
       fastapi_rbac_redis_test:
         condition: service_healthy
     networks:
       - fastapi_rbac_test_network
+    entrypoint:
+      ["celery", "-A", "app.celery_app:celery_app", "worker", "--loglevel=info"]
 
-# Docker volumes for test environment
 volumes:
   postgres_test_data:
     name: fastapi_rbac_postgres_test_data
@@ -252,7 +179,6 @@ volumes:
   pgadmin_test_data:
     name: fastapi_rbac_pgadmin_test_data
 
-# Docker network for test environment
 networks:
   fastapi_rbac_test_network:
     name: fastapi_rbac_test_network

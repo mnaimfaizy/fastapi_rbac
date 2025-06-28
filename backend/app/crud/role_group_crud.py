@@ -19,40 +19,27 @@ from app.utils.security_audit import create_audit_log
 class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
     """CRUD operations for RoleGroup model"""
 
-    async def get_all(self, *, db_session: AsyncSession | None = None) -> List[RoleGroup]:
+    async def get_all(self, *, db_session: AsyncSession) -> List[RoleGroup]:
         """Get all role groups without pagination"""
-        db_session = db_session or super().get_db().session
-        result = await db_session.execute(select(RoleGroup))
+        result = await db_session.exec(select(RoleGroup))
         return result.scalars().all()
 
-    async def get_group_by_name(
-        self, *, name: str, db_session: AsyncSession | None = None
-    ) -> RoleGroup | None:
-        db_session = db_session or super().get_db().session
-        result = await db_session.execute(select(RoleGroup).where(RoleGroup.name == name))
-        return result.scalar_one_or_none()
+    async def get_group_by_name(self, *, name: str, db_session: AsyncSession) -> RoleGroup | None:
+        result = await db_session.exec(select(RoleGroup).where(RoleGroup.name == name))
+        return result.scalars().first()
 
-    async def get_by_name(self, *, name: str, db_session: AsyncSession | None = None) -> RoleGroup | None:
+    async def get_by_name(self, *, name: str, db_session: AsyncSession) -> RoleGroup | None:
         """Alias for get_group_by_name."""
         return await self.get_group_by_name(name=name, db_session=db_session)
 
-    async def check_role_exists_in_group(
-        self, *, group_id: UUID, db_session: AsyncSession | None = None
-    ) -> bool:
-        db_session = db_session or super().get_db().session
-        result = await db_session.execute(select(RoleGroupMap).where(RoleGroupMap.role_group_id == group_id))
-        return result.scalar_one_or_none() is not None
+    async def check_role_exists_in_group(self, *, group_id: UUID, db_session: AsyncSession) -> bool:
+        result = await db_session.exec(select(RoleGroupMap).where(RoleGroupMap.role_group_id == group_id))
+        return result.one_or_none() is not None
 
     async def add_roles_to_group(
-        self,
-        *,
-        group_id: UUID,
-        role_ids: list[UUID],
-        db_session: AsyncSession | None = None,
+        self, *, group_id: UUID, role_ids: list[UUID], db_session: AsyncSession
     ) -> list[RoleGroupMap]:
         """Add multiple roles to a group in a batch operation"""
-        db_session = db_session or super().get_db().session
-
         # Create all role_group_map objects
         role_group_maps = []
         for role_id in role_ids:
@@ -69,18 +56,12 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
         return role_group_maps
 
     async def remove_roles_from_group(
-        self,
-        *,
-        group_id: UUID,
-        role_ids: list[UUID],
-        db_session: AsyncSession | None = None,
+        self, *, group_id: UUID, role_ids: list[UUID], db_session: AsyncSession
     ) -> None:
         """Remove multiple roles from a group in a batch operation"""
-        db_session = db_session or super().get_db().session
-
         for role_id in role_ids:
             # Delete the mapping between role and group
-            await db_session.execute(
+            await db_session.exec(
                 delete(RoleGroupMap).where(
                     RoleGroupMap.role_group_id == group_id,
                     RoleGroupMap.role_id == role_id,
@@ -90,14 +71,9 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
         await db_session.commit()
 
     async def validate_circular_dependency(
-        self,
-        *,
-        group_id: UUID,
-        role_ids: List[UUID],
-        db_session: AsyncSession | None = None,
+        self, *, group_id: UUID, role_ids: List[UUID], db_session: AsyncSession
     ) -> bool:
         """Check for circular dependencies when adding roles to a group"""
-        db_session = db_session or super().get_db().session
         checked_roles: Set[UUID] = set()
 
         async def check_role_chain(role_id: UUID) -> bool:
@@ -107,7 +83,7 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
             checked_roles.add(role_id)
 
             # Get all groups that this role belongs to
-            result = await db_session.execute(select(RoleGroupMap).where(RoleGroupMap.role_id == role_id))
+            result = await db_session.exec(select(RoleGroupMap).where(RoleGroupMap.role_id == role_id))
             role_groups = result.scalars().all()
 
             for role_group_map in role_groups:
@@ -115,7 +91,7 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
                     return True  # Circular dependency found
 
                 # Get roles in this group and check them
-                sub_result = await db_session.execute(
+                sub_result = await db_session.exec(
                     select(RoleGroupMap).where(RoleGroupMap.role_group_id == role_group_map.role_group_id)
                 )
                 sub_roles = sub_result.scalars().all()
@@ -142,7 +118,6 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
         db_session: AsyncSession | None = None,
     ) -> List[RoleGroup]:
         """Create multiple role groups in a single transaction"""
-        db_session = db_session or super().get_db().session
         new_groups = []
 
         for group in groups:
@@ -151,7 +126,7 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
             if existing:
                 raise NameExistException(RoleGroup, name=group.name)
 
-            new_group = RoleGroup(**group.dict())
+            new_group = RoleGroup(**group.model_dump())
             new_group.created_by_id = current_user.id
             db_session.add(new_group)
             new_groups.append(new_group)
@@ -227,7 +202,7 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
         db_session = db_session or super().get_db().session
 
         # Get all roles that have a role_group_id assigned
-        result = await db_session.execute(select(Role).where(Role.role_group_id.is_not(None)))
+        result = await db_session.exec(select(Role).where(Role.role_group_id.is_not(None)))
         roles = result.scalars().all()
 
         # Track statistics
@@ -249,7 +224,7 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
                     RoleGroupMap.role_group_id == role.role_group_id,
                 )
             )
-            existing_mapping = await db_session.execute(query)
+            existing_mapping = await db_session.exec(query)
 
             if existing_mapping.scalar_one_or_none():
                 stats["skipped"] += 1
@@ -413,7 +388,7 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
             # Create a query that eagerly loads all needed relationships
             query = select(RoleGroup).options(*options).where(RoleGroup.id == id)
 
-            result = await db_session.execute(query)
+            result = await db_session.exec(query)
             # Use unique() to handle potential duplicates from eager loading multiple paths
             role_group = result.unique().scalar_one_or_none()
 
@@ -461,8 +436,19 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
         """
         Create a role group and ensure all relationships are properly loaded
         to avoid lazy loading issues during response serialization.
+        Enforces unique group name at the CRUD layer.
         """
         db_session = db_session or super().get_db().session
+
+        # Enforce unique name
+        name = obj_in.name if hasattr(obj_in, "name") else None
+        if name:
+            existing = await self.get_group_by_name(name=name, db_session=db_session)
+            if existing:
+                from app.models.role_group_model import RoleGroup
+                from app.utils.exceptions.common_exception import NameExistException
+
+                raise NameExistException(RoleGroup, name=name)
 
         # Call the base create method
         created_group = await super().create(

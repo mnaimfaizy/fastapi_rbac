@@ -2,8 +2,8 @@ from datetime import datetime
 from uuid import UUID
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import Field
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models.base_uuid_model import BaseUUIDModel
 

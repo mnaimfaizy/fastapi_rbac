@@ -38,8 +38,8 @@ router = APIRouter()
 @router.get("")
 async def get_role_groups(
     params: Params = Depends(),
+    db_session: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user(required_permissions=["role_group.read"])),
-    db_session: AsyncSession = Depends(deps.get_async_db),
 ) -> IGetResponsePaginated[IRoleGroupRead]:
     """
     Gets a paginated list of role groups with hierarchical structure.
@@ -75,8 +75,8 @@ async def get_role_groups(
 async def get_role_group_by_id(
     group_id: UUID,
     include_nested_roles: bool = False,
+    db_session: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user(required_permissions=["role_group.read"])),
-    db_session: AsyncSession = Depends(deps.get_async_db),
 ) -> IGetResponseBase[IRoleGroupWithRoles]:
     """
     Gets a role group by its id with full hierarchical information.
@@ -91,10 +91,8 @@ async def get_role_group_by_id(
         The role group with all its relationships properly loaded
     """
     try:
-        role_group = await role_group_deps.get_group_by_id(
-            group_id=group_id,
-            db_session=db_session,
-            include_roles_recursive=include_nested_roles,
+        role_group = await crud.role_group.get_with_hierarchy(
+            id=group_id, db_session=db_session, include_roles_recursive=include_nested_roles
         )
 
         # The model will now have the parent relationship properly loaded
@@ -233,9 +231,6 @@ async def create_role_group(
     - admin
     - manager
     """
-    role_group_current = await crud.role_group.get_group_by_name(name=group.name, db_session=db_session)
-    if role_group_current:
-        raise NameExistException(RoleGroup, name=group.name)
     new_group = await crud.role_group.create(
         obj_in=group, created_by_id=current_user.id, db_session=db_session
     )
@@ -384,6 +379,7 @@ async def add_roles_to_group(
     current_user: User = Depends(deps.get_current_user(required_permissions=["role_group.update"])),
     redis_client: Redis = Depends(get_redis_client),
     background_tasks: BackgroundTasks = BackgroundTasks(),
+    db_session: AsyncSession = Depends(deps.get_db),
 ) -> IPostResponseBase[IRoleGroupWithRoles]:
     """
     Adds roles to a role group with circular dependency check
@@ -464,6 +460,7 @@ async def remove_roles_from_group(
     current_user: User = Depends(deps.get_current_user(required_permissions=["role_group.update"])),
     redis_client: Redis = Depends(get_redis_client),
     background_tasks: BackgroundTasks = BackgroundTasks(),
+    db_session: AsyncSession = Depends(deps.get_db),
 ) -> IPostResponseBase[IRoleGroupWithRoles]:
     """
     Removes roles from a role group

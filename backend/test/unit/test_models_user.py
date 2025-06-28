@@ -3,8 +3,8 @@ from uuid import UUID
 
 import pytest
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models.role_model import Role
 from app.models.user_model import User
@@ -72,10 +72,8 @@ async def test_user_with_roles(db: AsyncSession) -> None:
 
     # Check that user has roles
     stmt = select(Role.name).join(UserRole).where(UserRole.user_id == user.id)
-    result = await db.execute(stmt)  # Execute the query
-    # Fetch all results
-    result = result.fetchall()  # Fetch all results
-    roles = [row[0] for row in result]
+    result = await db.execute(stmt)
+    roles = result.scalars().all()  # This will be a list of role names (scalars)
 
     # Check that the user has both roles
     assert "admin" in roles
