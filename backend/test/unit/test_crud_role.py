@@ -452,17 +452,15 @@ async def test_remove_permissions(db: AsyncSession) -> None:
     assert len(updated_role.permissions) == 2
     assert all(p.id != permission_ids[0] for p in updated_role.permissions)
 
-    # Try to remove non-existent permission (should not fail)
+    # Try to remove non-existent permission (should raise exception)
     non_existent_id = UUID("00000000-0000-0000-0000-000000000000")
-    updated_role = await role_crud.remove_permissions(
-        role_id=role.id,
-        permission_ids=[non_existent_id],
-        current_user=mock_user,
-        db_session=db,
-    )
-
-    # Should still have 2 permissions
-    assert len(updated_role.permissions) == 2
+    with pytest.raises(ResourceNotFoundException):
+        await role_crud.remove_permissions(
+            role_id=role.id,
+            permission_ids=[non_existent_id],
+            current_user=mock_user,
+            db_session=db,
+        )
 
 
 @pytest.mark.asyncio

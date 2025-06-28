@@ -1404,6 +1404,31 @@ Whenever you (the Agent) make any code change or add a feature, you must:
 3. Run `npx eslint . --fix` and fix any remaining issues.
 4. Only then, consider the frontend change complete.
 
+## Dependency and Environment Management (Backend & Frontend)
+
+- **Dependency Installation:**
+
+  - Always check `requirements.txt` in the backend and `package.json` in the `react-frontend` for any dependency to install and their version.
+  - If a dependency is not available in these files, you may install it, but always prefer the version specified in the project files.
+
+- **Environment Variables:**
+
+  - For backend test runs, always load environment variables from `.env.test.local` (if present) using `python-dotenv`.
+  - Ensure that environment variables are loaded before running any tests or scripts that depend on them.
+
+- **Test Runner Best Practices:**
+
+  - The backend test runner (`test_runner.py`) is responsible for running all, unit, integration, and specific tests.
+  - The test runner should:
+    - Use `sys.executable` instead of the literal `python` string for subprocess calls to ensure the correct Python environment is used.
+    - Load `.env.test.local` at the start of the script for local/unit/integration test runs.
+
+- **General Best Practices:**
+  - Always activate the correct Python virtual environment before running backend scripts.
+  - For Docker Compose integration tests, ensure the correct `env_file` or `environment` section is set in the compose file.
+  - If you add new dependencies, update `requirements.txt` (backend) or `package.json` (frontend) accordingly.
+  - If you add new environment variables, document them in the appropriate `.env` file and ensure they are loaded where needed.
+
 ## Agent Command Execution Best Practices
 
 - **Always check the present working directory before running any shell or terminal command.**

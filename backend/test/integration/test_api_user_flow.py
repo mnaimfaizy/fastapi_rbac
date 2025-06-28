@@ -62,8 +62,15 @@ async def login_user(client: AsyncClient, email: str, password: str) -> Optional
     csrf_token, headers = await get_csrf_token(client)
     login_data = {"email": email, "password": password}
     response = await client.post(f"{settings.API_V1_STR}/auth/login", json=login_data, headers=headers)
+    if response.status_code != 200:
+        print(f"Admin login failed for {email}: {response.status_code} {response.text}")
     if response.status_code == 200:
-        token = response.json().get("access_token")
+        json_resp = response.json()
+        token = json_resp.get("access_token")
+        if not token and "data" in json_resp and isinstance(json_resp["data"], dict):
+            token = json_resp["data"].get("access_token")
+        if not token:
+            print(f"Login for {email} returned 200 but no access_token. Response: {response.text}")
         if isinstance(token, str):
             return token
         return None
@@ -81,6 +88,11 @@ async def promote_user_to_admin(
     seed_admin_email = "admin@example.com"
     seed_admin_password = "admin123"
     admin_token = await login_user(client, seed_admin_email, seed_admin_password)
+    assert admin_token is not None, (
+        f"Admin login failed for {seed_admin_email}. "
+        "Check that the seeded admin user exists and the password is correct. "
+        "If this fails, check the login endpoint and DB seeding logic."
+    )
     admin_headers = {"Authorization": f"Bearer {admin_token}"}
     user_id = None
     response = None  # Ensure response is always defined
@@ -374,7 +386,12 @@ class TestUserManagementFlow:
         if user_token is None:
             pytest.fail("User token is None, login failed.")
         assert isinstance(user_token, str)  # for mypy
-        jwt.decode(user_token, app_settings.SECRET_KEY, algorithms=[app_settings.ALGORITHM])
+        jwt.decode(
+            user_token,
+            app_settings.SECRET_KEY,
+            algorithms=[app_settings.ALGORITHM],
+            audience=app_settings.TOKEN_AUDIENCE,
+        )
         response = await client.get(f"{settings.API_V1_STR}/users/me", headers=auth_headers)
         if response.status_code != 200:
             print("/users/me error:", response.status_code, response.text)

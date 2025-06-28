@@ -16,9 +16,23 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+# Load environment variables from .env.test.local if present
+try:
+    from dotenv import load_dotenv
+
+    env_path = Path(__file__).parent / ".env.test.local"
+    if env_path.exists():
+        load_dotenv(dotenv_path=env_path)
+        print(f"Loaded environment variables from {env_path}")
+except ImportError:
+    print("python-dotenv not installed. Skipping .env.test.local loading.")
+
 
 def run_command(cmd: list[str], cwd: Optional[str] = None) -> int:
     """Run a command and return the exit code."""
+    # Replace 'python' with sys.executable for all subprocess calls
+    if cmd and cmd[0] == "python":
+        cmd[0] = sys.executable
     print(f"Running: {' '.join(cmd)}")
     if cwd:
         print(f"Working directory: {cwd}")
@@ -67,44 +81,41 @@ def run_unit_tests(
 def run_integration_tests(
     test_path: Optional[str] = None, verbose: bool = False, coverage: bool = False, parallel: bool = False
 ) -> int:
-    """Run integration tests."""
-    cmd = ["python", "-m", "pytest"]
+    """
+    Run integration tests using backend/docker-compose.test.minimal.yml and fastapi_rbac_test_runner service.
+    All services are started together, and everything is cleaned up after the test run.
+    If no test_path is specified, defaults to running all integration tests.
+    """
+    compose_file = "backend/docker-compose.test.minimal.yml"
+    service = "fastapi_rbac_test_runner"
+    compose_base_cmd = ["docker-compose", "-f", compose_file]
 
-    # Test path
-    if test_path:
-        cmd.append(test_path)
-    else:
-        cmd.append("test/integration/")
-
-    # Verbose output
+    # Set environment variables for the test runner service
+    os.environ["TEST_PATH"] = test_path if test_path else "test/integration/"
     if verbose:
-        cmd.extend(["-v", "-s"])
-
-    # Coverage
+        os.environ["VERBOSE"] = "1"
     if coverage:
-        cmd.extend(
-            [
-                "--cov=app",
-                "--cov-report=html:htmlcov",
-                "--cov-report=term-missing",
-                "--cov-report=xml:coverage.xml",
-            ]
-        )
-
-    # Integration tests might need more time
-    cmd.extend(
-        [
-            "--timeout=300",  # 5 minutes per test
-            "--tb=short",
-            "--strict-markers",
-        ]
-    )
-
-    # Parallel execution (careful with integration tests)
+        os.environ["COVERAGE"] = "1"
     if parallel:
-        cmd.extend(["-n", "2"])  # Limit parallel workers for integration tests
+        os.environ["PARALLEL"] = "1"
 
-    return run_command(cmd)
+    # Step 1: Run all services, abort on test runner exit, propagate exit code
+    up_cmd = compose_base_cmd + ["up", "--abort-on-container-exit", "--exit-code-from", service]
+    print("Starting all required services and running integration tests (full stack, isolated)...")
+    up_result = run_command(up_cmd, cwd=str(Path(__file__).parent.parent))
+
+    # Step 2: Clean up all containers, networks, and volumes
+    down_cmd = compose_base_cmd + ["down", "-v"]
+    print("Cleaning up all test containers, networks, and volumes...")
+    run_command(down_cmd, cwd=str(Path(__file__).parent.parent))
+
+    # Print summary after cleanup
+    if up_result == 0:
+        print("\n✅ All integration tests passed!")
+    else:
+        print("\n❌ Some integration tests failed. See above for details.")
+
+    return up_result
 
 
 def run_all_tests(
@@ -341,7 +352,7 @@ def main() -> int:
     args = parser.parse_args()
 
     # Change to backend directory
-    backend_dir = Path(__file__).parent.parent
+    backend_dir = Path(__file__).parent  # Use backend/ as working directory
     os.chdir(backend_dir)
 
     exit_code = 0

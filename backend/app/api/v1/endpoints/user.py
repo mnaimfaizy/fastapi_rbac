@@ -308,9 +308,10 @@ async def assign_roles_to_user(
 
 
 @router.get("")
+@router.get("/")
 async def read_users(
     email: Optional[str] = None,
-    params: Params = Depends(),
+    params: Optional[Params] = Depends(lambda: None),
     db_session: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user(required_permissions=["user.read"])),
 ) -> IGetResponsePaginated[Any]:
@@ -328,6 +329,8 @@ async def read_users(
         }
         return create_response(data=response_data)
     else:
+        if params is None:
+            params = Params()  # Use default pagination if not provided
         users = await crud.user.get_multi_paginated(params=params, db_session=db_session)
         response_data = {
             "items": [serialize_user(user) for user in users.data.items],
