@@ -392,32 +392,46 @@ async def test_circular_dependency_detection(db: AsyncSession) -> None:
 
 @pytest.mark.asyncio
 async def test_sync_roles_with_role_groups(db: AsyncSession, test_user: User) -> None:
-    """Test synchronizing roles with their role groups"""
+    """Test synchronizing roles with their role groups (robust to pre-seeded data and event listeners)"""
     # Create a role group
     group_name = f"test-group-{random_lower_string(8)}"
     group_in = IRoleGroupCreate(name=group_name)
     group = await role_group.create(obj_in=group_in, db_session=db)
 
-    # Create roles with role_group_id
+    # Create roles WITH role_group_id set to this group
+    role_ids = []
     for i in range(3):
         role_in = IRoleCreate(
             name=f"test-role-{i}-{random_lower_string(5)}",
             description=f"Test Role {i}",
-            role_group_id=group.id,
+            role_group_id=group.id,  # Set the group id here
         )
-        await role_crud.create(obj_in=role_in, db_session=db)
+        role = await role_crud.create(obj_in=role_in, db_session=db)
+        role_ids.append(role.id)
 
-    # Sync roles with role groups
+    await db.commit()  # Ensure roles are persisted before sync
+
+    # Explicitly call sync to ensure mappings are created
     stats = await role_group.sync_roles_with_role_groups(db_session=db, current_user=test_user)
 
-    # Check that roles were synchronized
+    # Query RoleGroupMap for mappings for this group
+    result = await db.exec(select(RoleGroupMap).where(RoleGroupMap.role_group_id == group.id))
+    mappings = result.all()
+    assert len(mappings) == 3
+
+    # The sync function should have created 3 new mappings for this group (could be more globally)
+    # Optionally, check that at least 3 were created in this sync
+    # (if pre-seeded data exists, stats['created'] could be >3)
     assert stats["created"] >= 3
 
-    # Run sync again to test the skipping of existing mappings
+    # Call sync again to check idempotency (should not create new mappings for this group)
     stats2 = await role_group.sync_roles_with_role_groups(db_session=db, current_user=test_user)
+    assert stats2["created"] == 0
 
-    # The second sync should not create any new mappings for these roles
-    assert stats2["skipped"] >= 3
+    # The mappings for this group should still be exactly 3
+    result2 = await db.exec(select(RoleGroupMap).where(RoleGroupMap.role_group_id == group.id))
+    mappings2 = result2.all()
+    assert len(mappings2) == 3
 
 
 @pytest.mark.asyncio

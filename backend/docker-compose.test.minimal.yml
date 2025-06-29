@@ -66,12 +66,17 @@ services:
       - CELERY_BROKER_URL=redis://fastapi_rbac_redis_test:6379/0
       - CELERY_RESULT_BACKEND=redis://fastapi_rbac_redis_test:6379/0
       - TEST_PATH=${TEST_PATH}
+      - COVERAGE=${COVERAGE}
+      - VERBOSE=${VERBOSE}
+      - PARALLEL=${PARALLEL}
+      - FAST=${FAST}
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@fastapi_rbac_db_test:5432/fastapi_rbac_test_runner
       - INIT_TEST_DATA=true
       - USE_HTTP_TEST_CLIENT=1
       - TEST_API_BASE_URL=http://fastapi_rbac_test:8000
     volumes:
       - .:/app
+      - ./htmlcov:/app/htmlcov
     depends_on:
       fastapi_rbac_test:
         condition: service_healthy

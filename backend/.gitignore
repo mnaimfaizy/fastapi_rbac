@@ -15,7 +15,10 @@ celerybeat-schedule
 docker-compose.override.yml
 logfile.log
 memory_test_db
+memory_test_db_*
 memory_test_db-journal
+coverage.xml
+htmlcov/
 dev.db-wal
 dev.db-shm
 *.bak

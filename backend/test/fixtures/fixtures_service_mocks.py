@@ -5,9 +5,10 @@ This module provides mock implementations of service dependencies
 such as Redis clients, email services, etc.
 """
 
-from typing import Any, AsyncGenerator, Dict, List, Optional, Set, Tuple
-from unittest.mock import AsyncMock
+from typing import Any, AsyncGenerator, Dict, Generator, List, Optional, Set, Tuple
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 import pytest_asyncio
 
 
@@ -193,3 +194,11 @@ async def enhanced_redis_mock() -> AsyncGenerator[MockRedisClient, None]:
     """Provide an enhanced Redis mock with state tracking for tests."""
     mock = MockRedisClient()
     yield mock
+
+
+@pytest.fixture(autouse=True)
+def mock_send_email() -> Generator[MagicMock | AsyncMock, None, None]:
+    """Automatically mock the send_email function in all tests to prevent real email sending."""
+    with patch("app.utils.email.email.send_email") as mock:
+        mock.return_value = True
+        yield mock

@@ -16,6 +16,14 @@ from app.db.init_db import init_db
 TEST_SQLALCHEMY_DATABASE_URI = os.getenv(
     "DATABASE_URL", "sqlite+aiosqlite:///file:memory_test_db?cache=shared&uri=true"
 )
+
+# Patch: Make SQLite DB file unique per pytest-xdist worker for parallel safety
+worker_id = os.environ.get("PYTEST_XDIST_WORKER", "default")
+if "sqlite" in TEST_SQLALCHEMY_DATABASE_URI:
+    TEST_SQLALCHEMY_DATABASE_URI = TEST_SQLALCHEMY_DATABASE_URI.replace(
+        "memory_test_db", f"memory_test_db_{worker_id}"
+    )
+
 print(f"DEBUG: Using TEST_SQLALCHEMY_DATABASE_URI = {TEST_SQLALCHEMY_DATABASE_URI}")
 
 

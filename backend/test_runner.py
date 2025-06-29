@@ -16,6 +16,17 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+# Ensure .coverage is not a directory before running tests
+coverage_path = Path(".coverage")
+if coverage_path.exists() and coverage_path.is_dir():
+    print("Removing .coverage directory to avoid Docker/coverage conflict...")
+    import shutil
+
+    shutil.rmtree(coverage_path)
+# Optionally, create an empty .coverage file if it does not exist
+if not coverage_path.exists():
+    coverage_path.touch()
+
 # Load environment variables from .env.test.local if present
 try:
     from dotenv import load_dotenv
@@ -62,9 +73,11 @@ def run_unit_tests(
         cmd.extend(
             [
                 "--cov=app",
+                "--cov-branch",
                 "--cov-report=html:htmlcov",
                 "--cov-report=term-missing",
                 "--cov-report=xml:coverage.xml",
+                "--cov-fail-under=80",
             ]
         )
 
@@ -121,45 +134,51 @@ def run_integration_tests(
 def run_all_tests(
     verbose: bool = False, coverage: bool = False, parallel: bool = False, fast: bool = False
 ) -> int:
-    """Run all tests."""
-    cmd = ["python", "-m", "pytest"]
+    """Run all tests (unit + integration) in Docker Compose for correct environment and coverage."""
+    if not is_running_in_docker():
+        compose_file = "backend/docker-compose.test.minimal.yml"
+        service = "fastapi_rbac_test_runner"
+        compose_base_cmd = ["docker-compose", "-f", compose_file]
+        # Pass through relevant environment variables and arguments
+        env = os.environ.copy()
+        env["TEST_COMMAND"] = "all"
+        if coverage:
+            env["COVERAGE"] = "1"
+        if verbose:
+            env["VERBOSE"] = "1"
+        if parallel:
+            env["PARALLEL"] = "1"
+        if fast:
+            env["FAST"] = "1"
+        env["TEST_PATH"] = "./test"
+        up_cmd = compose_base_cmd + ["up", "--abort-on-container-exit", "--exit-code-from", service]
+        print("Starting Docker Compose for 'all' tests...")
+        result = subprocess.run(up_cmd, cwd=str(Path(__file__).parent.parent), env=env)
+        down_cmd = compose_base_cmd + ["down", "-v"]
+        print("Cleaning up all test containers, networks, and volumes...")
+        subprocess.run(down_cmd, cwd=str(Path(__file__).parent.parent), env=env)
+        return result.returncode
 
-    # Test paths
-    cmd.extend(["test/unit/", "test/integration/"])
-
-    # Verbose output
+    # Fallback to running pytest directly in Docker
+    cmd = ["python", "-m", "pytest", "./test"]
     if verbose:
         cmd.extend(["-v", "-s"])
-
-    # Coverage
     if coverage:
         cmd.extend(
             [
                 "--cov=app",
+                "--cov-branch",
                 "--cov-report=html:htmlcov",
                 "--cov-report=term-missing",
                 "--cov-report=xml:coverage.xml",
-                "--cov-fail-under=80",  # Require 80% coverage
+                "--cov-fail-under=80",
             ]
         )
-
-    # Fast mode (skip slow tests)
     if fast:
         cmd.extend(["-m", "not slow"])
-
-    # Parallel execution
     if parallel:
         cmd.extend(["-n", "auto"])
-
-    # Additional options
-    cmd.extend(
-        [
-            "--tb=short",
-            "--strict-markers",
-            "--maxfail=5",  # Stop after 5 failures
-        ]
-    )
-
+    cmd.extend(["--tb=short", "--strict-markers", "--maxfail=5"])
     return run_command(cmd)
 
 
@@ -334,26 +353,58 @@ def run_demo_suite() -> int:
         return 1
 
 
+def is_running_in_docker() -> bool:
+    """Check if the code is running inside a Docker container."""
+    import os
+    from pathlib import Path
+
+    return os.environ.get("IN_DOCKER") == "1" or Path("/.dockerenv").exists()
+
+
+def cleanup_coverage_files() -> None:
+    """Remove old coverage files and directories to avoid permission issues and stale data."""
+    import shutil
+    from pathlib import Path
+
+    for path in [Path(".coverage"), Path("htmlcov"), Path("coverage.xml")]:
+        if path.exists():
+            try:
+                if path.is_dir():
+                    shutil.rmtree(path)
+                else:
+                    path.unlink()
+                print(f"Removed old coverage file or directory: {path}")
+            except Exception as e:
+                print(f"Warning: Could not remove {path}: {e}")
+
+
 def main() -> int:
     """Main entry point for the test runner."""
-    parser = argparse.ArgumentParser(description="FastAPI RBAC Test Runner")
+    parser = argparse.ArgumentParser(description="Unified test runner for FastAPI RBAC backend.")
     parser.add_argument(
         "command",
-        choices=["unit", "integration", "all", "specific", "lint", "format", "clean", "health", "demo"],
+        choices=[
+            "all",
+            "unit",
+            "integration",
+            "specific",
+            "demo",
+            "lint",
+            "format",
+            "clean",
+        ],
         help="Test command to run",
     )
-    parser.add_argument("--path", "-p", help="Specific test path (for 'specific' command)")
-    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
-    parser.add_argument("--coverage", "-c", action="store_true", help="Generate coverage report")
-    parser.add_argument("--parallel", "-j", action="store_true", help="Run tests in parallel")
-    parser.add_argument("--fast", "-f", action="store_true", help="Skip slow tests")
-    parser.add_argument("--debug", "-d", action="store_true", help="Enable debug mode")
-
+    parser.add_argument("--coverage", action="store_true", help="Enable coverage reporting")
+    parser.add_argument("--verbose", action="store_true", help="Verbose output")
+    parser.add_argument("--parallel", action="store_true", help="Run tests in parallel")
+    parser.add_argument("--fast", action="store_true", help="Skip slow tests (unit only)")
+    parser.add_argument("--path", type=str, help="Path to specific test file or method")
+    parser.add_argument("--debug", action="store_true", help="Debug mode for specific test")
     args = parser.parse_args()
 
-    # Change to backend directory
-    backend_dir = Path(__file__).parent  # Use backend/ as working directory
-    os.chdir(backend_dir)
+    # Clean up coverage files before running tests
+    cleanup_coverage_files()
 
     exit_code = 0
 
