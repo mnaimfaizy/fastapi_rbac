@@ -92,8 +92,12 @@ class CircularDependencyException(Exception):
 class ResourceNotFoundException(Exception):
     """Exception raised when a resource is not found"""
 
-    def __init__(self, model: type, **kwargs: Any) -> None:
-        message = f"{model.__name__} not found. "
+    def __init__(self, model: type | str, **kwargs: Any) -> None:
+        if hasattr(model, "__name__"):
+            model_name = model.__name__
+        else:
+            model_name = str(model)
+        message = f"{model_name} not found. "
         if kwargs:
             message += " ".join(f"{k}={v}" for k, v in kwargs.items())
         super().__init__(message)

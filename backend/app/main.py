@@ -13,6 +13,7 @@ from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
 from fastapi_csrf_protect import CsrfProtect
 from fastapi_limiter import FastAPILimiter
+from fastapi_pagination import add_pagination
 from jwt import DecodeError, ExpiredSignatureError, MissingRequiredClaimError
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
@@ -28,17 +29,15 @@ import app.celery_beat_schedule as celery_beat_schedule  # noqa
 from app.api import deps  # Import deps to set CSRF instance
 from app.api.deps import get_redis_client
 from app.api.v1.api import api_router as api_router_v1
-
-# Import Celery app from centralized configuration
 from app.celery_app import celery_app
 from app.core.config import ModeEnum, settings
 from app.core.security import decode_token
-
-# Import our environment-specific service settings
 from app.core.service_config import service_settings
 from app.schemas.response_schema import ErrorDetail, create_error_response
 from app.utils.exceptions.user_exceptions import UserSelfDeleteException
 from app.utils.fastapi_globals import GlobalsMiddleware, g
+
+allowed_origins = settings.BACKEND_CORS_ORIGINS or ["*"]
 
 # Store CSRF protect instance globally for use in dependencies
 csrf_protect = None
@@ -59,6 +58,10 @@ except Exception as e:
     print(f"Error loading logging configuration: {e}")
     # Setup basic logging as fallback
     logging.basicConfig(level=logging.DEBUG)
+
+# Set logging level to WARNING in testing mode to suppress debug/info logs
+if getattr(settings, "MODE", None) == ModeEnum.testing or os.environ.get("MODE") == "testing":
+    logging.getLogger().setLevel(logging.WARNING)
 
 # Get logger for this module
 logger = logging.getLogger("fastapi_rbac")
@@ -188,7 +191,6 @@ async def lifespan(fastapi_instance: FastAPI) -> AsyncGenerator[None, None]:
         FastAPICache.init(RedisBackend(redis_client), prefix="fastapi-cache")
         await FastAPILimiter.init(redis_client, identifier=user_id_identifier)
 
-    print("startup fastapi")
     yield
     # shutdown
     await FastAPICache.clear()
@@ -246,10 +248,6 @@ deps.set_csrf_protect_instance(csrf_protect)
 
 # Set all CORS origins enabled
 if settings.BACKEND_CORS_ORIGINS:
-    # Convert and print CORS origins for debugging
-    allowed_origins = [str(origin) for origin in settings.BACKEND_CORS_ORIGINS]
-    print(f"Configuring CORS with allowed origins: {allowed_origins}")
-
     fastapi_app.add_middleware(
         CORSMiddleware,
         allow_origins=allowed_origins,
@@ -451,6 +449,9 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONRe
 
 # Include API routes
 fastapi_app.include_router(api_router_v1, prefix=settings.API_V1_STR)
+
+# Enable FastAPI Pagination globally
+add_pagination(fastapi_app)
 
 # Export the app instance for uvicorn
 app = fastapi_app

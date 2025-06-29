@@ -2,6 +2,7 @@
 FastAPI app test fixtures.
 """
 
+import os
 from typing import Any, AsyncGenerator, Callable
 from unittest.mock import AsyncMock
 
@@ -52,10 +53,17 @@ async def client(app: FastAPI) -> AsyncGenerator[AsyncClient, None]:
     # Override the get_current_user function
     app.dependency_overrides[get_current_user] = mock_get_current_user
 
-    # Setup test client with ASGI transport
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as test_client:
-        yield test_client
+    # Use real HTTP client if running in Docker Compose integration mode
+    use_http = os.getenv("USE_HTTP_TEST_CLIENT", "0") == "1" or os.getenv("TEST_API_BASE_URL")
+    if use_http:
+        base_url = os.getenv("TEST_API_BASE_URL", "http://fastapi_rbac_test:8000")
+        async with AsyncClient(base_url=base_url) as test_client:
+            yield test_client
+    else:
+        # Use in-process ASGI client for local test runs
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as test_client:
+            yield test_client
 
     # Clear dependency overrides
     app.dependency_overrides = {}

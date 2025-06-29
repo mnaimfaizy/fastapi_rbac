@@ -47,12 +47,8 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        op.f("ix_PermissionGroup_id"), "PermissionGroup", ["id"], unique=False
-    )
-    op.create_index(
-        op.f("ix_PermissionGroup_name"), "PermissionGroup", ["name"], unique=False
-    )
+    op.create_index(op.f("ix_PermissionGroup_id"), "PermissionGroup", ["id"], unique=False)
+    op.create_index(op.f("ix_PermissionGroup_name"), "PermissionGroup", ["name"], unique=False)
     op.create_table(
         "Role",
         sa.Column("inserted_by", sa.Integer(), nullable=True),
@@ -93,9 +89,7 @@ def upgrade() -> None:
         sa.Column("last_changed_password_date", sa.DateTime(), nullable=True),
         sa.Column("number_of_failed_attempts", sa.Integer(), nullable=True),
         sa.Column("verified", sa.Boolean(), nullable=False),
-        sa.Column(
-            "verification_code", sqlmodel.sql.sqltypes.AutoString(), nullable=True
-        ),
+        sa.Column("verification_code", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
         sa.Column("id", get_uuid_type(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=True),
@@ -120,9 +114,7 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        op.f("ix_Permission_description"), "Permission", ["description"], unique=False
-    )
+    op.create_index(op.f("ix_Permission_description"), "Permission", ["description"], unique=False)
     op.create_index(op.f("ix_Permission_id"), "Permission", ["id"], unique=False)
     op.create_index(op.f("ix_Permission_name"), "Permission", ["name"], unique=False)
     op.create_table(
@@ -138,9 +130,7 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        op.f("ix_UserPasswordHistory_id"), "UserPasswordHistory", ["id"], unique=False
-    )
+    op.create_index(op.f("ix_UserPasswordHistory_id"), "UserPasswordHistory", ["id"], unique=False)
     op.create_table(
         "UserRole",
         sa.Column("id", get_uuid_type(), nullable=False),
@@ -181,9 +171,7 @@ def upgrade() -> None:
         ["role_group_id"],
         unique=False,
     )
-    op.create_index(
-        op.f("ix_rolegroupmap_role_id"), "rolegroupmap", ["role_id"], unique=False
-    )
+    op.create_index(op.f("ix_rolegroupmap_role_id"), "rolegroupmap", ["role_id"], unique=False)
     op.create_table(
         "RolePermission",
         sa.Column("id", get_uuid_type(), nullable=False),
@@ -201,18 +189,14 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id", "role_id", "permission_id"),
     )
-    op.create_index(
-        op.f("ix_RolePermission_id"), "RolePermission", ["id"], unique=False
-    )
+    op.create_index(op.f("ix_RolePermission_id"), "RolePermission", ["id"], unique=False)
     op.create_index(
         op.f("ix_RolePermission_permission_id"),
         "RolePermission",
         ["permission_id"],
         unique=False,
     )
-    op.create_index(
-        op.f("ix_RolePermission_role_id"), "RolePermission", ["role_id"], unique=False
-    )
+    op.create_index(op.f("ix_RolePermission_role_id"), "RolePermission", ["role_id"], unique=False)
     # ### end Alembic commands ###
 
 

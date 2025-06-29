@@ -30,8 +30,6 @@ class IPermissionGroupBase(BaseModel):
 
 
 class IPermissionGroupCreate(PermissionGroupBase):
-    # Add description and created_by_id if they are part of the base or should be here
-    description: Optional[str] = None
     created_by_id: Optional[UUID] = None
 
 

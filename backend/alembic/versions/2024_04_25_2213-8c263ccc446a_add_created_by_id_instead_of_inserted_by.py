@@ -34,9 +34,7 @@ def upgrade() -> None:
     # Permission table changes
     with op.batch_alter_table("Permission") as batch_op:
         batch_op.add_column(sa.Column("created_by_id", get_uuid_type(), nullable=True))
-        batch_op.create_foreign_key(
-            "fk_permission_created_by_id_user", "User", ["created_by_id"], ["id"]
-        )
+        batch_op.create_foreign_key("fk_permission_created_by_id_user", "User", ["created_by_id"], ["id"])
         batch_op.drop_column("inserted_by")
 
     # PermissionGroup table changes
@@ -50,17 +48,13 @@ def upgrade() -> None:
     # Role table changes
     with op.batch_alter_table("Role") as batch_op:
         batch_op.add_column(sa.Column("created_by_id", get_uuid_type(), nullable=True))
-        batch_op.create_foreign_key(
-            "fk_role_created_by_id_user", "User", ["created_by_id"], ["id"]
-        )
+        batch_op.create_foreign_key("fk_role_created_by_id_user", "User", ["created_by_id"], ["id"])
         batch_op.drop_column("inserted_by")
 
     # RoleGroup table changes
     with op.batch_alter_table("RoleGroup") as batch_op:
         batch_op.add_column(sa.Column("created_by_id", get_uuid_type(), nullable=True))
-        batch_op.create_foreign_key(
-            "fk_rolegroup_created_by_id_user", "User", ["created_by_id"], ["id"]
-        )
+        batch_op.create_foreign_key("fk_rolegroup_created_by_id_user", "User", ["created_by_id"], ["id"])
         batch_op.drop_column("inserted_by")
 
 
@@ -81,9 +75,7 @@ def downgrade() -> None:
     # PermissionGroup table changes
     with op.batch_alter_table("PermissionGroup") as batch_op:
         batch_op.add_column(sa.Column("inserted_by", sa.INTEGER(), nullable=True))
-        batch_op.drop_constraint(
-            "fk_permissiongroup_created_by_id_user", type_="foreignkey"
-        )
+        batch_op.drop_constraint("fk_permissiongroup_created_by_id_user", type_="foreignkey")
         batch_op.drop_column("created_by_id")
 
     # Permission table changes

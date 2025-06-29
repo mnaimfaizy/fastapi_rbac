@@ -55,6 +55,9 @@ COPY . .
 RUN find /app -name '*.sh' -exec dos2unix {} \; && \
     find /app -name '*.sh' -exec chmod +x {} \;
 
+# Ensure logs directory exists and is writable
+RUN mkdir -p /app/logs && chmod 777 /app/logs
+
 # Create the log file to be able to run tail
 RUN touch /var/log/cron.log
 
@@ -82,6 +85,9 @@ COPY . .
 # Fix line endings & execute permissions
 RUN find /app -name '*.sh' -exec dos2unix {} \; && \
     find /app -name '*.sh' -exec chmod +x {} \;
+
+# Ensure logs directory exists and is writable
+RUN mkdir -p /app/logs && chmod 777 /app/logs
 
 # Create the log file to be able to run tail
 RUN touch /var/log/cron.log
@@ -114,6 +120,9 @@ COPY ./pyproject.toml ./
 # Fix line endings & execute permissions
 RUN find /app -name '*.sh' -exec dos2unix {} \; && \
     find /app -name '*.sh' -exec chmod +x {} \;
+
+# Ensure logs directory exists and is writable
+RUN mkdir -p /app/logs && chmod 777 /app/logs
 
 # Create the log file to be able to run tail
 RUN touch /var/log/cron.log

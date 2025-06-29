@@ -1,0 +1,10 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "shell",
+      "label": "Run targeted integration test for permission delete fix",
+      "command": "python test_runner.py specific --path test/integration/test_api_permission_flow.py::TestPermissionManagementFlow::test_admin_permission_crud_flow"
+    }
+  ]
+}

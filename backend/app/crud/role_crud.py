@@ -2,8 +2,9 @@ from typing import Any, List
 from uuid import UUID
 
 from fastapi import HTTPException
+from fastapi_pagination import Page, paginate  # Add this import if not present
 from redis.asyncio import Redis
-from sqlalchemy import exc, select
+from sqlalchemy import exc, select  # removed or_, func
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.crud.base_crud import CRUDBase
@@ -71,21 +72,16 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
         await db_session.refresh(role)
         return role
 
-    async def get_role_by_name(self, *, name: str, db_session: AsyncSession | None = None) -> Role | None:
-        db_session = db_session or super().get_db().session
-        role = await db_session.execute(select(Role).where(Role.name == name))
-        return role.scalar_one_or_none()
+    async def get_role_by_name(self, *, name: str, db_session: AsyncSession) -> Role | None:
+        result = await db_session.exec(select(Role).where(Role.name == name))
+        return result.scalars().first()
 
-    async def get_all(self, *, db_session: AsyncSession | None = None) -> List[Role]:
+    async def get_all(self, *, db_session: AsyncSession) -> List[Role]:
         """Fetch all roles without pagination."""
-        db_session = db_session or super().get_db().session
-        result = await db_session.execute(select(Role).order_by(Role.name))  # Order by name for consistency
+        result = await db_session.exec(select(Role).order_by(Role.name))  # Order by name for consistency
         return result.scalars().all()
 
-    async def add_role_to_user(
-        self, *, user: User, role_id: UUID, db_session: AsyncSession | None = None
-    ) -> Role:
-        db_session = db_session or super().get_db().session
+    async def add_role_to_user(self, *, user: User, role_id: UUID, db_session: AsyncSession) -> Role:
         role = await super().get(id=role_id, db_session=db_session)
         if not role:
             raise ValueError(f"Role with ID {role_id} not found")
@@ -96,17 +92,13 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
         await db_session.refresh(role)
         return role
 
-    async def permission_exist_in_role(
-        self, *, role_id: UUID, db_session: AsyncSession | None = None
-    ) -> bool:
-        db_session = db_session or super().get_db().session
-        result = await db_session.execute(select(RolePermission).where(RolePermission.role_id == role_id))
-        permissions = result.scalars().all()
+    async def permission_exist_in_role(self, *, role_id: UUID, db_session: AsyncSession) -> bool:
+        result = await db_session.exec(select(RolePermission).where(RolePermission.role_id == role_id))
+        permissions = result.all()
         return len(permissions) > 0
 
-    async def user_exist_in_role(self, *, role_id: UUID, db_session: AsyncSession | None = None) -> bool:
+    async def user_exist_in_role(self, *, role_id: UUID, db_session: AsyncSession) -> bool:
         """Check if any user is assigned to the role."""
-        db_session = db_session or super().get_db().session
         role = await self.get(id=role_id, db_session=db_session)
         if not role:
             # Or raise an exception if role not found should be handled differently
@@ -115,15 +107,9 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
         return len(role.users) > 0
 
     async def assign_permissions(
-        self,
-        *,
-        role_id: UUID,
-        permission_ids: List[UUID],
-        current_user: User,
-        db_session: AsyncSession | None = None,
+        self, *, role_id: UUID, permission_ids: List[UUID], current_user: User, db_session: AsyncSession
     ) -> Role:
         """Assign permissions to a role"""
-        db_session = db_session or super().get_db().session
         role = await self.get(id=role_id, db_session=db_session)
 
         if not role:
@@ -135,7 +121,7 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
             stmt = select(RolePermission).where(
                 (RolePermission.role_id == role_id) & (RolePermission.permission_id == permission_id)
             )
-            result = await db_session.execute(stmt)
+            result = await db_session.exec(stmt)
             existing = result.scalar_one_or_none()
 
             # Only create if it doesn't exist
@@ -159,32 +145,36 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
         return role
 
     async def remove_permissions(
-        self,
-        *,
-        role_id: UUID,
-        permission_ids: List[UUID],
-        current_user: User,
-        db_session: AsyncSession | None = None,
+        self, *, role_id: UUID, permission_ids: List[UUID], current_user: User, db_session: AsyncSession
     ) -> Role:
         """Remove permissions from a role"""
-        db_session = db_session or super().get_db().session
         role = await self.get(id=role_id, db_session=db_session)
 
         if not role:
             raise ResourceNotFoundException(Role, id=role_id)
 
-        # Delete the specified role-permission mappings properly
+        # Track missing permission_ids
+        missing_permission_ids = []
+        mappings_to_delete = []
         for permission_id in permission_ids:
-            # First find the mapping
             stmt = select(RolePermission).where(
                 (RolePermission.role_id == role_id) & (RolePermission.permission_id == permission_id)
             )
-            result = await db_session.execute(stmt)
-            role_permission = result.scalar_one_or_none()
+            result = await db_session.exec(stmt)
+            mapping = result.scalar_one_or_none()
+            if mapping:
+                mappings_to_delete.append(mapping)
+            else:
+                missing_permission_ids.append(str(permission_id))
 
-            # If found, delete it
-            if role_permission:
-                await db_session.delete(role_permission)
+        if missing_permission_ids:
+            raise ResourceNotFoundException(
+                f"RolePermission mapping not found for permission_ids: {missing_permission_ids} "
+                f"on role {role_id}"
+            )
+
+        for mapping in mappings_to_delete:
+            await db_session.delete(mapping)
 
         # Create audit log
         await create_audit_log(
@@ -317,9 +307,9 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
         # Handle permission updates if provided
         if permission_ids is not None:
             # Clear existing permissions
-            await db_session.execute(select(RolePermission).where(RolePermission.role_id == obj_current.id))
+            await db_session.exec(select(RolePermission).where(RolePermission.role_id == obj_current.id))
             # Remove existing permissions
-            result = await db_session.execute(
+            result = await db_session.exec(
                 select(RolePermission).where(RolePermission.role_id == obj_current.id)
             )
             existing_permissions = result.scalars().all()
@@ -339,6 +329,38 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
         except Exception as e:
             await db_session.rollback()
             raise e
+
+    async def get_multi_paginated(
+        self,
+        *,
+        db_session: AsyncSession | None = None,
+        skip: int = 0,
+        limit: int = 100,
+        name_pattern: str | None = None,
+        search: str | None = None,
+        params: dict | None = None,
+        query: Any = None,
+    ) -> Page[Role]:
+        """
+        Get roles with optional name pattern or search, paginated.
+        """
+        if db_session is None:
+            raise ValueError("db_session (AsyncSession) is required for get_multi_paginated in CRUDRole")
+        stmt = select(Role)
+        if name_pattern:
+            sql_pattern = name_pattern.replace("*", "%")
+            stmt = stmt.where(Role.name.ilike(sql_pattern))  # type: ignore
+        elif search:
+            stmt = stmt.where(Role.name.ilike(f"%{search}%"))  # type: ignore
+        stmt = stmt.order_by(Role.name)
+        result = await db_session.exec(stmt)  # type: ignore
+        roles = result.scalars().all()
+        # Serialize roles to dicts matching IRoleRead before paginating
+        from app.schemas.role_schema import IRoleRead
+        from app.utils.role_utils import serialize_role
+
+        serialized_roles = [IRoleRead.model_validate(serialize_role(role)) for role in roles]
+        return paginate(serialized_roles)
 
 
 role_crud = CRUDRole(Role)

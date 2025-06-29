@@ -30,14 +30,10 @@ def upgrade() -> None:
 
         if "needsToChangePassword" in columns:
             # Add the new column with the correct name
-            batch_op.add_column(
-                sa.Column("needs_to_change_password", sa.Boolean(), nullable=True)
-            )
+            batch_op.add_column(sa.Column("needs_to_change_password", sa.Boolean(), nullable=True))
 
             # Copy data from old column to new column
-            op.execute(
-                'UPDATE "User" SET needs_to_change_password = "needsToChangePassword"'
-            )
+            op.execute('UPDATE "User" SET needs_to_change_password = "needsToChangePassword"')
 
             # Make the new column not nullable
             batch_op.alter_column("needs_to_change_password", nullable=False)
@@ -50,14 +46,10 @@ def downgrade() -> None:
     # Reverse the operation if needed
     with op.batch_alter_table("User") as batch_op:
         # Add back the old column
-        batch_op.add_column(
-            sa.Column("needsToChangePassword", sa.Boolean(), nullable=True)
-        )
+        batch_op.add_column(sa.Column("needsToChangePassword", sa.Boolean(), nullable=True))
 
         # Copy data from new column to old column
-        op.execute(
-            'UPDATE "User" SET "needsToChangePassword" = needs_to_change_password'
-        )
+        op.execute('UPDATE "User" SET "needsToChangePassword" = needs_to_change_password')
 
         # Make the old column not nullable
         batch_op.alter_column("needsToChangePassword", nullable=False)

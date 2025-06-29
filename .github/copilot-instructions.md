@@ -924,6 +924,20 @@ The React frontend follows modern React patterns and best practices:
    }
    ```
 
+## SQLModel Async Idioms and Test/Factory Conventions (2025 Update)
+
+- **All async DB queries in backend and tests must use SQLModel’s `.exec()` idiom with `AsyncSession`:**
+  ```python
+  result = await db.exec(select(User).where(User.email == email))
+  users = result.all()
+  ```
+- **Do NOT use `.execute()` for SQLModel queries in async code.**
+- **Integration tests must use API-driven flows for user actions (no direct DB manipulation).**
+- **Use available test fixtures and factories for all test data creation and service mocking.**
+- **See `backend/test/README.md` for full details and examples.**
+
+---
+
 ## When Making Changes
 
 1. **Follow the existing architecture and patterns:**
@@ -1277,3 +1291,149 @@ By following these guidelines, you'll be able to effectively understand and work
      expect(result.current.user).toEqual(mockUser);
    });
    ```
+
+## Backend Testing: Unified Test Runner
+
+- All backend test running must use `backend/test_runner.py`.
+- **Run all tests:**
+  ```bash
+  python backend/test_runner.py all
+  ```
+- **Run unit tests only:**
+  ```bash
+  python backend/test_runner.py unit
+  ```
+- **Run integration tests only:**
+  ```bash
+  python backend/test_runner.py integration
+  ```
+- **Run a specific test file:**
+  ```bash
+  python backend/test_runner.py specific --path backend/test/unit/test_crud_user.py
+  ```
+- **Run the comprehensive demo suite:**
+  ```bash
+  python backend/test_runner.py demo
+  ```
+- **Other options:** See `python backend/test_runner.py --help` for more.
+
+> **Note:** All previous test scripts (`run_tests.py`, `run_comprehensive_tests.py`, `test_all_units.py`, `run_final_tests.py`) have been removed. Use only `test_runner.py` for all test operations.
+
+- For full details on test/factory/fixture usage, see [`backend/test/README.md`](../backend/test/README.md).
+
+## Linting, Formatting, Type Checking, and Import Consistency: Agent Step-by-Step Guide
+
+Whenever you (the Agent) make any code change or add a feature, you must:
+
+### 1. Identify the Affected Directory
+
+- If the change is in the backend (Python/FastAPI), use the `backend/` directory.
+- If the change is in the frontend (React/TypeScript), use the `react-frontend/` directory.
+
+### 2. For Backend (Python/FastAPI)
+
+**a. Linting, Formatting, and Type Checking Tools:**
+
+- `mypy` for static type checking.
+- `black` for code formatting.
+- `isort` for import sorting.
+- `flake8` for linting.
+
+**b. Step-by-Step:**
+
+1. Run mypy for type checking:
+   ```
+   cd backend
+   mypy . --exclude alembic
+   ```
+2. Format code with Black:
+   ```
+   black .
+   ```
+3. Sort imports with isort:
+   ```
+   isort .
+   ```
+4. Check for linting issues with flake8:
+   ```
+   flake8 .
+   ```
+5. If any tool reports issues, fix them and repeat the check.
+
+### 3. For Frontend (React/TypeScript)
+
+**a. Linting and Formatting Tools:**
+
+- `prettier` for code formatting.
+- `eslint` for linting and import order (configured via plugins).
+
+**b. Step-by-Step:**
+
+1. Format code with Prettier:
+   ```
+   cd react-frontend
+   npx prettier --write .
+   ```
+2. Check and fix linting/import issues with ESLint:
+   ```
+   npx eslint . --fix
+   ```
+3. If ESLint reports issues that cannot be auto-fixed, address them manually and repeat the check.
+
+### 4. General Instructions
+
+- Always use the configuration files present in each directory (e.g., `pyproject.toml`, `.flake8`, `.isort.cfg` for backend; `.eslintrc`, `.prettierrc` for frontend).
+- Do not consider a change complete until all formatting, linting, type checking, and import checks pass with no errors or warnings.
+- If you add new files, ensure they are included in the linting/formatting/type checking process.
+- If you are unsure which tool to use, check the scripts in `backend/` and `react-frontend/` `package.json` or documentation.
+
+### 5. Example Workflow
+
+**For a backend change:**
+
+1. Make your code change.
+2. Run `mypy . --exclude alembic` in `backend/`.
+3. Run `black .` and `isort .` in `backend/`.
+4. Run `flake8 .` and fix any issues.
+5. Only then, consider the backend change complete.
+
+**For a frontend change:**
+
+1. Make your code change.
+2. Run `npx prettier --write .` in `react-frontend/`.
+3. Run `npx eslint . --fix` and fix any remaining issues.
+4. Only then, consider the frontend change complete.
+
+## Dependency and Environment Management (Backend & Frontend)
+
+- **Dependency Installation:**
+
+  - Always check `requirements.txt` in the backend and `package.json` in the `react-frontend` for any dependency to install and their version.
+  - If a dependency is not available in these files, you may install it, but always prefer the version specified in the project files.
+
+- **Environment Variables:**
+
+  - For backend test runs, always load environment variables from `.env.test.local` (if present) using `python-dotenv`.
+  - Ensure that environment variables are loaded before running any tests or scripts that depend on them.
+
+- **Test Runner Best Practices:**
+
+  - The backend test runner (`test_runner.py`) is responsible for running all, unit, integration, and specific tests.
+  - The test runner should:
+    - Use `sys.executable` instead of the literal `python` string for subprocess calls to ensure the correct Python environment is used.
+    - Load `.env.test.local` at the start of the script for local/unit/integration test runs.
+
+- **General Best Practices:**
+  - Always activate the correct Python virtual environment before running backend scripts.
+  - For Docker Compose integration tests, ensure the correct `env_file` or `environment` section is set in the compose file.
+  - If you add new dependencies, update `requirements.txt` (backend) or `package.json` (frontend) accordingly.
+  - If you add new environment variables, document them in the appropriate `.env` file and ensure they are loaded where needed.
+
+## Agent Command Execution Best Practices
+
+- **Always check the present working directory before running any shell or terminal command.**
+- **Only change directories (e.g., `cd backend`) if you are not already in the target directory.**
+- **If already in the correct directory, run the command directly (e.g., `flake8 .`).**
+- **If not in the correct directory, use `cd <target_dir> && <command>` (for bash/sh) or `cd <target_dir>; <command>` (for PowerShell).**
+- **This prevents errors from attempting to change to a directory you are already in, and ensures all commands are run in the correct context.**
+- **When generating commands for the user or for automation, always follow this pattern.**

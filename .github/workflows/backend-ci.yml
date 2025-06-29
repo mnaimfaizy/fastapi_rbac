@@ -105,7 +105,7 @@ jobs:
       TOKEN_ISSUER: "test_issuer"
       TOKEN_AUDIENCE: "test_audience"
       FIRST_SUPERUSER_EMAIL: "admin@example.com"
-      FIRST_SUPERUSER_PASSWORD: "testpassword"
+      FIRST_SUPERUSER_PASSWORD: "admin123"
       USER_CHANGED_PASSWORD_DATE: "2023-01-01T00:00:00" # Example date
       JWT_REFRESH_SECRET_KEY: "another_testing_secret_key"
       JWT_RESET_SECRET_KEY: "reset_testing_secret_key"
@@ -133,10 +133,23 @@ jobs:
           export PYTHONPATH=.
           alembic upgrade head
 
-      - name: Test with pytest and coverage
+      - name: Test with pytest and coverage (unit tests only)
         run: |
           cd backend
-          pytest --cov=app --cov-report=xml
+          pytest test/unit/ --cov=app --cov-report=xml
+
+      # - name: Test with pytest and coverage (integration tests)
+      #   run: |
+      #     # To run integration tests, use Docker Compose to start all required services
+      #     # and then run the integration test suite. Example:
+      #     docker-compose -f backend/docker-compose.test.minimal.yml up -d
+      #     cd backend
+      #     # Uncomment the following line to run integration tests in CI
+      #     # pytest test/integration/ --cov=app --cov-report=xml
+      #     # Optionally, bring down the services after tests:
+      #     # cd .. && docker-compose -f backend/docker-compose.test.minimal.yml down
+      #   # Note: Integration tests require Docker Compose and full service dependencies.
+      #   # See backend/test/README.md for details.
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
@@ -144,35 +157,3 @@ jobs:
           directory: ./backend/
           fail_ci_if_error: false
           verbose: true
-
-  build:
-    name: Build Docker Images
-    runs-on: ubuntu-latest
-    needs: [lint, test]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Backend Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./backend
-          file: ./backend/Dockerfile.prod
-          push: false
-          tags: fastapi-rbac-backend:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max,ignore-error=true
-
-      - name: Build Worker Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./backend
-          file: ./backend/queue.dockerfile.prod
-          push: false
-          tags: fastapi-rbac-worker:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max,ignore-error=true

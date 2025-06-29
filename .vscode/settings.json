@@ -19,7 +19,7 @@
 
   // Modern Python extension linting settings
   "flake8.enabled": true,
-  "flake8.args": ["--max-line-length=110"],
+  "flake8.args": ["--max-line-length=110", "--config=backend/.flake8"],
   "mypy-type-checker.args": ["--ignore-missing-imports"],
   "mypy-type-checker.path": ["./backend/mypy.ini"],
 

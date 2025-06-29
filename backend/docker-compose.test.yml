@@ -105,6 +105,38 @@ services:
         condition: service_healthy
     networks:
       - fastapi_rbac_test_network
+  # Test Runner for integration tests (runs pytest and exits)
+  fastapi_rbac_test_runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: testing
+      args:
+        - NODE_ENV=testing
+        - ENVIRONMENT=testing
+    image: fastapi_rbac:test
+    container_name: fastapi_rbac_test_runner
+    env_file:
+      - .env.test
+    environment:
+      - MODE=testing
+      - DATABASE_HOST=fastapi_rbac_db_test
+      - DATABASE_PORT=5432
+      - REDIS_HOST=fastapi_rbac_redis_test
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://fastapi_rbac_redis_test:6379/0
+      - CELERY_RESULT_BACKEND=redis://fastapi_rbac_redis_test:6379/0
+      - TEST_PATH=${TEST_PATH}
+    volumes:
+      - .:/app
+    depends_on:
+      fastapi_rbac_db_test:
+        condition: service_healthy
+      fastapi_rbac_redis_test:
+        condition: service_healthy
+    networks:
+      - fastapi_rbac_test_network
+    entrypoint: ["/bin/bash", "/app/scripts/testing-entrypoint.sh"]
 
   # PostgreSQL Database for testing
   fastapi_rbac_db_test:
@@ -116,12 +148,12 @@ services:
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=test_db
+      - POSTGRES_DB=fastapi_rbac_test
     volumes:
       - postgres_test_data:/var/lib/postgresql/data
       - ./init-scripts:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d test_db"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d fastapi_rbac_test"]
       interval: 10s
       timeout: 5s
       retries: 5

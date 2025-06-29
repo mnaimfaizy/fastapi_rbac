@@ -15,9 +15,7 @@ from typing import Any, AsyncGenerator, Callable, Dict, List, Optional, Protocol
 
 import pytest
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import AsyncSession
-
-# from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 # Type aliases for better readability
 FactoryCallable = Callable[..., Any]

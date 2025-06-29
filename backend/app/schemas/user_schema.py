@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import Any  # Removed Dict, List imports
+from typing import Any, List  # Added List import back
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field  # Added ConfigDict import
@@ -157,3 +157,8 @@ class PasswordResetConfirm(BaseModel):
 
     token: str = Field(..., description="Reset token received via email")
     new_password: str = Field(..., min_length=8, description="New password to set")
+
+
+class IUserRoleAssign(BaseModel):
+    user_id: str
+    role_ids: List[str]

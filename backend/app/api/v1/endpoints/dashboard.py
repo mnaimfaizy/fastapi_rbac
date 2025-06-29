@@ -1,6 +1,6 @@
 from typing import List
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api import deps
@@ -39,6 +39,7 @@ async def get_dashboard_data(
 
     if is_admin:
         stats.total_users = await crud_dashboard.get_total_users_count(db)
+        stats.active_users = await crud_dashboard.get_active_users_count(db)
         stats.total_roles = await crud_dashboard.get_total_roles_count(db)
         stats.total_permissions = await crud_dashboard.get_total_permissions_count(
             db
@@ -93,3 +94,17 @@ async def get_dashboard_data(
         system_users_summary=(system_users_summary_data if is_admin else None),  # Only for admin
     )
     return IDashboardResponse(data=dashboard_response_data)
+
+
+@router.get("/stats", response_model=IDashboardResponse)
+async def get_dashboard_stats(
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user()),
+) -> IDashboardResponse:
+    """
+    Retrieve dashboard stats (alias for /dashboard or /dashboard/stats).
+    """
+    is_admin = any(role.name.lower() == IRoleEnum.admin.lower() for role in current_user.roles)
+    if not is_admin:
+        raise HTTPException(status_code=403, detail="Admins only")
+    return await get_dashboard_data(db=db, current_user=current_user)

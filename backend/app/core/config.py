@@ -628,7 +628,7 @@ class Settings(BaseSettings):
         final_env_files_paths: Optional[tuple[str, ...]] = None
         if ordered_unique_files:
             final_env_files_paths = tuple(ordered_unique_files)
-            print(f"Loading .env files in order: {final_env_files_paths}")
+            # print(f"Loading .env files in order: {final_env_files_paths}")
 
         # Safely access model_config values with defaults if not present
         env_file_encoding = settings_cls.model_config.get("env_file_encoding", "utf-8")
