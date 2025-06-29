@@ -1,0 +1,65 @@
+site_name: FastAPI RBAC Documentation
+site_description: "Comprehensive documentation for the FastAPI RBAC project, covering setup, development, deployment, and API reference."
+site_author: "FastAPI RBAC Team"
+repo_url: "https://github.com/mnaimfaizy/fastapi_rbac"
+repo_name: "mnaimfaizy/fastapi_rbac"
+
+theme:
+  name: material
+  palette:
+    # Palette toggle for light vs dark mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+
+nav:
+  - Home: README.md
+  - "Getting Started":
+      - "Overview": "getting-started/index.md"
+      - "Project Overview": "getting-started/PROJECT_OVERVIEW.md"
+  - "Development":
+      - "Overview": "development/index.md"
+      - "Developer Setup": "development/DEVELOPER_SETUP.md"
+      - "Testing Guide": "development/TESTING.md"
+  - "Deployment":
+      - "Overview": "deployment/index.md"
+      - "Production Deployment": "deployment/production-deployment-guide.md"
+  - "Troubleshooting":
+      - "Overview": "troubleshooting/index.md"
+      - "Common Issues": "troubleshooting/common-issues.md"
+  - "API Reference":
+      - "Overview": "reference/index.md"
+      - "Authentication": "reference/api/auth.md"
+      - "Users": "reference/api/users.md"
+  - "Contributing": "contributing.md"
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - admonition
+  - toc:
+      permalink: true
+
+# Documentation note about installation
+extra:
+  documentation_note: >
+    To preview this documentation locally, install MkDocs and the Material theme at the user level
+    (outside any project virtual environment) using: `pip install --user mkdocs mkdocs-material`
