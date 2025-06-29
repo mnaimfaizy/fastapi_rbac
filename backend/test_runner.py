@@ -204,46 +204,21 @@ def run_specific_test(
 
 
 def lint_code() -> int:
-    """Run code linting."""
-    print("Running code linting...")
-
-    # Run flake8
-    flake8_result = run_command(
-        [
-            "python",
-            "-m",
-            "flake8",
-            "app/",
-            "test/",
-            "--max-line-length=100",
-            "--exclude=alembic/versions/,__pycache__/",
-            "--ignore=E203,W503",
-        ]
-    )
-
-    # Run mypy
-    mypy_result = run_command(
-        ["python", "-m", "mypy", "app/", "--ignore-missing-imports", "--no-strict-optional"]
-    )
-
-    return max(flake8_result, mypy_result)
+    """Run code linting using the backend/scripts/lint.ps1 script for consistency."""
+    print("Running code linting via backend/scripts/lint.ps1...")
+    script_path = str(Path(__file__).parent / "scripts" / "lint.ps1")
+    # Use PowerShell to run the script
+    cmd = ["pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script_path]
+    return run_command(cmd, cwd=str(Path(__file__).parent))
 
 
 def format_code() -> int:
-    """Format code using black and isort."""
-    print("Formatting code...")
-
-    # Run black
-    black_result = run_command(
-        ["python", "-m", "black", "app/", "test/", "--line-length=100", "--target-version=py310"]
-    )
-
-    # Run isort
-    isort_result = run_command(
-        ["python", "-m", "isort", "app/", "test/", "--profile=black", "--line-length=100"]
-    )
-
-    return max(black_result, isort_result)
+    """Format code using the backend/scripts/format.ps1 script for consistency."""
+    print("Formatting code via backend/scripts/format.ps1...")
+    script_path = str(Path(__file__).parent / "scripts" / "format.ps1")
+    # Use PowerShell to run the script
+    cmd = ["pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script_path]
+    return run_command(cmd, cwd=str(Path(__file__).parent))
 
 
 def clean_cache() -> int:
@@ -278,27 +253,27 @@ def clean_cache() -> int:
 
 
 def run_demo_suite() -> int:
-    """Run the comprehensive demo test suite (showcase)."""
-    demo_tests = [
+    """Run the comprehensive demo test suite (showcase) using current test files."""
+    integration_demo_tests = [
         {
             "cmd": [
                 "python",
                 "-m",
                 "pytest",
-                "test/test_api_rbac_comprehensive.py::TestUserEndpoints::test_user_crud_operations",
+                "test/integration/test_api_user_flow.py::TestUserManagementFlow::test_admin_user_crud_flow",
                 "-v",
             ],
-            "description": "User CRUD Operations Test",
+            "description": "User CRUD Operations Test (Integration)",
         },
         {
             "cmd": [
                 "python",
                 "-m",
                 "pytest",
-                "test/test_api_rbac_comprehensive.py::TestRoleEndpoints::test_role_crud_operations",
+                "test/integration/test_api_role_flow.py::TestRoleManagementFlow::test_admin_role_crud_flow",
                 "-v",
             ],
-            "description": "Role CRUD Operations Test",
+            "description": "Role CRUD Operations Test (Integration)",
         },
         {
             "cmd": [
@@ -306,29 +281,52 @@ def run_demo_suite() -> int:
                 "-m",
                 "pytest",
                 (
-                    "test/test_api_rbac_comprehensive.py::"
-                    "TestPermissionEndpoints::test_permission_crud_operations"
+                    "test/integration/test_api_permission_flow.py::"
+                    "TestPermissionManagementFlow::test_admin_permission_crud_flow"
                 ),
                 "-v",
             ],
-            "description": "Permission CRUD Operations Test",
+            "description": "Permission CRUD Operations Test (Integration)",
         },
+    ]
+    unit_demo_tests = [
         {
-            "cmd": ["python", "-m", "pytest", "test/test_simple_mock.py", "-v"],
-            "description": "Simple Mock Test (Baseline)",
+            "cmd": [
+                "python",
+                "-m",
+                "pytest",
+                "test/unit/test_models_user.py::test_create_user",
+                "-v",
+            ],
+            "description": "Simple User Model Unit Test",
         },
     ]
     print("\n🚀 FastAPI RBAC Comprehensive Test Suite Demonstration")
     print("=" * 70)
     passed_tests = 0
+    total_tests = 0
+    demo_tests = []
+    if is_running_in_docker():
+        demo_tests = integration_demo_tests + unit_demo_tests
+    else:
+        print("\n⚠️  Integration demo tests are only run inside Docker Compose. Skipping integration tests.")
+        print("\nTo run the full demo suite (including integration tests), use:\n")
+        print(
+            (
+                "docker-compose -f docker-compose.test.minimal.yml up -d && "
+                "docker exec -it fastapi_rbac_test_runner python ./test_runner.py demo &&"
+                "docker-compose -f docker-compose.test.minimal.yml down -v \n"
+            )
+        )
+        demo_tests = unit_demo_tests
     total_tests = len(demo_tests)
     for test in demo_tests:
         print(f"\n{'='*60}")
         print(f"Running: {test['description']}")
         print(f"Command: {' '.join(test['cmd'])}")
         print("=" * 60)
-        result = subprocess.run(test["cmd"])
-        if result.returncode == 0:
+        result_code = run_command(test["cmd"])
+        if result_code == 0:
             print(f"✅ {test['description']} - PASSED")
             passed_tests += 1
         else:
