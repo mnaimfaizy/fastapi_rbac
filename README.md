@@ -10,7 +10,7 @@ A comprehensive Role-Based Access Control (RBAC) system with FastAPI backend and
 
 ### New to the project?
 
-**Start here:** [`docs/getting-started/GETTING_STARTED.md`](docs/getting-started/GETTING_STARTED.md)
+**Start here:** [Getting Started](https://fastapi-rbac.mnfprofile.com/getting-started/)
 
 ### Want to run immediately?
 
@@ -28,11 +28,11 @@ docker-compose up -d
 
 All documentation has been organized for easy navigation:
 
-- **📖 [Getting Started](docs/getting-started/)** - New developer onboarding
-- **💻 [Development](docs/development/)** - Development setup and workflows
-- **🚀 [Deployment](docs/deployment/)** - Production deployment guides
-- **🔧 [Troubleshooting](docs/troubleshooting/)** - Problem-solving guides
-- **📋 [Reference](docs/reference/)** - Technical reference materials
+- **📖 [Getting Started](https://fastapi-rbac.mnfprofile.com/getting-started/)** - New developer onboarding
+- **💻 [Development](https://fastapi-rbac.mnfprofile.com/development/)** - Development setup and workflows
+- **🚀 [Deployment](https://fastapi-rbac.mnfprofile.com/deployment/)** - Production deployment guides
+- **🔧 [Troubleshooting](https://fastapi-rbac.mnfprofile.com/troubleshooting/)** - Problem-solving guides
+- **📋 [Reference](https://fastapi-rbac.mnfprofile.com/reference/)** - Technical reference materials
 
 ## 🛠️ Scripts & Utilities
 
@@ -142,15 +142,15 @@ npm test
 
 ## 🔧 Common Operations
 
-| Task                     | Command                                           | Documentation                                              |
-| ------------------------ | ------------------------------------------------- | ---------------------------------------------------------- |
-| **Start development**    | `docker-compose up -d`                            | [Getting Started](docs/getting-started/GETTING_STARTED.md) |
-| **Run backend tests**    | `.\scripts\dev\run-tests.ps1`                     | [Testing Guide](docs/development/TESTING.md)               |
-| **Run frontend tests**   | `cd react-frontend && npm test`                   | [Frontend Testing](react-frontend/README.md#testing)       |
-| **Security validation**  | `python backend/test/test_csrf_implementation.py` | [Security Features](#-enterprise-security)                 |
-| **Deploy to production** | `.\scripts\deployment\push-to-dockerhub.ps1`      | [Deployment](docs/deployment/PRODUCTION_SETUP.md)          |
-| **Troubleshoot CORS**    | `.\scripts\docker\diagnose-cors.ps1`              | [CORS Guide](docs/troubleshooting/CORS_TROUBLESHOOTING.md) |
-| **Database migration**   | `.\scripts\database\migrate-db.ps1`               | [DB Reference](docs/reference/DATABASE_SCHEMA.md)          |
+| Task                     | Command                                           | Documentation                                                                         |
+| ------------------------ | ------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| **Start development**    | `docker-compose up -d`                            | [Getting Started](https://fastapi-rbac.mnfprofile.com/getting-started/)               |
+| **Run backend tests**    | `.scripts\dev\run-tests.ps1`                     | [Testing Guide](https://fastapi-rbac.mnfprofile.com/development/testing/)             |
+| **Run frontend tests**   | `cd react-frontend && npm test`                   | [Frontend Testing](https://fastapi-rbac.mnfprofile.com/development/#frontend-testing) |
+| **Security validation**  | `python backend/test/test_csrf_implementation.py` | [Security Features](https://fastapi-rbac.mnfprofile.com/#-enterprise-security)        |
+| **Deploy to production** | `.scripts\deployment\push-to-dockerhub.ps1`      | [Deployment](https://fastapi-rbac.mnfprofile.com/deployment/)                         |
+| **Troubleshoot CORS**    | `.scripts\docker\diagnose-cors.ps1`              | [CORS Guide](https://fastapi-rbac.mnfprofile.com/troubleshooting/common-issues/)      |
+| **Database migration**   | `.scripts\database\migrate-db.ps1`               | [DB Reference](https://fastapi-rbac.mnfprofile.com/reference/)                        |
 
 ## 🧪 Integration Testing Environments
 
@@ -206,31 +206,31 @@ All backend test running is now managed through a single script: `backend/test_r
   ```powershell
   python backend/test_runner.py demo
   ```
-- **Other options:** See `python backend/test_runner.py --help` for more.
+- **Other options:** See [Test Runner Help](https://fastapi-rbac.mnfprofile.com/development/testing/) for more.
 
 > **Note:** All previous test scripts (`run_tests.py`, `run_comprehensive_tests.py`, `test_all_units.py`, `run_final_tests.py`) have been removed. Use only `test_runner.py` for all test operations.
 
-- For full details on test/factory/fixture usage, see [`backend/test/README.md`](backend/test/README.md).
+- For full details on test/factory/fixture usage, see [Test Suite Guide](https://fastapi-rbac.mnfprofile.com/development/testing/).
 
 ---
 
 ## 🆘 Need Help?
 
-1. **🔍 Check documentation**: Start with [Getting Started](docs/getting-started/GETTING_STARTED.md)
-2. **🔧 Browse troubleshooting**: See [troubleshooting guides](docs/troubleshooting/)
+1. **🔍 Check documentation**: Start with [Getting Started](https://fastapi-rbac.mnfprofile.com/getting-started/)
+2. **🔧 Browse troubleshooting**: See [Troubleshooting Guides](https://fastapi-rbac.mnfprofile.com/troubleshooting/)
 3. **💬 Ask the team**: Create an issue with detailed information
 4. **📖 Read the code**: Well-documented with inline comments
 
 ## 🤝 Contributing
 
-1. Read the [Development Setup](docs/development/DEVELOPER_SETUP.md)
-2. Follow the [Coding Standards](docs/development/CODING_STANDARDS.md)
+1. Read the [Development Setup](https://fastapi-rbac.mnfprofile.com/development/developer_setup/)
+2. Follow the [Coding Standards](https://fastapi-rbac.mnfprofile.com/development/)
 3. Write tests for new features
 4. Update documentation as needed
 
 ---
 
-**Ready to get started?** 👉 [Click here to begin!](docs/getting-started/GETTING_STARTED.md)
+**Ready to get started?** 👉 [Click here to begin!](https://fastapi-rbac.mnfprofile.com/getting-started/)
 
 # Run the backend service
 
@@ -249,7 +249,7 @@ npm install
 
 # Run the development server
 npm run dev
-````
+```
 
 ## Docker-based Development
 
@@ -274,10 +274,11 @@ docker-compose up -d
 
 ## Documentation
 
-- [Backend Documentation](backend/backend.md)
-- [Frontend Documentation](react-frontend/README.md)
-- [API Documentation](http://localhost:8001/docs) (when backend is running)
+- [Backend Documentation](https://fastapi-rbac.mnfprofile.com/development/)
+- [Frontend Documentation](https://fastapi-rbac.mnfprofile.com/development/)
+- [API Documentation](https://fastapi-rbac.mnfprofile.com/reference/api/)
 
 ## License
 
 This project is licensed under the terms of the MIT license.
+````
