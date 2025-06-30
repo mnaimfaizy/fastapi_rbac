@@ -1,0 +1,1540 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Comprehensive documentation for the FastAPI RBAC project, covering setup, development, deployment, and API reference.">
+      
+      
+        <meta name="author" content="FastAPI RBAC Team">
+      
+      
+      
+      
+      
+      <link rel="icon" href="../assets/favicon.ico">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.14">
+    
+    
+      
+        <title>Database Initialization Guide - FastAPI RBAC Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.342714a4.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#database-initialization-guide" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="FastAPI RBAC Documentation" class="md-header__button md-logo" aria-label="FastAPI RBAC Documentation" data-md-component="logo">
+      
+  <img src="../assets/menu_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            FastAPI RBAC Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Database Initialization Guide
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/mnaimfaizy/fastapi_rbac" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    mnaimfaizy/fastapi_rbac
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../getting-started/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../development/" class="md-tabs__link">
+          
+  
+  
+  Development
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../deployment/" class="md-tabs__link">
+          
+  
+  
+  Deployment
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../troubleshooting/" class="md-tabs__link">
+          
+  
+  
+  Troubleshooting
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../reference/" class="md-tabs__link">
+          
+  
+  
+  API Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../contributing/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Contributing
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="FastAPI RBAC Documentation" class="md-nav__button md-logo" aria-label="FastAPI RBAC Documentation" data-md-component="logo">
+      
+  <img src="../assets/menu_logo.png" alt="logo">
+
+    </a>
+    FastAPI RBAC Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/mnaimfaizy/fastapi_rbac" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    mnaimfaizy/fastapi_rbac
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Getting Started
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Getting Started
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Overview
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/PROJECT_OVERVIEW/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Project Overview
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Development
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Development
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../development/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Overview
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../development/DEVELOPER_SETUP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Developer Setup
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../development/TESTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Testing Guide
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Deployment
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Deployment
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Overview
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deployment/production-deployment-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Production Deployment
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Troubleshooting
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Troubleshooting
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Overview
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/common-issues/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Common Issues
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    API Reference
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            API Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Overview
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/api/auth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Authentication
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/api/users/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Users
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Contributing
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      Overview
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#environment-specific-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      Environment-Specific Behavior
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Environment-Specific Behavior">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#development-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      Development Environment
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#production-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      Production Environment
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#testing-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      Testing Environment
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#manual-database-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Manual Database Operations
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Manual Database Operations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#if-you-need-to-run-migrations-manually" class="md-nav__link">
+    <span class="md-ellipsis">
+      If you need to run migrations manually:
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#if-you-need-to-reset-the-database" class="md-nav__link">
+    <span class="md-ellipsis">
+      If you need to reset the database:
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#if-you-need-to-run-initial-data-setup-manually" class="md-nav__link">
+    <span class="md-ellipsis">
+      If you need to run initial data setup manually:
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#error-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      Error Handling
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Error Handling">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#database-connection-errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      Database Connection Errors
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#migration-errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      Migration Errors
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#initial-data-errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      Initial Data Errors
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#container-restart-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      Container Restart Behavior
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Container Restart Behavior">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#will-the-container-fail-if-database-is-not-ready" class="md-nav__link">
+    <span class="md-ellipsis">
+      Will the container fail if database is not ready?
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#will-migrations-run-every-time" class="md-nav__link">
+    <span class="md-ellipsis">
+      Will migrations run every time?
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#will-initial-data-be-duplicated" class="md-nav__link">
+    <span class="md-ellipsis">
+      Will initial data be duplicated?
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      Best Practices
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Best Practices">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#for-new-developers" class="md-nav__link">
+    <span class="md-ellipsis">
+      For New Developers
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#for-production-deployment" class="md-nav__link">
+    <span class="md-ellipsis">
+      For Production Deployment
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#for-cicd-pipelines" class="md-nav__link">
+    <span class="md-ellipsis">
+      For CI/CD Pipelines
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      Troubleshooting Commands
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      Summary
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="database-initialization-guide">Database Initialization Guide<a class="headerlink" href="#database-initialization-guide" title="Permanent link">&para;</a></h1>
+<p>This document explains how database initialization works in different environments and provides solutions for common scenarios.</p>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>The FastAPI RBAC system uses a multi-step database initialization process:</p>
+<ol>
+<li><strong>Database Connection Check</strong> - Waits for database to be ready</li>
+<li><strong>Pre-start Script</strong> - Validates database connectivity and configuration</li>
+<li><strong>Alembic Migrations</strong> - Applies database schema changes</li>
+<li><strong>Initial Data Setup</strong> - Creates default users, roles, and permissions</li>
+</ol>
+<h2 id="environment-specific-behavior">Environment-Specific Behavior<a class="headerlink" href="#environment-specific-behavior" title="Permanent link">&para;</a></h2>
+<h3 id="development-environment">Development Environment<a class="headerlink" href="#development-environment" title="Permanent link">&para;</a></h3>
+<p><strong>How it works:</strong></p>
+<ul>
+<li>Uses <code>development-entrypoint.sh</code> script</li>
+<li>Automatically runs migrations and initial data setup</li>
+<li>Starts uvicorn with hot-reload for development</li>
+</ul>
+<p><strong>Command to start:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nb">cd </span><span class="n">d</span><span class="p">:\</span><span class="n">Projects</span><span class="p">\</span><span class="n">fastapi_rbac</span><span class="p">\</span><span class="n">backend</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">docker-compose</span> <span class="o">-f</span> <span class="n">docker-compose</span><span class="p">.</span><span class="n">dev</span><span class="p">.</span><span class="n">yml</span> <span class="n">up</span> <span class="p">-</span><span class="n">-build</span>
+</code></pre></div>
+<p><strong>What happens automatically:</strong></p>
+<ol>
+<li>Waits for PostgreSQL to be ready</li>
+<li>Runs <code>backend_pre_start.py</code> to validate connections</li>
+<li>Runs <code>alembic upgrade head</code> to apply migrations</li>
+<li>Runs <code>initial_data.py</code> to create default data</li>
+<li>Starts FastAPI with hot-reload</li>
+</ol>
+<h3 id="production-environment">Production Environment<a class="headerlink" href="#production-environment" title="Permanent link">&para;</a></h3>
+<p><strong>How it works:</strong></p>
+<ul>
+<li>Uses <code>production-entrypoint.sh</code> script</li>
+<li>Automatically runs migrations and initial data setup</li>
+<li>Starts gunicorn with multiple workers</li>
+</ul>
+<p><strong>Command to start:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nb">cd </span><span class="n">d</span><span class="p">:\</span><span class="n">Projects</span><span class="p">\</span><span class="n">fastapi_rbac</span><span class="p">\</span><span class="n">backend</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">docker-compose</span> <span class="o">-f</span> <span class="n">docker-compose</span><span class="p">.</span><span class="n">prod</span><span class="p">.</span><span class="n">yml</span> <span class="n">up</span> <span class="p">-</span><span class="n">-build</span>
+</code></pre></div>
+<p><strong>What happens automatically:</strong></p>
+<ol>
+<li>Waits for PostgreSQL to be ready (with longer timeout)</li>
+<li>Runs <code>backend_pre_start.py</code> to validate connections</li>
+<li>Runs <code>alembic upgrade head</code> to apply migrations</li>
+<li>Runs <code>initial_data.py</code> to create default data</li>
+<li>Starts FastAPI with gunicorn for production</li>
+</ol>
+<h3 id="testing-environment">Testing Environment<a class="headerlink" href="#testing-environment" title="Permanent link">&para;</a></h3>
+<p><strong>How it works:</strong></p>
+<ul>
+<li>Uses standard <code>entrypoint.sh</code> script</li>
+<li>Automatically runs migrations and initial data setup</li>
+<li>Starts FastAPI for testing</li>
+</ul>
+<p><strong>Command to start:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nb">cd </span><span class="n">d</span><span class="p">:\</span><span class="n">Projects</span><span class="p">\</span><span class="n">fastapi_rbac</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">docker-compose</span> <span class="o">-f</span> <span class="n">docker-compose</span><span class="p">.</span><span class="n">dev</span><span class="p">.</span><span class="n">yml</span> <span class="n">up</span> <span class="p">-</span><span class="n">-build</span>
+</code></pre></div>
+<h2 id="manual-database-operations">Manual Database Operations<a class="headerlink" href="#manual-database-operations" title="Permanent link">&para;</a></h2>
+<h3 id="if-you-need-to-run-migrations-manually">If you need to run migrations manually:<a class="headerlink" href="#if-you-need-to-run-migrations-manually" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c"># Enter the running container</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">docker</span> <span class="n">exec</span> <span class="n">-it</span> <span class="n">fastapi_rbac_dev</span> <span class="n">bash</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c"># Run migrations</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">alembic</span> <span class="n">upgrade</span> <span class="n">head</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c"># Or run specific migration</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="n">alembic</span> <span class="n">upgrade</span> <span class="p">+</span><span class="n">1</span>
+</code></pre></div>
+<h3 id="if-you-need-to-reset-the-database">If you need to reset the database:<a class="headerlink" href="#if-you-need-to-reset-the-database" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c"># Stop containers</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">docker-compose</span> <span class="o">-f</span> <span class="n">docker-compose</span><span class="p">.</span><span class="n">dev</span><span class="p">.</span><span class="n">yml</span> <span class="n">down</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c"># Remove database volume</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">docker</span> <span class="n">volume</span> <span class="nb">rm </span><span class="n">fastapi_rbac_postgres_dev_data</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c"># Start fresh</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="n">docker-compose</span> <span class="o">-f</span> <span class="n">docker-compose</span><span class="p">.</span><span class="n">dev</span><span class="p">.</span><span class="n">yml</span> <span class="n">up</span> <span class="p">-</span><span class="n">-build</span>
+</code></pre></div>
+<h3 id="if-you-need-to-run-initial-data-setup-manually">If you need to run initial data setup manually:<a class="headerlink" href="#if-you-need-to-run-initial-data-setup-manually" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c"># Enter the running container</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">docker</span> <span class="n">exec</span> <span class="n">-it</span> <span class="n">fastapi_rbac_dev</span> <span class="n">bash</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c"># Run initial data script</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">python</span> <span class="n">app</span><span class="p">/</span><span class="n">initial_data</span><span class="p">.</span><span class="n">py</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="c"># Or use the root-level script</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="n">python</span> <span class="n">init_data</span><span class="p">.</span><span class="n">py</span>
+</code></pre></div>
+<h2 id="error-handling">Error Handling<a class="headerlink" href="#error-handling" title="Permanent link">&para;</a></h2>
+<h3 id="database-connection-errors">Database Connection Errors<a class="headerlink" href="#database-connection-errors" title="Permanent link">&para;</a></h3>
+<p><strong>Error:</strong> <code>Database connection error: could not connect to server</code></p>
+<p><strong>Solutions:</strong></p>
+<ol>
+<li>Ensure PostgreSQL container is running</li>
+<li>Check environment variables (DATABASE_HOST, DATABASE_PORT, etc.)</li>
+<li>Verify network connectivity between containers</li>
+<li>Check if database credentials are correct</li>
+</ol>
+<p><strong>Debug commands:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c"># Check if database container is running</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">docker</span> <span class="nb">ps </span><span class="p">|</span> <span class="n">grep</span> <span class="n">postgres</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c"># Check database logs</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">docker</span> <span class="n">logs</span> <span class="n">fastapi_rbac_db_dev</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c"># Test database connection from app container</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="n">docker</span> <span class="n">exec</span> <span class="n">-it</span> <span class="n">fastapi_rbac_dev</span> <span class="n">bash</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="n">python</span> <span class="n">app</span><span class="p">/</span><span class="n">backend_pre_start</span><span class="p">.</span><span class="n">py</span>
+</code></pre></div>
+<h3 id="migration-errors">Migration Errors<a class="headerlink" href="#migration-errors" title="Permanent link">&para;</a></h3>
+<p><strong>Error:</strong> <code>alembic.util.exc.CommandError: Can't locate revision identified by</code></p>
+<p><strong>Solutions:</strong></p>
+<ol>
+<li>Check if alembic_version table exists in database</li>
+<li>Reset migrations if needed</li>
+<li>Check for conflicting migration files</li>
+</ol>
+<p><strong>Debug commands:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c"># Check migration status</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">docker</span> <span class="n">exec</span> <span class="n">-it</span> <span class="n">fastapi_rbac_dev</span> <span class="n">alembic</span> <span class="n">current</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c"># Check migration history</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="n">docker</span> <span class="n">exec</span> <span class="n">-it</span> <span class="n">fastapi_rbac_dev</span> <span class="n">alembic</span> <span class="nb">history</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="c"># Reset to base (CAREFUL - destroys data)</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="n">docker</span> <span class="n">exec</span> <span class="n">-it</span> <span class="n">fastapi_rbac_dev</span> <span class="n">alembic</span> <span class="n">downgrade</span> <span class="n">base</span>
+</code></pre></div>
+<h3 id="initial-data-errors">Initial Data Errors<a class="headerlink" href="#initial-data-errors" title="Permanent link">&para;</a></h3>
+<p><strong>Error:</strong> <code>Could not create superuser</code> or <code>Permission group not found</code></p>
+<p><strong>Solutions:</strong></p>
+<ol>
+<li>Check if database schema is properly created</li>
+<li>Verify initial data configuration in <code>app/db/init_db.py</code></li>
+<li>Check for duplicate data constraints</li>
+</ol>
+<p><strong>Debug commands:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c"># Run initial data script with debug output</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">docker</span> <span class="n">exec</span> <span class="n">-it</span> <span class="n">fastapi_rbac_dev</span> <span class="n">python</span> <span class="n">app</span><span class="p">/</span><span class="n">initial_data</span><span class="p">.</span><span class="n">py</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c"># Check database content</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="n">docker</span> <span class="n">exec</span> <span class="n">-it</span> <span class="n">fastapi_rbac_db_dev</span> <span class="n">psql</span> <span class="n">-U</span> <span class="n">postgres</span> <span class="n">-d</span> <span class="n">fastapi_db</span> <span class="n">-c</span> <span class="s2">&quot;SELECT * FROM User;&quot;</span>
+</code></pre></div>
+<h2 id="container-restart-behavior">Container Restart Behavior<a class="headerlink" href="#container-restart-behavior" title="Permanent link">&para;</a></h2>
+<h3 id="will-the-container-fail-if-database-is-not-ready">Will the container fail if database is not ready?<a class="headerlink" href="#will-the-container-fail-if-database-is-not-ready" title="Permanent link">&para;</a></h3>
+<p><strong>No</strong> - The entrypoint scripts include robust waiting logic that:</p>
+<ul>
+<li>Continuously tries to connect to the database</li>
+<li>Waits with exponential backoff</li>
+<li>Only proceeds when database is confirmed ready</li>
+<li>Has a maximum retry limit (5 minutes in development, configurable)</li>
+</ul>
+<h3 id="will-migrations-run-every-time">Will migrations run every time?<a class="headerlink" href="#will-migrations-run-every-time" title="Permanent link">&para;</a></h3>
+<p><strong>Yes, but safely</strong> - Alembic migrations are:</p>
+<ul>
+<li>Idempotent (safe to run multiple times)</li>
+<li>Only apply changes that haven't been applied yet</li>
+<li>Track applied migrations in the <code>alembic_version</code> table</li>
+<li>Skip already-applied migrations automatically</li>
+</ul>
+<h3 id="will-initial-data-be-duplicated">Will initial data be duplicated?<a class="headerlink" href="#will-initial-data-be-duplicated" title="Permanent link">&para;</a></h3>
+<p><strong>No</strong> - The initial data setup:</p>
+<ul>
+<li>Checks if data already exists before creating</li>
+<li>Uses "get or create" patterns</li>
+<li>Skips creation if entities already exist</li>
+<li>Logs warnings for any issues but continues processing</li>
+</ul>
+<h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
+<h3 id="for-new-developers">For New Developers<a class="headerlink" href="#for-new-developers" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Use the provided Docker Compose files</strong> - They handle all initialization automatically</li>
+<li><strong>Don't run migrations manually</strong> unless troubleshooting</li>
+<li><strong>Use environment-specific configurations</strong> (.env.development, .env.production)</li>
+<li><strong>Check logs</strong> if something seems wrong: <code>docker-compose logs fastapi_rbac_dev</code></li>
+</ol>
+<h3 id="for-production-deployment">For Production Deployment<a class="headerlink" href="#for-production-deployment" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Use production Docker Compose</strong> with proper environment variables</li>
+<li><strong>Set up proper secrets management</strong> for database credentials</li>
+<li><strong>Configure health checks</strong> to ensure containers are ready</li>
+<li><strong>Set up monitoring</strong> for database connectivity and application health</li>
+<li><strong>Backup database</strong> before major deployments</li>
+</ol>
+<h3 id="for-cicd-pipelines">For CI/CD Pipelines<a class="headerlink" href="#for-cicd-pipelines" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Use testing Docker Compose</strong> for consistent test environments</li>
+<li><strong>Run database in separate container</strong> for isolation</li>
+<li><strong>Use fresh database</strong> for each test run</li>
+<li><strong>Verify migrations</strong> work correctly in pipeline</li>
+<li><strong>Test initial data creation</strong> as part of integration tests</li>
+</ol>
+<h2 id="troubleshooting-commands">Troubleshooting Commands<a class="headerlink" href="#troubleshooting-commands" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c"># Check all container status</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">docker-compose</span> <span class="o">-f</span> <span class="n">docker-compose</span><span class="p">.</span><span class="n">dev</span><span class="p">.</span><span class="n">yml</span> <span class="nb">ps</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c"># View logs for specific service</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="n">docker-compose</span> <span class="o">-f</span> <span class="n">docker-compose</span><span class="p">.</span><span class="n">dev</span><span class="p">.</span><span class="n">yml</span> <span class="n">logs</span> <span class="n">fastapi_rbac_dev</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="c"># Enter container for debugging</span>
+<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="n">docker</span> <span class="n">exec</span> <span class="n">-it</span> <span class="n">fastapi_rbac_dev</span> <span class="n">bash</span>
+<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>
+<a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="c"># Check database connectivity</span>
+<a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="n">docker</span> <span class="n">exec</span> <span class="n">-it</span> <span class="n">fastapi_rbac_dev</span> <span class="n">python</span> <span class="n">app</span><span class="p">/</span><span class="n">backend_pre_start</span><span class="p">.</span><span class="n">py</span>
+<a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>
+<a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="c"># Check migration status</span>
+<a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="n">docker</span> <span class="n">exec</span> <span class="n">-it</span> <span class="n">fastapi_rbac_dev</span> <span class="n">alembic</span> <span class="n">current</span>
+<a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a>
+<a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="c"># Check if initial data exists</span>
+<a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="n">docker</span> <span class="n">exec</span> <span class="n">-it</span> <span class="n">fastapi_rbac_db_dev</span> <span class="n">psql</span> <span class="n">-U</span> <span class="n">postgres</span> <span class="n">-d</span> <span class="n">fastapi_db</span> <span class="n">-c</span> <span class="s2">&quot;SELECT email FROM User WHERE is_superuser = true;&quot;</span>
+<a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a>
+<a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a><span class="c"># Restart single service</span>
+<a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a><span class="n">docker-compose</span> <span class="o">-f</span> <span class="n">docker-compose</span><span class="p">.</span><span class="n">dev</span><span class="p">.</span><span class="n">yml</span> <span class="n">restart</span> <span class="n">fastapi_rbac_dev</span>
+<a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a>
+<a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a><span class="c"># Complete reset (destroys data)</span>
+<a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a><span class="n">docker-compose</span> <span class="o">-f</span> <span class="n">docker-compose</span><span class="p">.</span><span class="n">dev</span><span class="p">.</span><span class="n">yml</span> <span class="n">down</span> <span class="n">-v</span>
+<a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a><span class="n">docker-compose</span> <span class="o">-f</span> <span class="n">docker-compose</span><span class="p">.</span><span class="n">dev</span><span class="p">.</span><span class="n">yml</span> <span class="n">up</span> <span class="p">-</span><span class="n">-build</span>
+</code></pre></div>
+<h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
+<p>The database initialization is <strong>fully automated</strong> and <strong>idempotent</strong>. You should:</p>
+<ul>
+<li>✅ <strong>Use Docker Compose</strong> for consistent environments</li>
+<li>✅ <strong>Let the system handle initialization</strong> automatically</li>
+<li>✅ <strong>Check logs</strong> if issues occur</li>
+<li>❌ <strong>Don't run manual migrations</strong> unless troubleshooting</li>
+<li>❌ <strong>Don't worry about duplicate data</strong> - the system handles it</li>
+<li>❌ <strong>Don't fear container restarts</strong> - initialization is safe and smart</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../assets/javascripts/workers/search.d50fe291.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.13a4f30d.min.js"></script>
+      
+    
+  </body>
+</html>

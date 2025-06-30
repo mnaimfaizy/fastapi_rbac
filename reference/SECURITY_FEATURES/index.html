@@ -1,0 +1,1616 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Comprehensive documentation for the FastAPI RBAC project, covering setup, development, deployment, and API reference.">
+      
+      
+        <meta name="author" content="FastAPI RBAC Team">
+      
+      
+      
+      
+      
+      <link rel="icon" href="../../assets/favicon.ico">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.14">
+    
+    
+      
+        <title>Security Features Documentation - FastAPI RBAC Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.342714a4.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#security-features-documentation" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="FastAPI RBAC Documentation" class="md-header__button md-logo" aria-label="FastAPI RBAC Documentation" data-md-component="logo">
+      
+  <img src="../../assets/menu_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            FastAPI RBAC Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Security Features Documentation
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/mnaimfaizy/fastapi_rbac" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    mnaimfaizy/fastapi_rbac
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../getting-started/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../development/" class="md-tabs__link">
+          
+  
+  
+  Development
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../deployment/" class="md-tabs__link">
+          
+  
+  
+  Deployment
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../troubleshooting/" class="md-tabs__link">
+          
+  
+  
+  Troubleshooting
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+  API Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../contributing/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Contributing
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="FastAPI RBAC Documentation" class="md-nav__button md-logo" aria-label="FastAPI RBAC Documentation" data-md-component="logo">
+      
+  <img src="../../assets/menu_logo.png" alt="logo">
+
+    </a>
+    FastAPI RBAC Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/mnaimfaizy/fastapi_rbac" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    mnaimfaizy/fastapi_rbac
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Getting Started
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Getting Started
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Overview
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/PROJECT_OVERVIEW/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Project Overview
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Development
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Development
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Overview
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/DEVELOPER_SETUP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Developer Setup
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/TESTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Testing Guide
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Deployment
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Deployment
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Overview
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/production-deployment-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Production Deployment
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Troubleshooting
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Troubleshooting
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Overview
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/common-issues/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Common Issues
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    API Reference
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            API Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Overview
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/auth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Authentication
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/users/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Users
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Contributing
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#security-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔒 Security Overview
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implemented-security-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      🛡️ Implemented Security Features
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🛡️ Implemented Security Features">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-csrf-protection" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. CSRF Protection
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-input-sanitization" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Input Sanitization
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-rate-limiting" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Rate Limiting
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-enhanced-security-headers" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Enhanced Security Headers
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-jwt-token-security" class="md-nav__link">
+    <span class="md-ellipsis">
+      5. JWT Token Security
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-password-security" class="md-nav__link">
+    <span class="md-ellipsis">
+      6. Password Security
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-audit-logging" class="md-nav__link">
+    <span class="md-ellipsis">
+      7. Audit Logging
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔍 Security Testing
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🔍 Security Testing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#backend-security-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      Backend Security Tests
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#frontend-security-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      Frontend Security Tests
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-monitoring" class="md-nav__link">
+    <span class="md-ellipsis">
+      🚨 Security Monitoring
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🚨 Security Monitoring">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rate-limiting-monitoring" class="md-nav__link">
+    <span class="md-ellipsis">
+      Rate Limiting Monitoring
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#security-event-monitoring" class="md-nav__link">
+    <span class="md-ellipsis">
+      Security Event Monitoring
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#failed-authentication-monitoring" class="md-nav__link">
+    <span class="md-ellipsis">
+      Failed Authentication Monitoring
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔧 Security Configuration
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🔧 Security Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      Environment Variables
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#docker-security" class="md-nav__link">
+    <span class="md-ellipsis">
+      Docker Security
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      📋 Security Checklist
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="📋 Security Checklist">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pre-deployment-security-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Pre-Deployment Security Validation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#security-testing-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      Security Testing Commands
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#production-security-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔒 Production Security Recommendations
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🔒 Production Security Recommendations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-infrastructure-security" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Infrastructure Security
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-database-security" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Database Security
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-monitoring-alerting" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Monitoring &amp; Alerting
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-regular-security-reviews" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Regular Security Reviews
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#additional-resources" class="md-nav__link">
+    <span class="md-ellipsis">
+      📚 Additional Resources
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="security-features-documentation">Security Features Documentation<a class="headerlink" href="#security-features-documentation" title="Permanent link">&para;</a></h1>
+<p>This document provides comprehensive information about the security features implemented in the FastAPI RBAC project.</p>
+<h2 id="security-overview">🔒 Security Overview<a class="headerlink" href="#security-overview" title="Permanent link">&para;</a></h2>
+<p>The FastAPI RBAC system implements enterprise-grade security with multiple layers of protection against common web vulnerabilities and attacks.</p>
+<p><strong>Security Rating</strong>: ⭐⭐⭐⭐⭐ (Enterprise-Grade)</p>
+<h2 id="implemented-security-features">🛡️ Implemented Security Features<a class="headerlink" href="#implemented-security-features" title="Permanent link">&para;</a></h2>
+<h3 id="1-csrf-protection">1. CSRF Protection<a class="headerlink" href="#1-csrf-protection" title="Permanent link">&para;</a></h3>
+<p><strong>Implementation</strong>: <code>fastapi-csrf-protect==1.0.3</code></p>
+<ul>
+<li><strong>Endpoint</strong>: <code>GET /api/v1/auth/csrf-token</code></li>
+<li><strong>Protection</strong>: All state-changing operations (POST, PUT, DELETE)</li>
+<li><strong>Token Management</strong>: Secure cookie handling with signed/unsigned token support</li>
+<li><strong>Validation</strong>: 403 responses for invalid or missing CSRF tokens</li>
+</ul>
+<p><strong>Usage Example</strong>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1">// Frontend CSRF token handling</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kd">const</span><span class="w"> </span><span class="nx">csrfToken</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">csrfService</span><span class="p">.</span><span class="nx">getCsrfToken</span><span class="p">();</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1">// Token automatically included in subsequent requests</span>
+</code></pre></div>
+<h3 id="2-input-sanitization">2. Input Sanitization<a class="headerlink" href="#2-input-sanitization" title="Permanent link">&para;</a></h3>
+<p><strong>Implementation</strong>: Custom <code>InputSanitizer</code> class with <code>bleach==6.2.0</code></p>
+<ul>
+<li><strong>XSS Prevention</strong>: HTML tag removal and content cleaning</li>
+<li><strong>Field-Type Sanitization</strong>: Text, email, HTML, URL, and search field sanitization</li>
+<li><strong>SQL Injection Protection</strong>: Parameter sanitization and validation</li>
+<li><strong>Path Traversal Protection</strong>: File path validation and cleaning</li>
+<li><strong>DoS Protection</strong>: Input length validation and rate limiting</li>
+</ul>
+<p><strong>Sanitization Types</strong>:</p>
+<ul>
+<li><code>sanitize_text()</code>: Basic text cleaning</li>
+<li><code>sanitize_email()</code>: Email format validation and cleaning</li>
+<li><code>sanitize_html()</code>: HTML content sanitization with allowed tags</li>
+<li><code>sanitize_url()</code>: URL validation and cleaning</li>
+<li><code>sanitize_search()</code>: Search query cleaning</li>
+</ul>
+<h3 id="3-rate-limiting">3. Rate Limiting<a class="headerlink" href="#3-rate-limiting" title="Permanent link">&para;</a></h3>
+<p><strong>Implementation</strong>: <code>slowapi==0.1.9</code></p>
+<p><strong>Protected Endpoints</strong>:</p>
+<ul>
+<li><strong>Login</strong>: 5 attempts per minute</li>
+<li><strong>Registration</strong>: 3 attempts per hour</li>
+<li><strong>Password Reset</strong>: 3 attempts per hour</li>
+<li><strong>Token Refresh</strong>: 5 attempts per minute</li>
+</ul>
+<p><strong>Configuration</strong>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Rate limiter with user identification</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">limiter</span> <span class="o">=</span> <span class="n">Limiter</span><span class="p">(</span><span class="n">key_func</span><span class="o">=</span><span class="n">user_id_identifier</span><span class="p">)</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Applied to endpoints</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="nd">@limiter</span><span class="o">.</span><span class="n">limit</span><span class="p">(</span><span class="s2">&quot;5/minute&quot;</span><span class="p">)</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">login_endpoint</span><span class="p">():</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="k">pass</span>
+</code></pre></div>
+<h3 id="4-enhanced-security-headers">4. Enhanced Security Headers<a class="headerlink" href="#4-enhanced-security-headers" title="Permanent link">&para;</a></h3>
+<p><strong>Implementation</strong>: Custom middleware and Nginx configuration</p>
+<p><strong>Headers Applied</strong>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">X-Content-Type-Options:</span><span class="w"> </span><span class="s">nosniff</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="s">X-Frame-Options:</span><span class="w"> </span><span class="s">DENY</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="s">X-XSS-Protection:</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w"> </span><span class="k">mode=block</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="s">Referrer-Policy:</span><span class="w"> </span><span class="s">strict-origin-when-cross-origin</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="s">Permissions-Policy:</span><span class="w"> </span><span class="s">geolocation=(),</span><span class="w"> </span><span class="s">microphone=(),</span><span class="w"> </span><span class="s">camera=()</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="s">Strict-Transport-Security:</span><span class="w"> </span><span class="s">max-age=31536000</span><span class="p">;</span><span class="w"> </span><span class="k">includeSubDomains</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="s">Content-Security-Policy:</span><span class="w"> </span><span class="s">default-src</span><span class="w"> </span><span class="s">&#39;self&#39;</span><span class="p">;</span><span class="w"> </span><span class="k">script-src</span><span class="w"> </span><span class="s">&#39;self&#39;</span><span class="p">;</span><span class="w"> </span><span class="k">style-src</span><span class="w"> </span><span class="s">&#39;self&#39;</span><span class="w"> </span><span class="s">&#39;unsafe-inline&#39;</span><span class="p">;</span><span class="w"> </span><span class="k">...</span>
+</code></pre></div>
+<p><strong>Protection Against</strong>:</p>
+<ul>
+<li>Clickjacking (X-Frame-Options)</li>
+<li>MIME sniffing (X-Content-Type-Options)</li>
+<li>XSS attacks (CSP and X-XSS-Protection)</li>
+<li>Information leakage (Referrer-Policy)</li>
+</ul>
+<h3 id="5-jwt-token-security">5. JWT Token Security<a class="headerlink" href="#5-jwt-token-security" title="Permanent link">&para;</a></h3>
+<p><strong>Implementation</strong>: Custom JWT handling with blacklisting</p>
+<p><strong>Features</strong>:</p>
+<ul>
+<li><strong>Access Tokens</strong>: Short-lived, stored in memory (Redux state)</li>
+<li><strong>Refresh Tokens</strong>: Long-lived, stored in localStorage</li>
+<li><strong>Token Blacklisting</strong>: Redis-based token invalidation</li>
+<li><strong>Automatic Refresh</strong>: Transparent token renewal</li>
+<li><strong>Secure Logout</strong>: Complete token invalidation</li>
+</ul>
+<p><strong>Security Measures</strong>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Token blacklisting</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="k">await</span> <span class="n">redis_client</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;blacklist:</span><span class="si">{</span><span class="n">token_jti</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="s2">&quot;true&quot;</span><span class="p">,</span> <span class="n">ex</span><span class="o">=</span><span class="n">token_exp_time</span><span class="p">)</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># Token validation with blacklist check</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="k">if</span> <span class="k">await</span> <span class="n">redis_client</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;blacklist:</span><span class="si">{</span><span class="n">token_jti</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">):</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status_code</span><span class="o">=</span><span class="mi">401</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="s2">&quot;Token has been revoked&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="6-password-security">6. Password Security<a class="headerlink" href="#6-password-security" title="Permanent link">&para;</a></h3>
+<p><strong>Implementation</strong>: Advanced password validation and history</p>
+<p><strong>Features</strong>:</p>
+<ul>
+<li><strong>Password Strength</strong>: Integration with <code>zxcvbn</code> for strength validation</li>
+<li><strong>Password History</strong>: Prevents reuse of last 5 passwords</li>
+<li><strong>Account Locking</strong>: 5 failed attempts trigger 15-minute lockout</li>
+<li><strong>Secure Hashing</strong>: bcrypt with salt for password storage</li>
+</ul>
+<p><strong>Password Policy</strong>:</p>
+<ul>
+<li>Minimum 8 characters</li>
+<li>Strength score validation</li>
+<li>History tracking for compliance</li>
+<li>Automatic lockout protection</li>
+</ul>
+<h3 id="7-audit-logging">7. Audit Logging<a class="headerlink" href="#7-audit-logging" title="Permanent link">&para;</a></h3>
+<p><strong>Implementation</strong>: Comprehensive security event logging</p>
+<p><strong>Logged Events</strong>:</p>
+<ul>
+<li>Authentication attempts (success/failure)</li>
+<li>Account lockouts and unlocks</li>
+<li>Password changes</li>
+<li>Permission changes</li>
+<li>Administrative actions</li>
+<li>Security violations</li>
+</ul>
+<p><strong>Log Format</strong>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">audit_log</span> <span class="o">=</span> <span class="n">AuditLog</span><span class="p">(</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="n">actor_id</span><span class="o">=</span><span class="n">user_id</span><span class="p">,</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="n">action</span><span class="o">=</span><span class="s2">&quot;login_attempt&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">resource_type</span><span class="o">=</span><span class="s2">&quot;user&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">resource_id</span><span class="o">=</span><span class="n">user_id</span><span class="p">,</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">details</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;ip_address&quot;</span><span class="p">:</span> <span class="n">client_ip</span><span class="p">,</span> <span class="s2">&quot;user_agent&quot;</span><span class="p">:</span> <span class="n">user_agent</span><span class="p">},</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    <span class="n">timestamp</span><span class="o">=</span><span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="p">)</span>
+</code></pre></div>
+<h2 id="security-testing">🔍 Security Testing<a class="headerlink" href="#security-testing" title="Permanent link">&para;</a></h2>
+<h3 id="backend-security-tests">Backend Security Tests<a class="headerlink" href="#backend-security-tests" title="Permanent link">&para;</a></h3>
+<p><strong>Files</strong>:</p>
+<ul>
+<li><code>backend/test/test_csrf_implementation.py</code>: CSRF protection validation</li>
+<li><code>backend/test/test_sanitization.py</code>: Input sanitization testing</li>
+<li>Backend test suite includes security-focused test cases</li>
+</ul>
+<h3 id="frontend-security-tests">Frontend Security Tests<a class="headerlink" href="#frontend-security-tests" title="Permanent link">&para;</a></h3>
+<p><strong>Coverage</strong>: 17 CSRF-related tests in the frontend test suite</p>
+<p><strong>Test Areas</strong>:</p>
+<ul>
+<li>CSRF token retrieval and storage</li>
+<li>Token inclusion in requests</li>
+<li>Error handling for invalid tokens</li>
+<li>Token refresh mechanisms</li>
+</ul>
+<h2 id="security-monitoring">🚨 Security Monitoring<a class="headerlink" href="#security-monitoring" title="Permanent link">&para;</a></h2>
+<h3 id="rate-limiting-monitoring">Rate Limiting Monitoring<a class="headerlink" href="#rate-limiting-monitoring" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Rate limit exceeded logging</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Rate limit exceeded for </span><span class="si">{</span><span class="n">client_ip</span><span class="si">}</span><span class="s2"> on </span><span class="si">{</span><span class="n">endpoint</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="security-event-monitoring">Security Event Monitoring<a class="headerlink" href="#security-event-monitoring" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Security violation logging</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Security violation: </span><span class="si">{</span><span class="n">violation_type</span><span class="si">}</span><span class="s2"> from </span><span class="si">{</span><span class="n">client_ip</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="failed-authentication-monitoring">Failed Authentication Monitoring<a class="headerlink" href="#failed-authentication-monitoring" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Failed login attempt tracking</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">user</span><span class="o">.</span><span class="n">failed_attempts</span> <span class="o">+=</span> <span class="mi">1</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="k">if</span> <span class="n">user</span><span class="o">.</span><span class="n">failed_attempts</span> <span class="o">&gt;=</span> <span class="mi">5</span><span class="p">:</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="n">user</span><span class="o">.</span><span class="n">locked_until</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span> <span class="o">+</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">minutes</span><span class="o">=</span><span class="mi">15</span><span class="p">)</span>
+</code></pre></div>
+<h2 id="security-configuration">🔧 Security Configuration<a class="headerlink" href="#security-configuration" title="Permanent link">&para;</a></h2>
+<h3 id="environment-variables">Environment Variables<a class="headerlink" href="#environment-variables" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># CSRF Protection</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="nv">CSRF_SECRET_KEY</span><span class="o">=</span>your-csrf-secret-key
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># Rate Limiting</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="nv">RATE_LIMIT_STORAGE_URL</span><span class="o">=</span>redis://localhost:6379
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="c1"># JWT Security</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="nv">JWT_SECRET_KEY</span><span class="o">=</span>your-jwt-secret-key
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="nv">ACCESS_TOKEN_EXPIRE_MINUTES</span><span class="o">=</span><span class="m">30</span>
+<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="nv">REFRESH_TOKEN_EXPIRE_DAYS</span><span class="o">=</span><span class="m">7</span>
+<a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>
+<a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="c1"># Password Security</span>
+<a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="nv">PASSWORD_MIN_LENGTH</span><span class="o">=</span><span class="m">8</span>
+<a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="nv">PASSWORD_HISTORY_COUNT</span><span class="o">=</span><span class="m">5</span>
+<a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="nv">ACCOUNT_LOCKOUT_ATTEMPTS</span><span class="o">=</span><span class="m">5</span>
+<a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="nv">ACCOUNT_LOCKOUT_DURATION</span><span class="o">=</span><span class="m">15</span>
+</code></pre></div>
+<h3 id="docker-security">Docker Security<a class="headerlink" href="#docker-security" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Non-root user containers</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="l l-Scalar l-Scalar-Plain">USER 1000:1000</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="l l-Scalar l-Scalar-Plain"># Security options</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="l l-Scalar l-Scalar-Plain">security_opt</span><span class="p p-Indicator">:</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">no-new-privileges:true</span>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>
+<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="c1"># Read-only root filesystem</span>
+<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="nt">read_only</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</code></pre></div>
+<h2 id="security-checklist">📋 Security Checklist<a class="headerlink" href="#security-checklist" title="Permanent link">&para;</a></h2>
+<h3 id="pre-deployment-security-validation">Pre-Deployment Security Validation<a class="headerlink" href="#pre-deployment-security-validation" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] <strong>CSRF Protection</strong>: Verify all state-changing endpoints are protected</li>
+<li>[ ] <strong>Input Sanitization</strong>: Test XSS prevention on all form inputs</li>
+<li>[ ] <strong>Rate Limiting</strong>: Validate rate limits are working on auth endpoints</li>
+<li>[ ] <strong>Security Headers</strong>: Confirm all security headers are present</li>
+<li>[ ] <strong>JWT Security</strong>: Test token generation, validation, and blacklisting</li>
+<li>[ ] <strong>Password Security</strong>: Verify password policies and account locking</li>
+<li>[ ] <strong>Audit Logging</strong>: Confirm security events are being logged</li>
+<li>[ ] <strong>HTTPS</strong>: Ensure all communications are encrypted in production</li>
+</ul>
+<h3 id="security-testing-commands">Security Testing Commands<a class="headerlink" href="#security-testing-commands" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c"># Test CSRF protection</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">python</span> <span class="n">backend</span><span class="p">/</span><span class="n">test</span><span class="p">/</span><span class="n">test_csrf_implementation</span><span class="p">.</span><span class="n">py</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c"># Test input sanitization</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="n">python</span> <span class="n">backend</span><span class="p">/</span><span class="n">test</span><span class="p">/</span><span class="n">test_sanitization</span><span class="p">.</span><span class="n">py</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="c"># Run security-focused backend tests</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="n">pytest</span> <span class="n">test</span><span class="p">/</span> <span class="n">-k</span> <span class="s2">&quot;security or auth or csrf&quot;</span> <span class="n">-v</span>
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>
+<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="c"># Run frontend security tests</span>
+<a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="nb">cd </span><span class="n">react-frontend</span>
+<a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="n">npm</span> <span class="n">test</span> <span class="p">--</span> <span class="p">-</span><span class="n">-run</span> <span class="n">csrfService</span><span class="p">.</span><span class="n">test</span><span class="p">.</span><span class="n">ts</span>
+</code></pre></div>
+<h2 id="production-security-recommendations">🔒 Production Security Recommendations<a class="headerlink" href="#production-security-recommendations" title="Permanent link">&para;</a></h2>
+<h3 id="1-infrastructure-security">1. Infrastructure Security<a class="headerlink" href="#1-infrastructure-security" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Use HTTPS/TLS certificates</li>
+<li>Configure firewall rules</li>
+<li>Implement network segmentation</li>
+<li>Regular security updates</li>
+</ul>
+<h3 id="2-database-security">2. Database Security<a class="headerlink" href="#2-database-security" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Use encrypted connections</li>
+<li>Implement database user permissions</li>
+<li>Regular backup encryption</li>
+<li>Access logging</li>
+</ul>
+<h3 id="3-monitoring-alerting">3. Monitoring &amp; Alerting<a class="headerlink" href="#3-monitoring-alerting" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Security event monitoring</li>
+<li>Failed authentication alerting</li>
+<li>Rate limiting breach notifications</li>
+<li>Unusual activity detection</li>
+</ul>
+<h3 id="4-regular-security-reviews">4. Regular Security Reviews<a class="headerlink" href="#4-regular-security-reviews" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Monthly security audits</li>
+<li>Dependency vulnerability scanning</li>
+<li>Code security reviews</li>
+<li>Penetration testing</li>
+</ul>
+<h2 id="additional-resources">📚 Additional Resources<a class="headerlink" href="#additional-resources" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="https://owasp.org/">OWASP Security Guidelines</a></li>
+<li><a href="https://fastapi.tiangolo.com/tutorial/security/">FastAPI Security Documentation</a></li>
+<li><a href="https://tools.ietf.org/html/rfc8725">JWT Security Best Practices</a></li>
+<li><a href="https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html">CSRF Protection Guide</a></li>
+</ul>
+<hr />
+<p><strong>Last Updated</strong>: June 11, 2025
+<strong>Security Review</strong>: All features verified and operational
+<strong>Compliance</strong>: Enterprise-grade security standards met</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../../assets/javascripts/workers/search.d50fe291.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.13a4f30d.min.js"></script>
+      
+    
+  </body>
+</html>
