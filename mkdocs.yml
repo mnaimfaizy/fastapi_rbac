@@ -26,9 +26,11 @@ theme:
     - search.highlight
     - content.code.copy
     - content.code.annotate
+  logo: assets/menu_logo.png
+  favicon: assets/favicon.ico
 
 nav:
-  - Home: README.md
+  - Home: index.md
   - "Getting Started":
       - "Overview": "getting-started/index.md"
       - "Project Overview": "getting-started/PROJECT_OVERVIEW.md"
