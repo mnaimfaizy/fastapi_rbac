@@ -1,8 +1,11 @@
-# FastAPI RBAC - User Management Microservice
-
 <p align="center">
-  <img src="docs/assets/logo_with_background.png" alt="FastAPI RBAC Logo" width="100%" />
+  <picture>
+    <source srcset="assets/logo_with_background.png" media="(prefers-color-scheme: dark)" />
+    <img src="assets/logo.png" alt="FastAPI RBAC Logo" width="100%" />
+  </picture>
 </p>
+
+# FastAPI RBAC - User Management Microservice
 
 A comprehensive Role-Based Access Control (RBAC) system with FastAPI backend and React frontend, designed to handle Authentication and Authorization for other services.
 
