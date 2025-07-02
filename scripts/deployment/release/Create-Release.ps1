@@ -30,7 +30,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$RootDir = (Get-Item (Split-Path -Parent $PSCommandPath)).Parent.Parent.FullName
+$RootDir = (Get-Item (Split-Path -Parent $PSCommandPath)).Parent.Parent.Parent.FullName
 $ReleaseNotesPath = Join-Path -Path $RootDir -ChildPath "docs\release-notes.md"
 $ChangelogPath = Join-Path -Path $RootDir -ChildPath "changelog.txt"
 $DockerBuildScript = Join-Path -Path $RootDir -ChildPath "scripts\deployment\production\build-and-push.ps1"

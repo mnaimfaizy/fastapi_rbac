@@ -15,3 +15,4 @@ docker-compose.override.yml
 logfile.log
 node_modules
 site/
+changelog.txt
