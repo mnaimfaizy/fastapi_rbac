@@ -23,6 +23,9 @@ param(
     [switch]$SkipDockerBuild,
 
     [Parameter(Mandatory=$false)]
+    [switch]$DryRun,
+
+    [Parameter(Mandatory=$false)]
     [switch]$Help
 )
 
@@ -42,12 +45,14 @@ function Show-Help {
     Write-Host "  -PreviousTag    : Previous tag to generate changelog from (defaults to latest tag)" -ForegroundColor White
     Write-Host "  -SkipNotes      : Skip updating release notes (just create and push tag)" -ForegroundColor White
     Write-Host "  -SkipDockerBuild: Skip building and pushing Docker images" -ForegroundColor White
+    Write-Host "  -DryRun         : Simulate the release process without making actual changes" -ForegroundColor White
     Write-Host "  -Help           : Show this help message" -ForegroundColor White
 
     Write-Host "`n💡 Examples:" -ForegroundColor Yellow
     Write-Host "  .\Create-Release.ps1 -Version v1.0.0" -ForegroundColor White
     Write-Host "  .\Create-Release.ps1 -Version v1.0.0 -PreviousTag v0.9.0" -ForegroundColor White
     Write-Host "  .\Create-Release.ps1 -Version v1.0.0 -SkipNotes" -ForegroundColor White
+    Write-Host "  .\Create-Release.ps1 -Version v1.0.0 -DryRun" -ForegroundColor White
 
     Write-Host "`n📝 Process:" -ForegroundColor Yellow
     Write-Host "  1. Generate changelog from Git history" -ForegroundColor White
@@ -231,6 +236,16 @@ $changelog
     # Insert the new entry
     $updatedReleaseNotes = $releaseNotes.Substring(0, $insertPosition) + $newEntry + $releaseNotes.Substring($insertPosition)
 
+    if ($DryRun) {
+        Write-Host "🔍 [DRY RUN] Would create backup of release notes at: $backupPath" -ForegroundColor Cyan
+        Write-Host "🔍 [DRY RUN] Would update release notes with new version $version" -ForegroundColor Cyan
+        Write-Host "`nPreview of release notes changes:" -ForegroundColor Yellow
+        Write-Host "=================================" -ForegroundColor Yellow
+        Write-Host $newEntry -ForegroundColor White
+        Write-Host "=================================`n" -ForegroundColor Yellow
+        return
+    }
+
     # Create backup of current release notes
     $backupPath = "$ReleaseNotesPath.bak"
     Copy-Item -Path $ReleaseNotesPath -Destination $backupPath -Force
@@ -257,6 +272,12 @@ function New-GitTag {
     )
 
     Write-Host "`nCreating Git tag: $version..." -ForegroundColor Cyan
+
+    if ($DryRun) {
+        Write-Host "🔍 [DRY RUN] Would create Git tag: $version" -ForegroundColor Cyan
+        Write-Host "🔍 [DRY RUN] Would push Git tag to remote" -ForegroundColor Cyan
+        return
+    }
 
     # Check if tag already exists
     $existingTags = git tag -l $version
@@ -314,6 +335,12 @@ function Build-DockerImages {
     )
 
     Write-Host "`nBuilding and pushing Docker images..." -ForegroundColor Cyan
+
+    if ($DryRun) {
+        Write-Host "🔍 [DRY RUN] Would build and push Docker images with tag: $version" -ForegroundColor Cyan
+        Write-Host "🔍 [DRY RUN] Would execute: $DockerBuildScript -Tag $version" -ForegroundColor Cyan
+        return
+    }
 
     # Check if build script exists
     if (-not (Test-Path -Path $DockerBuildScript)) {
@@ -373,7 +400,12 @@ if ([string]::IsNullOrEmpty($PreviousTag)) {
 }
 
 # Start the release process
-Write-Host "`n🚀 Starting release process for version: $Version" -ForegroundColor Green
+if ($DryRun) {
+    Write-Host "`n� [DRY RUN] Starting release process simulation for version: $Version" -ForegroundColor Cyan
+    Write-Host "🔍 No actual changes will be made to files or repositories." -ForegroundColor Cyan
+} else {
+    Write-Host "`n�🚀 Starting release process for version: $Version" -ForegroundColor Green
+}
 
 # Confirm and prepare main branch
 Confirm-MainBranch
@@ -402,10 +434,23 @@ else {
 
 # Clean up temporary files
 if (Test-Path -Path $ChangelogPath) {
-    Remove-Item -Path $ChangelogPath -Force
+    if ($DryRun) {
+        Write-Host "🔍 [DRY RUN] Would clean up temporary files" -ForegroundColor Cyan
+    } else {
+        Remove-Item -Path $ChangelogPath -Force
+    }
 }
 
-Write-Host "`n✅ Release process completed successfully for version: $Version" -ForegroundColor Green
+if ($DryRun) {
+    Write-Host "`n✅ Dry run completed successfully for version: $Version" -ForegroundColor Green
+    Write-Host "No actual changes were made. Run without -DryRun to execute the release process." -ForegroundColor Cyan
+} else {
+    Write-Host "`n✅ Release process completed successfully for version: $Version" -ForegroundColor Green
+    Write-Host "`n📋 Next steps:" -ForegroundColor Yellow
+    Write-Host "  1. Monitor GitHub Actions workflow at: https://github.com/yourusername/fastapi_rbac/actions" -ForegroundColor White
+    Write-Host "  2. Verify Docker images on Docker Hub" -ForegroundColor White
+    Write-Host "  3. Notify team members about the new release" -ForegroundColor White
+}
 Write-Host "`n📋 Next steps:" -ForegroundColor Yellow
 Write-Host "  1. Monitor GitHub Actions workflow at: https://github.com/yourusername/fastapi_rbac/actions" -ForegroundColor White
 Write-Host "  2. Verify Docker images on Docker Hub" -ForegroundColor White

@@ -15,6 +15,7 @@ set -e
 # Default values
 SKIP_NOTES=false
 SKIP_DOCKER_BUILD=false
+DRY_RUN=false
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 RELEASE_NOTES_PATH="$ROOT_DIR/docs/release-notes.md"
@@ -39,12 +40,14 @@ function show_help {
     echo -e "${WHITE}  -p, --previous-tag TAG  : Previous tag to generate changelog from (defaults to latest tag)${NC}"
     echo -e "${WHITE}  -s, --skip-notes        : Skip updating release notes (just create and push tag)${NC}"
     echo -e "${WHITE}  -d, --skip-docker-build : Skip building and pushing Docker images${NC}"
+    echo -e "${WHITE}  -r, --dry-run           : Simulate the release process without making actual changes${NC}"
     echo -e "${WHITE}  -h, --help              : Show this help message${NC}"
 
     echo -e "\n${YELLOW}💡 Examples:${NC}"
     echo -e "${WHITE}  ./create-release.sh -v v1.0.0${NC}"
     echo -e "${WHITE}  ./create-release.sh -v v1.0.0 -p v0.9.0${NC}"
     echo -e "${WHITE}  ./create-release.sh -v v1.0.0 --skip-notes${NC}"
+    echo -e "${WHITE}  ./create-release.sh -v v1.0.0 --dry-run${NC}"
 
     echo -e "\n${YELLOW}📝 Process:${NC}"
     echo -e "${WHITE}  1. Generate changelog from Git history${NC}"
@@ -209,6 +212,17 @@ $changelog
         {print}
     ' "$RELEASE_NOTES_PATH" > "$tmp_file"
 
+    if [ "$DRY_RUN" = true ]; then
+        echo -e "${CYAN}🔍 [DRY RUN] Would create backup of release notes at: ${RELEASE_NOTES_PATH}.bak${NC}"
+        echo -e "${CYAN}🔍 [DRY RUN] Would update release notes with new version $version${NC}"
+        echo -e "\n${YELLOW}Preview of release notes changes:${NC}"
+        echo -e "=================================${NC}"
+        cat "$tmp_file" | grep -A 20 "$version" | head -n 20
+        echo -e "...\n=================================${NC}"
+        rm -f "$tmp_file"
+        return
+    fi
+
     # Create backup of current release notes
     cp "$RELEASE_NOTES_PATH" "${RELEASE_NOTES_PATH}.bak"
     echo -e "${GREEN}✅ Created backup of release notes at: ${RELEASE_NOTES_PATH}.bak${NC}"
@@ -233,6 +247,12 @@ function create_git_tag {
     local version="$1"
 
     echo -e "\n${CYAN}Creating Git tag: $version...${NC}"
+
+    if [ "$DRY_RUN" = true ]; then
+        echo -e "${CYAN}🔍 [DRY RUN] Would create Git tag: $version${NC}"
+        echo -e "${CYAN}🔍 [DRY RUN] Would push Git tag to remote${NC}"
+        return
+    fi
 
     # Check if tag already exists
     if git tag -l "$version" | grep -q "$version"; then
@@ -275,6 +295,12 @@ function build_docker_images {
     local version="$1"
 
     echo -e "\n${CYAN}Building and pushing Docker images...${NC}"
+
+    if [ "$DRY_RUN" = true ]; then
+        echo -e "${CYAN}🔍 [DRY RUN] Would build and push Docker images with tag: $version${NC}"
+        echo -e "${CYAN}🔍 [DRY RUN] Would execute: $DOCKER_BUILD_SCRIPT $version${NC}"
+        return
+    fi
 
     # Check if build script exists
     if [ ! -f "$DOCKER_BUILD_SCRIPT" ]; then
@@ -323,6 +349,10 @@ while [[ $# -gt 0 ]]; do
             SKIP_DOCKER_BUILD=true
             shift
             ;;
+        -r|--dry-run)
+            DRY_RUN=true
+            shift
+            ;;
         -h|--help)
             show_help
             exit 0
@@ -358,7 +388,12 @@ if [ -z "$PREVIOUS_TAG" ]; then
 fi
 
 # Start the release process
-echo -e "\n${GREEN}🚀 Starting release process for version: $VERSION${NC}"
+if [ "$DRY_RUN" = true ]; then
+    echo -e "\n${CYAN}🔍 [DRY RUN] Starting release process simulation for version: $VERSION${NC}"
+    echo -e "${CYAN}🔍 No actual changes will be made to files or repositories.${NC}"
+else
+    echo -e "\n${GREEN}🚀 Starting release process for version: $VERSION${NC}"
+fi
 
 # Confirm and prepare main branch
 confirm_main_branch
@@ -385,12 +420,22 @@ fi
 
 # Clean up temporary files
 if [ -f "$CHANGELOG_PATH" ]; then
-    rm -f "$CHANGELOG_PATH"
+    if [ "$DRY_RUN" = true ]; then
+        echo -e "${CYAN}🔍 [DRY RUN] Would clean up temporary files${NC}"
+    else
+        rm -f "$CHANGELOG_PATH"
+    fi
 fi
 
-echo -e "\n${GREEN}✅ Release process completed successfully for version: $VERSION${NC}"
-echo -e "\n${YELLOW}📋 Next steps:${NC}"
-echo -e "${WHITE}  1. Monitor GitHub Actions workflow at: https://github.com/yourusername/fastapi_rbac/actions${NC}"
-echo -e "${WHITE}  2. Verify Docker images on Docker Hub${NC}"
-echo -e "${WHITE}  3. Notify team members about the new release${NC}"
+if [ "$DRY_RUN" = true ]; then
+    echo -e "\n${GREEN}✅ Dry run completed successfully for version: $VERSION${NC}"
+    echo -e "${CYAN}No actual changes were made. Run without --dry-run to execute the release process.${NC}"
+else
+    echo -e "\n${GREEN}✅ Release process completed successfully for version: $VERSION${NC}"
+    echo -e "\n${YELLOW}📋 Next steps:${NC}"
+    echo -e "${WHITE}  1. Monitor GitHub Actions workflow at: https://github.com/yourusername/fastapi_rbac/actions${NC}"
+    echo -e "${WHITE}  2. Verify Docker images on Docker Hub${NC}"
+    echo -e "${WHITE}  3. Notify team members about the new release${NC}"
+fi
+
 echo -e "\n${CYAN}Thank you for using the FastAPI RBAC Release Automation Script! 🎉${NC}"

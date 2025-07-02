@@ -112,6 +112,16 @@ These scripts will:
 - Create and push the Git tag
 - Optionally build and push Docker images
 
+You can use the `-DryRun` (PowerShell) or `--dry-run` (Bash) flag to simulate the release process without making any actual changes:
+
+```powershell
+.\Create-Release.ps1 -Version v0.2.0 -DryRun
+```
+
+```bash
+./create-release.sh -v v0.2.0 --dry-run
+```
+
 For more options, run the scripts with the `-Help` or `--help` flag.
 
 ### Manual Release Process
