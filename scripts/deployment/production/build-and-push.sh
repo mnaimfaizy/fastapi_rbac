@@ -40,6 +40,7 @@ echo "Final tag to be used: $TAG"
 
 # Stop any running containers
 echo "Stopping any running containers..."
+docker network rm fastapi_rbac_network || true
 docker compose -f docker-compose.prod-test.yml down --remove-orphans || true
 
 # Build the production images
