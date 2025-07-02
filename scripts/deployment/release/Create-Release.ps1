@@ -20,7 +20,7 @@ param(
     [switch]$SkipNotes,
 
     [Parameter(Mandatory=$false)]
-    [switch]$SkipDockerBuild,
+    [switch]$BuildDocker,
 
     [Parameter(Mandatory=$false)]
     [switch]$DryRun,
@@ -35,6 +35,16 @@ $ReleaseNotesPath = Join-Path -Path $RootDir -ChildPath "docs\release-notes.md"
 $ChangelogPath = Join-Path -Path $RootDir -ChildPath "changelog.txt"
 $DockerBuildScript = Join-Path -Path $RootDir -ChildPath "scripts\deployment\production\build-and-push.ps1"
 
+# Add a trap to ensure we clean up the changelog file even on error
+trap {
+    if (Test-Path -Path $ChangelogPath) {
+        Write-Host "Cleaning up changelog file after error..." -ForegroundColor Yellow
+        Remove-Item -Path $ChangelogPath -Force -ErrorAction SilentlyContinue
+    }
+    # Re-throw the error to ensure the script exits with the proper error code
+    throw $_
+}
+
 function Show-Help {
     Write-Host "`n🚀 FastAPI RBAC Release Automation Script" -ForegroundColor Cyan
     Write-Host "==========================================" -ForegroundColor Cyan
@@ -44,7 +54,7 @@ function Show-Help {
     Write-Host "  -Version        : Version to release (e.g., v1.0.0, v0.1.0-beta.1)" -ForegroundColor White
     Write-Host "  -PreviousTag    : Previous tag to generate changelog from (defaults to latest tag)" -ForegroundColor White
     Write-Host "  -SkipNotes      : Skip updating release notes (just create and push tag)" -ForegroundColor White
-    Write-Host "  -SkipDockerBuild: Skip building and pushing Docker images" -ForegroundColor White
+    Write-Host "  -BuildDocker    : Build and push Docker images (opt-in)" -ForegroundColor White
     Write-Host "  -DryRun         : Simulate the release process without making actual changes" -ForegroundColor White
     Write-Host "  -Help           : Show this help message" -ForegroundColor White
 
@@ -52,18 +62,19 @@ function Show-Help {
     Write-Host "  .\Create-Release.ps1 -Version v1.0.0" -ForegroundColor White
     Write-Host "  .\Create-Release.ps1 -Version v1.0.0 -PreviousTag v0.9.0" -ForegroundColor White
     Write-Host "  .\Create-Release.ps1 -Version v1.0.0 -SkipNotes" -ForegroundColor White
+    Write-Host "  .\Create-Release.ps1 -Version v1.0.0 -BuildDocker" -ForegroundColor White
     Write-Host "  .\Create-Release.ps1 -Version v1.0.0 -DryRun" -ForegroundColor White
 
     Write-Host "`n📝 Process:" -ForegroundColor Yellow
     Write-Host "  1. Generate changelog from Git history" -ForegroundColor White
     Write-Host "  2. Update release notes file (docs/release-notes.md)" -ForegroundColor White
     Write-Host "  3. Create and push Git tag" -ForegroundColor White
-    Write-Host "  4. Optionally build and push Docker images" -ForegroundColor White
+    Write-Host "  4. Optionally build and push Docker images (with -BuildDocker flag)" -ForegroundColor White
 
     Write-Host "`n🔧 Requirements:" -ForegroundColor Yellow
     Write-Host "  • Git installed and configured" -ForegroundColor White
     Write-Host "  • Access to the repository" -ForegroundColor White
-    Write-Host "  • Docker installed and logged in (if building images)" -ForegroundColor White
+    Write-Host "  • Docker installed and running (if using -BuildDocker)" -ForegroundColor White
 
     Write-Host ""
 }
@@ -134,6 +145,12 @@ function New-Changelog {
     )
 
     Write-Host "Generating changelog from Git history..." -ForegroundColor Cyan
+
+    # Clean up any existing changelog file
+    if (Test-Path -Path $ChangelogPath) {
+        Remove-Item -Path $ChangelogPath -Force
+        Write-Host "Removed existing changelog file" -ForegroundColor Cyan
+    }
 
     if ([string]::IsNullOrEmpty($previousTag)) {
         # If this is the first release, get all commits
@@ -237,8 +254,9 @@ $changelog
     $updatedReleaseNotes = $releaseNotes.Substring(0, $insertPosition) + $newEntry + $releaseNotes.Substring($insertPosition)
 
     if ($DryRun) {
-        Write-Host "🔍 [DRY RUN] Would create backup of release notes at: $backupPath" -ForegroundColor Cyan
+        Write-Host "🔍 [DRY RUN] Would create backup of release notes at: $ReleaseNotesPath.bak" -ForegroundColor Cyan
         Write-Host "🔍 [DRY RUN] Would update release notes with new version $version" -ForegroundColor Cyan
+        Write-Host "🔍 [DRY RUN] Would commit the updated release notes" -ForegroundColor Cyan
         Write-Host "`nPreview of release notes changes:" -ForegroundColor Yellow
         Write-Host "=================================" -ForegroundColor Yellow
         Write-Host $newEntry -ForegroundColor White
@@ -263,6 +281,27 @@ $changelog
         Write-Host "Please edit the release notes at: $ReleaseNotesPath" -ForegroundColor Cyan
         Write-Host "Then run this script again with the -SkipNotes flag to continue." -ForegroundColor Cyan
         exit 0
+    } else {
+        # Clean up backup file after confirmation
+        if (Test-Path -Path $backupPath) {
+            Remove-Item -Path $backupPath -Force
+            Write-Host "✅ Removed backup file after confirmation" -ForegroundColor Green
+        }
+
+        # Commit the updated release notes
+        Write-Host "`nCommitting the updated release notes..." -ForegroundColor Cyan
+        git add $ReleaseNotesPath
+        git commit -m "Update release notes for $version"
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "⚠️ WARNING: Failed to commit the updated release notes." -ForegroundColor Yellow
+            $confirmation = Read-Host "Do you want to continue anyway? (y/n)"
+            if ($confirmation -ne "y") {
+                Write-Host "Operation cancelled." -ForegroundColor Red
+                exit 1
+            }
+        } else {
+            Write-Host "✅ Release notes committed successfully" -ForegroundColor Green
+        }
     }
 }
 
@@ -333,6 +372,39 @@ function Build-DockerImages {
     param (
         [string]$version
     )
+
+    Write-Host "`nChecking Docker availability..." -ForegroundColor Cyan
+
+    # Check if Docker is installed
+    try {
+        $null = docker --version
+    }
+    catch {
+        Write-Host "❌ Docker is not installed or not in PATH. Cannot build Docker images." -ForegroundColor Red
+        $confirmation = Read-Host "Do you want to continue without building Docker images? (y/n)"
+        if ($confirmation -ne "y") {
+            Write-Host "Operation cancelled." -ForegroundColor Red
+            exit 1
+        }
+        return
+    }
+
+    # Check if Docker is running
+    try {
+        $null = docker info
+        if ($LASTEXITCODE -ne 0) {
+            throw "Docker info command failed"
+        }
+    }
+    catch {
+        Write-Host "❌ Docker engine is not running. Cannot build Docker images." -ForegroundColor Red
+        $confirmation = Read-Host "Do you want to continue without building Docker images? (y/n)"
+        if ($confirmation -ne "y") {
+            Write-Host "Operation cancelled." -ForegroundColor Red
+            exit 1
+        }
+        return
+    }
 
     Write-Host "`nBuilding and pushing Docker images..." -ForegroundColor Cyan
 
@@ -424,12 +496,12 @@ else {
 # Create and push Git tag
 New-GitTag -version $Version
 
-# Build and push Docker images
-if (-not $SkipDockerBuild) {
+# Build and push Docker images (only if -BuildDocker is specified)
+if ($BuildDocker) {
     Build-DockerImages -version $Version
 }
 else {
-    Write-Host "`n⚠️ Skipping Docker build as requested." -ForegroundColor Yellow
+    Write-Host "`n⚠️ Skipping Docker build (use -BuildDocker flag to build images)." -ForegroundColor Yellow
 }
 
 # Clean up temporary files
@@ -438,6 +510,7 @@ if (Test-Path -Path $ChangelogPath) {
         Write-Host "🔍 [DRY RUN] Would clean up temporary files" -ForegroundColor Cyan
     } else {
         Remove-Item -Path $ChangelogPath -Force
+        Write-Host "✅ Removed temporary changelog file" -ForegroundColor Green
     }
 }
 

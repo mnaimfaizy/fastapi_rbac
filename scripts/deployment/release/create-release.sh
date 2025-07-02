@@ -14,13 +14,23 @@ set -e
 
 # Default values
 SKIP_NOTES=false
-SKIP_DOCKER_BUILD=false
+BUILD_DOCKER=false
 DRY_RUN=false
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../../../" && pwd)"
 RELEASE_NOTES_PATH="$ROOT_DIR/docs/release-notes.md"
 CHANGELOG_PATH="$ROOT_DIR/changelog.txt"
 DOCKER_BUILD_SCRIPT="$ROOT_DIR/scripts/deployment/production/build-and-push.sh"
+
+# Add a trap to ensure we clean up the changelog file even on error
+cleanup() {
+    # Only clean up if not in dry run mode
+    if [ "$DRY_RUN" != true ] && [ -f "$CHANGELOG_PATH" ]; then
+        echo -e "\nCleaning up changelog file after error..."
+        rm -f "$CHANGELOG_PATH"
+    fi
+}
+trap cleanup EXIT
 
 # ANSI color codes
 RED='\033[0;31m'
@@ -39,7 +49,7 @@ function show_help {
     echo -e "${WHITE}  -v, --version VERSION   : Version to release (e.g., v1.0.0, v0.1.0-beta.1)${NC}"
     echo -e "${WHITE}  -p, --previous-tag TAG  : Previous tag to generate changelog from (defaults to latest tag)${NC}"
     echo -e "${WHITE}  -s, --skip-notes        : Skip updating release notes (just create and push tag)${NC}"
-    echo -e "${WHITE}  -d, --skip-docker-build : Skip building and pushing Docker images${NC}"
+    echo -e "${WHITE}  -b, --build-docker      : Build and push Docker images (opt-in)${NC}"
     echo -e "${WHITE}  -r, --dry-run           : Simulate the release process without making actual changes${NC}"
     echo -e "${WHITE}  -h, --help              : Show this help message${NC}"
 
@@ -47,18 +57,19 @@ function show_help {
     echo -e "${WHITE}  ./create-release.sh -v v1.0.0${NC}"
     echo -e "${WHITE}  ./create-release.sh -v v1.0.0 -p v0.9.0${NC}"
     echo -e "${WHITE}  ./create-release.sh -v v1.0.0 --skip-notes${NC}"
+    echo -e "${WHITE}  ./create-release.sh -v v1.0.0 --build-docker${NC}"
     echo -e "${WHITE}  ./create-release.sh -v v1.0.0 --dry-run${NC}"
 
     echo -e "\n${YELLOW}📝 Process:${NC}"
     echo -e "${WHITE}  1. Generate changelog from Git history${NC}"
     echo -e "${WHITE}  2. Update release notes file (docs/release-notes.md)${NC}"
     echo -e "${WHITE}  3. Create and push Git tag${NC}"
-    echo -e "${WHITE}  4. Optionally build and push Docker images${NC}"
+    echo -e "${WHITE}  4. Optionally build and push Docker images (with -b/--build-docker flag)${NC}"
 
     echo -e "\n${YELLOW}🔧 Requirements:${NC}"
     echo -e "${WHITE}  • Git installed and configured${NC}"
     echo -e "${WHITE}  • Access to the repository${NC}"
-    echo -e "${WHITE}  • Docker installed and logged in (if building images)${NC}"
+    echo -e "${WHITE}  • Docker installed and running (if using -b/--build-docker)${NC}"
     echo ""
 }
 
@@ -116,6 +127,12 @@ function generate_changelog {
     local current_tag="$2"
 
     echo -e "${CYAN}Generating changelog from Git history...${NC}"
+
+    # Clean up any existing changelog file
+    if [ -f "$CHANGELOG_PATH" ]; then
+        rm -f "$CHANGELOG_PATH"
+        echo -e "${CYAN}Removed existing changelog file${NC}"
+    fi
 
     if [ -z "$previous_tag" ]; then
         # If this is the first release, get all commits
@@ -215,6 +232,7 @@ $changelog
     if [ "$DRY_RUN" = true ]; then
         echo -e "${CYAN}🔍 [DRY RUN] Would create backup of release notes at: ${RELEASE_NOTES_PATH}.bak${NC}"
         echo -e "${CYAN}🔍 [DRY RUN] Would update release notes with new version $version${NC}"
+        echo -e "${CYAN}🔍 [DRY RUN] Would commit the updated release notes${NC}"
         echo -e "\n${YELLOW}Preview of release notes changes:${NC}"
         echo -e "=================================${NC}"
         cat "$tmp_file" | grep -A 20 "$version" | head -n 20
@@ -240,6 +258,26 @@ $changelog
         echo -e "${CYAN}Please edit the release notes at: $RELEASE_NOTES_PATH${NC}"
         echo -e "${CYAN}Then run this script again with the --skip-notes flag to continue.${NC}"
         exit 0
+    else
+        # Clean up backup file after confirmation
+        if [ -f "${RELEASE_NOTES_PATH}.bak" ]; then
+            rm -f "${RELEASE_NOTES_PATH}.bak"
+            echo -e "${GREEN}✅ Removed backup file after confirmation${NC}"
+        fi
+
+        # Commit the updated release notes
+        echo -e "\n${CYAN}Committing the updated release notes...${NC}"
+        git add "$RELEASE_NOTES_PATH"
+        if ! git commit -m "Update release notes for $version"; then
+            echo -e "${YELLOW}⚠️ WARNING: Failed to commit the updated release notes.${NC}"
+            read -p "Do you want to continue anyway? (y/n): " confirmation
+            if [ "$confirmation" != "y" ]; then
+                echo -e "${RED}Operation cancelled.${NC}"
+                exit 1
+            fi
+        else
+            echo -e "${GREEN}✅ Release notes committed successfully${NC}"
+        fi
     fi
 }
 
@@ -294,6 +332,30 @@ function create_git_tag {
 function build_docker_images {
     local version="$1"
 
+    echo -e "\n${CYAN}Checking Docker availability...${NC}"
+
+    # Check if Docker is installed
+    if ! command -v docker &>/dev/null; then
+        echo -e "${RED}❌ Docker is not installed or not in PATH. Cannot build Docker images.${NC}"
+        read -p "Do you want to continue without building Docker images? (y/n): " confirmation
+        if [ "$confirmation" != "y" ]; then
+            echo -e "${RED}Operation cancelled.${NC}"
+            exit 1
+        fi
+        return
+    }
+
+    # Check if Docker is running
+    if ! docker info &>/dev/null; then
+        echo -e "${RED}❌ Docker engine is not running. Cannot build Docker images.${NC}"
+        read -p "Do you want to continue without building Docker images? (y/n): " confirmation
+        if [ "$confirmation" != "y" ]; then
+            echo -e "${RED}Operation cancelled.${NC}"
+            exit 1
+        fi
+        return
+    fi
+
     echo -e "\n${CYAN}Building and pushing Docker images...${NC}"
 
     if [ "$DRY_RUN" = true ]; then
@@ -345,8 +407,8 @@ while [[ $# -gt 0 ]]; do
             SKIP_NOTES=true
             shift
             ;;
-        -d|--skip-docker-build)
-            SKIP_DOCKER_BUILD=true
+        -b|--build-docker)
+            BUILD_DOCKER=true
             shift
             ;;
         -r|--dry-run)
@@ -411,11 +473,11 @@ fi
 # Create and push Git tag
 create_git_tag "$VERSION"
 
-# Build and push Docker images
-if [ "$SKIP_DOCKER_BUILD" = false ]; then
+# Build and push Docker images (only if --build-docker is specified)
+if [ "$BUILD_DOCKER" = true ]; then
     build_docker_images "$VERSION"
 else
-    echo -e "\n${YELLOW}⚠️ Skipping Docker build as requested.${NC}"
+    echo -e "\n${YELLOW}⚠️ Skipping Docker build (use -b/--build-docker flag to build images).${NC}"
 fi
 
 # Clean up temporary files
@@ -424,6 +486,7 @@ if [ -f "$CHANGELOG_PATH" ]; then
         echo -e "${CYAN}🔍 [DRY RUN] Would clean up temporary files${NC}"
     else
         rm -f "$CHANGELOG_PATH"
+        echo -e "${GREEN}✅ Removed temporary changelog file${NC}"
     fi
 fi
 
