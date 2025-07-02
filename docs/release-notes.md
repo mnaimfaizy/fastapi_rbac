@@ -6,6 +6,58 @@ This file serves as the single source of truth for release history and versionin
 
 ## Version History
 
+### v0.0.3-beta (2025-07-02)
+
+**New Features:**
+
+- Release automation scripts for streamlined publishing and changelog management
+- Dry-run option for release scripts to enable safe testing before actual release
+- Enhanced documentation with new index page, logo assets, and favicon for improved branding
+- Comprehensive documentation for the FastAPI RBAC project
+- Contributing guidelines to support community collaboration
+- Troubleshooting agent prompt for user support
+- Prompt templates for architect, implementor, and manager roles
+- Comprehensive testing suite for authentication and basic functionality
+- Enhanced admin user creation process with configurable verification settings
+- CSRF token management added to API service
+- Comprehensive tests for PermissionGroups, RoleGroupList, RoleList, and UsersList components
+- Frontend Testing Framework implementation (P0 Item #1)
+- Rate Limiting implementation (P0 Item #2)
+- Complete separation of Docker environments for development, testing, and production
+
+**Bug Fixes:**
+
+- Correct Docker check logic in `create-release.sh`
+- Improved release scripts with better Docker handling, changelog management, and cleanup
+- Added `changelog.txt` to `.gitignore` and fixed path resolution in release scripts
+- Removed `server-dir` from FTP deployment configuration and updated documentation links to point to the live site
+- Fixed frontend build, type, and linting issues
+- Resolved authentication tests to accept 429 status code for rate limiting scenarios
+
+**Breaking Changes:**
+
+- None
+
+**Technical Details:**
+
+- Updated linting and formatting processes to use PowerShell scripts for consistency
+- Enhanced demo suite to include integration tests
+- Updated test environment configuration and improved coverage reporting
+- Improved test runner and fixtures for parallel execution
+- Enhanced documentation and best practices for dependency management, environment variables, and test runner usage
+- Updated user and role handling in tests
+- Removed Docker build job from CI workflow
+- Removed obsolete scripts for fixing CRUD and factory method calls, test issues, imports, and password requirements
+- Comprehensive test suite refactor and API-driven integration test alignment
+- Complete test suite restructuring and fixed all 125 unit tests
+- Started test suite refactor for comprehensive API/integration testing
+- Restructured Docker environment files and enhanced database initialization scripts
+- Added troubleshooting scripts for CORS and Docker configuration
+- Updated Docker configurations for production and testing environments
+- Refactored code for improved readability and consistency
+- Comprehensive updates to documentation and frontend security integration
+- Updated documentation and security features across the project
+
 ### v0.0.2-beta (2025-07-02)
 
 **Pre-release Beta Version**
