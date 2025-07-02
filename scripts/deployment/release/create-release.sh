@@ -343,7 +343,7 @@ function build_docker_images {
             exit 1
         fi
         return
-    }
+    fi
 
     # Check if Docker is running
     if ! docker info &>/dev/null; then
