@@ -43,7 +43,8 @@ jobs:
           else
             # This case should ideally not be reached with the current 'on' triggers.
             # If it is, the script will use its own fallback (git describe or 'latest').
-            echo "Workflow: Not a 'v*' tag or main branch push. IMAGE_TAG not set by workflow. Script will use its fallback logic."          fi
+            echo "Workflow: Not a 'v*' tag or main branch push. IMAGE_TAG not set by workflow. Script will use its fallback logic."
+          fi
         shell: bash
 
       - name: Run push script
