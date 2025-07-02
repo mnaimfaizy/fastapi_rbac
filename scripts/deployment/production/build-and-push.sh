@@ -40,11 +40,11 @@ echo "Final tag to be used: $TAG"
 
 # Stop any running containers
 echo "Stopping any running containers..."
-docker-compose -f docker-compose.prod-test.yml down --remove-orphans || true
+docker compose -f docker-compose.prod-test.yml down --remove-orphans || true
 
 # Build the production images
 echo "Building production Docker images..."
-docker-compose -f docker-compose.prod-test.yml build
+docker compose -f docker-compose.prod-test.yml build
 
 # Tag and push backend image
 echo "Tagging and pushing backend image..."
