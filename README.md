@@ -1,7 +1,8 @@
 # FastAPI RBAC - User Management Microservice
 
 <p align="center">
-  <img src="docs/assets/logo_with_background.png" alt="FastAPI RBAC Logo" width="100%" />
+  <img src="docs/assets/logo_with_background.png" alt="FastAPI RBAC Logo" width="100%" | **Deploy to production** | `.scripts\deployment\push-to-dockerhub.ps1`      | [Deployment](https://fastapi-rbac.mnfprofile.com/deployment/)                         |
+| **Create a release**    | `.scripts\deployment\release\Create-Release.ps1` | [Release Process](https://fastapi-rbac.mnfprofile.com/deployment/RELEASE_PROCESS/)   |>
 </p>
 
 A comprehensive Role-Based Access Control (RBAC) system with FastAPI backend and React frontend, designed to handle Authentication and Authorization for other services.
@@ -33,6 +34,7 @@ All documentation has been organized for easy navigation:
 - **🚀 [Deployment](https://fastapi-rbac.mnfprofile.com/deployment/)** - Production deployment guides
 - **🔧 [Troubleshooting](https://fastapi-rbac.mnfprofile.com/troubleshooting/)** - Problem-solving guides
 - **📋 [Reference](https://fastapi-rbac.mnfprofile.com/reference/)** - Technical reference materials
+- **📝 [Release Notes](https://fastapi-rbac.mnfprofile.com/release-notes/)** - Version history and changes
 
 ## 🛠️ Scripts & Utilities
 
@@ -95,6 +97,8 @@ fastapi_rbac/
 │   ├── dev/               # Development helpers
 │   ├── docker/            # Container operations
 │   ├── deployment/        # Release scripts
+│   │   ├── production/    # Production deployment
+│   │   └── release/       # Release automation
 │   └── database/          # DB management
 ├── 📄 docker-compose.dev.yml      # Development environment
 ├── 📄 docker-compose.test.yml     # Testing environment
@@ -138,6 +142,9 @@ npm test
 
 # Test production configuration locally
 .\scripts\docker\test-production.ps1
+
+# Create a new release
+.\scripts\deployment\release\Create-Release.ps1 -Version v0.2.0
 ```
 
 ## 🔧 Common Operations

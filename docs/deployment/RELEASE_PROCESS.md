@@ -21,7 +21,21 @@ The GitHub Actions workflow is configured to trigger on any tag starting with `v
 
 ## Steps to Create a Release
 
-1.  **Prepare Your Branch:**
+1.  **Update Release Notes:**
+
+    - Before creating a release, ensure the `docs/release-notes.md` file is updated with the new version information.
+    - Add a new entry at the top of the version history section with:
+      - Version number (e.g., `v1.0.0` or `v0.1.0-beta.1`)
+      - Release date in YYYY-MM-DD format
+      - Summary of changes categorized as "New Features", "Bug Fixes", and "Breaking Changes"
+      - Optionally, include "Technical Details" with implementation notes
+    - You can generate a draft of changes from Git history with:
+      ```powershell
+      git log <previous_tag>..HEAD --pretty=format:"- %s" > changelog.txt
+      ```
+    - Review and edit the generated list, then add it to `docs/release-notes.md` under the appropriate categories.
+
+2.  **Prepare Your Branch:**
 
     - Ensure your main working branch (e.g., `main`) contains all the code changes, bug fixes, and features intended for this release.
     - Pull the latest changes from the remote repository to ensure your local branch is up-to-date:
@@ -30,7 +44,7 @@ The GitHub Actions workflow is configured to trigger on any tag starting with `v
       git pull origin main
       ```
 
-2.  **Create a Git Tag:**
+3.  **Create a Git Tag:**
 
     - Once your branch is ready and all changes are committed, create a new Git tag with the desired version number.
     - For a stable release:
@@ -43,7 +57,7 @@ The GitHub Actions workflow is configured to trigger on any tag starting with `v
       ```
     - Replace `v1.0.0` or `v0.1.0-beta.1` with the actual version you are releasing.
 
-3.  **Push the Git Tag to GitHub:**
+4.  **Push the Git Tag to GitHub:**
     - Pushing the tag to the remote repository on GitHub will trigger the release workflow.
       ```powershell
       git push origin v1.0.0  # Replace with your tag name
@@ -73,6 +87,36 @@ The GitHub Actions workflow is configured to trigger on any tag starting with `v
     - You should see the new image tags corresponding to the Git tag you pushed (e.g., `v1.0.0`, `v0.1.0-beta.1`).
 
 ## Example: Releasing `v0.2.0`
+
+### Using the Release Automation Script (Recommended)
+
+We have automation scripts that simplify the release process by handling all the steps in one command:
+
+1. **For PowerShell users:**
+
+   ```powershell
+   cd scripts\deployment\release
+   .\Create-Release.ps1 -Version v0.2.0
+   ```
+
+2. **For Bash users:**
+   ```bash
+   cd scripts/deployment/release
+   ./create-release.sh -v v0.2.0
+   ```
+
+These scripts will:
+
+- Generate a changelog from Git history
+- Update the release notes file
+- Create and push the Git tag
+- Optionally build and push Docker images
+
+For more options, run the scripts with the `-Help` or `--help` flag.
+
+### Manual Release Process
+
+If you prefer to release manually, follow these steps:
 
 1.  Ensure `main` branch is ready.
     ```powershell

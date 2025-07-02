@@ -12,6 +12,7 @@ Thank you for your interest in contributing to the FastAPI RBAC project! We're e
 - [Code Standards](#code-standards)
 - [Testing Requirements](#testing-requirements)
 - [Submission Process](#submission-process)
+- [Release Process](#release-process)
 - [Community Guidelines](#community-guidelines)
 - [Getting Help](#getting-help)
 - [Recognition](#recognition)
@@ -366,6 +367,63 @@ Brief description of changes
 - All conversations must be resolved
 - CI/CD pipeline must pass
 - Breaking changes require additional review and migration documentation
+
+## Release Process
+
+### Overview
+
+This project follows a unified release notes and version tracking system. The `docs/release-notes.md` file serves as the single source of truth for all releases and major changes across the entire monorepo.
+
+### Versioning
+
+We follow [Semantic Versioning](https://semver.org/) for our releases:
+
+- **Major Version (X.0.0)**: Incompatible API changes or significant new features
+- **Minor Version (0.X.0)**: Backward-compatible new features and enhancements
+- **Patch Version (0.0.X)**: Backward-compatible bug fixes and minor improvements
+- **Pre-release Versions**: Suffixed with `-alpha.N`, `-beta.N`, or `-rc.N` (e.g., `v1.0.0-beta.1`)
+
+### Creating a New Release
+
+1. **Prepare the Release Notes**:
+
+   - Update `docs/release-notes.md` with the new version
+   - Include the release date and summary of changes
+   - Categorize changes into "New Features", "Bug Fixes", and "Breaking Changes"
+   - Ensure the content is clear and understandable for users
+
+2. **Generate Draft Release Notes from Git History** (optional):
+
+   - Use Git commands to extract commit messages since the last tagged release:
+     ```bash
+     git log <previous_tag>..<HEAD> --pretty=format:"- %s" > changelog.txt
+     ```
+   - Review, categorize, and edit the generated notes before adding to `docs/release-notes.md`
+
+3. **Update Version References**:
+
+   - Update any version references in the documentation
+   - Ensure any version-specific instructions are updated
+
+4. **Create Git Tag**:
+
+   - Tag the release using the same version as in the release notes:
+     ```bash
+     git tag -a vX.Y.Z -m "Release version X.Y.Z"
+     ```
+   - Push the tag to trigger the release workflow:
+     ```bash
+     git push origin vX.Y.Z
+     ```
+
+5. **Post-Release Actions**:
+   - Announce the release in appropriate channels
+   - Monitor deployment and application health
+   - Start planning for the next release cycle
+
+### Detailed Release Process
+
+For a detailed step-by-step guide on creating releases, including Docker image publishing, see the [Release Process Guide](../deployment/RELEASE_PROCESS.md).
 
 ## Community Guidelines
 
