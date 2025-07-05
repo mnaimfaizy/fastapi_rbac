@@ -13,7 +13,8 @@ param(
     [switch]$Force,
     [switch]$DryRun,
     [switch]$ShowDetails,
-    [switch]$Help
+    [switch]$Help,
+    [switch]$GlobalPrune
 )
 
 $ErrorActionPreference = "Stop"
@@ -41,6 +42,7 @@ function Show-Help {
     Write-ColorOutput "  -DryRun          : Show what would be cleaned without making changes" "White"
     Write-ColorOutput "  -ShowDetails     : Show detailed output during operations" "White"
     Write-ColorOutput "  -Help            : Show this help message" "White"
+    Write-ColorOutput "  -GlobalPrune     : Perform a full Docker system prune (all containers, images, volumes, networks, and build cache)" "Red"
       Write-ColorOutput "`n💡 Examples:" "Yellow"
     Write-ColorOutput "  .\cleanup-environments.ps1                              # Clean test containers only" "White"
     Write-ColorOutput "  .\cleanup-environments.ps1 -Environment dev             # Clean dev environment" "White"
@@ -48,6 +50,7 @@ function Show-Help {
     Write-ColorOutput "  .\cleanup-environments.ps1 -Force                       # Clean everything with no prompts" "White"
     Write-ColorOutput "  .\cleanup-environments.ps1 -Environment all -Force      # Clean all environments completely" "White"
     Write-ColorOutput "  .\cleanup-environments.ps1 -DryRun                      # Preview cleanup actions" "White"
+    Write-ColorOutput "  .\cleanup-environments.ps1 -GlobalPrune                 # Full Docker system prune (CAUTION!)" "Red"
 
     Write-ColorOutput "`n🌐 Environments:" "Yellow"
     Write-ColorOutput "  test       : Testing environment (default)" "White"
@@ -58,6 +61,7 @@ function Show-Help {
     Write-ColorOutput "  • Using -IncludeVolumes or -Force will permanently delete database data!" "White"
     Write-ColorOutput "  • Using -IncludeImages or -Force will require rebuilding images next time" "White"
     Write-ColorOutput "  • Using -Force cleans EVERYTHING (containers, images, volumes, networks)" "White"
+    Write-ColorOutput "  • Using -GlobalPrune will remove ALL Docker containers, images, volumes, networks, and build cache on this system!" "Red"
     Write-ColorOutput "  • Use -DryRun first to preview what will be cleaned" "White"
 
     Write-ColorOutput "`n🎯 Cleanup Components:" "Yellow"
@@ -433,6 +437,32 @@ function Invoke-EnvironmentCleanup {
 # Check for help request
 if ($Help) {
     Show-Help
+    exit 0
+}
+
+if ($GlobalPrune) {
+    Write-ColorOutput "" "White"
+    Write-ColorOutput "🚨 GLOBAL DOCKER PRUNE MODE 🚨" "Red"
+    Write-ColorOutput "This will remove ALL Docker containers, images, volumes, networks, and build cache on this system!" "Red"
+    Write-ColorOutput "This is NOT limited to FastAPI RBAC resources." "Red"
+    if (-not $Force -and -not $DryRun) {
+        $confirm = Read-Host "Are you absolutely sure you want to prune ALL Docker resources? (y/N)"
+        if ($confirm -ne "y" -and $confirm -ne "Y") {
+            Write-ColorOutput "Global prune cancelled." "Yellow"
+            exit 0
+        }
+    }
+    if ($DryRun) {
+        Write-ColorOutput "Would run: docker system prune -af --volumes" "Yellow"
+        Write-ColorOutput "Would run: docker builder prune -af" "Yellow"
+        Write-ColorOutput "No changes made (dry run)." "Yellow"
+        exit 0
+    }
+    Write-ColorOutput "Running: docker system prune -af --volumes" "Red"
+    docker system prune -af --volumes
+    Write-ColorOutput "Running: docker builder prune -af" "Red"
+    docker builder prune -af
+    Write-ColorOutput "✅ Global Docker prune completed!" "Green"
     exit 0
 }
 
