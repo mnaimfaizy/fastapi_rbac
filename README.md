@@ -235,15 +235,29 @@ All backend test running is now managed through a single script: `backend/test_r
 3. Write tests for new features
 4. Update documentation as needed
 
----
+## 🤖 Copilot MCP Server Integration
+
+This project is pre-configured to use the GitHub MCP server for Copilot Chat automation and repository management.
+
+- **Workspace Scope:** The `.vscode/mcp.json` file ensures this configuration only applies to this repository.
+- **Getting Started:** Open Copilot Chat in VS Code, switch to Agent mode, and select the "github" MCP server.
+- **Example Prompts:**
+  - `List all open issues in this repository`
+  - `Create a new issue titled "Test MCP server connection"`
+  - `Show all collaborators`
+  - `List open pull requests`
+- **Best Practices:**
+  - Use clear, action-oriented prompts (e.g., "Create", "List", "Show").
+  - Reference issues, PRs, or resources by number or name when possible.
+  - Check the Copilot Chat tools menu for available actions.
+
+For advanced usage and troubleshooting, see [`docs/development/MCP_SERVER.md`](docs/development/MCP_SERVER.md).
 
 **Ready to get started?** 👉 [Click here to begin!](https://fastapi-rbac.mnfprofile.com/getting-started/)
 
 # Run the backend service
 
 uvicorn app.main:app --port 8001 --reload
-
-````
 
 ### Frontend
 
@@ -288,4 +302,3 @@ docker-compose up -d
 ## License
 
 This project is licensed under the terms of the MIT license.
-````
