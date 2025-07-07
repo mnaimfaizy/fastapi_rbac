@@ -143,7 +143,7 @@ def wait_for_redis() -> None:
 
         if redis_ssl:
             # Path to the certificate files (adjust for container paths)
-            base_cert_path = os.getenv("REDIS_CERT_PATH", "/certs")
+            base_cert_path = os.getenv("REDIS_CERT_PATH", "/app/certs")
 
             # For local development or when running outside container
             if not os.path.exists(base_cert_path):
@@ -177,10 +177,11 @@ def wait_for_redis() -> None:
             # Only add certificate paths if files exist and not None
             if ssl_ca_certs and os.path.exists(ssl_ca_certs):
                 ssl_kwargs["ssl_ca_certs"] = ssl_ca_certs
-            if ssl_certfile and os.path.exists(ssl_certfile):
-                ssl_kwargs["ssl_certfile"] = ssl_certfile
-            if ssl_keyfile and os.path.exists(ssl_keyfile):
-                ssl_kwargs["ssl_keyfile"] = ssl_keyfile
+            # Do NOT add ssl_certfile or ssl_keyfile unless mutual TLS is required
+            # if ssl_certfile and os.path.exists(ssl_certfile):
+            #     ssl_kwargs["ssl_certfile"] = ssl_certfile
+            # if ssl_keyfile and os.path.exists(ssl_keyfile):
+            #     ssl_kwargs["ssl_keyfile"] = ssl_keyfile
 
             # In Docker environment, hostnames might be different
             # In production Docker, hostname verification often needs to be disabled

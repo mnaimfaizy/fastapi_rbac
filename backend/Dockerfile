@@ -64,7 +64,7 @@ RUN touch /var/log/cron.log
 EXPOSE 8000
 
 # Use the development entrypoint script
-CMD ["bash", "/app/scripts/development-entrypoint.sh"]
+CMD ["bash", "/app/scripts/docker/development-entrypoint.sh"]
 
 # Testing stage
 FROM base as testing
@@ -95,7 +95,7 @@ RUN touch /var/log/cron.log
 EXPOSE 8000
 
 # Use the testing entrypoint script
-CMD ["bash", "/app/scripts/testing-entrypoint.sh"]
+CMD ["bash", "/app/scripts/docker/testing-entrypoint.sh"]
 
 # Production stage
 FROM base as production
@@ -135,4 +135,4 @@ USER appuser
 EXPOSE 8000
 
 # Use the production entrypoint script
-CMD ["bash", "/app/scripts/entrypoint.sh"]
+CMD ["bash", "/app/scripts/docker/entrypoint.sh"]

@@ -37,13 +37,14 @@ Write-Host "Generating Redis server key and CSR in $CertsDir..."
 & openssl genrsa -out (Join-Path $CertsDir "redis.key") 2048
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-# Use fastapi_rbac_redis as the Common Name for the Redis certificate
-& openssl req -new -key (Join-Path $CertsDir "redis.key") -out (Join-Path $CertsDir "redis.csr") -subj "/CN=fastapi_rbac_redis"
+# Use redis_cert.cnf for SANs (fastapi_rbac_redis_prod, fastapi_rbac_redis, localhost)
+$ConfigPath = Join-Path $CertsDir "redis_cert.cnf"
+& openssl req -new -key (Join-Path $CertsDir "redis.key") -out (Join-Path $CertsDir "redis.csr") -config $ConfigPath
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "Signing the Redis server certificate with our CA in $CertsDir..."
-# Sign the Redis server certificate with our CA
-& openssl x509 -req -sha256 -days 365 -in (Join-Path $CertsDir "redis.csr") -CA (Join-Path $CertsDir "ca.crt") -CAkey (Join-Path $CertsDir "ca.key") -CAcreateserial -out (Join-Path $CertsDir "redis.crt")
+# Sign the Redis server certificate with our CA and SAN
+& openssl x509 -req -sha256 -days 365 -in (Join-Path $CertsDir "redis.csr") -CA (Join-Path $CertsDir "ca.crt") -CAkey (Join-Path $CertsDir "ca.key") -CAcreateserial -out (Join-Path $CertsDir "redis.crt") -extensions v3_req -extfile $ConfigPath
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "Cleaning up temporary files from $CertsDir..."

@@ -1,9 +1,9 @@
 # Backend Production Docker Compose
-# Optimized for production deployment with security and performance settings
+# Modular, directory-scoped, and environment-variable-driven for production deployment
 
 services:
   # Shared Infrastructure Services
-  fastapi_rbac_db:
+  fastapi_rbac_db_prod:
     image: postgres:15-alpine
     container_name: fastapi_rbac_db_prod
     restart: always
@@ -16,20 +16,20 @@ services:
     env_file:
       - .env.production
     volumes:
-      - fastapi_rbac_postgres_prod_data:/var/lib/postgresql/data
-      - ./init-scripts:/docker-entrypoint-initdb.d
+      - ${BACKEND_DB_DATA:-./postgres-data}:/var/lib/postgresql/data
+      - ./init-scripts/prod:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5434:5432" # Only expose for prod-test, not in prod
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER:-postgres}"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-      - fastapi_rbac_network
-    ports:
-      - "5432:5432"
+      - fastapi_rbac_prod_network
 
-  fastapi_rbac_redis:
-    image: redis:7-alpine
+  fastapi_rbac_redis_prod:
+    image: redis:7.2.5-alpine
     container_name: fastapi_rbac_redis_prod
     restart: always
     command: >
@@ -44,13 +44,12 @@ services:
       --appendonly yes
     ports:
       - "6379:6379"
-    expose:
-      - 6379
     volumes:
       - ./certs:/certs:ro
-      - fastapi_rbac_redis_prod_data:/data
+      - ./redis-data:/data
     healthcheck:
-      test: [
+      test:
+        [
           "CMD",
           "redis-cli",
           "-h",
@@ -61,18 +60,18 @@ services:
           "--insecure",
           "-a",
           "${REDIS_PASSWORD:-redis}",
-          "ping"
+          "ping",
         ]
       interval: 15s
       timeout: 10s
       retries: 5
     networks:
-      - fastapi_rbac_network
+      - fastapi_rbac_prod_network
 
   # FastAPI Backend Production Service
-  fastapi_rbac:
+  fastapi_rbac_prod:
     build:
-      context: .
+      context: ${BACKEND_SRC:-.}
       dockerfile: Dockerfile.prod
       args:
         - NODE_ENV=production
@@ -91,26 +90,26 @@ services:
       - DATABASE_NAME=${DATABASE_NAME:-fastapi_db}
       - REDIS_PORT=${REDIS_PORT:-6379}
       - REDIS_PASSWORD=${REDIS_PASSWORD:-redis}
-      - REDIS_URL=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/0?ssl_cert_reqs=none&ssl_ca_certs=/certs/ca.crt
-      - CELERY_BROKER_URL=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/0?ssl_cert_reqs=none&ssl_ca_certs=/certs/ca.crt
-      - CELERY_RESULT_BACKEND=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/0?ssl_cert_reqs=none&ssl_ca_certs=/certs/ca.crt
+      - REDIS_URL=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/0?ssl_cert_reqs=none&ssl_ca_certs=/app/certs/ca.crt
+      - CELERY_BROKER_URL=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/0?ssl_cert_reqs=none&ssl_ca_certs=/app/certs/ca.crt
+      - CELERY_RESULT_BACKEND=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/0?ssl_cert_reqs=none&ssl_ca_certs=/app/certs/ca.crt
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
     env_file:
       - .env.production
     volumes:
-      - ./certs:/certs:ro
+      - ${BACKEND_LOGS:-./logs}:/app/logs
     ports:
       - "8000:8000"
     user: appuser
     depends_on:
-      fastapi_rbac_db:
+      fastapi_rbac_db_prod:
         condition: service_healthy
-      fastapi_rbac_redis:
+      fastapi_rbac_redis_prod:
         condition: service_healthy
     restart: always
     networks:
-      - fastapi_rbac_network
+      - fastapi_rbac_prod_network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
       interval: 30s
@@ -119,9 +118,9 @@ services:
       start_period: 40s
 
   # Celery Worker Production Service
-  fastapi_rbac_worker:
+  fastapi_rbac_worker_prod:
     build:
-      context: .
+      context: ${BACKEND_SRC:-.}
       dockerfile: queue.dockerfile.prod
       args:
         - NODE_ENV=production
@@ -139,31 +138,31 @@ services:
       - DATABASE_NAME=${DATABASE_NAME:-fastapi_db}
       - REDIS_PORT=${REDIS_PORT:-6379}
       - REDIS_PASSWORD=${REDIS_PASSWORD:-redis}
-      - REDIS_URL=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/0?ssl_cert_reqs=none&ssl_ca_certs=/certs/ca.crt
-      - CELERY_BROKER_URL=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/0?ssl_cert_reqs=none&ssl_ca_certs=/certs/ca.crt
-      - CELERY_RESULT_BACKEND=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/0?ssl_cert_reqs=none&ssl_ca_certs=/certs/ca.crt
+      - REDIS_URL=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/0?ssl_cert_reqs=none&ssl_ca_certs=/app/certs/ca.crt
+      - CELERY_BROKER_URL=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/0?ssl_cert_reqs=none&ssl_ca_certs=/app/certs/ca.crt
+      - CELERY_RESULT_BACKEND=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/0?ssl_cert_reqs=none&ssl_ca_certs=/app/certs/ca.crt
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
       - SQLALCHEMY_DATABASE_URI=postgresql://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres}@fastapi_rbac_db_prod:${DATABASE_PORT:-5432}/${DATABASE_NAME:-fastapi_db}
     env_file:
       - .env.production
     volumes:
-      - ./certs:/certs:ro
-    command: ["/bin/bash", "/app/scripts/worker-start.sh"]
+      - ${BACKEND_LOGS:-./logs}:/app/logs
+    command: ["/bin/bash", "/app/scripts/docker/docker-worker-start.sh"]
     user: appuser
     restart: always
     depends_on:
-      fastapi_rbac_db:
+      fastapi_rbac_db_prod:
         condition: service_healthy
-      fastapi_rbac_redis:
+      fastapi_rbac_redis_prod:
         condition: service_healthy
     networks:
-      - fastapi_rbac_network
+      - fastapi_rbac_prod_network
 
   # Celery Beat Production Service
-  fastapi_rbac_beat:
+  fastapi_rbac_beat_prod:
     build:
-      context: .
+      context: ${BACKEND_SRC:-.}
       dockerfile: queue.dockerfile.prod
       args:
         - NODE_ENV=production
@@ -181,30 +180,30 @@ services:
       - DATABASE_NAME=${DATABASE_NAME:-fastapi_db}
       - REDIS_PORT=${REDIS_PORT:-6379}
       - REDIS_PASSWORD=${REDIS_PASSWORD:-redis}
-      - REDIS_URL=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/1?ssl_cert_reqs=none&ssl_ca_certs=/certs/ca.crt
-      - CELERY_BROKER_URL=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/1?ssl_cert_reqs=none&ssl_ca_certs=/certs/ca.crt
-      - CELERY_RESULT_BACKEND=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/1?ssl_cert_reqs=none&ssl_ca_certs=/certs/ca.crt
+      - REDIS_URL=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/1?ssl_cert_reqs=none&ssl_ca_certs=/app/certs/ca.crt
+      - CELERY_BROKER_URL=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/1?ssl_cert_reqs=none&ssl_ca_certs=/app/certs/ca.crt
+      - CELERY_RESULT_BACKEND=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/1?ssl_cert_reqs=none&ssl_ca_certs=/app/certs/ca.crt
     env_file:
       - .env.production
     volumes:
-      - ./certs:/certs:ro
-      - fastapi_rbac_celery_beat_prod_data:/app/celerybeat-schedule
-    command: ["/bin/bash", "/app/scripts/beat-start.sh"]
+      - ${BACKEND_LOGS:-./logs}:/app/logs
+      - ${BACKEND_CELERY_BEAT_DATA:-./celerybeat-schedule}:/app/celerybeat-schedule
+    command: ["/bin/bash", "/app/scripts/docker/docker-beat-start.sh"]
     user: appuser
     restart: always
     depends_on:
-      fastapi_rbac_db:
+      fastapi_rbac_db_prod:
         condition: service_healthy
-      fastapi_rbac_redis:
+      fastapi_rbac_redis_prod:
         condition: service_healthy
-      fastapi_rbac_worker:
+      fastapi_rbac_worker_prod:
         condition: service_started
     networks:
-      - fastapi_rbac_network
+      - fastapi_rbac_prod_network
 
   # PgAdmin Production Service
-  fastapi_rbac_pgadmin:
-    image: dpage/pgadmin4:latest
+  fastapi_rbac_pgadmin_prod:
+    image: dpage/pgadmin4:8.7
     container_name: fastapi_rbac_pgadmin_prod
     restart: always
     environment:
@@ -221,31 +220,33 @@ services:
     ports:
       - "${PGADMIN_PORT:-5050}:80"
     volumes:
-      - fastapi_rbac_pgadmin_prod_data:/var/lib/pgadmin
+      - ${BACKEND_PGADMIN_DATA:-./pgadmin-data}:/var/lib/pgadmin
       - ../pgadmin/servers.json:/pgadmin4/servers.json:ro
     entrypoint:
       - "/bin/sh"
       - "-c"
       - "echo 'fastapi_rbac_db_prod:5432:*:${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres}' > /tmp/pgpassfile && chmod 600 /tmp/pgpassfile && /entrypoint.sh"
     networks:
-      - fastapi_rbac_network
+      - fastapi_rbac_prod_network
     depends_on:
-      fastapi_rbac_db:
+      fastapi_rbac_db_prod:
         condition: service_healthy
     env_file:
       - .env.production
 
 volumes:
+  # All volumes are directory-scoped and can be overridden via env vars
   fastapi_rbac_postgres_prod_data:
-    name: fastapi_rbac_postgres_prod_data
+    name: ${BACKEND_DB_VOLUME:-fastapi_rbac_postgres_prod_data}
   fastapi_rbac_celery_beat_prod_data:
-    name: fastapi_rbac_celery_beat_prod_data
+    name: ${BACKEND_CELERY_BEAT_VOLUME:-fastapi_rbac_celery_beat_prod_data}
   fastapi_rbac_redis_prod_data:
-    name: fastapi_rbac_redis_prod_data
+    name: ${BACKEND_REDIS_VOLUME:-fastapi_rbac_redis_prod_data}
   fastapi_rbac_pgadmin_prod_data:
-    name: fastapi_rbac_pgadmin_prod_data
+    name: ${BACKEND_PGADMIN_VOLUME:-fastapi_rbac_pgadmin_prod_data}
 
 networks:
-  fastapi_rbac_network:
-    name: fastapi_rbac_network
+  fastapi_rbac_prod_network:
+    name: ${BACKEND_NETWORK:-fastapi_rbac_prod_network}
     driver: bridge
+    external: true

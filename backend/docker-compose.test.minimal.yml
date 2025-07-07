@@ -86,7 +86,7 @@ services:
         condition: service_healthy
     networks:
       - fastapi_rbac_test_network
-    entrypoint: ["/bin/bash", "/app/scripts/testing-entrypoint.sh"]
+    entrypoint: ["/bin/bash", "/app/scripts/docker/testing-entrypoint.sh"]
 
   # PostgreSQL Database for testing
   fastapi_rbac_db_test:
@@ -101,9 +101,7 @@ services:
       - POSTGRES_DB=fastapi_rbac_test
     volumes:
       - postgres_test_data:/var/lib/postgresql/data
-      - ./init-scripts:/docker-entrypoint-initdb.d
-      - ./init-scripts/01-init-user.sh:/docker-entrypoint-initdb.d/01-init-user.sh:ro
-      - ./init-scripts/02-init-test-runner-db.sh:/docker-entrypoint-initdb.d/02-init-test-runner-db.sh:ro
+      - ./init-scripts/test:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d fastapi_rbac_test"]
       interval: 10s
@@ -115,7 +113,7 @@ services:
 
   # Redis Cache for testing
   fastapi_rbac_redis_test:
-    image: redis:7-alpine
+    image: redis:7.2.5-alpine
     restart: always
     container_name: fastapi_rbac_redis_test
     ports:

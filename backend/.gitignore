@@ -21,6 +21,12 @@ coverage.xml
 htmlcov/
 dev.db-wal
 dev.db-shm
+postgres_test_data/
+postgres_dev_data/
+pgadmin_dev_data/
+pgadmin-data/
+postgres-data/
+redis-data/
 *.bak
 *.log
 *.crt

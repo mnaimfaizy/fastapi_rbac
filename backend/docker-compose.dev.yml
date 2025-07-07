@@ -6,10 +6,12 @@ services:
   # FastAPI Backend Development Service
   fastapi_rbac_dev:
     build:
-      context: .
+      context: ${BACKEND_SRC:-.}
       dockerfile: Dockerfile
+      target: development
       args:
         - NODE_ENV=development
+        - ENVIRONMENT=development
     image: fastapi_rbac:dev
     container_name: fastapi_rbac_dev
     environment:
@@ -24,9 +26,9 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - .:/app
-      - /app/node_modules # Exclude node_modules from bind mount
-    command: ["bash", "/app/scripts/development-entrypoint.sh"]
+      - ${BACKEND_SRC:-.}:/app
+      - ./logs:/app/logs
+    command: ["bash", "/app/scripts/docker/development-entrypoint.sh"]
     networks:
       - fastapi_rbac_dev_network
     depends_on:
@@ -44,14 +46,15 @@ services:
   # Celery worker for background tasks - Development
   fastapi_rbac_worker_dev:
     build:
-      context: .
+      context: ${BACKEND_SRC:-.}
       dockerfile: queue.dockerfile
       args:
         - NODE_ENV=development
     image: fastapi_rbac_worker:dev
     container_name: fastapi_rbac_worker_dev
     volumes:
-      - .:/app
+      - ${BACKEND_SRC:-.}:/app
+      - ./logs:/app/logs
     environment:
       - MODE=development
       - ENVIRONMENT=development
@@ -61,7 +64,7 @@ services:
       - SMTP_HOST=mailhog_dev
     env_file:
       - .env.development
-    command: ["/bin/bash", "/app/scripts/worker-fixed.sh"]
+    command: ["/bin/bash", "/app/scripts/docker/docker-worker-start.sh"]
     depends_on:
       fastapi_rbac_redis_dev:
         condition: service_healthy
@@ -74,15 +77,16 @@ services:
   # Celery beat scheduler for periodic tasks - Development
   fastapi_rbac_beat_dev:
     build:
-      context: .
+      context: ${BACKEND_SRC:-.}
       dockerfile: queue.dockerfile
       args:
         - NODE_ENV=development
     image: fastapi_rbac_worker:dev
     container_name: fastapi_rbac_beat_dev
     volumes:
-      - .:/app
-      - fastapi_rbac_celery_beat_dev_schedule:/app/celerybeat-schedule
+      - ${BACKEND_SRC:-.}:/app
+      - ./logs:/app/logs
+      - fastapi_rbac_celery_beat_dev_schedule:/app
     environment:
       - MODE=development
       - ENVIRONMENT=development
@@ -92,7 +96,7 @@ services:
       - SMTP_HOST=mailhog_dev
     env_file:
       - .env.development
-    command: ["/bin/bash", "/app/scripts/beat-fixed.sh"]
+    command: ["/bin/bash", "/app/scripts/docker/docker-beat-start.sh"]
     depends_on:
       fastapi_rbac_redis_dev:
         condition: service_healthy
@@ -105,14 +109,15 @@ services:
   # Celery Flower monitoring dashboard - Development
   fastapi_rbac_flower_dev:
     build:
-      context: .
+      context: ${BACKEND_SRC:-.}
       dockerfile: queue.dockerfile
       args:
         - NODE_ENV=development
     image: fastapi_rbac_worker:dev
     container_name: fastapi_rbac_flower_dev
     volumes:
-      - .:/app
+      - ${BACKEND_SRC:-.}:/app
+      - ./logs:/app/logs
     environment:
       - MODE=development
       - ENVIRONMENT=development
@@ -132,6 +137,93 @@ services:
     networks:
       - fastapi_rbac_dev_network
 
+  # Mail testing service for development
+  mailhog_dev:
+    image: mailhog/mailhog:latest
+    container_name: fastapi_rbac_mailhog_dev
+    ports:
+      - "1025:1025"
+      - "8025:8025" # Web UI
+    restart: unless-stopped
+    networks:
+      - fastapi_rbac_dev_network
+
+  # PostgreSQL Database for development
+  fastapi_rbac_db_dev:
+    image: postgres:15-alpine
+    restart: always
+    container_name: fastapi_rbac_db_dev
+    ports:
+      - "5433:5432" # Different port to avoid conflicts
+    env_file:
+      - .env.development
+    environment:
+      - POSTGRES_USER=${DATABASE_USER:-postgres}
+      - POSTGRES_PASSWORD=${DATABASE_PASSWORD:-postgres}
+      - POSTGRES_DB=${DATABASE_NAME:-fastapi_dev_db}
+    volumes:
+      - ${BACKEND_DB_DATA:-./postgres_dev_data}:/var/lib/postgresql/data
+      - ./init-scripts/dev:/docker-entrypoint-initdb.d:ro
+    networks:
+      - fastapi_rbac_dev_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PgAdmin for development
+  fastapi_rbac_pgadmin_dev:
+    image: dpage/pgadmin4:8.7
+    container_name: fastapi_rbac_pgadmin_dev
+    restart: always
+    ports:
+      - "8080:80" # Different port for dev
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL:-admin@example.com}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD:-admin}
+      - PGADMIN_CONFIG_SERVER_MODE=False
+      - PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=False
+    volumes:
+      - ${BACKEND_DB_DATA:-./pgadmin_dev_data}:/var/lib/pgadmin
+    networks:
+      - fastapi_rbac_dev_network
+    depends_on:
+      fastapi_rbac_db_dev:
+        condition: service_healthy
+
+  # Redis for development
+  fastapi_rbac_redis_dev:
+    image: redis:7.2.5-alpine
+    container_name: fastapi_rbac_redis_dev
+    restart: always
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - fastapi_rbac_redis_dev_data:/data
+    expose:
+      - 6379
+    networks:
+      - fastapi_rbac_dev_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
 volumes:
   fastapi_rbac_celery_beat_dev_schedule:
     name: fastapi_rbac_celery_beat_dev_schedule
+  fastapi_rbac_db_dev_data:
+    name: fastapi_rbac_db_dev_data
+  fastapi_rbac_pgadmin_dev_data:
+    name: fastapi_rbac_pgadmin_dev_data
+  fastapi_rbac_redis_dev_data:
+    name: fastapi_rbac_redis_dev_data
+
+networks:
+  fastapi_rbac_dev_network:
+    name: fastapi_rbac_dev_network
+    driver: bridge
+    external: true

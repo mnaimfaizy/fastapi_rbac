@@ -1,10 +1,10 @@
 # React Frontend Production Docker Compose
-# Optimized for production deployment
+# Modular, directory-scoped, and environment-variable driven
 
 services:
   react_frontend:
     build:
-      context: .
+      context: ${REACT_FRONTEND_SRC:-.}
       dockerfile: Dockerfile.prod
       args:
         - NODE_ENV=production
@@ -12,18 +12,22 @@ services:
     container_name: react_frontend_prod
     environment:
       - NODE_ENV=production
-      - VITE_API_BASE_URL=/api/v1
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-/api/v1}
     env_file:
       - .env.production
     ports:
-      - '80:80'
+      - '${REACT_FRONTEND_PORT:-80}:80'
     restart: always
     networks:
-      - fastapi_rbac_network
-    depends_on:
-      - fastapi_rbac
+      - fastapi_rbac_prod_network
+    # Add volume for logs or static if needed
+    # volumes:
+    #   - ${REACT_FRONTEND_LOGS:-./logs}:/app/logs
+    #   - ${REACT_FRONTEND_STATIC:-./static}:/app/static
+    depends_on: []
 
 networks:
-  fastapi_rbac_network:
-    name: fastapi_rbac_network
+  fastapi_rbac_prod_network:
+    name: fastapi_rbac_prod_network
+    driver: bridge
     external: true

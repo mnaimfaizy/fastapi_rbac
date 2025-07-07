@@ -102,4 +102,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD celery -A app.celery_app inspect ping || exit 1
 
 # The actual command will be specified in docker-compose
-CMD ["/bin/bash", "/app/scripts/worker-start.sh"]
+CMD ["/bin/bash", "/app/scripts/docker/docker-worker-start.sh"]

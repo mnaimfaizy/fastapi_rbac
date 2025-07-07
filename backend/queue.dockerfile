@@ -64,9 +64,9 @@ RUN find /app -name "*.sh" -type f -exec dos2unix -f {} \; \
 RUN ln -sf /app/app/backend_pre_start.py /app/backend_pre_start.py
 
 # Update the worker, beat, and flower start scripts to use the correct path
-RUN sed -i 's|/app/app/backend_pre_start.py|/app/backend_pre_start.py|g' /app/worker-start.sh \
-    && sed -i 's|/app/app/backend_pre_start.py|/app/backend_pre_start.py|g' /app/beat-start.sh \
-    && sed -i 's|/app/app/backend_pre_start.py|/app/backend_pre_start.py|g' /app/flower-start.sh
+RUN sed -i 's|/app/app/backend_pre_start.py|/app/backend_pre_start.py|g' /app/scripts/docker/docker-worker-start.sh \
+    && sed -i 's|/app/app/backend_pre_start.py|/app/backend_pre_start.py|g' /app/scripts/docker/docker-beat-start.sh \
+    && sed -i 's|/app/app/backend_pre_start.py|/app/backend_pre_start.py|g' /app/scripts/flower-start.sh
 
 # Remove any existing celerybeat-schedule directory that might conflict with the DB file
 RUN rm -rf /app/celerybeat-schedule
@@ -74,4 +74,4 @@ RUN rm -rf /app/celerybeat-schedule
 ENV PYTHONPATH=/app
 
 # Default command can be overridden by docker-compose
-CMD ["/bin/bash", "/app/worker-start.sh"]
+CMD ["/bin/bash", "/app/scripts/worker-start.sh"]

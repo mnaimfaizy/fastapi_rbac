@@ -4,12 +4,12 @@
 services:
   react_frontend_dev:
     build:
-      context: .
+      context: ${REACT_FRONTEND_SRC:-.}
       dockerfile: Dockerfile
       target: development
       args:
         - NODE_ENV=development
-    image: react_frontend:dev
+    image: react_frontend_dev:dev
     container_name: react_frontend_dev
     environment:
       - NODE_ENV=development
@@ -18,14 +18,12 @@ services:
     ports:
       - '3000:5173' # Vite dev server default port
     volumes:
-      - .:/app
+      - ${REACT_FRONTEND_SRC:-.}:/app
       - /app/node_modules # Exclude node_modules from bind mount
     command: ['npm', 'run', 'dev', '--', '--host', '0.0.0.0']
     networks:
       - fastapi_rbac_dev_network
     restart: on-failure
-    depends_on:
-      - fastapi_rbac_dev
     healthcheck:
       test:
         [
@@ -39,3 +37,9 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+networks:
+  fastapi_rbac_dev_network:
+    name: fastapi_rbac_dev_network
+    driver: bridge
+    external: true

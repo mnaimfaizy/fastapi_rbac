@@ -1,7 +1,15 @@
 #!/bin/bash
 # Script to build and push Docker images to DockerHub for Linux/CI environments
 
-set -e  # Exit on any error
+# Ignore orphaned resources to avoid network conflicts in CI
+env | grep COMPOSE_IGNORE_ORPHANS || export COMPOSE_IGNORE_ORPHANS=True
+
+set +e  # Disable exit on error for cleanup
+# Stop any running containers and networks (do not fail if not found)
+echo "Stopping any running containers..."
+(docker network rm fastapi_rbac_prod_test_network 2>/dev/null || true)
+docker compose -f docker-compose.prod-test.yml down --remove-orphans || true
+set -e  # Re-enable exit on error after cleanup
 
 # You need to be logged in to DockerHub:
 # docker login
@@ -37,11 +45,6 @@ else
 fi
 
 echo "Final tag to be used: $TAG"
-
-# Stop any running containers
-echo "Stopping any running containers..."
-docker network rm fastapi_rbac_network || true
-docker compose -f docker-compose.prod-test.yml down --remove-orphans || true
 
 # Build the production images
 echo "Building production Docker images..."
