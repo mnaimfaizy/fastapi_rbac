@@ -1,52 +1,82 @@
 # Test script to verify all components are working
 Write-Host "=== FastAPI RBAC Test Environment Connectivity Test ===" -ForegroundColor Green
 
-# Test 1: Frontend connectivity
+# Test 1: Frontend connectivity (with retries)
 Write-Host "`n1. Testing Frontend (React)..." -ForegroundColor Yellow
-try {
-    $frontendResponse = Invoke-RestMethod -Uri "http://localhost:3001" -Method GET -TimeoutSec 5
-    if ($frontendResponse -match "FastAPI") {
-        Write-Host "✅ Frontend: Responding" -ForegroundColor Green
-    } else {
-        Write-Host "✅ Frontend: Responding (HTML content detected)" -ForegroundColor Green
+$frontendOk = $false
+for ($i = 0; $i -lt 5; $i++) {
+    try {
+        $frontendResponse = Invoke-RestMethod -Uri "http://localhost:3001" -Method GET -TimeoutSec 5 -ErrorAction Stop
+        if ($frontendResponse -match "FastAPI") {
+            Write-Host "✅ Frontend: Responding" -ForegroundColor Green
+        } else {
+            Write-Host "✅ Frontend: Responding (HTML content detected)" -ForegroundColor Green
+        }
+        $frontendOk = $true
+        break
+    } catch {
+        Write-Host "Frontend not ready yet, retrying... ($($i+1)/5) - $($_.Exception.Message)" -ForegroundColor Yellow
+        Start-Sleep -Seconds 3
     }
-} catch {
-    Write-Host "❌ Frontend: Not responding - $($_.Exception.Message)" -ForegroundColor Red
+}
+if (-not $frontendOk) {
+    Write-Host "❌ Frontend: Not responding after retries" -ForegroundColor Red
 }
 
-# Test 2: Backend API connectivity
+# Test 2: Backend API connectivity (with retries)
 Write-Host "`n2. Testing Backend API..." -ForegroundColor Yellow
-try {
-    $healthResponse = Invoke-RestMethod -Uri "http://localhost:8002/api/v1/health/" -Method GET -TimeoutSec 5
-    Write-Host "✅ Backend API: $($healthResponse.status)" -ForegroundColor Green
-    Write-Host "   - Environment: $($healthResponse.environment)" -ForegroundColor Cyan
-    Write-Host "   - Database: $($healthResponse.database.status)" -ForegroundColor Cyan
-    Write-Host "   - Redis: $($healthResponse.redis.status)" -ForegroundColor Cyan
-} catch {
-    Write-Host "❌ Backend API: Not responding - $($_.Exception.Message)" -ForegroundColor Red
-}
-
-# Test 3: Database connectivity
-Write-Host "`n3. Testing Database..." -ForegroundColor Yellow
-try {
-    $userCount = docker exec -e PGPASSWORD=postgres fastapi_rbac_db_test psql -U postgres -d fastapi_rbac_test -c 'SELECT count(*) FROM "User";' -t
-    $userCount = $userCount.Trim()
-    Write-Host "✅ Database: Connected - $userCount users found" -ForegroundColor Green
-} catch {
-    Write-Host "❌ Database: Connection failed - $($_.Exception.Message)" -ForegroundColor Red
-}
-
-# Test 4: Redis connectivity
-Write-Host "`n4. Testing Redis..." -ForegroundColor Yellow
-try {
-    $redisResponse = docker exec fastapi_rbac_redis_test redis-cli ping
-    if ($redisResponse -eq "PONG") {
-        Write-Host "✅ Redis: Connected" -ForegroundColor Green
-    } else {
-        Write-Host "❌ Redis: Unexpected response - $redisResponse" -ForegroundColor Red
+$backendOk = $false
+for ($i = 0; $i -lt 5; $i++) {
+    try {
+        $healthResponse = Invoke-RestMethod -Uri "http://localhost:8002/api/v1/health/" -Method GET -TimeoutSec 5 -ErrorAction Stop
+        Write-Host "✅ Backend API: $($healthResponse.status)" -ForegroundColor Green
+        Write-Host "   - Environment: $($healthResponse.environment)" -ForegroundColor Cyan
+        Write-Host "   - Database: $($healthResponse.database.status)" -ForegroundColor Cyan
+        Write-Host "   - Redis: $($healthResponse.redis.status)" -ForegroundColor Cyan
+        $backendOk = $true
+        break
+    } catch {
+        Write-Host "Backend API not ready yet, retrying... ($($i+1)/5) - $($_.Exception.Message)" -ForegroundColor Yellow
+        Start-Sleep -Seconds 3
     }
-} catch {
-    Write-Host "❌ Redis: Connection failed - $($_.Exception.Message)" -ForegroundColor Red
+}
+if (-not $backendOk) {
+    Write-Host "❌ Backend API: Not responding after retries" -ForegroundColor Red
+}
+
+# Test 3: Database connectivity (check container running)
+Write-Host "`n3. Testing Database..." -ForegroundColor Yellow
+$dbContainer = "fastapi_rbac_db_test"
+$dbRunning = docker ps --format '{{.Names}}' | Select-String -Pattern "^$dbContainer$"
+if ($dbRunning) {
+    try {
+        $userCount = docker exec -e PGPASSWORD=postgres $dbContainer psql -U postgres -d fastapi_rbac_test -c 'SELECT count(*) FROM "User";' -t
+        $userCount = $userCount.Trim()
+        Write-Host "✅ Database: Connected - $userCount users found" -ForegroundColor Green
+    } catch {
+        Write-Host "❌ Database: Connection failed - $($_.Exception.Message)" -ForegroundColor Red
+    }
+} else {
+    Write-Host "❌ Database: Container not running ($dbContainer)" -ForegroundColor Red
+}
+
+# Test 4: Redis connectivity (check container running)
+Write-Host "`n4. Testing Redis..." -ForegroundColor Yellow
+$redisContainer = "fastapi_rbac_redis_test"
+$redisRunning = docker ps --format '{{.Names}}' | Select-String -Pattern "^$redisContainer$"
+if ($redisRunning) {
+    try {
+        $redisResponse = docker exec $redisContainer redis-cli ping
+        if ($redisResponse -eq "PONG") {
+            Write-Host "✅ Redis: Connected" -ForegroundColor Green
+        } else {
+            Write-Host "❌ Redis: Unexpected response - $redisResponse" -ForegroundColor Red
+        }
+    } catch {
+        Write-Host "❌ Redis: Connection failed - $($_.Exception.Message)" -ForegroundColor Red
+    }
+} else {
+    Write-Host "❌ Redis: Container not running ($redisContainer)" -ForegroundColor Red
 }
 
 # Test 5: MailHog connectivity

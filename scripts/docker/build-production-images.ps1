@@ -23,55 +23,6 @@ function Write-ColorOutput {
     else { Write-Host $Message }
 }
 
-function Build-DockerImage {
-    param(
-        [string]$Context,
-        [string]$Dockerfile,
-        [string]$ImageName,
-        [string]$Target = "production",
-        [hashtable]$BuildArgs = @{}
-    )
-
-    Write-ColorOutput "Building production image: $ImageName (target: $Target)" "Blue"
-
-    $buildCommand = "docker build"
-
-    if ($NoCache) {
-        $buildCommand += " --no-cache"
-    }
-
-    if ($Target) {
-        $buildCommand += " --target $Target"
-    }
-
-    $buildCommand += " -f $Dockerfile"
-
-    foreach ($key in $BuildArgs.Keys) {
-        $buildCommand += " --build-arg $key=$($BuildArgs[$key])"
-    }
-
-    $buildCommand += " -t $ImageName $Context"
-
-    if ($Verbose) {
-        Write-ColorOutput "Executing: $buildCommand" "Yellow"
-    }
-
-    try {
-        Invoke-Expression $buildCommand
-        if ($LASTEXITCODE -eq 0) {
-            Write-ColorOutput "✅ Successfully built: $ImageName" "Green"
-            return $true
-        } else {
-            Write-ColorOutput "❌ Failed to build: $ImageName" "Red"
-            return $false
-        }
-    } catch {
-        Write-ColorOutput "❌ Exception while building: $ImageName" "Red"
-        Write-ColorOutput "Error: $_" "Red"
-        return $false
-    }
-}
-
 function Push-DockerImage {
     param([string]$ImageName)
 
@@ -103,6 +54,21 @@ if (-not (Test-Path "backend" -PathType Container) -or -not (Test-Path "react-fr
     exit 1
 }
 
+# Refactored: Use modular compose files and ensure network for production
+
+# Compose files and network for production
+$composeFiles = @("backend/docker-compose.prod.yml", "react-frontend/docker-compose.prod.yml")
+$networkName = "fastapi_rbac_prod_network"
+$projectName = "fastapi_rbac_production"
+$composeArgs = ($composeFiles | ForEach-Object { "-f $_" }) -join " "
+$projectArg = "-p $projectName"
+
+# Ensure the external network exists
+if (-not (docker network ls --format '{{.Name}}' | Select-String -Pattern "^$networkName$")) {
+    Write-ColorOutput "Creating external Docker network: $networkName" "Green"
+    docker network create $networkName | Out-Null
+}
+
 if ($CleanFirst) {
     Write-ColorOutput "Cleaning up existing production images..." "Yellow"
     $prodImages = @("fastapi_rbac:prod", "fastapi_rbac_worker:prod", "react_frontend:prod")
@@ -113,60 +79,23 @@ if ($CleanFirst) {
     Write-ColorOutput "" "White"
 }
 
+# Set build context environment variables
+$env:REACT_FRONTEND_SRC = "../react-frontend"
+$env:BACKEND_SRC = "../backend"
+
+# Build images using docker compose (modular, both backend and frontend)
+$buildCmd = "docker compose $composeArgs $projectArg build"
+if ($NoCache) { $buildCmd += " --no-cache" }
+if ($Verbose) { Write-ColorOutput "Executing: $buildCmd" "Yellow" }
+Invoke-Expression $buildCmd
+
+# After build, define builtImages and allBuildsSucceeded for tagging/pushing
+$builtImages = @("fastapi_rbac:prod", "fastapi_rbac_worker:prod", "react_frontend:prod")
 $allBuildsSucceeded = $true
-$builtImages = @()
 
-# Define production images to build
-$images = @(
-    @{
-        Name = "Backend API"
-        Context = "backend"
-        Dockerfile = "backend/Dockerfile.prod"
-        ImageName = "fastapi_rbac:prod"
-        Target = "production"
-        BuildArgs = @{
-            ENVIRONMENT = "production"
-        }
-    },
-    @{
-        Name = "Celery Worker"
-        Context = "backend"
-        Dockerfile = "backend/queue.dockerfile.prod"
-        ImageName = "fastapi_rbac_worker:prod"
-        Target = "production"
-        BuildArgs = @{
-            ENVIRONMENT = "production"
-        }
-    },
-    @{
-        Name = "React Frontend"
-        Context = "react-frontend"
-        Dockerfile = "react-frontend/Dockerfile.prod"
-        ImageName = "react_frontend:prod"
-        Target = "production"
-        BuildArgs = @{
-            NODE_ENV = "production"
-        }
-    }
-)
-
-# Build each image
-foreach ($imageConfig in $images) {
-    Write-ColorOutput "Building $($imageConfig.Name)..." "Blue"
-
-    if (-not (Test-Path $imageConfig.Dockerfile)) {
-        Write-ColorOutput "❌ Dockerfile not found: $($imageConfig.Dockerfile)" "Red"
-        $allBuildsSucceeded = $false
-        continue
-    }
-
-    if (Build-DockerImage -Context $imageConfig.Context -Dockerfile $imageConfig.Dockerfile -ImageName $imageConfig.ImageName -Target $imageConfig.Target -BuildArgs $imageConfig.BuildArgs) {
-        $builtImages += $imageConfig.ImageName
-    } else {
-        $allBuildsSucceeded = $false
-    }
-    Write-ColorOutput "" "White"
-}
+# Unset build context environment variables
+Remove-Item Env:REACT_FRONTEND_SRC -ErrorAction SilentlyContinue
+Remove-Item Env:BACKEND_SRC -ErrorAction SilentlyContinue
 
 # Tag with prod-test for production testing environment
 Write-ColorOutput "Tagging images for production testing (prod-test)..." "Blue"
@@ -219,7 +148,7 @@ if ($allBuildsSucceeded) {
     Write-ColorOutput "Production images are ready for deployment!" "Green"
     Write-ColorOutput "" "White"
     Write-ColorOutput "Next steps:" "Blue"
-    Write-ColorOutput "  1. Test images with: docker-compose -f backend/docker-compose.prod.yml up" "Yellow"
+    Write-ColorOutput "  1. Test images with: .\\docker-env.ps1 -Environment prod -Action up" "Yellow"
     Write-ColorOutput "  2. Deploy to production environment" "Yellow"
     Write-ColorOutput "  3. Monitor application health and logs" "Yellow"
 } else {

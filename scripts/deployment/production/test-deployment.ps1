@@ -37,18 +37,33 @@ if (Test-Path ".\validate-docker-config.ps1") {
 }
 
 Write-Host "`n2. Checking Docker Compose syntax..." -ForegroundColor Yellow
-try {
-    docker-compose -f docker-compose.prod-test.yml config --quiet
-    Write-Host "✅ Docker Compose syntax is valid" -ForegroundColor Green
-} catch {
-    Write-Host "❌ Docker Compose syntax error" -ForegroundColor Red
-    Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
+$composeFiles = @(
+    "backend/docker-compose.prod.yml",
+    "react-frontend/docker-compose.prod.yml"
+)
+$syntaxOk = $true
+foreach ($composeFile in $composeFiles) {
+    if (Test-Path $composeFile) {
+        try {
+            docker-compose -f $composeFile config --quiet
+            Write-Host "✅ $composeFile syntax is valid" -ForegroundColor Green
+        } catch {
+            Write-Host "❌ $composeFile syntax error" -ForegroundColor Red
+            Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
+            $syntaxOk = $false
+        }
+    } else {
+        Write-Host "❌ $composeFile not found" -ForegroundColor Red
+        $syntaxOk = $false
+    }
+}
+if (-not $syntaxOk) {
+    Write-Host "Docker Compose syntax validation failed." -ForegroundColor Red
     exit 1
 }
 
 Write-Host "`n3. Checking required files..." -ForegroundColor Yellow
 $requiredFiles = @(
-    "docker-compose.prod-test.yml",
     "backend/docker-compose.prod.yml",
     "react-frontend/docker-compose.prod.yml",
     "backend/.env.production",
@@ -84,9 +99,9 @@ $choice = Read-Host "`nSelect option (1-4, default: 1)"
 
 switch ($choice) {
     "2" {
-        Write-Host "`nStarting services for local testing..." -ForegroundColor Yellow
+        Write-Host "`nStarting services for local production testing (using modular compose files)..." -ForegroundColor Yellow
         Write-Host "This will:" -ForegroundColor Cyan
-        Write-Host "- Build all Docker images" -ForegroundColor Cyan
+        Write-Host "- Build all Docker images (using backend/docker-compose.prod.yml and react-frontend/docker-compose.prod.yml)" -ForegroundColor Cyan
         Write-Host "- Start all services" -ForegroundColor Cyan
         Write-Host "- Make services available at:" -ForegroundColor Cyan
         Write-Host "  • Frontend: http://localhost" -ForegroundColor Cyan
@@ -96,34 +111,69 @@ switch ($choice) {
         $confirm = Read-Host "`nContinue? (y/N)"
         if ($confirm -eq "y" -or $confirm -eq "Y") {
             Write-Host "`nStarting services..." -ForegroundColor Green
-            docker-compose -f docker-compose.prod-test.yml up -d --build
+
+            $networkName = "fastapi_rbac_prod_network"
+            $networkExists = docker network ls --format '{{.Name}}' | Select-String -Pattern "^$networkName$"
+            if (-not $networkExists) {
+                Write-Host "Docker network '$networkName' does not exist. Creating..." -ForegroundColor Yellow
+                docker network create $networkName | Out-Null
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Host "✅ Docker network '$networkName' created." -ForegroundColor Green
+                } else {
+                    Write-Host "❌ Failed to create Docker network '$networkName'" -ForegroundColor Red
+                    exit 1
+                }
+            } else {
+                Write-Host "✅ Docker network '$networkName' already exists." -ForegroundColor Green
+            }
+
+            docker compose -f backend/docker-compose.prod.yml -f react-frontend/docker-compose.prod.yml up -d --build
 
             if ($LASTEXITCODE -eq 0) {
                 Write-Host "`n✅ Services started successfully!" -ForegroundColor Green
                 Write-Host "`nService Status:" -ForegroundColor Cyan
-                docker-compose -f docker-compose.prod-test.yml ps
+                docker compose -f backend/docker-compose.prod.yml -f react-frontend/docker-compose.prod.yml ps
 
                 Write-Host "`nTo view logs:" -ForegroundColor Yellow
-                Write-Host "docker-compose -f docker-compose.prod-test.yml logs -f" -ForegroundColor Cyan
+                Write-Host "docker compose -f backend/docker-compose.prod.yml -f react-frontend/docker-compose.prod.yml logs -f" -ForegroundColor Cyan
                 Write-Host "`nTo stop services:" -ForegroundColor Yellow
-                Write-Host "docker-compose -f docker-compose.prod-test.yml down" -ForegroundColor Cyan
+                Write-Host "docker compose -f backend/docker-compose.prod.yml -f react-frontend/docker-compose.prod.yml down" -ForegroundColor Cyan
             } else {
                 Write-Host "❌ Failed to start services" -ForegroundColor Red
             }
         }
     }
     "3" {
-        Write-Host "`nBuilding images..." -ForegroundColor Yellow
-        docker-compose -f docker-compose.prod-test.yml build
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "✅ Images built successfully" -ForegroundColor Green
-        } else {
-            Write-Host "❌ Failed to build images" -ForegroundColor Red
+        Write-Host "`nBuilding images using modular compose files..." -ForegroundColor Yellow
+        Write-Host "- Backend: backend/docker-compose.prod.yml (fastapi_rbac_prod)" -ForegroundColor Cyan
+        Write-Host "- Frontend: react-frontend/Dockerfile.prod (react_frontend:prod)" -ForegroundColor Cyan
+        Write-Host "- Worker: backend/docker-compose.prod.yml (fastapi_rbac_worker_prod)" -ForegroundColor Cyan
+        docker-compose -f backend/docker-compose.prod.yml build fastapi_rbac_prod
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "❌ Failed to build backend image" -ForegroundColor Red
+            return
         }
+        Set-Location -Path "react-frontend"
+        docker build -f Dockerfile.prod -t react_frontend:prod .
+        $frontendExit = $LASTEXITCODE
+        Set-Location -Path ".."
+        if ($frontendExit -ne 0) {
+            Write-Host "❌ Failed to build frontend image" -ForegroundColor Red
+            return
+        }
+        docker-compose -f backend/docker-compose.prod.yml build fastapi_rbac_worker_prod
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "❌ Failed to build worker image" -ForegroundColor Red
+            return
+        }
+        Write-Host "✅ Images built successfully" -ForegroundColor Green
     }
     "4" {
-        Write-Host "`nService Configuration:" -ForegroundColor Yellow
-        docker-compose -f docker-compose.prod-test.yml config
+        Write-Host "`nService Configuration (backend and frontend):" -ForegroundColor Yellow
+        Write-Host "--- backend/docker-compose.prod.yml ---" -ForegroundColor Cyan
+        docker-compose -f backend/docker-compose.prod.yml config
+        Write-Host "--- react-frontend/docker-compose.prod.yml ---" -ForegroundColor Cyan
+        docker-compose -f react-frontend/docker-compose.prod.yml config
     }
     default {
         Write-Host "`n✅ Validation complete!" -ForegroundColor Green

@@ -53,34 +53,46 @@ function Test-HttpEndpoint {
         [string]$Url,
         [string]$Description,
         [int]$TimeoutSeconds = 10,
-        [string]$ExpectedContent = $null
+        [string]$ExpectedContent = $null,
+        [int]$MaxRetries = 5
     )
 
-    try {
-        $response = Invoke-RestMethod -Uri $Url -Method GET -TimeoutSec $TimeoutSeconds
-
-        if ($ExpectedContent) {
-            $contentMatch = $response -match $ExpectedContent
-            Write-TestResult "$Description" $contentMatch "Response contains expected content"
-            return $contentMatch
-        } else {
-            Write-TestResult "$Description" $true "HTTP 200 OK"
-            return $true
+    $success = $false
+    for ($i = 0; $i -lt $MaxRetries; $i++) {
+        try {
+            $response = Invoke-RestMethod -Uri $Url -Method GET -TimeoutSec $TimeoutSeconds -ErrorAction Stop
+            if ($ExpectedContent) {
+                $contentMatch = $response -match $ExpectedContent
+                Write-TestResult "$Description" $contentMatch "Response contains expected content"
+                $success = $contentMatch
+            } else {
+                Write-TestResult "$Description" $true "HTTP 200 OK"
+                $success = $true
+            }
+            break
+        } catch {
+            if ($i -lt ($MaxRetries - 1)) {
+                Write-ColorOutput "$Description not ready yet, retrying... ($($i+1)/$MaxRetries) - $($_.Exception.Message)" "Yellow"
+                Start-Sleep -Seconds 3
+            } else {
+                Write-TestResult "$Description" $false $_.Exception.Message
+            }
         }
-    } catch {
-        Write-TestResult "$Description" $false $_.Exception.Message
-        return $false
     }
+    return $success
 }
 
 function Test-DatabaseConnection {
     param([string]$Environment)
 
     $containerName = "fastapi_rbac_db_$Environment"
-
+    $dbRunning = docker ps --format '{{.Names}}' | Select-String -Pattern "^$containerName$"
+    if (-not $dbRunning) {
+        Write-TestResult "Database Connection ($Environment)" $false "Container not running ($containerName)"
+        return $false
+    }
     try {
         $result = docker exec -e PGPASSWORD=postgres $containerName psql -U postgres -d "fastapi_rbac_$Environment" -c "SELECT 1;" -t 2>$null
-
         if ($result -match "1") {
             Write-TestResult "Database Connection ($Environment)" $true
             return $true
@@ -98,7 +110,11 @@ function Test-RedisConnection {
     param([string]$Environment)
 
     $containerName = "fastapi_rbac_redis_$Environment"
-
+    $redisRunning = docker ps --format '{{.Names}}' | Select-String -Pattern "^$containerName$"
+    if (-not $redisRunning) {
+        Write-TestResult "Redis Connection ($Environment)" $false "Container not running ($containerName)"
+        return $false
+    }
     try {
         $result = docker exec $containerName redis-cli ping 2>$null
         $success = $result -eq "PONG"

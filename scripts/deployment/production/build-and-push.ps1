@@ -126,7 +126,7 @@ docker-compose -f docker-compose.prod-test.yml down --remove-orphans 2>$null
 
 # Build the production images directly from their respective compose files
 Write-Host "Building backend production image..." -ForegroundColor Green
-docker-compose -f backend\docker-compose.prod.yml build fastapi_rbac
+docker-compose -f backend\docker-compose.prod.yml build fastapi_rbac_prod
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Failed to build backend image"
     exit 1
@@ -144,11 +144,14 @@ if ($LASTEXITCODE -ne 0) {
 Set-Location -Path ".."
 
 Write-Host "Building worker production image..." -ForegroundColor Green
-docker-compose -f backend\docker-compose.prod.yml build fastapi_rbac_worker
+docker-compose -f backend\docker-compose.prod.yml build fastapi_rbac_worker_prod
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Failed to build worker image"
     exit 1
 }
+# Ensure worker image is tagged as fastapi_rbac_worker:prod for consistency
+# (Docker Compose build may already tag it, but this guarantees it)
+docker tag fastapi_rbac_worker_prod fastapi_rbac_worker:prod 2>$null
 
 Write-Host "All production images built successfully!" -ForegroundColor Green
 

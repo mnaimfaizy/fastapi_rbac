@@ -46,23 +46,46 @@ fi
 
 echo "Final tag to be used: $TAG"
 
-# Build the production images
-echo "Building production Docker images..."
-docker compose -f docker-compose.prod-test.yml build
+# Build backend image
+echo "Building backend production image..."
+docker compose -f backend/docker-compose.prod.yml build fastapi_rbac_prod
+if [ $? -ne 0 ]; then
+  echo "Failed to build backend image" >&2
+  exit 1
+fi
+
+# Build frontend image
+echo "Building frontend production image..."
+docker build -f react-frontend/Dockerfile.prod -t react_frontend:prod react-frontend
+if [ $? -ne 0 ]; then
+  echo "Failed to build frontend image" >&2
+  exit 1
+fi
+
+# Build worker image
+echo "Building worker production image..."
+docker compose -f backend/docker-compose.prod.yml build fastapi_rbac_worker_prod
+if [ $? -ne 0 ]; then
+  echo "Failed to build worker image" >&2
+  exit 1
+fi
+
+echo "All production images built successfully!"
 
 # Tag and push backend image
 echo "Tagging and pushing backend image..."
-docker tag fastapi_rbac_backend_prod_test "${BACKEND_IMAGE}:${TAG}"
+docker tag fastapi_rbac:prod "${BACKEND_IMAGE}:${TAG}"
 docker push "${BACKEND_IMAGE}:${TAG}"
 
 # Tag and push frontend image
 echo "Tagging and pushing frontend image..."
-docker tag react_frontend_prod_test "${FRONTEND_IMAGE}:${TAG}"
+docker tag react_frontend:prod "${FRONTEND_IMAGE}:${TAG}"
 docker push "${FRONTEND_IMAGE}:${TAG}"
 
 # Tag and push worker image
 echo "Tagging and pushing worker image..."
-docker tag fastapi_rbac_worker_prod_test "${WORKER_IMAGE}:${TAG}"
+docker tag fastapi_rbac_worker_prod fastapi_rbac_worker:prod 2>/dev/null || true
+docker tag fastapi_rbac_worker:prod "${WORKER_IMAGE}:${TAG}"
 docker push "${WORKER_IMAGE}:${TAG}"
 
 # If tag is not latest, also tag as latest for main branch pushes
