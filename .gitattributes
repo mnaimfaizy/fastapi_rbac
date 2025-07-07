@@ -13,3 +13,6 @@
 # Ensure those won't be messed up with
 *.jpg binary
 *.data binary
+
+# Ensure that shell scripts have LF line endings
+*.sh text eol=lf
