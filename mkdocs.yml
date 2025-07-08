@@ -48,6 +48,11 @@ nav:
       - "Overview": "reference/index.md"
       - "Authentication": "reference/api/auth.md"
       - "Users": "reference/api/users.md"
+      - "Roles": "reference/api/roles.md"
+      - "Permissions": "reference/api/permissions.md"
+      - "Role Groups": "reference/api/role_groups.md"
+      - "Permission Groups": "reference/api/permission_groups.md"
+      - "Dashboard": "reference/api/dashboard.md"
   - "Release Notes": "release-notes.md"
   - "Contributing": "contributing.md"
 
