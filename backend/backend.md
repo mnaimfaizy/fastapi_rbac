@@ -163,3 +163,43 @@ To run the entire stack:
 # From project root
 docker-compose up -d
 ```
+
+# Environment Variable Migration & Consolidation (2025 Update)
+
+The project now uses a single consolidated `.env.example` file for all environments (development, testing, production). The old `production.env.example` has been removed. All environment variables—development and production—are documented in `.env.example` with clear comments and a production checklist.
+
+**Migration Steps:**
+
+- Copy `.env.example` to `.env` for your environment:
+  - Development: `cp .env.example .env`
+  - Production: `cp .env.example .env` and edit all production-specific values (see checklist in the file)
+- Compare your existing `.env` with the new `.env.example` and add any missing variables.
+- Pay special attention to new security, Redis SSL, Celery, and rate limiting variables.
+- For a full migration guide, see [`docs/internal/backend/MIGRATION_GUIDE.md`](../docs/internal/backend/MIGRATION_GUIDE.md).
+
+**Key New/Updated Variables:**
+
+- `PASSWORD_PEPPER` (password hashing security)
+- `CELERY_WORKER_CONCURRENCY`, `CELERY_WORKER_MAX_MEMORY_PER_CHILD`, `CELERY_BROKER_POOL_LIMIT`, `CELERY_TASK_COMPRESSION` (Celery production tuning)
+- `VALIDATE_TOKEN_IP`, `TOKEN_BLACKLIST_ON_LOGOUT`, `TOKEN_BLACKLIST_EXPIRY` (token/session security)
+- Updated Redis SSL and email settings
+
+**Quick Reference:**
+
+- For development, defaults in `.env.example` are ready to use.
+- For production, you must:
+  - Set `MODE=production`, `DEBUG=false`, `LOG_LEVEL=INFO`, `USERS_OPEN_REGISTRATION=false`
+  - Generate new secrets (`SECRET_KEY`, `JWT_SECRET_KEY`, etc.)
+  - Configure production database, Redis (with SSL), email SMTP, and CORS origins
+
+**Troubleshooting:**
+
+- If you see `KeyError: 'VARIABLE_NAME'`, add the missing variable from `.env.example`.
+- For Redis, database, or email issues, check connection and SSL settings as described in the migration guide.
+
+**Rollback:**
+
+- Restore your previous `.env` from backup if needed.
+- The old `production.env.example` is available in git history if you need to reference it.
+
+For more details, see the full migration guide and troubleshooting steps in [`docs/internal/backend/MIGRATION_GUIDE.md`](../docs/internal/backend/MIGRATION_GUIDE.md).
