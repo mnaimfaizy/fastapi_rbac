@@ -1,9 +1,9 @@
 name: Docker Publish
 
 on:
+  release:
+    types: [published]
   push:
-    branches:
-      - main # Adjust this if your main branch is named differently (e.g., master)
     tags:
       - "v*" # Trigger on version tags like v1.0, v1.1.2, etc.
 
@@ -37,13 +37,11 @@ jobs:
           if [[ "${{ github.ref_type }}" == "tag" ]]; then
             echo "IMAGE_TAG=${{ github.ref_name }}" >> $GITHUB_ENV
             echo "Workflow: Using Git tag as IMAGE_TAG: ${{ github.ref_name }}"
-          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then # Adjust 'main' if your default branch is different
+          elif [[ "${{ github.event_name }}" == "release" ]]; then
             echo "IMAGE_TAG=latest" >> $GITHUB_ENV
-            echo "Workflow: Push to main branch, using IMAGE_TAG=latest"
+            echo "Workflow: Release published, using IMAGE_TAG=latest"
           else
-            # This case should ideally not be reached with the current 'on' triggers.
-            # If it is, the script will use its own fallback (git describe or 'latest').
-            echo "Workflow: Not a 'v*' tag or main branch push. IMAGE_TAG not set by workflow. Script will use its fallback logic."
+            echo "Workflow: Not a release or tag. IMAGE_TAG not set by workflow. Script will use its fallback logic."
           fi
         shell: bash
 
