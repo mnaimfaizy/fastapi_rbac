@@ -48,13 +48,13 @@ docker run -d \
   -e REFRESH_TOKEN_EXPIRE_DAYS=7 \
   -e FIRST_SUPERUSER_EMAIL=admin@example.com \
   -e FIRST_SUPERUSER_PASSWORD=changethispassword \
-  # Add other necessary environment variables as per backend/production.env.example
+  # Add other necessary environment variables as per backend/.env.example
   mnaimfaizy/fastapi-rbac-backend:latest # Or a specific version tag like :v1.0.0
 ```
 
 ### Environment Variables
 
-This image is configured using environment variables. For a comprehensive list and their default values (if any), please refer to the `backend/production.env.example` file in the [source repository](https://github.com/mnaimfaizy/fastapi_rbac/blob/main/backend/production.env.example).
+This image is configured using environment variables. For a comprehensive list and their default values (if any), please refer to the `backend/.env.example` file in the [source repository](https://github.com/mnaimfaizy/fastapi_rbac/blob/main/backend/.env.example). The file contains both development and production configurations with clear guidance for each environment.
 
 **Key variables include:**
 
