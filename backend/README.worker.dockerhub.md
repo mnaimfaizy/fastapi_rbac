@@ -43,14 +43,14 @@ docker run -d \
   -e REDIS_PASSWORD=your_redis_password \
   -e CELERY_BROKER_URL=redis://your_redis_host:6379/0 \ # Or use REDIS_HOST, REDIS_PORT, REDIS_PASSWORD to construct this
   -e CELERY_RESULT_BACKEND=redis://your_redis_host:6379/0 \
-  # Add other necessary environment variables as per backend/production.env.example
+  # Add other necessary environment variables as per backend/.env.example
   # (especially those related to email if your tasks send emails)
   mnaimfaizy/fastapi-rbac-worker:latest # Or a specific version tag like :v1.0.0
 ```
 
 ### Environment Variables
 
-The Celery worker shares many environment variables with the backend service, especially for database and Redis connections, and any application settings that tasks might need. Refer to `backend/production.env.example` in the [source repository](https://github.com/mnaimfaizy/fastapi_rbac/blob/main/backend/production.env.example).
+The Celery worker shares many environment variables with the backend service, especially for database and Redis connections, and any application settings that tasks might need. Refer to `backend/.env.example` in the [source repository](https://github.com/mnaimfaizy/fastapi_rbac/blob/main/backend/.env.example) for the complete list of environment variables. The file contains both development and production configurations with clear guidance for each environment.
 
 **Key variables for the worker:**
 
