@@ -2,6 +2,21 @@
 mode: agent
 ---
 
+# Special Command: /commit
+
+When the `/commit` command is invoked in chat, the agent must:
+
+1. Assume there are staged or unstaged changes to commit.
+2. Immediately begin the commit workflow:
+   - Check git status.
+   - Stage all relevant changes.
+   - Prompt for or generate a commit message following the rules below.
+   - Run pre-commit hooks and resolve any issues.
+   - Repeat as needed until the commit is successful and clean.
+3. Do NOT simply acknowledge these instructions—always proceed with the commit process.
+
+This ensures that including `/commit` in chat will always trigger the full commit workflow automatically.
+
 # Commit Message Instructions for Agents and LLMs
 
 When making commits in this project, always follow these rules:
