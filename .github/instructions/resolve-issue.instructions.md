@@ -20,7 +20,7 @@ When asked to resolve an issue, follow these steps:
    - Push the changes to the remote repository.
 4. **Test the Solution**: Ensure that the solution works as intended by running tests or manually testing the changes.
 5. **Document the Changes**: Update any relevant documentation to reflect the changes made to resolve the issue.
-6. **Create a Pull Request**: Once the issue is resolved, create a pull request with a clear description of the changes made and how they resolve the issue.
+6. **Create a Pull Request**: Once the issue is resolved, create a pull request with a clear description of the changes made and how they resolve the issue. Also include label(s) like `bug`, `enhancement`, or `documentation` as appropriate.
 7. **Link the Issue**: In the pull request description, link to the issue being resolved by mentioning it (e.g., "Fixes #issue_number").
 8. **Review and Merge**: After the pull request is reviewed and all the CI builds are passed and approved, merge it into the main branch.
 9. **Close the Issue**: Once the pull request is merged, close the issue if it has not been closed automatically by the pull request.
