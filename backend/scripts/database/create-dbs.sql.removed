@@ -1,0 +1,2 @@
+# Removed create-dbs.sql as part of issue #10 resolution.
+# See https://github.com/mnaimfaizy/fastapi_rbac/issues/10 for details.
