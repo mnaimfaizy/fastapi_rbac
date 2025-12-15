@@ -35,6 +35,7 @@ All documentation has been organized for easy navigation:
 - **🔧 [Troubleshooting](https://fastapi-rbac.mnfprofile.com/troubleshooting/)** - Problem-solving guides
 - **📋 [Reference](https://fastapi-rbac.mnfprofile.com/reference/)** - Technical reference materials
 - **📝 [Release Notes](https://fastapi-rbac.mnfprofile.com/release-notes/)** - Version history and changes
+- **🏷️ [Repository Info](REPOSITORY_INFO.md)** - GitHub description and recommended topics/tags
 
 ## 🛠️ Scripts & Utilities
 
