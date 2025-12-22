@@ -4,6 +4,26 @@
   <img src="docs/assets/logo_with_background.png" alt="FastAPI RBAC Logo" width="100%">
 </p>
 
+<div align="center">
+
+[![Backend CI](https://github.com/mnaimfaizy/fastapi_rbac/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/mnaimfaizy/fastapi_rbac/actions/workflows/backend-ci.yml)
+[![React Frontend CI](https://github.com/mnaimfaizy/fastapi_rbac/actions/workflows/react-frontend-ci.yml/badge.svg)](https://github.com/mnaimfaizy/fastapi_rbac/actions/workflows/react-frontend-ci.yml)
+[![Docker Publish](https://github.com/mnaimfaizy/fastapi_rbac/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/mnaimfaizy/fastapi_rbac/actions/workflows/docker-publish.yml)
+[![Documentation](https://github.com/mnaimfaizy/fastapi_rbac/actions/workflows/docs.yml/badge.svg)](https://github.com/mnaimfaizy/fastapi_rbac/actions/workflows/docs.yml)
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![React](https://img.shields.io/badge/React-18+-61DAFB.svg?logo=react&logoColor=black)](https://reactjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5+-3178C6.svg?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+
+[![Docker Hub Backend](https://img.shields.io/docker/pulls/mnaimfaizy/fastapi-rbac-backend?label=Backend%20Pulls&logo=docker)](https://hub.docker.com/r/mnaimfaizy/fastapi-rbac-backend)
+[![Docker Hub Frontend](https://img.shields.io/docker/pulls/mnaimfaizy/fastapi-rbac-frontend?label=Frontend%20Pulls&logo=docker)](https://hub.docker.com/r/mnaimfaizy/fastapi-rbac-frontend)
+[![Documentation Status](https://img.shields.io/badge/docs-live-brightgreen.svg)](https://fastapi-rbac.mnfprofile.com/)
+[![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/mnaimfaizy/fastapi_rbac/graphs/commit-activity)
+
+</div>
+
 A comprehensive Role-Based Access Control (RBAC) system with FastAPI backend and React frontend, designed to handle Authentication and Authorization for other services.
 
 ## 🚀 Quick Start
