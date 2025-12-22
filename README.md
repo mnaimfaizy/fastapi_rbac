@@ -1,8 +1,7 @@
 # FastAPI RBAC - User Management Microservice
 
 <p align="center">
-  <img src="docs/assets/logo_with_background.png" alt="FastAPI RBAC Logo" width="100%" | **Deploy to production** | `.scripts\deployment\push-to-dockerhub.ps1`      | [Deployment](https://fastapi-rbac.mnfprofile.com/deployment/)                         |
-| **Create a release**    | `.scripts\deployment\release\Create-Release.ps1` | [Release Process](https://fastapi-rbac.mnfprofile.com/deployment/RELEASE_PROCESS/)   |>
+  <img src="docs/assets/logo_with_background.png" alt="FastAPI RBAC Logo" width="100%">
 </p>
 
 A comprehensive Role-Based Access Control (RBAC) system with FastAPI backend and React frontend, designed to handle Authentication and Authorization for other services.
@@ -32,6 +31,7 @@ All documentation has been organized for easy navigation:
 - **📖 [Getting Started](https://fastapi-rbac.mnfprofile.com/getting-started/)** - New developer onboarding
 - **💻 [Development](https://fastapi-rbac.mnfprofile.com/development/)** - Development setup and workflows
 - **🚀 [Deployment](https://fastapi-rbac.mnfprofile.com/deployment/)** - Production deployment guides
+- **📦 [Release Management](RELEASE.md)** - Complete release process and versioning guide
 - **🔧 [Troubleshooting](https://fastapi-rbac.mnfprofile.com/troubleshooting/)** - Problem-solving guides
 - **📋 [Reference](https://fastapi-rbac.mnfprofile.com/reference/)** - Technical reference materials
 - **📝 [Release Notes](https://fastapi-rbac.mnfprofile.com/release-notes/)** - Version history and changes

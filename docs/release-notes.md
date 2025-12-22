@@ -113,7 +113,9 @@ This file serves as the single source of truth for release history and versionin
 
 ## Release Process
 
-For information about the release process, including how to create releases and generate release notes, see the [Release Process Documentation](deployment/RELEASE_PROCESS.md).
+For comprehensive information about the release process, see the [Release Management Guide](../RELEASE.md).
+
+For a quick reference of the original process documentation, see [Release Process Documentation](deployment/RELEASE_PROCESS.md).
 
 ## Semantic Versioning
 

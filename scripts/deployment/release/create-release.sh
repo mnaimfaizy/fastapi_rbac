@@ -170,7 +170,16 @@ function update_release_notes {
     local version="$1"
     local changelog="$2"
 
-    echo -e "\n${CYAN}Updating release notes...${NC}"
+    echo -e "\n${CYAN}Updating release notes and VERSION file...${NC}"
+
+    # Update VERSION file
+    local version_without_v="${version#v}"  # Remove 'v' prefix if present
+    if [ "$DRY_RUN" = true ]; then
+        echo -e "${CYAN}🔍 [DRY RUN] Would update VERSION file to: $version_without_v${NC}"
+    else
+        echo "$version_without_v" > "$ROOT_DIR/VERSION"
+        echo -e "${GREEN}✅ Updated VERSION file to: $version_without_v${NC}"
+    fi
 
     # Check if release notes file exists
     if [ ! -f "$RELEASE_NOTES_PATH" ]; then
@@ -265,18 +274,18 @@ $changelog
             echo -e "${GREEN}✅ Removed backup file after confirmation${NC}"
         fi
 
-        # Commit the updated release notes
-        echo -e "\n${CYAN}Committing the updated release notes...${NC}"
-        git add "$RELEASE_NOTES_PATH"
-        if ! git commit -m "Update release notes for $version"; then
-            echo -e "${YELLOW}⚠️ WARNING: Failed to commit the updated release notes.${NC}"
+        # Commit the updated release notes and VERSION file
+        echo -e "\n${CYAN}Committing the updated release notes and VERSION file...${NC}"
+        git add "$RELEASE_NOTES_PATH" "$ROOT_DIR/VERSION"
+        if ! git commit -m "docs: update release notes and version for $version"; then
+            echo -e "${YELLOW}⚠️ WARNING: Failed to commit the updated files.${NC}"
             read -p "Do you want to continue anyway? (y/n): " confirmation
             if [ "$confirmation" != "y" ]; then
                 echo -e "${RED}Operation cancelled.${NC}"
                 exit 1
             fi
         else
-            echo -e "${GREEN}✅ Release notes committed successfully${NC}"
+            echo -e "${GREEN}✅ Release notes and VERSION file committed successfully${NC}"
         fi
     fi
 }

@@ -6,12 +6,19 @@ on:
   push:
     tags:
       - "v*" # Trigger on version tags like v1.0, v1.1.2, etc.
+  workflow_dispatch: # Allow manual triggering
+    inputs:
+      tag:
+        description: 'Version tag to release (e.g., v1.0.0)'
+        required: true
+        type: string
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
       contents: read # Needed to checkout the repository
+      packages: write # Needed for GitHub Container Registry (optional)
 
     steps:
       - name: Checkout repository
@@ -19,8 +26,18 @@ jobs:
         with:
           fetch-depth: 0 # Fetches all history and tags, useful if script falls back to git describe
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: linux/amd64,linux/arm64
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          platforms: linux/amd64,linux/arm64
+          driver-opts: |
+            image=moby/buildkit:latest
+            network=host
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
@@ -32,32 +49,111 @@ jobs:
         run: cp backend/.env.example backend/.env.production
         shell: bash
 
-      - name: Set IMAGE_TAG for the script
+      - name: Set IMAGE_TAG and metadata
+        id: meta
         run: |
-          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "IMAGE_TAG=${{ github.event.inputs.tag }}" >> $GITHUB_ENV
+            echo "Using manual workflow dispatch tag: ${{ github.event.inputs.tag }}"
+          elif [[ "${{ github.ref_type }}" == "tag" ]]; then
             echo "IMAGE_TAG=${{ github.ref_name }}" >> $GITHUB_ENV
-            echo "Workflow: Using Git tag as IMAGE_TAG: ${{ github.ref_name }}"
+            echo "Using Git tag as IMAGE_TAG: ${{ github.ref_name }}"
           elif [[ "${{ github.event_name }}" == "release" ]]; then
             echo "IMAGE_TAG=latest" >> $GITHUB_ENV
-            echo "Workflow: Release published, using IMAGE_TAG=latest"
+            echo "Release published, using IMAGE_TAG=latest"
           else
-            echo "Workflow: Not a release or tag. IMAGE_TAG not set by workflow. Script will use its fallback logic."
+            echo "Not a release or tag. IMAGE_TAG not set by workflow. Script will use its fallback logic."
           fi
+          
+          # Extract version info for labels
+          VERSION="${{ github.ref_name }}"
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_ENV
+          echo "VCS_REF=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
         shell: bash
 
-      - name: Run push script
-        # The IMAGE_TAG environment variable is now available to the script
-        run: |
-          chmod +x ./scripts/deployment/production/build-and-push.sh
-          ./scripts/deployment/production/build-and-push.sh
-        working-directory: ./ # Ensures script is run from the repo root where it's located
+      - name: Build and push backend image (multi-arch)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile.prod
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-backend:${{ env.IMAGE_TAG }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-backend:latest
+          labels: |
+            org.opencontainers.image.title=FastAPI RBAC Backend
+            org.opencontainers.image.description=Backend service for FastAPI RBAC project
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.created=${{ env.BUILD_DATE }}
+            org.opencontainers.image.revision=${{ env.VCS_REF }}
+            org.opencontainers.image.source=https://github.com/mnaimfaizy/fastapi_rbac
+            org.opencontainers.image.url=https://github.com/mnaimfaizy/fastapi_rbac
+          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-backend:buildcache
+          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-backend:buildcache,mode=max
+          build-args: |
+            BUILD_DATE=${{ env.BUILD_DATE }}
+            VCS_REF=${{ env.VCS_REF }}
+            VERSION=${{ env.VERSION }}
+
+      - name: Build and push frontend image (multi-arch)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./react-frontend
+          file: ./react-frontend/Dockerfile.prod
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-frontend:${{ env.IMAGE_TAG }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-frontend:latest
+          labels: |
+            org.opencontainers.image.title=FastAPI RBAC Frontend
+            org.opencontainers.image.description=React frontend for FastAPI RBAC project
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.created=${{ env.BUILD_DATE }}
+            org.opencontainers.image.revision=${{ env.VCS_REF }}
+            org.opencontainers.image.source=https://github.com/mnaimfaizy/fastapi_rbac
+            org.opencontainers.image.url=https://github.com/mnaimfaizy/fastapi_rbac
+          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-frontend:buildcache
+          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-frontend:buildcache,mode=max
+          build-args: |
+            BUILD_DATE=${{ env.BUILD_DATE }}
+            VCS_REF=${{ env.VCS_REF }}
+            VERSION=${{ env.VERSION }}
+
+      - name: Build and push worker image (multi-arch)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile.prod
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-worker:${{ env.IMAGE_TAG }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-worker:latest
+          labels: |
+            org.opencontainers.image.title=FastAPI RBAC Worker
+            org.opencontainers.image.description=Celery worker for FastAPI RBAC project
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.created=${{ env.BUILD_DATE }}
+            org.opencontainers.image.revision=${{ env.VCS_REF }}
+            org.opencontainers.image.source=https://github.com/mnaimfaizy/fastapi_rbac
+            org.opencontainers.image.url=https://github.com/mnaimfaizy/fastapi_rbac
+          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-worker:buildcache
+          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-worker:buildcache,mode=max
+          target: worker
+          build-args: |
+            BUILD_DATE=${{ env.BUILD_DATE }}
+            VCS_REF=${{ env.VCS_REF }}
+            VERSION=${{ env.VERSION }}
 
       - name: Update Docker Hub Description for Backend
         uses: peter-evans/dockerhub-description@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: ${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-backend # Or your direct image name if username is part of it
+          repository: ${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-backend
           readme-filepath: ./backend/README.dockerhub.md
           short-description: "Backend service for FastAPI RBAC project."
 
@@ -76,5 +172,48 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: ${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-worker
-          readme-filepath: ./backend/README.worker.dockerhub.md # Assuming worker README is in backend folder
+          readme-filepath: ./backend/README.worker.dockerhub.md
           short-description: "Celery worker for FastAPI RBAC project."
+
+      - name: Create release summary
+        if: success()
+        run: |
+          echo "## 🚀 Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ env.IMAGE_TAG }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ env.VCS_REF }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Build Date:** ${{ env.BUILD_DATE }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Published Images" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-backend:${{ env.IMAGE_TAG }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-frontend:${{ env.IMAGE_TAG }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-worker:${{ env.IMAGE_TAG }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🏗️ Architecture Support" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- linux/amd64" >> $GITHUB_STEP_SUMMARY
+          echo "- linux/arm64" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📋 Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "1. Verify images on [Docker Hub](https://hub.docker.com/u/${{ secrets.DOCKERHUB_USERNAME }})" >> $GITHUB_STEP_SUMMARY
+          echo "2. Test deployment in staging environment" >> $GITHUB_STEP_SUMMARY
+          echo "3. Update production deployments" >> $GITHUB_STEP_SUMMARY
+          echo "4. Monitor application logs and metrics" >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "## ❌ Release Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The Docker image build and push process failed." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Please check the workflow logs for details." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔧 Troubleshooting Steps" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "1. Review build logs above" >> $GITHUB_STEP_SUMMARY
+          echo "2. Verify Docker Hub credentials" >> $GITHUB_STEP_SUMMARY
+          echo "3. Check Dockerfile syntax" >> $GITHUB_STEP_SUMMARY
+          echo "4. Ensure all dependencies are available" >> $GITHUB_STEP_SUMMARY

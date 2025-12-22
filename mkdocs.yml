@@ -41,6 +41,9 @@ nav:
   - "Deployment":
       - "Overview": "deployment/index.md"
       - "Production Deployment": "deployment/production-deployment-guide.md"
+      - "Quick Release Guide": "deployment/QUICK_RELEASE_GUIDE.md"
+      - "Release Process": "deployment/RELEASE_PROCESS.md"
+      - "Release Improvements": "deployment/RELEASE_IMPROVEMENTS.md"
   - "Troubleshooting":
       - "Overview": "troubleshooting/index.md"
       - "Common Issues": "troubleshooting/common-issues.md"
