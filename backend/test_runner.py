@@ -13,6 +13,7 @@ import argparse
 import os
 import subprocess
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Optional
 
@@ -39,16 +40,17 @@ except ImportError:
     print("python-dotenv not installed. Skipping .env.test.local loading.")
 
 
-def run_command(cmd: list[str], cwd: Optional[str] = None) -> int:
+def run_command(cmd: Sequence[str], cwd: Optional[str] = None) -> int:
     """Run a command and return the exit code."""
+    cmd_list = list(cmd)
     # Replace 'python' with sys.executable for all subprocess calls
-    if cmd and cmd[0] == "python":
-        cmd[0] = sys.executable
-    print(f"Running: {' '.join(cmd)}")
+    if cmd_list and cmd_list[0] == "python":
+        cmd_list[0] = sys.executable
+    print(f"Running: {' '.join(cmd_list)}")
     if cwd:
         print(f"Working directory: {cwd}")
 
-    result = subprocess.run(cmd, cwd=cwd)
+    result = subprocess.run(cmd_list, cwd=cwd)
     return result.returncode
 
 

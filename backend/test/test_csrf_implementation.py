@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Test script to verify CSRF protection implementation for critical auth endpoints.
+"""Test script to verify CSRF protection implementation for critical auth endpoints.
 
 This script tests:
 1. CSRF token generation endpoint
