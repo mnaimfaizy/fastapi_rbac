@@ -37,7 +37,7 @@ This document summarizes the major refactor and maintenance changes applied to t
 - **Entrypoint Scripts Relocated:**
 
   - All entrypoint and service start scripts are now under `backend/scripts/docker/` for clarity.
-  - Old scripts (`production-entrypoint.sh`, `development-entrypoint.sh`, `testing-entrypoint.sh`, etc.) have been removed or replaced.
+  - Legacy entrypoint scripts have been replaced by `entrypoint-prod.sh`, `entrypoint-dev.sh`, and `entrypoint-test.sh`.
 
 - **Entrypoint Logic Improvements:**
 

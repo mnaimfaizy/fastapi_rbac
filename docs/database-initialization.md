@@ -17,7 +17,7 @@ The FastAPI RBAC system uses a multi-step database initialization process:
 
 **How it works:**
 
-- Uses `development-entrypoint.sh` script
+- Uses `backend/scripts/docker/entrypoint-dev.sh` (container entrypoint)
 - Automatically runs migrations and initial data setup
 - Starts uvicorn with hot-reload for development
 
@@ -40,7 +40,7 @@ docker-compose -f docker-compose.dev.yml up --build
 
 **How it works:**
 
-- Uses `production-entrypoint.sh` script
+- Uses `backend/scripts/docker/entrypoint-prod.sh` (container entrypoint)
 - Automatically runs migrations and initial data setup
 - Starts gunicorn with multiple workers
 
@@ -63,15 +63,15 @@ docker-compose -f docker-compose.prod.yml up --build
 
 **How it works:**
 
-- Uses standard `entrypoint.sh` script
+- Uses `backend/scripts/docker/entrypoint-test.sh` (container entrypoint)
 - Automatically runs migrations and initial data setup
 - Starts FastAPI for testing
 
 **Command to start:**
 
 ```powershell
-cd d:\Projects\fastapi_rbac
-docker-compose -f docker-compose.dev.yml up --build
+cd d:\Projects\fastapi_rbac\backend
+docker-compose -f docker-compose.test.yml up --build
 ```
 
 ## Manual Database Operations
