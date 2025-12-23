@@ -53,8 +53,8 @@ async def promote_user_to_admin(
     client: AsyncClient, user_email: str, max_retries: int = 5, delay: float = 0.3
 ) -> str:
     """Assign the admin role to a user using the seeded admin account, with retry for DB visibility."""
-    seed_admin_email = "admin@example.com"
-    seed_admin_password = "admin123"
+    seed_admin_email = str(settings.FIRST_SUPERUSER_EMAIL)
+    seed_admin_password = settings.FIRST_SUPERUSER_PASSWORD
     seed_admin_token = await login_user(client, seed_admin_email, seed_admin_password)
     seed_admin_headers = {"Authorization": f"Bearer {seed_admin_token}"}
     user_id = None

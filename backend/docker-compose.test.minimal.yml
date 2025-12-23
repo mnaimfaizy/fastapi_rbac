@@ -86,7 +86,7 @@ services:
         condition: service_healthy
     networks:
       - fastapi_rbac_test_network
-    entrypoint: ["/bin/bash", "/app/scripts/docker/testing-entrypoint.sh"]
+    entrypoint: ["/bin/bash", "/app/scripts/docker/entrypoint-test.sh"]
 
   # PostgreSQL Database for testing
   fastapi_rbac_db_test:

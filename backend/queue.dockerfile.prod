@@ -68,11 +68,11 @@ RUN mkdir -p /app/logs /app/celerybeat-schedule
 RUN chown -R appuser:appuser /app
 
 # Copy scripts first
-COPY scripts/worker-start.sh scripts/beat-start.sh scripts/flower-start.sh ./scripts/
+COPY scripts/docker/start-worker.sh scripts/docker/start-beat.sh scripts/docker/start-flower.sh ./scripts/docker/
 
 # Fix line endings for scripts
-RUN dos2unix -f ./scripts/*.sh && \
-    chmod +x ./scripts/*.sh
+RUN dos2unix -f ./scripts/docker/*.sh && \
+    chmod +x ./scripts/docker/*.sh
 
 # Copy openssl config if needed
 COPY ./.docker/openssl.cnf /etc/ssl/openssl.cnf
@@ -102,4 +102,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD celery -A app.celery_app inspect ping || exit 1
 
 # The actual command will be specified in docker-compose
-CMD ["/bin/bash", "/app/scripts/docker/docker-worker-start.sh"]
+CMD ["/bin/bash", "/app/scripts/docker/start-worker.sh"]

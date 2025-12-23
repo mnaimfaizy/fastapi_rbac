@@ -1,7 +1,9 @@
 import logging
 import os
+import ssl
 import sys
 from pathlib import Path
+from typing import Any
 
 import tenacity
 from redis.exceptions import AuthenticationError  # Import AuthenticationError directly
@@ -97,10 +99,7 @@ def wait_for_redis() -> None:
         redis_host_from_settings = settings.REDIS_HOST
         redis_port_from_settings = settings.REDIS_PORT
 
-        # Check if running in a container environment (useful for Docker)
-        in_container = (
-            os.getenv("CONTAINER_MODE", "").lower() == "true"
-        )  # Get Redis connection details based on environment mode
+        # Get Redis connection details based on environment mode
         if settings.MODE == ModeEnum.development:
             # In Docker development, use the container name from settings
             redis_host = os.getenv("REDIS_HOST", str(redis_host_from_settings))
@@ -119,7 +118,11 @@ def wait_for_redis() -> None:
             redis_port_str = os.getenv("REDIS_PORT", str(redis_port_from_settings))
             # In production, get SSL setting from environment or default to True
             redis_ssl = os.getenv("REDIS_SSL", "true").lower() == "true"
-            logger.info(f"{settings.MODE.value} mode: Using configured Redis with SSL={redis_ssl}.")
+            logger.info(
+                "%s mode: Using configured Redis with SSL=%s.",
+                settings.MODE.value,
+                redis_ssl,
+            )
 
         # Convert port to int, with a default if None or invalid
         try:
@@ -137,9 +140,9 @@ def wait_for_redis() -> None:
         redis_password = os.getenv("REDIS_PASSWORD", settings.REDIS_PASSWORD)
 
         # Get SSL certificate paths when SSL is enabled
-        ssl_ca_certs = None
-        ssl_certfile = None
-        ssl_keyfile = None
+        ssl_ca_certs: str | None = None
+        ssl_certfile: str | None = None
+        ssl_keyfile: str | None = None
 
         if redis_ssl:
             # Path to the certificate files (adjust for container paths)
@@ -148,7 +151,10 @@ def wait_for_redis() -> None:
             # For local development or when running outside container
             if not os.path.exists(base_cert_path):
                 base_cert_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "certs")
-                logger.info(f"Certificate path not found at {base_cert_path}, using local certs directory")
+                logger.info(
+                    "Certificate path not found at %s, using local certs directory",
+                    base_cert_path,
+                )
 
             ssl_ca_certs = os.path.join(base_cert_path, "ca.crt")
             ssl_certfile = os.path.join(base_cert_path, "redis.crt")
@@ -156,7 +162,18 @@ def wait_for_redis() -> None:
 
             # Verify certificates exist
             if not os.path.exists(ssl_ca_certs):
-                logger.warning(f"CA certificate not found at {ssl_ca_certs}, SSL might not work properly")
+                if settings.MODE == ModeEnum.production:
+                    raise RuntimeError(
+                        (
+                            f"Redis TLS is enabled but CA certificate was not found at {ssl_ca_certs}. "
+                            "Generate certs via backend/certs/generate-certs.(sh|ps1) and ensure "
+                            "they are mounted at /app/certs."
+                        )
+                    )
+                logger.warning(
+                    f"CA certificate not found at {ssl_ca_certs}. "
+                    "Redis TLS is enabled; connection will likely fail."
+                )
             if not os.path.exists(ssl_certfile):
                 logger.warning(f"Certificate not found at {ssl_certfile}, SSL might not work properly")
             if not os.path.exists(ssl_keyfile):
@@ -169,26 +186,37 @@ def wait_for_redis() -> None:
         # Create connection configuration based on whether SSL is enabled
         if redis_ssl:
             logger.info("Connecting to Redis with SSL and password.")
-            ssl_kwargs = {
+            ssl_kwargs: dict[str, Any] = {
                 "ssl": True,
-                "ssl_cert_reqs": "required",
+                "ssl_cert_reqs": ssl.CERT_REQUIRED,
             }
 
             # Only add certificate paths if files exist and not None
             if ssl_ca_certs and os.path.exists(ssl_ca_certs):
                 ssl_kwargs["ssl_ca_certs"] = ssl_ca_certs
+            elif settings.MODE == ModeEnum.production:
+                # Production must never silently downgrade TLS verification.
+                raise RuntimeError(
+                    "Redis TLS is enabled in production but CA certificate is missing; "
+                    "refusing to connect with insecure settings."
+                )
             # Do NOT add ssl_certfile or ssl_keyfile unless mutual TLS is required
             # if ssl_certfile and os.path.exists(ssl_certfile):
             #     ssl_kwargs["ssl_certfile"] = ssl_certfile
             # if ssl_keyfile and os.path.exists(ssl_keyfile):
             #     ssl_kwargs["ssl_keyfile"] = ssl_keyfile
 
-            # In Docker environment, hostnames might be different
-            # In production Docker, hostname verification often needs to be disabled
-            if in_container or settings.MODE == ModeEnum.production:
-                # In container mode, hostname verification might need to be disabled
-                # or the hostname might need to match the cert's CN
-                ssl_kwargs["ssl_check_hostname"] = False
+            # Hostname verification
+            # The generated Redis cert (backend/certs/redis_cert.cnf) includes SANs for:
+            # - fastapi_rbac_redis_prod
+            # - fastapi_rbac_redis
+            # - localhost
+            # so we can (and should) verify hostnames in production.
+            ssl_check_hostname_env = os.getenv("REDIS_SSL_CHECK_HOSTNAME")
+            if ssl_check_hostname_env is not None:
+                ssl_kwargs["ssl_check_hostname"] = ssl_check_hostname_env.lower() == "true"
+            else:
+                ssl_kwargs["ssl_check_hostname"] = settings.MODE == ModeEnum.production
 
             # Log the SSL settings being used
             logger.info(f"Redis SSL configuration: {ssl_kwargs}")
@@ -198,11 +226,8 @@ def wait_for_redis() -> None:
                 port=redis_port,
                 password=redis_password if redis_password else None,
                 db=0,
-                credential_provider=None,
-                health_check_interval=0,  # Corrected name and using default value
-                cache_config=None,  # Corrected name
-                cache=None,  # Added for CacheInterface | None
-            )
+                **ssl_kwargs,
+            )  # type: ignore[arg-type]
         elif redis_password:
             logger.info("Connecting to Redis with a password (no SSL).")
             r = redis.Redis(

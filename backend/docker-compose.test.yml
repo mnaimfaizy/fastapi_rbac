@@ -111,7 +111,7 @@ services:
       - ./logs:/app/logs
     ports:
       - "8002:8000" # Different port for test environment
-    command: ["bash", "/app/scripts/docker/testing-entrypoint.sh"]
+    command: ["bash", "/app/scripts/docker/entrypoint-test.sh"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
       interval: 30s
@@ -147,7 +147,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://fastapi_rbac_redis_test:6379/0
     env_file:
       - .env.test
-    command: ["/bin/bash", "/app/scripts/docker/docker-worker-start.sh"]
+    command: ["/bin/bash", "/app/scripts/docker/start-worker.sh"]
     volumes:
       - ${BACKEND_SRC:-.}:/app
       - ./logs:/app/logs
@@ -183,7 +183,7 @@ services:
       - ${BACKEND_SRC:-.}:/app
       - ./logs:/app/logs
       - fastapi_rbac_celery_beat_test_schedule:/app
-    command: ["/bin/bash", "/app/scripts/docker/docker-beat-start.sh"]
+    command: ["/bin/bash", "/app/scripts/docker/start-beat.sh"]
     depends_on:
       fastapi_rbac_db_test:
         condition: service_healthy
@@ -223,7 +223,7 @@ services:
         condition: service_healthy
     networks:
       - fastapi_rbac_test_network
-    entrypoint: ["/bin/bash", "/app/scripts/docker/testing-entrypoint.sh"]
+    entrypoint: ["/bin/bash", "/app/scripts/docker/entrypoint-test.sh"]
 
   # Flower for monitoring Celery tasks in test environment
   fastapi_rbac_flower_test:
@@ -251,7 +251,7 @@ services:
     volumes:
       - ${BACKEND_SRC:-.}:/app
       - ./logs:/app/logs
-    command: ["/bin/bash", "/app/scripts/flower-start.sh"]
+    command: ["/bin/bash", "/app/scripts/docker/start-flower.sh"]
     depends_on:
       fastapi_rbac_redis_test:
         condition: service_healthy
