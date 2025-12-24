@@ -135,4 +135,4 @@ USER appuser
 EXPOSE 8000
 
 # Use the production entrypoint script
-CMD ["bash", "/app/scripts/docker/entrypoint.sh"]
+CMD ["bash", "/app/scripts/docker/production-entrypoint.sh"]

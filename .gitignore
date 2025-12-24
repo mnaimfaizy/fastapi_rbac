@@ -16,3 +16,6 @@ logfile.log
 node_modules
 site/
 changelog.txt
+
+# Local test DB artifact
+memory_test_db_default

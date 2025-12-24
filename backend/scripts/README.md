@@ -1,4 +1,4 @@
-# Backend scripts
+# Backend Scripts
 
 This folder contains operational scripts used by Docker Compose and for local developer convenience.
 

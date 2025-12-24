@@ -13,8 +13,9 @@ import argparse
 import os
 import subprocess
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Optional
 
 # Ensure .coverage is not a directory before running tests
 coverage_path = Path(".coverage")
