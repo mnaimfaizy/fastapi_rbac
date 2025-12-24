@@ -41,13 +41,12 @@ RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir flower \
     && pip install --no-cache-dir psycopg2-binary
 
-# Copy scripts first but don't copy the rest of the app yet
-COPY scripts/worker-start.sh scripts/beat-start.sh scripts/flower-start.sh /app/
+# Copy queue scripts first (better Docker layer caching)
+COPY scripts/docker/start-worker.sh scripts/docker/start-beat.sh scripts/docker/start-flower.sh /app/scripts/docker/
 
-# Fix line endings for all shell scripts
-# Use dos2unix with -f to force conversion and overwrite original files
-RUN dos2unix -f /app/worker-start.sh /app/beat-start.sh /app/flower-start.sh \
-    && chmod +x /app/worker-start.sh /app/beat-start.sh /app/flower-start.sh
+# Fix line endings for copied scripts
+RUN dos2unix -f /app/scripts/docker/start-worker.sh /app/scripts/docker/start-beat.sh /app/scripts/docker/start-flower.sh \
+    && chmod +x /app/scripts/docker/start-worker.sh /app/scripts/docker/start-beat.sh /app/scripts/docker/start-flower.sh
 
 # Copy openssl config
 COPY ./.docker/openssl.cnf /etc/ssl/openssl.cnf
@@ -60,18 +59,10 @@ RUN find /app -name "*.sh" -type f -exec dos2unix -f {} \; \
     && find /app -name "*.sh" -type f -exec chmod +x {} \; \
     && find /app -name "*.py" -type f -exec dos2unix -f {} \;
 
-# Create a symlink to ensure the pre_start script is found without \r character
-RUN ln -sf /app/app/backend_pre_start.py /app/backend_pre_start.py
-
-# Update the worker, beat, and flower start scripts to use the correct path
-RUN sed -i 's|/app/app/backend_pre_start.py|/app/backend_pre_start.py|g' /app/scripts/docker/docker-worker-start.sh \
-    && sed -i 's|/app/app/backend_pre_start.py|/app/backend_pre_start.py|g' /app/scripts/docker/docker-beat-start.sh \
-    && sed -i 's|/app/app/backend_pre_start.py|/app/backend_pre_start.py|g' /app/scripts/flower-start.sh
-
 # Remove any existing celerybeat-schedule directory that might conflict with the DB file
 RUN rm -rf /app/celerybeat-schedule
 
 ENV PYTHONPATH=/app
 
 # Default command can be overridden by docker-compose
-CMD ["/bin/bash", "/app/scripts/worker-start.sh"]
+CMD ["/bin/bash", "/app/scripts/docker/start-worker.sh"]

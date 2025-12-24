@@ -1,5 +1,5 @@
 #Requires -Version 5.1
-# PowerShell equivalent for flower-start.sh
+# PowerShell equivalent for local/start-flower.sh
 
 $ErrorActionPreference = 'Stop'
 

@@ -4,7 +4,7 @@
     {
       "type": "shell",
       "label": "Run targeted integration test for permission delete fix",
-      "command": "python backend/test_runner.py specific --path backend/test/integration/test_api_permission_flow.py::TestPermissionManagementFlow::test_admin_permission_crud_flow"
+      "command": "cd backend && python test_runner.py specific --path test/integration/test_api_permission_flow.py::TestPermissionManagementFlow::test_admin_permission_crud_flow"
     }
   ]
 }

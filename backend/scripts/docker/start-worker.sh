@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-# Set PYTHONPATH to /backend (Docker default)
-export PYTHONPATH="/backend"
+# Set PYTHONPATH to /app (Docker best practice for this project)
+export PYTHONPATH="/app"
 
 # Wait for core services to be available before starting the worker
 python ./app/backend_pre_start.py

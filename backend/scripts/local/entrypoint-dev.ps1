@@ -1,5 +1,5 @@
 #Requires -Version 5.1
-# PowerShell equivalent for development-entrypoint.sh
+# PowerShell equivalent for docker/entrypoint-dev.sh
 
 $ErrorActionPreference = 'Stop'
 Write-Host "=== FastAPI RBAC System Development Mode ==="

@@ -53,11 +53,10 @@ services:
           "CMD",
           "redis-cli",
           "-h",
-          "fastapi_rbac_redis_prod",
+          "localhost",
           "--tls",
           "--cacert",
           "/certs/ca.crt",
-          "--insecure",
           "-a",
           "${REDIS_PASSWORD:-redis}",
           "ping",
@@ -90,15 +89,15 @@ services:
       - DATABASE_NAME=${DATABASE_NAME:-fastapi_db}
       - REDIS_PORT=${REDIS_PORT:-6379}
       - REDIS_PASSWORD=${REDIS_PASSWORD:-redis}
-      - REDIS_URL=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/0?ssl_cert_reqs=none&ssl_ca_certs=/app/certs/ca.crt
-      - CELERY_BROKER_URL=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/0?ssl_cert_reqs=none&ssl_ca_certs=/app/certs/ca.crt
-      - CELERY_RESULT_BACKEND=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/0?ssl_cert_reqs=none&ssl_ca_certs=/app/certs/ca.crt
+      - REDIS_URL=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/0?ssl_cert_reqs=required&ssl_ca_certs=/app/certs/ca.crt&ssl_check_hostname=true
+      - CELERY_BROKER_URL=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/0?ssl_cert_reqs=required&ssl_ca_certs=/app/certs/ca.crt&ssl_check_hostname=true
+      - CELERY_RESULT_BACKEND=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/0?ssl_cert_reqs=required&ssl_ca_certs=/app/certs/ca.crt&ssl_check_hostname=true
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
     env_file:
       - .env.production
     volumes:
-      - ${BACKEND_LOGS:-./logs}:/app/logs
+      - ${BACKEND_LOGS:-fastapi_rbac_logs_prod_data}:/app/logs
     ports:
       - "8000:8000"
     user: appuser
@@ -138,17 +137,17 @@ services:
       - DATABASE_NAME=${DATABASE_NAME:-fastapi_db}
       - REDIS_PORT=${REDIS_PORT:-6379}
       - REDIS_PASSWORD=${REDIS_PASSWORD:-redis}
-      - REDIS_URL=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/0?ssl_cert_reqs=none&ssl_ca_certs=/app/certs/ca.crt
-      - CELERY_BROKER_URL=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/0?ssl_cert_reqs=none&ssl_ca_certs=/app/certs/ca.crt
-      - CELERY_RESULT_BACKEND=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/0?ssl_cert_reqs=none&ssl_ca_certs=/app/certs/ca.crt
+      - REDIS_URL=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/0?ssl_cert_reqs=required&ssl_ca_certs=/app/certs/ca.crt&ssl_check_hostname=true
+      - CELERY_BROKER_URL=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/0?ssl_cert_reqs=required&ssl_ca_certs=/app/certs/ca.crt&ssl_check_hostname=true
+      - CELERY_RESULT_BACKEND=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/0?ssl_cert_reqs=required&ssl_ca_certs=/app/certs/ca.crt&ssl_check_hostname=true
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
       - SQLALCHEMY_DATABASE_URI=postgresql://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres}@fastapi_rbac_db_prod:${DATABASE_PORT:-5432}/${DATABASE_NAME:-fastapi_db}
     env_file:
       - .env.production
     volumes:
-      - ${BACKEND_LOGS:-./logs}:/app/logs
-    command: ["/bin/bash", "/app/scripts/docker/docker-worker-start.sh"]
+      - ${BACKEND_LOGS:-fastapi_rbac_logs_prod_data}:/app/logs
+    command: ["/bin/bash", "/app/scripts/docker/start-worker.sh"]
     user: appuser
     restart: always
     depends_on:
@@ -180,15 +179,16 @@ services:
       - DATABASE_NAME=${DATABASE_NAME:-fastapi_db}
       - REDIS_PORT=${REDIS_PORT:-6379}
       - REDIS_PASSWORD=${REDIS_PASSWORD:-redis}
-      - REDIS_URL=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/1?ssl_cert_reqs=none&ssl_ca_certs=/app/certs/ca.crt
-      - CELERY_BROKER_URL=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/1?ssl_cert_reqs=none&ssl_ca_certs=/app/certs/ca.crt
-      - CELERY_RESULT_BACKEND=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/1?ssl_cert_reqs=none&ssl_ca_certs=/app/certs/ca.crt
+      - REDIS_URL=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/1?ssl_cert_reqs=required&ssl_ca_certs=/app/certs/ca.crt&ssl_check_hostname=true
+      - CELERY_BROKER_URL=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/1?ssl_cert_reqs=required&ssl_ca_certs=/app/certs/ca.crt&ssl_check_hostname=true
+      - CELERY_RESULT_BACKEND=rediss://default:${REDIS_PASSWORD:-redis}@fastapi_rbac_redis_prod:${REDIS_PORT:-6379}/1?ssl_cert_reqs=required&ssl_ca_certs=/app/certs/ca.crt&ssl_check_hostname=true
+      - CELERY_BEAT_SCHEDULER=celery.beat:PersistentScheduler
     env_file:
       - .env.production
     volumes:
-      - ${BACKEND_LOGS:-./logs}:/app/logs
+      - ${BACKEND_LOGS:-fastapi_rbac_logs_prod_data}:/app/logs
       - ${BACKEND_CELERY_BEAT_DATA:-./celerybeat-schedule}:/app/celerybeat-schedule
-    command: ["/bin/bash", "/app/scripts/docker/docker-beat-start.sh"]
+    command: ["/bin/bash", "/app/scripts/docker/start-beat.sh"]
     user: appuser
     restart: always
     depends_on:
@@ -238,6 +238,8 @@ volumes:
   # All volumes are directory-scoped and can be overridden via env vars
   fastapi_rbac_postgres_prod_data:
     name: ${BACKEND_DB_VOLUME:-fastapi_rbac_postgres_prod_data}
+  fastapi_rbac_logs_prod_data:
+    name: ${BACKEND_LOGS_VOLUME:-fastapi_rbac_logs_prod_data}
   fastapi_rbac_celery_beat_prod_data:
     name: ${BACKEND_CELERY_BEAT_VOLUME:-fastapi_rbac_celery_beat_prod_data}
   fastapi_rbac_redis_prod_data:

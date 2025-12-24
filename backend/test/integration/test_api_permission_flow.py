@@ -24,8 +24,8 @@ class TestPermissionManagementFlow:
     async def get_admin_token(self, client: AsyncClient) -> str:
         # Use the known pre-seeded admin credentials from initial data
         login_data = {
-            "email": "admin@example.com",  # Adjust if your seeded admin email is different
-            "password": "admin123",  # Adjust if your seeded admin password is different
+            "email": str(settings.FIRST_SUPERUSER_EMAIL),
+            "password": settings.FIRST_SUPERUSER_PASSWORD,
         }
         csrf_token, headers = await get_csrf_token(client)
         headers["x-csrf-token"] = csrf_token

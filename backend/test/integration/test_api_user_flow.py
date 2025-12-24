@@ -85,8 +85,8 @@ async def promote_user_to_admin(
 ) -> Optional[Dict[str, Any]]:
     """Assign the admin role to a user using the seeded admin account, with retry for DB visibility.
     Also sets is_superuser=True."""
-    seed_admin_email = "admin@example.com"
-    seed_admin_password = "admin123"
+    seed_admin_email = str(settings.FIRST_SUPERUSER_EMAIL)
+    seed_admin_password = settings.FIRST_SUPERUSER_PASSWORD
     admin_token = await login_user(client, seed_admin_email, seed_admin_password)
     assert admin_token is not None, (
         f"Admin login failed for {seed_admin_email}. "
@@ -350,8 +350,8 @@ class TestUserManagementFlow:
         # Register and verify a user
         email, password = await register_and_verify_user(client)
         # Debug: fetch user status after registration/verification
-        admin_email = "admin@example.com"
-        admin_password = "admin123"
+        admin_email = str(settings.FIRST_SUPERUSER_EMAIL)
+        admin_password = settings.FIRST_SUPERUSER_PASSWORD
         admin_token = await login_user(client, admin_email, admin_password)
         admin_headers = {"Authorization": f"Bearer {admin_token}"}
         response = await client.get(f"{settings.API_V1_STR}/users?email={email}", headers=admin_headers)

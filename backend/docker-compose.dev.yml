@@ -28,7 +28,7 @@ services:
     volumes:
       - ${BACKEND_SRC:-.}:/app
       - ./logs:/app/logs
-    command: ["bash", "/app/scripts/docker/development-entrypoint.sh"]
+    command: ["bash", "/app/scripts/docker/entrypoint-dev.sh"]
     networks:
       - fastapi_rbac_dev_network
     depends_on:
@@ -64,7 +64,7 @@ services:
       - SMTP_HOST=mailhog_dev
     env_file:
       - .env.development
-    command: ["/bin/bash", "/app/scripts/docker/docker-worker-start.sh"]
+    command: ["/bin/bash", "/app/scripts/docker/start-worker.sh"]
     depends_on:
       fastapi_rbac_redis_dev:
         condition: service_healthy
@@ -96,7 +96,7 @@ services:
       - SMTP_HOST=mailhog_dev
     env_file:
       - .env.development
-    command: ["/bin/bash", "/app/scripts/docker/docker-beat-start.sh"]
+    command: ["/bin/bash", "/app/scripts/docker/start-beat.sh"]
     depends_on:
       fastapi_rbac_redis_dev:
         condition: service_healthy
@@ -127,7 +127,7 @@ services:
       - .env.development
     ports:
       - "5555:5555" # Flower web interface
-    command: ["/bin/bash", "/app/scripts/flower-start.sh"]
+    command: ["/bin/bash", "/app/scripts/docker/start-flower.sh"]
     depends_on:
       fastapi_rbac_redis_dev:
         condition: service_healthy

@@ -284,7 +284,7 @@ class TestDashboardFlow:
         """Test that regular users cannot access dashboard endpoints."""
         # Use pre-seeded regular user
         regular_email = "user@example.com"
-        regular_password = "admin123"  # Correct password from init_db.py
+        regular_password = settings.FIRST_SUPERUSER_PASSWORD
         # Debug: Print all users and their roles before login
         from sqlmodel import select
 
@@ -329,8 +329,8 @@ class TestDashboardFlow:
     ) -> None:
         """Test that dashboard data is consistent with actual data."""
         # Use pre-seeded admin user
-        admin_email = "admin@example.com"
-        admin_password = "admin123"
+        admin_email = str(settings.FIRST_SUPERUSER_EMAIL)
+        admin_password = settings.FIRST_SUPERUSER_PASSWORD
         from sqlmodel import select
 
         from app.models.user_model import User as UserModel
