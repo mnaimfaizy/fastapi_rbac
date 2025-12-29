@@ -2,7 +2,7 @@
 # Supports development, testing, and production environments
 
 # Base stage with common dependencies
-FROM node:18-alpine as base
+FROM node:18-alpine AS base
 
 WORKDIR /app
 
@@ -13,7 +13,7 @@ COPY package*.json ./
 RUN npm ci
 
 # Development stage
-FROM base as development
+FROM base AS development
 
 ENV NODE_ENV=development
 ENV VITE_MODE=development
@@ -28,7 +28,7 @@ EXPOSE 5173
 CMD ["npm", "run", "dev", "--", "--host"]
 
 # Testing stage
-FROM base as testing
+FROM base AS testing
 
 ENV NODE_ENV=testing
 ENV VITE_MODE=testing
@@ -43,7 +43,7 @@ EXPOSE 3000
 CMD ["npm", "run", "dev", "--", "--host", "--port", "3000"]
 
 # Production build stage
-FROM base as build
+FROM base AS build
 
 ENV NODE_ENV=production
 ENV VITE_MODE=production
@@ -55,7 +55,7 @@ COPY . .
 RUN npm run build
 
 # Production stage
-FROM nginx:alpine as production
+FROM nginx:alpine AS production
 
 # Copy custom nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
