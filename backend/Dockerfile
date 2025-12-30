@@ -2,7 +2,7 @@
 # Supports development, testing, and production environments
 
 # Base stage with common dependencies
-FROM python:3.10-slim-buster as base
+FROM python:3.10-slim-buster AS base
 
 WORKDIR /app
 
@@ -39,7 +39,7 @@ RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
 # Development stage
-FROM base as development
+FROM base AS development
 
 ENV ENVIRONMENT=development
 ENV TESTING=0
@@ -67,7 +67,7 @@ EXPOSE 8000
 CMD ["bash", "/app/scripts/docker/entrypoint-dev.sh"]
 
 # Testing stage
-FROM base as testing
+FROM base AS testing
 
 ENV ENVIRONMENT=testing
 ENV TESTING=1
@@ -98,7 +98,7 @@ EXPOSE 8000
 CMD ["bash", "/app/scripts/docker/entrypoint-test.sh"]
 
 # Production stage
-FROM base as production
+FROM base AS production
 
 ENV ENVIRONMENT=production
 ENV TESTING=0
