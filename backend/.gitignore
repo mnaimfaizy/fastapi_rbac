@@ -11,6 +11,7 @@ public/
 .coverage
 .env*
 !.env.example
+!.env.production.example
 celerybeat-schedule
 docker-compose.override.yml
 logfile.log
