@@ -196,7 +196,14 @@ async def lifespan(fastapi_instance: FastAPI) -> AsyncGenerator[None, None]:
     await FastAPICache.clear()
     await FastAPILimiter.close()
     if redis_client:
-        await redis_client.close()
+        # Connection is returned to pool, pool cleanup happens below
+        pass
+
+    # Clean up Redis connection pool
+    from app.utils.redis_connection import RedisConnectionFactory
+
+    await RedisConnectionFactory.close_pool()
+
     g.cleanup()
     gc.collect()
 

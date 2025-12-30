@@ -73,22 +73,55 @@ def get_celery_config() -> Dict[str, Any]:
         "task_max_retries": 3,  # Maximum number of retries
     }  # Add production-specific settings
     if settings.MODE == ModeEnum.production:
-        # SSL options for Redis. Adjust as per your SSL setup.
-        # If you don't have specific SSL certs, an empty dict might suffice
-        # for basic SSL enabling, or you might need to specify paths to certs.
-        # For now, let's assume basic SSL enabling without specific certs.
-        # If your Redis server requires specific certs, configure them here.
-        ssl_opts = {"ssl_cert_reqs": None}  # Basic SSL, no client cert verification
+        # SSL options for Redis with proper certificate validation
+        import os
+        import ssl
+
+        # Path to certificate files (should match Redis connection factory)
+        cert_path = os.getenv("REDIS_CERT_PATH", "/app/certs")
+        if not os.path.exists(cert_path):
+            cert_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "certs")
+
+        ca_cert_path = os.path.join(cert_path, "ca.crt")
+
+        # Configure SSL with certificate validation for production
+        # This ensures secure connections to Redis broker and backend
+        ssl_opts = {
+            "ssl_cert_reqs": ssl.CERT_REQUIRED,  # Require valid certificate
+            "ssl_ca_certs": ca_cert_path if os.path.exists(ca_cert_path) else None,
+            "ssl_check_hostname": True,  # Verify hostname matches certificate
+        }
+
+        # Remove None values from ssl_opts
+        ssl_opts = {k: v for k, v in ssl_opts.items() if v is not None}
+
+        # If CA cert is missing in production, log a warning
+        if not os.path.exists(ca_cert_path):
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                f"CA certificate not found at {ca_cert_path}. "
+                "SSL connections to Redis may fail. "
+                "Generate certificates using backend/certs/generate-certs.sh"
+            )
 
         config.update(
             {
                 # For broker_use_ssl, Celery expects a dictionary or None.
                 # If you are using Redis as a broker and want SSL:
-                "broker_use_ssl": ssl_opts,
+                "broker_use_ssl": ssl_opts if ssl_opts else None,
                 # For redis_backend_use_ssl, Celery also expects a dictionary or None.
-                "redis_backend_use_ssl": ssl_opts,
+                "redis_backend_use_ssl": ssl_opts if ssl_opts else None,
                 "task_default_rate_limit": "10000/m",  # Limit tasks to 10000 per minute
                 "worker_max_tasks_per_child": 1000,  # Restart worker after 1000 tasks
+                # Enhanced connection settings for production
+                "broker_connection_retry": True,
+                "broker_connection_retry_on_startup": True,
+                "broker_connection_max_retries": 10,
+                "broker_pool_limit": 50,  # Limit broker connection pool size
+                "broker_heartbeat": 30,  # Send heartbeat every 30 seconds
+                "broker_heartbeat_checkrate": 2,  # Check heartbeat twice as often
             }
         )
 
