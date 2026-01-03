@@ -131,9 +131,11 @@ docker-compose up -d
 
 ## Testing
 
-The frontend includes comprehensive testing infrastructure with **354 tests across 16 test files**.
+The frontend includes comprehensive testing infrastructure with **354 tests across 16 test files** plus **end-to-end tests with Playwright**.
 
 ### Test Categories
+
+#### Unit & Integration Tests (Vitest)
 
 - **Component Tests**: React component rendering and interaction
 - **API Service Tests**: Complete API service layer with mocking
@@ -142,6 +144,13 @@ The frontend includes comprehensive testing infrastructure with **354 tests acro
 - **Role & Permission Tests**: Access control and authorization
 - **Integration Tests**: Redux store integration and state management
 - **Security Tests**: CSRF protection and input validation
+
+#### End-to-End Tests (Playwright)
+
+- **Authentication E2E**: Complete login/logout flows in real browsers
+- **Dashboard E2E**: Dashboard loading and navigation
+- **Protected Routes E2E**: Route access control and redirects
+- **Cross-browser Testing**: Chromium, Firefox, and WebKit support
 
 ### Test Coverage
 
@@ -154,11 +163,12 @@ The frontend includes comprehensive testing infrastructure with **354 tests acro
 - **Permission Groups**: Permission organization (22 tests)
 - **API Services**: Comprehensive service testing (170+ tests)
 - **CSRF Service**: Security validation (17 tests)
+- **E2E Tests**: 3 test suites with 20+ tests covering critical user flows
 
-### Running Tests
+### Running Unit & Integration Tests
 
 ```bash
-# Run all tests
+# Run all unit/integration tests
 npm test
 
 # Run tests in watch mode
@@ -176,6 +186,30 @@ npm test -- UsersList.test.tsx
 # Run tests matching pattern
 npm test -- --run --reporter=verbose
 ```
+
+### Running E2E Tests
+
+```bash
+# Run all E2E tests
+npm run test:e2e
+
+# Run E2E tests with UI mode (recommended for development)
+npm run test:e2e:ui
+
+# Run E2E tests in headed mode (see browser)
+npm run test:e2e:headed
+
+# Debug E2E tests
+npm run test:e2e:debug
+
+# View E2E test report
+npm run test:e2e:report
+
+# Generate E2E test code
+npm run test:e2e:codegen
+```
+
+For detailed E2E testing documentation, see [E2E_TESTING.md](./E2E_TESTING.md).
 
 ### Test Configuration
 
