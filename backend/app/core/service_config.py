@@ -21,7 +21,13 @@ class ServiceSettings:
     @property
     def redis_url(self) -> str:
         """
-        Get the Redis URL based on current environment
+        Get the Redis URL based on current environment.
+
+        For production, uses rediss:// (SSL) with proper certificate validation.
+        For development and testing, uses redis:// without SSL unless explicitly enabled.
+
+        The returned URL is compatible with redis-py's from_url() method but should
+        ideally be used with RedisConnectionFactory for better SSL handling.
         """
         if self.mode == ModeEnum.development:
             # For development, use the configured Redis host (Docker container or localhost)
@@ -35,8 +41,17 @@ class ServiceSettings:
             db = os.getenv("REDIS_DB", "0")  # Use configured DB or default to 0
             return f"redis://{host}:{port}/{db}"
         else:
-            # For production, use the Docker container's Redis service with TLS
-            return f"rediss://{settings.REDIS_HOST}:{settings.REDIS_PORT}/0?ssl_cert_reqs=none"
+            # For production, use SSL with proper certificate paths
+            # Note: URL-based SSL parameters are less flexible than using RedisConnectionFactory
+            # This is kept for backward compatibility with code using from_url()
+            password = settings.REDIS_PASSWORD or ""
+            username = "default"  # Redis 6+ ACL
+            host = settings.REDIS_HOST
+            port = settings.REDIS_PORT
+
+            # Build rediss:// URL with SSL parameters
+            # The cert path will be handled by RedisConnectionFactory when possible
+            return f"rediss://{username}:{password}@{host}:{port}/0"
 
     @property
     def celery_broker_url(self) -> str:

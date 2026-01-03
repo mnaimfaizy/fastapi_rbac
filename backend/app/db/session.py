@@ -88,30 +88,17 @@ async def get_redis_client() -> AsyncGenerator[aioredis.Redis, Any]:
     This function implements the async iterator pattern
     to be compatible with 'async for' usage.
 
-    The connection uses service_settings.redis_url which automatically
-    handles protocol selection (redis:// vs rediss://) based on environment.
+    Uses the new RedisConnectionFactory for improved SSL handling,
+    connection pooling, and error resilience.
     """
-    from app.core.service_config import service_settings
+    from app.utils.redis_connection import RedisConnectionFactory
 
-    # The URL from service_settings has the correct scheme (redis:// or rediss://) and optional parameters
-    redis_url = service_settings.redis_url
-
-    # Standard connection parameters used in all modes
-    connection_params = {
-        "decode_responses": True,
-        "password": settings.REDIS_PASSWORD,
-    }
-
-    # For production environments with SSL enabled Redis
-    if settings.MODE != ModeEnum.development and "rediss://" in redis_url:
-        # When using rediss:// protocol, the SSL options are already included in the URL
-        # Don't add SSL parameters explicitly as they're handled by the URL scheme
-        connection_params["username"] = "default"
-
-    # Create Redis client with appropriate parameters
-    redis_client = aioredis.from_url(redis_url, **connection_params)
+    # Get client from the connection pool
+    redis_client = await RedisConnectionFactory.get_client()
 
     try:
         yield redis_client
     finally:
-        await redis_client.close()
+        # Connection is returned to pool, not closed
+        # The pool manages connection lifecycle
+        pass
