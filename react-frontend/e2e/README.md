@@ -131,6 +131,31 @@ Standard timeout values for different operations
 
 ## Running Tests
 
+### Prerequisites
+
+**⚠️ IMPORTANT: The backend API must be running before E2E tests!**
+
+Use the provided helper script to verify your environment is ready:
+
+```bash
+./scripts/start-e2e-env.sh
+```
+
+Or manually start the backend:
+
+```bash
+# In a separate terminal, start the backend
+cd backend
+docker-compose -f docker-compose.dev.yml up -d
+
+# Verify it's running
+curl http://localhost:8000/api/v1/health
+```
+
+For more details, see the [E2E Testing documentation](../E2E_TESTING.md#prerequisites).
+
+### Running Tests
+
 See the main [E2E Testing documentation](../E2E_TESTING.md) for detailed instructions on running and debugging tests.
 
 Quick commands:

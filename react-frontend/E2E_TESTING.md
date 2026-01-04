@@ -82,6 +82,48 @@ VITE_APP_URL=http://localhost:5173
 VITE_API_BASE_URL=http://localhost:8000/api/v1
 ```
 
+### Prerequisites
+
+**⚠️ IMPORTANT: E2E tests require the backend API to be running!**
+
+Before running E2E tests, you must start the FastAPI backend server:
+
+```bash
+# Option 1: Start backend in a separate terminal
+cd backend
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# Option 2: Use the test environment with docker-compose
+cd backend
+docker-compose -f docker-compose.test.yml up -d
+
+# Option 3: Use the development environment
+cd backend
+docker-compose -f docker-compose.dev.yml up -d
+```
+
+Verify the backend is running:
+
+```bash
+# Check health endpoint
+curl http://localhost:8000/api/v1/health
+
+# You should see: {"status": "healthy"}
+```
+
+**Test Data Setup:**
+The E2E tests expect certain users to exist in the database:
+
+- Admin user: `admin@example.com` / `AdminPass123!`
+- Regular user: `user@example.com` / `UserPass123!`
+
+These users are typically created by the backend initialization scripts. If tests fail with authentication errors, verify these users exist or run the backend initialization:
+
+```bash
+cd backend
+python app/initial_data.py
+```
+
 ## Running Tests
 
 ### Basic Commands
