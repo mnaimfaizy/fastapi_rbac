@@ -3,15 +3,17 @@ import { User, ApiResponse, PaginatedItems } from '../models/user';
 
 // Define specific types for create and update payloads
 // to ensure role_id is included correctly
-export interface UserCreatePayload
-  extends Partial<Omit<User, 'id' | 'roles' | 'created_at' | 'updated_at'>> {
+export interface UserCreatePayload extends Partial<
+  Omit<User, 'id' | 'roles' | 'created_at' | 'updated_at'>
+> {
   email: string;
   password?: string; // Password required on create
   role_id?: string[]; // Use role_id as expected by backend
 }
 
-export interface UserUpdatePayload
-  extends Partial<Omit<User, 'id' | 'roles' | 'created_at' | 'updated_at'>> {
+export interface UserUpdatePayload extends Partial<
+  Omit<User, 'id' | 'roles' | 'created_at' | 'updated_at'>
+> {
   password?: string; // Add optional password field for updates
   role_id?: string[]; // Use role_id as expected by backend
 }

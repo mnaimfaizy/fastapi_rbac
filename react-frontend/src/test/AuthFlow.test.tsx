@@ -289,9 +289,11 @@ describe('Authentication Flow Tests', () => {
 
       await waitFor(() => {
         expect(mockSignup).toHaveBeenCalledWith({
-          full_name: 'John Doe',
           email: 'john@example.com',
           password: 'password123',
+          first_name: 'John',
+          last_name: 'Doe',
+          full_name: 'John Doe',
         });
       });
     });
