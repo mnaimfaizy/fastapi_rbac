@@ -1,0 +1,87 @@
+# Dependabot for risk-tiered upgrades (issue #30).
+# Prefer reviewing bumps inside the active lane; do not merge mega-PRs.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - maintenance
+    groups:
+      backend-patch-minor:
+        applies-to: version-updates
+        update-types:
+          - patch
+          - minor
+    ignore:
+      # Hard-stop / lane-gated majors — handle in dedicated lane PRs
+      - dependency-name: fastapi
+        update-types: ["version-update:semver-major"]
+      - dependency-name: starlette
+        update-types: ["version-update:semver-major"]
+      - dependency-name: pydantic
+        update-types: ["version-update:semver-major"]
+      - dependency-name: pydantic-settings
+        update-types: ["version-update:semver-major"]
+      - dependency-name: SQLAlchemy
+        update-types: ["version-update:semver-major"]
+      - dependency-name: sqlmodel
+        update-types: ["version-update:semver-major"]
+      - dependency-name: celery
+        update-types: ["version-update:semver-major"]
+      - dependency-name: redis
+        update-types: ["version-update:semver-major"]
+      - dependency-name: PyJWT
+        update-types: ["version-update:semver-major"]
+      - dependency-name: cryptography
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: npm
+    directory: /react-frontend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - maintenance
+    groups:
+      frontend-patch-minor:
+        applies-to: version-updates
+        update-types:
+          - patch
+          - minor
+    ignore:
+      - dependency-name: react
+        update-types: ["version-update:semver-major"]
+      - dependency-name: react-dom
+        update-types: ["version-update:semver-major"]
+      - dependency-name: react-router-dom
+        update-types: ["version-update:semver-major"]
+      - dependency-name: vite
+        update-types: ["version-update:semver-major"]
+      - dependency-name: tailwindcss
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@tailwindcss/vite"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - maintenance
+    groups:
+      github-actions:
+        applies-to: version-updates
+        update-types:
+          - patch
+          - minor
+          - major
