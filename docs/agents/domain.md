@@ -8,6 +8,7 @@ How engineering skills should consume domain documentation in this repository.
 - `DOCUMENTATION.md`
 - `docs/index.md`
 - `docs/internal/` (if present for architecture and decision notes)
+- If `graphify-out/graph.json` exists, prefer `graphify query` for architecture questions — see `docs/agents/graphify.md`
 
 ## File structure guidance
 

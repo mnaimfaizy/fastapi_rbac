@@ -319,6 +319,16 @@ The configured tools enforce these guidelines automatically:
 4. **Type Checking**:
    - Mypy enforces static type checking in Python
 
+## Knowledge graph (optional)
+
+For architecture navigation, install graphify (`uv tool install graphifyy`) and build a local code graph:
+
+```powershell
+.\scripts\development\graphify\Update-Graphify.ps1 -Full
+```
+
+See [`docs/agents/graphify.md`](../agents/graphify.md) for install, query, and git policy details.
+
 ## Troubleshooting
 
 ### VS Code Doesn't Recognize Python Environment

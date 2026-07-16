@@ -4,3 +4,4 @@ This section contains guides and references for developers working on the projec
 
 - **[Developer Setup](./DEVELOPER_SETUP.md):** How to set up your local development environment.
 - **[Testing Guide](./TESTING.md):** Information on running and writing tests.
+- **[Knowledge Graph (graphify)](../agents/graphify.md):** Build and query the local codebase knowledge graph for architecture navigation.

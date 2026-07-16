@@ -38,6 +38,7 @@ nav:
       - "Overview": "development/index.md"
       - "Developer Setup": "development/DEVELOPER_SETUP.md"
       - "Testing Guide": "development/TESTING.md"
+      - "Knowledge Graph (graphify)": "agents/graphify.md"
   - "Deployment":
       - "Overview": "deployment/index.md"
       - "Production Deployment": "deployment/production-deployment-guide.md"

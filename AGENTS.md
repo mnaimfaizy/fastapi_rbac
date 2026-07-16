@@ -21,6 +21,10 @@ Use the label vocabulary defined in `docs/agents/triage-labels.md`.
 
 Use domain docs guidance in `docs/agents/domain.md` for terminology and architectural decision context.
 
+### Knowledge graph (graphify)
+
+If `graphify-out/graph.json` exists, **query it first** for architecture and module-relationship questions (`graphify query` / `path` / `explain`). Build and update instructions: `docs/agents/graphify.md`. `GRAPH_REPORT.md` is committed; heavy artifacts are gitignored and rebuilt locally.
+
 ## Notes
 
 - Canonical skill location is `.claude/skills`.
