@@ -59,9 +59,7 @@ async function globalSetup(config: FullConfig) {
     console.error('E2E tests require the FastAPI backend to be running.');
     console.error('\nPlease start the backend before running E2E tests:\n');
     console.error('  cd backend');
-    console.error(
-      '  docker-compose -f docker-compose.dev.yml up -d  # OR'
-    );
+    console.error('  docker-compose -f docker-compose.dev.yml up -d  # OR');
     console.error(
       '  python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000\n'
     );

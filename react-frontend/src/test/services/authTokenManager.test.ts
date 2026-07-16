@@ -126,7 +126,8 @@ describe('AuthTokenManager', () => {
       authTokenManager.setupTokenExpiryTimer(validToken);
 
       expect(setTimeoutSpy).toHaveBeenCalled();
-      expect(clearTimeoutSpy).toHaveBeenCalled(); // Called to clear any existing timer
+      // No prior timer, so clearTimeout is skipped
+      expect(clearTimeoutSpy).not.toHaveBeenCalled();
     });
 
     it('immediately logs out if token is already expired', () => {
@@ -162,8 +163,8 @@ describe('AuthTokenManager', () => {
       authTokenManager.setupTokenExpiryTimer(validToken);
       authTokenManager.setupTokenExpiryTimer(validToken);
 
-      // clearTimeout should be called twice (once for each setupTokenExpiryTimer call)
-      expect(clearTimeoutSpy).toHaveBeenCalledTimes(2);
+      // First setup has no prior timer; second setup clears the first timer
+      expect(clearTimeoutSpy).toHaveBeenCalledTimes(1);
     });
 
     it('uses 10-second buffer before token expiry', () => {
@@ -204,8 +205,8 @@ describe('AuthTokenManager', () => {
       // Clear timer without setting one first
       authTokenManager.clearExpiryTimer();
 
-      // Should still call clearTimeout (with null/undefined)
-      expect(clearTimeoutSpy).toHaveBeenCalled();
+      // No timer is set, so clearTimeout is not invoked
+      expect(clearTimeoutSpy).not.toHaveBeenCalled();
     });
   });
 
