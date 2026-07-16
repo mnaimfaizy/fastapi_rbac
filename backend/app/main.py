@@ -37,7 +37,8 @@ from app.schemas.response_schema import ErrorDetail, create_error_response
 from app.utils.exceptions.user_exceptions import UserSelfDeleteException
 from app.utils.fastapi_globals import GlobalsMiddleware, g
 
-allowed_origins = settings.BACKEND_CORS_ORIGINS or ["*"]
+# Coerce to str for Starlette CORSMiddleware (settings may type origins as str | AnyHttpUrl)
+allowed_origins: list[str] = [str(origin) for origin in (settings.BACKEND_CORS_ORIGINS or ["*"])]
 
 # Store CSRF protect instance globally for use in dependencies
 csrf_protect = None
