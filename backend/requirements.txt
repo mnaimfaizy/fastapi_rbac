@@ -87,13 +87,13 @@ prometheus_client==0.21.1
 psycopg2-binary==2.9.9
 prompt_toolkit==3.0.51
 pyasn1==0.4.8
-pycodestyle==2.13.0
+pycodestyle==2.14.0
 pycparser==2.22
 pydantic==2.11.3
 pydantic-extra-types==2.10.3
 pydantic-settings==2.9.1
 pydantic_core==2.33.1
-pyflakes==3.3.2
+pyflakes==3.4.0
 Pygments==2.19.1
 PyJWT==2.10.1
 pytest==8.4.2
