@@ -1,0 +1,19 @@
+---
+description: Prefer graphify knowledge graph for architecture questions when graphify-out/graph.json exists
+globs:
+alwaysApply: true
+---
+
+# graphify (project)
+
+If `graphify-out/graph.json` exists, use it **first** for architecture, module relationship, and “how does X connect to Y” questions:
+
+```bash
+graphify query "<question>"
+graphify path "A" "B"
+graphify explain "NodeLabel"
+```
+
+If the graph is missing, follow `docs/agents/graphify.md` to build (`graphify extract . --code-only --out .`). Do not invent edges. Prefer domain terms from `docs/agents/domain.md`: user, role, permission, role group, permission group.
+
+This does not replace MkDocs or runtime application behavior.

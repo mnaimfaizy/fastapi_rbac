@@ -26,6 +26,10 @@ Apply the triage role labels configured in `docs/agents/triage-labels.md`.
 
 Read and maintain shared terminology and ADR guidance from `docs/agents/domain.md`.
 
+### Knowledge graph (graphify)
+
+If `graphify-out/graph.json` exists, query it first for architecture questions. See `docs/agents/graphify.md` for install, build (`--code-only`), update, and git policy.
+
 ## Project conventions
 
 When working in this repository, follow conventions in:

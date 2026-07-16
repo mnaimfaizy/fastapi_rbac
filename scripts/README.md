@@ -11,6 +11,7 @@ Scripts for local development environment:
 - `setup-dev-environment.ps1` - Complete development environment setup
 - `code-quality/manage-code-quality.ps1` - Code formatting, linting, and import fixing
 - `database/create-databases.sql` - Database creation scripts
+- `graphify/Update-Graphify.ps1` / `graphify/update-graphify.sh` - Rebuild or update the local knowledge graph (see `docs/agents/graphify.md`)
 
 ### Docker Scripts (`docker/`)
 

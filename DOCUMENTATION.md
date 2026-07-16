@@ -26,6 +26,7 @@ To preview the documentation locally:
 - `CONTRIBUTING.md`: Simple redirect to the comprehensive contribution guidelines
 - `docs/contributing.md`: Comprehensive contribution guidelines
 - `docs/`: Contains all additional documentation markdown files
+- `docs/agents/graphify.md`: Knowledge-graph (graphify) install, build, query, and git policy for agents/developers
 - `mkdocs.yml`: Configuration file for MkDocs
 - `.github/workflows/docs.yml`: GitHub Actions workflow for automatic deployment
 
