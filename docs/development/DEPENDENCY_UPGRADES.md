@@ -91,10 +91,11 @@ About **76** advisory hits across pinned packages (many packages have multiple a
 | `redis` | Patched in Lane 2 → `5.3.1` (no OSV hits on 5.2.1; **major 6+/8 deferred** — hard-stop) | Lane 2 / later |
 | `fastapi-limiter` | Kept `0.1.6` — `0.2.0` is a breaking rewrite (drops Redis `FastAPILimiter`) | Lane 2 follow-up |
 | `bcrypt` / `passlib` | No OSV hits; left on `4.3.0` / `1.7.4` | Lane 2 |
-| `gunicorn==21.2.0` | Fix now — request smuggling (needs ≥22) | Lane 4 |
+| `gunicorn` | **Fixed in Lane 4** → `26.0.0` (request-smuggling advisories needed ≥22) | Lane 4 |
+| `tornado` | **Fixed in Lane 4** → `6.5.7` (flower still requires `<7`) | Lane 4 |
+| `urllib3` / `requests` / `idna` | **Fixed in Lane 4** → `2.7.0` / `2.34.2` / `3.18` | Lane 4 |
+| `celery` / `kombu` | Currency bump in Lane 4 → `5.6.3` / `5.6.2` (hard-stop; verify worker import) | Lane 4 |
 | `black` / `pytest` | Tooling majors deferred after Lane 1 patch/minor | Lane 1 majors later |
-| `tornado` (transitive via flower) | Fix with flower/ops cluster | Lane 4 |
-| `urllib3` / `requests` / `idna` | Fix with ops/http client cluster when convenient | Lane 4 |
 | Remaining transitive (filelock, virtualenv, pygments, …) | Accept or fold into nearest lane | Lane 1 / 4 |
 
 ### Lane 2 notes (2026-07-16)
@@ -108,6 +109,13 @@ About **76** advisory hits across pinned packages (many packages have multiple a
 - Currency bump (no OSV hits on prior pins): `SQLAlchemy==2.0.51`, `sqlmodel==0.0.39`, `alembic==1.18.5`, `asyncpg==0.31.0`, `aiosqlite==0.22.1`, `greenlet==3.5.3`, `sqlakeyset==2.0.1775222100`, `SQLAlchemy-Utils==0.42.1`.
 - Confirmed `AsyncSession.exec` still present; do not migrate call sites to `.execute()`.
 - Alembic `upgrade head` / `downgrade -1` / re-upgrade verified on empty Postgres.
+
+### Lane 4 notes (2026-07-17)
+
+- CVE-driven: `gunicorn==26.0.0`, `tornado==6.5.7`, `urllib3==2.7.0`, `requests==2.34.2`, `idna==3.18`.
+- Workers/ops currency: `celery==5.6.3` + `kombu==5.6.2` (+ `billiard`, `tzlocal`), `uvicorn==0.51.0`, `sentry-sdk==2.66.0`, `tenacity==9.1.4`; `flower` already latest `2.0.1`; `httpx` already latest `0.28.1`.
+- Companion pins: `click`, `httptools`, `watchfiles`, `websockets`, `prometheus_client`, `exceptiongroup`, `types-requests`.
+- Dockerfiles unchanged (install from `requirements.txt`); worker import smoke verified (`app.celery_app`).
 
 ### Frontend (`npm audit`)
 
