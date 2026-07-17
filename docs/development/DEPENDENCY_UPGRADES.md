@@ -119,17 +119,22 @@ About **76** advisory hits across pinned packages (many packages have multiple a
 
 ### Frontend (`npm audit`)
 
-**22** vulnerabilities reported: 3 critical, 12 high, 5 moderate, 2 low.
+Initial snapshot (2026-07-16): **22** vulnerabilities. After Lane 1 tooling + Lane 5 runtime refresh: **`npm audit` reports 0**.
 
 | Package | Severity | Disposition | Target lane |
 |---------|----------|-------------|-------------|
-| `vitest` / `@vitest/coverage-v8` | critical | Fix now (dev tooling; UI server / related) | Lane 1 |
-| `form-data` (transitive) | critical | Fix via lockfile / parent bump | Lane 1 or 5 |
-| `axios` | high | Fix now | Lane 5 |
-| `react-router` / `react-router-dom` | high | Fix carefully (auth routes) | Lane 5 / 6 |
-| `vite` | high | Fix carefully (dev server middleware) | Lane 1 (if within major) or 6 |
-| `eslint` plugin-kit / related | low–high | Fix with tooling | Lane 1 |
-| Other transitive (lodash, minimatch, rollup, tar, ws, …) | high | Prefer lockfile refresh in Lane 1 / 5 | Lane 1 / 5 |
+| `vitest` / `@vitest/coverage-v8` | critical | Addressed in Lane 1 | Lane 1 |
+| `form-data` (transitive) | critical | Cleared via Lane 5 lockfile refresh | Lane 5 |
+| `axios` | high | **Fixed in Lane 5** → `^1.18.1` | Lane 5 |
+| `react-router` / `react-router-dom` | high | **Fixed in Lane 5** → `^7.18.1` (within major 7) | Lane 5 |
+| `vite` | high | **Patched in Lane 5** → `^6.4.3` (within major 6; Vite 7/8 deferred) | Lane 5 / 6 |
+| `eslint` plugin-kit / related | low–high | Addressed in Lane 1 | Lane 1 |
+| Other transitive (lodash, minimatch, rollup, tar, ws, …) | high | Cleared via Lane 5 `npm audit fix` | Lane 5 |
+
+### Lane 5 notes (2026-07-17)
+
+- Runtime (non-major): axios, RTK, react-redux, react-hook-form, zod 3.x, Radix, lucide-react `0.577`, recharts `2.15.4` (v3 deferred), date-fns, sonner, tailwind-merge, postcss.
+- Majors deferred to Lane 6: React, Vite 7+/8, Tailwind, lucide-react 1.x, recharts 3.x, zod 4.x.
 
 ## Per-PR checklist
 
