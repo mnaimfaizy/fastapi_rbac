@@ -103,6 +103,12 @@ About **76** advisory hits across pinned packages (many packages have multiple a
 - Companion pins: `pydantic` / `pydantic-settings` / `pydantic_core`, `fastapi-csrf-protect`, `slowapi`, `annotated-doc`, `typing_extensions`, `pyasn1`.
 - Re-run `pip-audit` after merge; do not treat this table as live CVE status.
 
+### Lane 3 notes (2026-07-17)
+
+- Currency bump (no OSV hits on prior pins): `SQLAlchemy==2.0.51`, `sqlmodel==0.0.39`, `alembic==1.18.5`, `asyncpg==0.31.0`, `aiosqlite==0.22.1`, `greenlet==3.5.3`, `sqlakeyset==2.0.1775222100`, `SQLAlchemy-Utils==0.42.1`.
+- Confirmed `AsyncSession.exec` still present; do not migrate call sites to `.execute()`.
+- Alembic `upgrade head` / `downgrade -1` / re-upgrade verified on empty Postgres.
+
 ### Frontend (`npm audit`)
 
 **22** vulnerabilities reported: 3 critical, 12 high, 5 moderate, 2 low.
