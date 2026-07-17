@@ -4,9 +4,9 @@ from uuid import UUID  # Removed Coroutine
 
 from fastapi import HTTPException
 from pydantic import EmailStr
-from sqlalchemy import exc  # Keep this import
-from sqlalchemy import desc, select
+from sqlalchemy import desc, exc  # Keep this import
 from sqlalchemy.orm import selectinload
+from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession  # Keep this import
 
 from app.core.config import settings
@@ -38,7 +38,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         )
         result = await db_session.exec(stmt)
         unique_result = result.unique()
-        return unique_result.scalar_one_or_none()
+        return unique_result.one_or_none()
 
     async def get_multi_by_email(self, *, email: str, db_session: AsyncSession | None = None) -> list[User]:
         """
@@ -56,7 +56,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
             )
         )
         result = await db_session.exec(stmt)
-        return result.unique().scalars().all()
+        return list(result.unique().all())
 
     async def get_by_id_active(self, *, id: UUID, db_session: AsyncSession | None = None) -> User | None:
         """
@@ -88,7 +88,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
                 result = await db_session.exec(
                     select(Role).where(Role.id.in_(role_ids))  # type: ignore[attr-defined]
                 )
-                roles_to_assign = list(result.scalars().all())
+                roles_to_assign = list(result.all())
                 if len(roles_to_assign) != len(role_ids):
                     await db_session.rollback()
                     found_role_ids = {r.id for r in roles_to_assign}
@@ -136,7 +136,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         """
         if db_session is None:
             raise ValueError("db_session must be provided")
-        role_ids = []
+        role_ids: list[UUID] = []
         if isinstance(obj_in, IUserCreate):
             role_ids = obj_in.role_id if obj_in.role_id is not None else []
             obj_in_data = obj_in.model_dump(exclude={"password", "role_id"})
@@ -155,7 +155,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
                 result = await db_session.exec(
                     select(Role).where(Role.id.in_(role_ids))  # type: ignore[attr-defined]
                 )
-                roles = list(result.scalars().all())
+                roles = list(result.all())
                 if len(roles) != len(role_ids):
                     await db_session.rollback()
                     raise HTTPException(
@@ -218,7 +218,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
                 result = await db_session.exec(
                     select(Role).where(Role.id.in_(role_ids))  # type: ignore[attr-defined]
                 )
-                roles = list(result.scalars().all())
+                roles = list(result.all())
                 if len(roles) != len(role_ids):
                     raise HTTPException(
                         status_code=404,
@@ -315,7 +315,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         result = await db_session.exec(
             select(self.model).where(self.model.id == id)  # type: ignore[attr-defined]
         )
-        obj = result.scalars().one_or_none()
+        obj = result.one_or_none()
         if obj is None:
             raise HTTPException(status_code=404, detail=f"User with id {id} not found")
         assert isinstance(obj, User), f"Expected User instance, got {type(obj)}"
@@ -341,7 +341,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         roles_result = await db_session.exec(
             select(Role).where(Role.id.in_(role_ids))  # type: ignore[attr-defined]
         )
-        roles_to_add = list(roles_result.scalars().all())
+        roles_to_add = list(roles_result.all())
         for r in roles_to_add:
             assert isinstance(r, Role), f"Expected Role instance, got {type(r)}"
         if len(roles_to_add) != len(role_ids):
@@ -382,7 +382,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
             .order_by(desc(UserPasswordHistory.created_at))
             .limit(limit)
         )
-        history_hashes = result.scalars().all()
+        history_hashes = list(result.all())
         return new_password_hash in history_hashes
 
     async def is_password_in_history(
@@ -406,7 +406,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
             .order_by(desc(UserPasswordHistory.created_at))
             .limit(limit)
         )
-        history_entries = result.scalars().all()
+        history_entries = list(result.all())
         for entry in history_entries:
             assert isinstance(
                 entry, UserPasswordHistory
@@ -546,7 +546,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
             .options(selectinload(self.model.roles).selectinload(Role.permissions))  # type: ignore[arg-type]
         )
         result = await db_session.exec(stmt)
-        user = result.unique().scalars().first()  # FIX: use .scalars().first() for model instance
+        user = result.unique().first()
         if user:
             await db_session.refresh(user, attribute_names=["roles"])
             # Also refresh permissions for each role

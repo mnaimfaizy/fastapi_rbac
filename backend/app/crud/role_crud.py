@@ -77,12 +77,12 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
 
     async def get_role_by_name(self, *, name: str, db_session: AsyncSession) -> Role | None:
         result = await db_session.exec(select(Role).where(Role.name == name))
-        return result.scalars().first()
+        return result.first()
 
     async def get_all(self, *, db_session: AsyncSession) -> List[Role]:
         """Fetch all roles without pagination."""
         result = await db_session.exec(select(Role).order_by(Role.name))  # Order by name for consistency
-        return result.scalars().all()
+        return list(result.all())
 
     async def add_role_to_user(self, *, user: User, role_id: UUID, db_session: AsyncSession) -> Role:
         role = await super().get(id=role_id, db_session=db_session)
@@ -125,7 +125,7 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
                 (RolePermission.role_id == role_id) & (RolePermission.permission_id == permission_id)
             )
             result = await db_session.exec(stmt)
-            existing = result.scalar_one_or_none()
+            existing = result.one_or_none()
 
             # Only create if it doesn't exist
             if not existing:
@@ -164,7 +164,7 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
                 (RolePermission.role_id == role_id) & (RolePermission.permission_id == permission_id)
             )
             result = await db_session.exec(stmt)
-            mapping = result.scalar_one_or_none()
+            mapping = result.one_or_none()
             if mapping:
                 mappings_to_delete.append(mapping)
             else:
@@ -315,7 +315,7 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
             result = await db_session.exec(
                 select(RolePermission).where(RolePermission.role_id == obj_current.id)
             )
-            existing_permissions = result.scalars().all()
+            existing_permissions = list(result.all())
             for rp in existing_permissions:
                 await db_session.delete(rp)
 
