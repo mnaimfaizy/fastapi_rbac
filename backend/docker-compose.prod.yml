@@ -29,7 +29,7 @@ services:
       - fastapi_rbac_prod_network
 
   fastapi_rbac_redis_prod:
-    image: redis:7.2.5-alpine
+    image: redis:7.2-alpine
     container_name: fastapi_rbac_redis_prod
     restart: always
     command: >

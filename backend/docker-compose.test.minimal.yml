@@ -113,7 +113,7 @@ services:
 
   # Redis Cache for testing
   fastapi_rbac_redis_test:
-    image: redis:7.2.5-alpine
+    image: redis:7.2-alpine
     restart: always
     container_name: fastapi_rbac_redis_test
     ports:

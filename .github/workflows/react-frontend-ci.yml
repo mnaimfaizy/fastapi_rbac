@@ -88,8 +88,9 @@ jobs:
         run: npm run build
 
   # Playwright E2E requires a live FastAPI backend (Postgres, Redis, seeded admin,
-  # CSRF-aware login). This workflow never started that stack, so the job has been
-  # failing since E2E was added. Re-enable when full-stack CI is wired (#30 / #37).
+  # CSRF-aware login). Image tags are aligned with compose/CI services (#37), but this
+  # job still does not start the backend stack. Keep skipped until a dedicated
+  # full-stack E2E workflow is added (follow-up under #30).
   e2e-tests:
     name: E2E Tests
     if: ${{ false }}

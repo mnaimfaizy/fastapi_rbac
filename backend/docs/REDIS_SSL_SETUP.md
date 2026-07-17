@@ -151,7 +151,7 @@ The `docker-compose.prod.yml` configures Redis with SSL:
 
 ```yaml
 fastapi_rbac_redis_prod:
-  image: redis:7.2.5-alpine
+  image: redis:7.2-alpine
   command: >
     redis-server
     --tls-port 6379

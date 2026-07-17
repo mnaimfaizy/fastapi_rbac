@@ -2,7 +2,7 @@
 # Multi-stage build for Celery workers, beat, and flower in production
 
 # BUILD STAGE
-FROM python:3.10-slim-bullseye AS builder
+FROM python:3.10-slim-bookworm AS builder
 
 # Set work directory
 WORKDIR /app
@@ -32,7 +32,7 @@ RUN rm -rf /app/wheels && mkdir /app/wheels && \
     ls -l /app/wheels
 
 # FINAL STAGE
-FROM python:3.10-slim-bullseye
+FROM python:3.10-slim-bookworm
 
 # Create a non-root user
 RUN useradd -m -u 1000 appuser
