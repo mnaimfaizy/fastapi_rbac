@@ -6,7 +6,9 @@ SSL/TLS connections based on the environment mode.
 """
 
 import os
+import socket
 import ssl
+from collections.abc import AsyncGenerator, Generator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -18,7 +20,7 @@ from app.utils.redis_connection import RedisConnectionFactory
 
 
 @pytest.fixture(autouse=True)
-def reset_factory():
+def reset_factory() -> Generator[None, None, None]:
     """Reset RedisConnectionFactory singleton state between tests."""
     RedisConnectionFactory._pool = None
     RedisConnectionFactory._client = None
@@ -30,12 +32,12 @@ def reset_factory():
 class TestRedisConnectionFactory:
     """Test suite for RedisConnectionFactory."""
 
-    def test_get_ssl_context_development(self):
+    def test_get_ssl_context_development(self) -> None:
         """Test that SSL context is None in development mode."""
         ssl_context = RedisConnectionFactory._get_ssl_context(ModeEnum.development)
         assert ssl_context is None
 
-    def test_get_ssl_context_testing_disabled(self):
+    def test_get_ssl_context_testing_disabled(self) -> None:
         """Test that SSL context is None in testing mode when SSL is disabled."""
         with patch.dict(os.environ, {"REDIS_SSL": "false"}):
             ssl_context = RedisConnectionFactory._get_ssl_context(ModeEnum.testing)
@@ -43,7 +45,7 @@ class TestRedisConnectionFactory:
 
     @patch("app.utils.redis_connection.os.path.exists")
     @patch("app.utils.redis_connection.ssl.create_default_context")
-    def test_get_ssl_context_production(self, mock_create_context, mock_exists):
+    def test_get_ssl_context_production(self, mock_create_context: MagicMock, mock_exists: MagicMock) -> None:
         """Test that SSL context is properly configured in production mode."""
         # Mock certificate file existence
         mock_exists.return_value = True
@@ -63,7 +65,7 @@ class TestRedisConnectionFactory:
         assert ssl_context.minimum_version == ssl.TLSVersion.TLSv1_2
 
     @patch("app.utils.redis_connection.os.path.exists")
-    def test_get_ssl_context_missing_certificate_production(self, mock_exists):
+    def test_get_ssl_context_missing_certificate_production(self, mock_exists: MagicMock) -> None:
         """Test that RuntimeError is raised when certificate is missing in production."""
         # Mock certificate file not existing
         mock_exists.return_value = False
@@ -72,7 +74,7 @@ class TestRedisConnectionFactory:
         with pytest.raises(RuntimeError, match="CA certificate not found"):
             RedisConnectionFactory._get_ssl_context(ModeEnum.production)
 
-    def test_get_connection_params_development(self):
+    def test_get_connection_params_development(self) -> None:
         """Test connection parameters for development mode."""
         with patch.object(settings, "MODE", ModeEnum.development):
             params = RedisConnectionFactory._get_connection_params(db=0)
@@ -82,9 +84,17 @@ class TestRedisConnectionFactory:
             assert params["db"] == 0
             assert params["decode_responses"] is True
             assert "ssl" not in params or params["ssl"] is False
+            assert params["socket_keepalive"] is True
+            if hasattr(socket, "TCP_KEEPIDLE"):
+                assert params["socket_keepalive_options"][socket.TCP_KEEPIDLE] == 60
+                assert params["socket_keepalive_options"][socket.TCP_KEEPINTVL] == 10
+                assert params["socket_keepalive_options"][socket.TCP_KEEPCNT] == 3
+                assert 1 not in params["socket_keepalive_options"]
+                assert 2 not in params["socket_keepalive_options"]
+                assert 3 not in params["socket_keepalive_options"]
 
     @patch("app.utils.redis_connection.RedisConnectionFactory._get_ssl_context")
-    def test_get_connection_params_production(self, mock_get_ssl_context):
+    def test_get_connection_params_production(self, mock_get_ssl_context: MagicMock) -> None:
         """Test connection parameters for production mode with SSL."""
         # Mock SSL context
         mock_ssl_context = MagicMock(spec=ssl.SSLContext)
@@ -99,7 +109,7 @@ class TestRedisConnectionFactory:
             assert params["health_check_interval"] == 30
 
     @patch("app.utils.redis_connection.ConnectionPool")
-    def test_create_connection_pool(self, mock_pool_class):
+    def test_create_connection_pool(self, mock_pool_class: MagicMock) -> None:
         """Test connection pool creation."""
         mock_pool = MagicMock(spec=ConnectionPool)
         mock_pool_class.return_value = mock_pool
@@ -113,7 +123,7 @@ class TestRedisConnectionFactory:
         assert call_kwargs["db"] == 0
 
     @patch("app.utils.redis_connection.RedisConnectionFactory._create_connection_pool")
-    def test_get_connection_pool_singleton(self, mock_create_pool):
+    def test_get_connection_pool_singleton(self, mock_create_pool: MagicMock) -> None:
         """Test that connection pool is a singleton."""
         mock_pool = MagicMock(spec=ConnectionPool)
         mock_create_pool.return_value = mock_pool
@@ -129,14 +139,14 @@ class TestRedisConnectionFactory:
         assert mock_create_pool.call_count == 1  # Not called again
 
     @pytest_asyncio.fixture
-    async def mock_redis_pool(self):
+    async def mock_redis_pool(self) -> AsyncGenerator[MagicMock, None]:
         """Create a mock Redis connection pool."""
         mock_pool = MagicMock(spec=ConnectionPool)
         with patch.object(RedisConnectionFactory, "get_connection_pool", return_value=mock_pool):
             yield mock_pool
 
     @pytest.mark.asyncio
-    async def test_get_client(self, mock_redis_pool):
+    async def test_get_client(self, mock_redis_pool: MagicMock) -> None:
         """Test getting a Redis client from the pool."""
         with patch("app.utils.redis_connection.Redis") as mock_redis_class:
             mock_client = AsyncMock(spec=Redis)
@@ -148,7 +158,7 @@ class TestRedisConnectionFactory:
             mock_redis_class.assert_called_once_with(connection_pool=mock_redis_pool)
 
     @pytest.mark.asyncio
-    async def test_health_check_success(self):
+    async def test_health_check_success(self) -> None:
         """Test successful health check."""
         mock_client = AsyncMock(spec=Redis)
         mock_client.ping = AsyncMock(return_value=True)
@@ -159,7 +169,7 @@ class TestRedisConnectionFactory:
         mock_client.ping.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_health_check_failure(self):
+    async def test_health_check_failure(self) -> None:
         """Test health check failure."""
         from redis.exceptions import ConnectionError
 
@@ -170,7 +180,7 @@ class TestRedisConnectionFactory:
             await RedisConnectionFactory.health_check(client=mock_client)
 
     @pytest.mark.asyncio
-    async def test_close_pool(self):
+    async def test_close_pool(self) -> None:
         """Test closing the connection pool."""
         mock_pool = AsyncMock(spec=ConnectionPool)
         mock_pool.disconnect = AsyncMock()
@@ -188,7 +198,7 @@ class TestRedisConnectionIntegration:
 
     @pytest.mark.asyncio
     @pytest.mark.integration
-    async def test_real_redis_connection(self):
+    async def test_real_redis_connection(self) -> None:
         """Test actual connection to Redis (requires running Redis)."""
         # This test requires a real Redis instance
         # Skip if REDIS_HOST is not accessible
@@ -203,7 +213,7 @@ class TestRedisConnectionIntegration:
 
     @pytest.mark.asyncio
     @pytest.mark.integration
-    async def test_connection_pool_reuse(self):
+    async def test_connection_pool_reuse(self) -> None:
         """Test that connections are properly reused from the pool."""
         try:
             # Get two clients - should use same pool

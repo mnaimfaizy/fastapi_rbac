@@ -2,9 +2,12 @@ from typing import Any, List
 from uuid import UUID
 
 from fastapi import HTTPException
-from fastapi_pagination import Page, paginate  # Add this import if not present
+from fastapi_pagination import Page, Params
+from fastapi_pagination.ext.sqlmodel import paginate
 from redis.asyncio import Redis
-from sqlalchemy import exc, select  # removed or_, func
+from sqlalchemy import exc
+from sqlalchemy.orm import selectinload
+from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.crud.base_crud import CRUDBase
@@ -334,33 +337,34 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
         self,
         *,
         db_session: AsyncSession | None = None,
-        skip: int = 0,
-        limit: int = 100,
+        params: Params | None = None,
         name_pattern: str | None = None,
         search: str | None = None,
-        params: dict | None = None,
         query: Any = None,
+        **kwargs: Any,
     ) -> Page[Role]:
         """
         Get roles with optional name pattern or search, paginated.
         """
         if db_session is None:
             raise ValueError("db_session (AsyncSession) is required for get_multi_paginated in CRUDRole")
-        stmt = select(Role)
-        if name_pattern:
-            sql_pattern = name_pattern.replace("*", "%")
-            stmt = stmt.where(Role.name.ilike(sql_pattern))  # type: ignore
-        elif search:
-            stmt = stmt.where(Role.name.ilike(f"%{search}%"))  # type: ignore
-        stmt = stmt.order_by(Role.name)
-        result = await db_session.exec(stmt)  # type: ignore
-        roles = result.scalars().all()
-        # Serialize roles to dicts matching IRoleRead before paginating
-        from app.schemas.role_schema import IRoleRead
-        from app.utils.role_utils import serialize_role
 
-        serialized_roles = [IRoleRead.model_validate(serialize_role(role)) for role in roles]
-        return paginate(serialized_roles)
+        if params is None:
+            params = Params()
+
+        if query is None:
+            stmt = select(Role)
+            if name_pattern:
+                sql_pattern = name_pattern.replace("*", "%")
+                stmt = stmt.where(Role.name.ilike(sql_pattern))  # type: ignore
+            elif search:
+                stmt = stmt.where(Role.name.ilike(f"%{search}%"))  # type: ignore
+            stmt = stmt.order_by(Role.name)
+        else:
+            stmt = query
+
+        stmt = stmt.options(selectinload(Role.permissions))
+        return await paginate(db_session, stmt, params, unique=True)
 
 
 role_crud = CRUDRole(Role)

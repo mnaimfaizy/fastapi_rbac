@@ -46,11 +46,11 @@ async def read_users_list(
 
     # Convert to a response format that includes roles
     response_data = {
-        "items": [serialize_user(user) for user in users.data.items],
-        "total": users.data.total,
-        "page": users.data.page,
-        "size": users.data.size,
-        "pages": users.data.pages,
+        "items": [serialize_user(user) for user in users.items],
+        "total": users.total,
+        "page": users.page,
+        "size": users.size,
+        "pages": users.pages,
     }
     return create_response(data=response_data)
 
@@ -333,10 +333,10 @@ async def read_users(
             params = Params()  # Use default pagination if not provided
         users = await crud.user.get_multi_paginated(params=params, db_session=db_session)
         response_data = {
-            "items": [serialize_user(user) for user in users.data.items],
-            "total": users.data.total,
-            "page": users.data.page,
-            "size": users.data.size,
-            "pages": users.data.pages,
+            "items": [serialize_user(user) for user in users.items],
+            "total": users.total,
+            "page": users.page,
+            "size": users.size,
+            "pages": users.pages,
         }
         return create_response(data=response_data)

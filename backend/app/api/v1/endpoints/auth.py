@@ -865,6 +865,7 @@ async def resend_verification_email(
     body: PasswordResetRequest,  # Contains email
     background_tasks: BackgroundTasks,
     redis_client: AsyncRedis = Depends(get_redis_client),
+    db_session: AsyncSession = Depends(deps.get_db),
     _: None = Depends(deps.validate_csrf_token),
 ) -> IPostResponseBase:  # No data returned, just a message
     """
@@ -899,7 +900,7 @@ async def resend_verification_email(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Too many attempts to resend verification email. Try again later.",
             )
-        user = await crud.user.get_by_email(email=email_to_verify)
+        user = await crud.user.get_by_email(email=email_to_verify, db_session=db_session)
         if not user:
             await asyncio.sleep(0.2)  # Mitigate timing attacks
             background_tasks.add_task(
@@ -1207,6 +1208,7 @@ async def get_new_access_token(
     body: RefreshToken = Body(...),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     redis_client: AsyncRedis = Depends(get_redis_client),
+    db_session: AsyncSession = Depends(deps.get_db),
 ) -> IPostResponseBase[TokenRead]:
     """
     Gets a new access token using the refresh token for future requests
@@ -1282,7 +1284,7 @@ async def get_new_access_token(
             user: User | None = None
             try:
                 user_uuid = UUID(user_id_from_token)
-                user = await crud.user.get(id=user_uuid)
+                user = await crud.user.get(id=user_uuid, db_session=db_session)
             except ValueError:
                 background_tasks.add_task(
                     log_security_event,
@@ -1392,12 +1394,13 @@ async def login_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     redis_client: AsyncRedis = Depends(get_redis_client),
+    db_session: AsyncSession = Depends(deps.get_db),
 ) -> IPostResponseBase[TokenRead]:  # Changed return type
     """
     OAuth2 compatible token login, get an access token for future requests
     """
     # Check if user exists and get their current status
-    user_record = await crud.user.get_by_email(email=form_data.username)
+    user_record = await crud.user.get_by_email(email=form_data.username, db_session=db_session)
     if not user_record:
         # User doesn't exist, but don't reveal that information
         # Log failed login attempt for non-existent user as a background task
@@ -1456,12 +1459,14 @@ async def login_access_token(
             "your account will be locked for 24 hours."
         )
     # Now attempt to authenticate
-    user = await crud.user.authenticate(email=form_data.username, password=form_data.password)
+    user = await crud.user.authenticate(
+        email=form_data.username, password=form_data.password, db_session=db_session
+    )
     if not user:
         # Failed authentication attempt
         # Pull the user data again to get the latest
         # status after increment_failed_attempts was called
-        updated_user = await crud.user.get_by_email(email=form_data.username)
+        updated_user = await crud.user.get_by_email(email=form_data.username, db_session=db_session)
         if not updated_user:
             background_tasks.add_task(
                 log_security_event,
@@ -1630,6 +1635,7 @@ async def request_password_reset(
     background_tasks: BackgroundTasks = BackgroundTasks(),
     redis_client: AsyncRedis = Depends(get_redis_client),
     sanitizer: deps.InputSanitizer = Depends(get_strict_sanitizer),
+    db_session: AsyncSession = Depends(deps.get_db),
     _: None = Depends(deps.validate_csrf_token),
 ) -> IPostResponseBase:
     """
@@ -1651,7 +1657,7 @@ async def request_password_reset(
                 details={"error": str(e), "ip_address": ip_address},
             )
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email format")
-        user = await crud.user.get_by_email(email=email_for_reset)
+        user = await crud.user.get_by_email(email=email_for_reset, db_session=db_session)
         if not user:
             background_tasks.add_task(
                 log_security_event,
@@ -1860,7 +1866,9 @@ async def confirm_password_reset(
         try:
             # This will check history, update password,
             # and update last_changed_password_date
-            await crud.user.update_password(user=user, new_password=reset_confirm.new_password)
+            await crud.user.update_password(
+                user=user, new_password=reset_confirm.new_password, db_session=db_session
+            )
         except ValueError as e:
             # Log password history violation as a background task
             background_tasks.add_task(
@@ -2079,7 +2087,9 @@ async def reset_password(
         try:
             # This will check history, update password,
             # and update last_changed_password_date
-            await crud.user.update_password(user=user, new_password=body_in.new_password)
+            await crud.user.update_password(
+                user=user, new_password=body_in.new_password, db_session=db_session
+            )
         except ValueError as e:
             # Log password history violation as a background task
             background_tasks.add_task(
