@@ -2,8 +2,9 @@ from typing import Any, Dict, List, Set
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import delete, select
+from sqlalchemy import delete
 from sqlalchemy.orm import selectinload
+from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.crud.base_crud import CRUDBase
@@ -22,11 +23,11 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
     async def get_all(self, *, db_session: AsyncSession) -> List[RoleGroup]:
         """Get all role groups without pagination"""
         result = await db_session.exec(select(RoleGroup))
-        return result.scalars().all()
+        return list(result.all())
 
     async def get_group_by_name(self, *, name: str, db_session: AsyncSession) -> RoleGroup | None:
         result = await db_session.exec(select(RoleGroup).where(RoleGroup.name == name))
-        return result.scalars().first()
+        return result.first()
 
     async def get_by_name(self, *, name: str, db_session: AsyncSession) -> RoleGroup | None:
         """Alias for get_group_by_name."""
@@ -84,7 +85,7 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
 
             # Get all groups that this role belongs to
             result = await db_session.exec(select(RoleGroupMap).where(RoleGroupMap.role_id == role_id))
-            role_groups = result.scalars().all()
+            role_groups = list(result.all())
 
             for role_group_map in role_groups:
                 if role_group_map.role_group_id == group_id:
@@ -94,7 +95,7 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
                 sub_result = await db_session.exec(
                     select(RoleGroupMap).where(RoleGroupMap.role_group_id == role_group_map.role_group_id)
                 )
-                sub_roles = sub_result.scalars().all()
+                sub_roles = list(sub_result.all())
 
                 for sub_role in sub_roles:
                     if await check_role_chain(sub_role.role_id):
@@ -203,7 +204,7 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
 
         # Get all roles that have a role_group_id assigned
         result = await db_session.exec(select(Role).where(Role.role_group_id.is_not(None)))
-        roles = result.scalars().all()
+        roles = list(result.all())
 
         # Track statistics
         stats = {
@@ -226,7 +227,7 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
             )
             existing_mapping = await db_session.exec(query)
 
-            if existing_mapping.scalar_one_or_none():
+            if existing_mapping.one_or_none():
                 stats["skipped"] += 1
                 continue
 
@@ -390,7 +391,7 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
 
             result = await db_session.exec(query)
             # Use unique() to handle potential duplicates from eager loading multiple paths
-            role_group = result.unique().scalar_one_or_none()
+            role_group = result.unique().one_or_none()
 
             # Removed the post-processing loop that used hasattr checks.
             # Relying solely on selectinload to populate the attributes.

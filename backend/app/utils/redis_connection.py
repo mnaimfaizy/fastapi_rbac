@@ -16,6 +16,7 @@ Features:
 
 import logging
 import os
+import socket
 import ssl
 from typing import Any, Dict, Optional
 
@@ -147,6 +148,17 @@ class RedisConnectionFactory:
         redis_password = settings.REDIS_PASSWORD
 
         # Base connection parameters
+        # Use real socket constants (Linux: TCP_KEEPIDLE=4, etc.). The previous
+        # hard-coded 1/2/3 mapped to TCP_NODELAY/TCP_MAXSEG/TCP_CORK and caused
+        # OSError EINVAL when redis-py applied them under uvloop.
+        keepalive_options: Dict[int, int] = {}
+        if hasattr(socket, "TCP_KEEPIDLE"):
+            keepalive_options[socket.TCP_KEEPIDLE] = 60
+        if hasattr(socket, "TCP_KEEPINTVL"):
+            keepalive_options[socket.TCP_KEEPINTVL] = 10
+        if hasattr(socket, "TCP_KEEPCNT"):
+            keepalive_options[socket.TCP_KEEPCNT] = 3
+
         params: Dict[str, Any] = {
             "host": redis_host,
             "port": redis_port,
@@ -154,13 +166,10 @@ class RedisConnectionFactory:
             "decode_responses": True,
             "encoding": "utf-8",
             "socket_keepalive": True,
-            "socket_keepalive_options": {
-                1: 1,  # TCP_KEEPIDLE
-                2: 1,  # TCP_KEEPINTVL
-                3: 3,  # TCP_KEEPCNT
-            },
             "health_check_interval": 30,  # Check connection health every 30 seconds
         }
+        if keepalive_options:
+            params["socket_keepalive_options"] = keepalive_options
 
         # Add authentication if password is set
         if redis_password:

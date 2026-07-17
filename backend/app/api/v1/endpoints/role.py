@@ -52,7 +52,14 @@ async def get_roles(
         pattern = name_pattern.replace("*", "%")
         query = select(Role).where(getattr(Role, "name").like(pattern)).order_by(Role.name)
     response_page = await crud.role.get_multi_paginated(params=params, db_session=db_session, query=query)
-    return create_response(data=response_page)
+    response_data = {
+        "items": [serialize_role(role) for role in response_page.items],
+        "total": response_page.total,
+        "page": response_page.page,
+        "size": response_page.size,
+        "pages": response_page.pages,
+    }
+    return create_response(data=response_data)
 
 
 @router.get("/list", response_model=IGetResponseBase[List[IRoleRead]])

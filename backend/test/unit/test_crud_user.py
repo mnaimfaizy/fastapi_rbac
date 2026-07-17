@@ -4,6 +4,7 @@ import pytest
 from fastapi import HTTPException
 from sqlmodel.ext.asyncio.session import AsyncSession  # Changed import
 
+from app.core.config import settings
 from app.core.security import PasswordValidator
 from app.crud.user_crud import user_crud
 from app.models.role_model import Role
@@ -245,17 +246,18 @@ async def test_create_user_with_duplicate_email(db: AsyncSession) -> None:
 
 @pytest.mark.asyncio
 async def test_password_history_enforcement(db: AsyncSession) -> None:
-    """Test that a user cannot reuse any of their last 5 passwords"""
+    """Test that a user cannot reuse any of their last N passwords."""
+    history_size = settings.PASSWORD_HISTORY_SIZE
     email = random_email()
     password = random_lower_string()
     user_in = IUserCreate(email=email, password=password)
     user = await user_crud.create(obj_in=user_in, db_session=db)
 
-    for _ in range(5):
+    for _ in range(history_size):
         new_password = random_lower_string()
         await user_crud.update_password(user=user, new_password=new_password, db_session=db)
 
-    with pytest.raises(ValueError, match="Cannot reuse any of your last 5 passwords"):
+    with pytest.raises(ValueError, match=f"Cannot reuse any of your last {history_size} passwords"):
         await user_crud.update_password(user=user, new_password=password, db_session=db)
 
 

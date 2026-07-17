@@ -82,18 +82,26 @@ About **76** advisory hits across pinned packages (many packages have multiple a
 
 | Package (pinned) | Disposition | Target lane |
 |------------------|-------------|-------------|
-| `starlette==0.46.2` | Fix now — Host/path/form/Range advisories; fix versions often require Starlette 0.47+ / 1.x | Lane 2 |
-| `PyJWT==2.10.1` | Fix now — several JWT verifier/header advisories | Lane 2 |
-| `cryptography==44.0.2` | Fix now — OpenSSL/DNS constraint advisories (may need major) | Lane 2 |
-| `bleach==6.2.0` | Fix now — XSS / URI scheme sanitization | Lane 2 |
-| `python-multipart==0.0.20` | Fix now — DoS / path / form parsing | Lane 2 |
+| `starlette` | **Fixed in Lane 2** → `1.3.1` (with `fastapi==0.139.1`) | Lane 2 |
+| `PyJWT` | **Fixed in Lane 2** → `2.13.0` | Lane 2 |
+| `cryptography` | **Fixed in Lane 2** → `49.0.0` (requires `cffi>=2`) | Lane 2 |
+| `bleach` | **Fixed in Lane 2** → `6.4.0` | Lane 2 |
+| `python-multipart` | **Fixed in Lane 2** → `0.0.32` | Lane 2 |
+| `ecdsa` | **Fixed in Lane 2** → `0.19.2` (with `python-jose==3.5.0`) | Lane 2 |
+| `redis` | Patched in Lane 2 → `5.3.1` (no OSV hits on 5.2.1; **major 6+/8 deferred** — hard-stop) | Lane 2 / later |
+| `fastapi-limiter` | Kept `0.1.6` — `0.2.0` is a breaking rewrite (drops Redis `FastAPILimiter`) | Lane 2 follow-up |
+| `bcrypt` / `passlib` | No OSV hits; left on `4.3.0` / `1.7.4` | Lane 2 |
 | `gunicorn==21.2.0` | Fix now — request smuggling (needs ≥22) | Lane 4 |
-| `ecdsa==0.19.1` | Triage with python-jose usage; timing/DER issues | Lane 2 |
-| `black==25.1.0` | Fix in tooling bump (cache / GHA advisories; fix ≥26.x is major) | Lane 1 (patch/minor only) or accept until major tooling PR |
-| `pytest==8.3.5` | Accept for now — `/tmp` race on UNIX; fix is 9.x major | Lane 1 majors later |
+| `black` / `pytest` | Tooling majors deferred after Lane 1 patch/minor | Lane 1 majors later |
 | `tornado` (transitive via flower) | Fix with flower/ops cluster | Lane 4 |
 | `urllib3` / `requests` / `idna` | Fix with ops/http client cluster when convenient | Lane 4 |
 | Remaining transitive (filelock, virtualenv, pygments, …) | Accept or fold into nearest lane | Lane 1 / 4 |
+
+### Lane 2 notes (2026-07-16)
+
+- Starlette Host-header advisories require **≥1.0.1**, so FastAPI moved to **0.139.x** (allows `starlette>=0.46.0`).
+- Companion pins: `pydantic` / `pydantic-settings` / `pydantic_core`, `fastapi-csrf-protect`, `slowapi`, `annotated-doc`, `typing_extensions`, `pyasn1`.
+- Re-run `pip-audit` after merge; do not treat this table as live CVE status.
 
 ### Frontend (`npm audit`)
 
