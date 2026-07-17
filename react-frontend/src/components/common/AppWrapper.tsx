@@ -44,7 +44,7 @@ export const AppWrapper: React.FC<AppWrapperProps> = ({ children }) => {
     }
 
     // Log route changes for analytics (could be replaced with actual analytics)
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       console.log(`[Route Change] ${location.pathname}${location.search}`);
     }
   }, [isAuthenticated, location]);
