@@ -136,6 +136,22 @@ Initial snapshot (2026-07-16): **22** vulnerabilities. After Lane 1 tooling + La
 - Runtime (non-major): axios, RTK, react-redux, react-hook-form, zod 3.x, Radix, lucide-react `0.577`, recharts `2.15.4` (v3 deferred), date-fns, sonner, tailwind-merge, postcss.
 - Majors deferred to Lane 6: React, Vite 7+/8, Tailwind, lucide-react 1.x, recharts 3.x, zod 4.x.
 
+### Lane 6 notes (2026-07-17)
+
+Spike landed in one PR (stack was already on React 19 / Tailwind 4 / RR7):
+
+| Package | From → To | Notes |
+|---------|-----------|--------|
+| `react` / `react-dom` | `19.0` → `19.2.7` | Same major currency |
+| `tailwindcss` / `@tailwindcss/vite` | `4.1` → `4.3.3` | Same major currency |
+| `vite` | `6.4` → `7.3.6` | With `@vitejs/plugin-react` `5.x` |
+| `vitest` / coverage | `3.2` → `4.1.10` | Peer-aligned with Vite 7 |
+| `lucide-react` | `0.577` → `1.24.0` | Icon import API unchanged here |
+| `zod` | `3.25` → `4.4.3` | Existing `message` args still work (deprecated); prefer `error` later |
+| `recharts` | `2.15` → `3.9.2` | Dashboard `AreaChart` OK |
+
+**Deferred (narrower follow-ups):** Vite 8 + `@vitejs/plugin-react` 6 (Rolldown/Babel compiler peers), TypeScript 7. Playwright e2e remains gated until full-stack CI (#37).
+
 ## Per-PR checklist
 
 1. Backend: pytest suite green; `import app.main` smoke if relevant.
