@@ -2,7 +2,7 @@
 # Supports development, testing, and production environments
 
 # Base stage with common dependencies
-FROM python:3.10-slim-bullseye AS base
+FROM python:3.10-slim-bookworm AS base
 
 WORKDIR /app
 

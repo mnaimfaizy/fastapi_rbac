@@ -150,7 +150,20 @@ Spike landed in one PR (stack was already on React 19 / Tailwind 4 / RR7):
 | `zod` | `3.25` → `4.4.3` | Existing `message` args still work (deprecated); prefer `error` later |
 | `recharts` | `2.15` → `3.9.2` | Dashboard `AreaChart` OK |
 
-**Deferred (narrower follow-ups):** Vite 8 + `@vitejs/plugin-react` 6 (Rolldown/Babel compiler peers), TypeScript 7. Playwright e2e remains gated until full-stack CI (#37).
+**Deferred (narrower follow-ups):** Vite 8 + `@vitejs/plugin-react` 6 (Rolldown/Babel compiler peers), TypeScript 7. Playwright e2e remains gated until a dedicated full-stack E2E workflow (image alignment done in Lane 7).
+
+### Lane 7 notes (2026-07-17)
+
+Aligned Docker/CI base images:
+
+| Surface | Aligned tag |
+|---------|-------------|
+| Backend Dockerfiles | `python:3.10-slim-bookworm` |
+| Frontend Dockerfiles | `node:20-alpine` (matches CI Node 20 + `package.json` `engines`) |
+| Compose Postgres | `postgres:15-alpine` (CI now matches) |
+| Compose / CI Redis | `redis:7.2-alpine` (was CI `redis:6` / compose `7.2.5-alpine`) |
+
+Playwright e2e job remains `if: false` — needs a workflow that starts API + DB + Redis + seeded admin; track as follow-up under #30.
 
 ## Per-PR checklist
 

@@ -169,8 +169,8 @@ This guide covers common Docker-related issues and their solutions for the FastA
 2. **Update Base Images**
    ```powershell
    # Pull latest base images
-   docker pull python:3.10-slim
-   docker pull node:18-alpine
+   docker pull python:3.10-slim-bookworm
+   docker pull node:20-alpine
    ```
 
 ## 🌐 Networking Issues
