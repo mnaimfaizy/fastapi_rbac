@@ -1,8 +1,8 @@
 from datetime import timedelta
 
+import jwt
 import pytest
-from jose import jwt
-from jose.exceptions import ExpiredSignatureError  # Added import
+from jwt.exceptions import ExpiredSignatureError
 
 from app.core.config import settings
 from app.core.security import PasswordValidator, create_access_token, create_refresh_token, decode_token

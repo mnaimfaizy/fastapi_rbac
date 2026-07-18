@@ -1,0 +1,3 @@
+# PyJWT as the sole JWT library; delete unused TokenManager
+
+Auth previously signed and verified JWTs with `python-jose` in `app/core/security.py` while tests and some call sites already used PyJWT, and an unused `TokenManager` sketched a parallel jti-blacklist / IP-UA / session-limit stack that never wired into live endpoints. We consolidated on **PyJWT only**, removed `python-jose` (and jose-only `ecdsa`), deleted `token_manager.py`, and kept the live Redis **allowlist** in `app/utils/token.py` as the session invalidation model. Dual crypto stacks and a phantom second auth path were higher risk than the migration cost; unfinished session-security controls remain follow-ups rather than being silently claimed by config.

@@ -10,7 +10,6 @@ from uuid import UUID  # Import UUID
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from fastapi_csrf_protect import CsrfProtect
-from jwt import DecodeError, ExpiredSignatureError, MissingRequiredClaimError
 from redis.asyncio import Redis
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -63,23 +62,8 @@ def get_current_user(
         redis_client: Redis = Depends(get_redis_client),
         db_session: AsyncSession = Depends(get_db),
     ) -> User:
-        try:
-            payload = decode_token(access_token)
-        except ExpiredSignatureError:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Your token has expired. Please log in again.",
-            )
-        except DecodeError:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Error when decoding the token. Please check your request.",
-            )
-        except MissingRequiredClaimError:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="There is no required field in your token. Please contact the administrator.",
-            )
+        # decode_token maps JWT failures to HTTPException (preserve that behavior)
+        payload = decode_token(access_token)
 
         user_id_str = payload.get("sub")
         if not user_id_str:

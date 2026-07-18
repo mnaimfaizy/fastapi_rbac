@@ -29,7 +29,7 @@ A follow-up may align Poetry with `requirements.txt`; until then, always pin and
 |------|---------|------------------|-------|
 | 0 | Inventory & automation | Dependabot, this doc, CVE snapshot | Docs review; valid Dependabot config |
 | 1 | Dev / test tooling | pytest*, black, isort, flake8*, mypy, coverage, pre-commit, factory_boy, Faker; eslint*, prettier, vitest*, testing-library*, Playwright | Backend unit + lint; frontend lint/build/e2e; local `npm run test:run` |
-| 2 | Backend security / auth | FastAPI, Starlette, Pydantic, PyJWT, python-jose, passlib, bcrypt, cryptography, redis, CSRF/limiter, bleach | Backend tests; login/refresh/logout smoke; CSRF if middleware touched |
+| 2 | Backend security / auth | FastAPI, Starlette, Pydantic, PyJWT, passlib, bcrypt, cryptography, redis, CSRF/limiter, bleach | Backend tests; login/refresh/logout smoke; CSRF if middleware touched |
 | 3 | Backend data / async DB | SQLAlchemy, sqlmodel, asyncpg, aiosqlite, alembic, greenlet, sqlakeyset | Migrations on empty DB; CRUD-heavy tests; keep `AsyncSession` + `.exec()` |
 | 4 | Backend workers / ops | celery, kombu, flower, gunicorn, uvicorn, sentry-sdk, httpx, tenacity | Worker import smoke; Docker health if images change |
 | 5 | Frontend runtime (non-major) | axios, Redux Toolkit, react-hook-form, zod, Radix, lucide-react, recharts | lint, `test:run`, build; Playwright auth if HTTP client touched |
@@ -44,7 +44,7 @@ Upgrade carefully (changelog review; prefer split PRs if needed):
 - FastAPI middleware affecting CSRF / rate limiting (`fastapi-csrf-protect`, `fastapi-limiter` / `slowapi`)
 - Redis client + token utilities
 - Celery / kombu / broker compatibility
-- PyJWT / python-jose / passlib / bcrypt
+- PyJWT / passlib / bcrypt
 - Frontend axios interceptors + react-router + Redux auth slice
 
 ## Automation
@@ -87,7 +87,8 @@ About **76** advisory hits across pinned packages (many packages have multiple a
 | `cryptography` | **Fixed in Lane 2** → `49.0.0` (requires `cffi>=2`) | Lane 2 |
 | `bleach` | **Fixed in Lane 2** → `6.4.0` | Lane 2 |
 | `python-multipart` | **Fixed in Lane 2** → `0.0.32` | Lane 2 |
-| `ecdsa` | **Fixed in Lane 2** → `0.19.2` (with `python-jose==3.5.0`) | Lane 2 |
+| `ecdsa` | **Removed** with `python-jose` (HS256-only app; no direct imports) — see #63 | Lane 2 follow-up |
+| `python-jose` | **Removed** — consolidated JWT onto PyJWT only (#63 / [ADR 0001](../adr/0001-pyjwt-sole-jwt-library.md)) | Lane 2 follow-up |
 | `redis` | Patched in Lane 2 → `5.3.1` (no OSV hits on 5.2.1; **major 6+/8 deferred** — hard-stop) | Lane 2 / later |
 | `fastapi-limiter` | Kept `0.1.6` — `0.2.0` is a breaking rewrite (drops Redis `FastAPILimiter`) | Lane 2 follow-up |
 | `bcrypt` / `passlib` | No OSV hits; left on `4.3.0` / `1.7.4` | Lane 2 |
@@ -103,6 +104,13 @@ About **76** advisory hits across pinned packages (many packages have multiple a
 - Starlette Host-header advisories require **≥1.0.1**, so FastAPI moved to **0.139.x** (allows `starlette>=0.46.0`).
 - Companion pins: `pydantic` / `pydantic-settings` / `pydantic_core`, `fastapi-csrf-protect`, `slowapi`, `annotated-doc`, `typing_extensions`, `pyasn1`.
 - Re-run `pip-audit` after merge; do not treat this table as live CVE status.
+
+### Lane 2 hard-stop follow-up — JWT consolidation (#63, 2026-07-18)
+
+- **Decision:** PyJWT is the only JWT implementation; `python-jose` and unused `ecdsa` removed. See [ADR 0001](../adr/0001-pyjwt-sole-jwt-library.md).
+- **Runtime:** `app/core/security.py` encode/decode; session invalidation remains Redis **allowlist** (`app/utils/token.py`), not jti blacklist.
+- **Removed:** unused `app/utils/token_manager.py` (never imported by live auth).
+- **Deferred (security debt, not part of #63 behavior change):** see umbrella [#67](https://github.com/mnaimfaizy/fastapi_rbac/issues/67) — enforce/retire `password_version`; `VALIDATE_TOKEN_IP` honesty/implement; concurrent session limit; orphan `TOKEN_BLACKLIST_*` settings.
 
 ### Lane 3 notes (2026-07-17)
 

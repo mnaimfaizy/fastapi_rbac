@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from logging.config import fileConfig
 from typing import AsyncGenerator, Callable, Dict, List, Optional, Tuple
 
-from fastapi import FastAPI, HTTPException, Request, Response, status
+from fastapi import FastAPI, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi_async_sqlalchemy import SQLAlchemyMiddleware
@@ -14,7 +14,6 @@ from fastapi_cache.backends.redis import RedisBackend
 from fastapi_csrf_protect import CsrfProtect
 from fastapi_limiter import FastAPILimiter
 from fastapi_pagination import add_pagination
-from jwt import DecodeError, ExpiredSignatureError, MissingRequiredClaimError
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -142,25 +141,8 @@ async def user_id_identifier(request: Request) -> Optional[str]:
             header_parts = auth_header.split()
             if len(header_parts) == 2 and header_parts[0].lower() == "bearer":
                 token = header_parts[1]
-                try:
-                    payload = decode_token(token)
-                except ExpiredSignatureError:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Your token has expired. Please log in again.",
-                    )
-                except DecodeError:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail=("Error when decoding the token. " "Please check your request."),
-                    )
-                except MissingRequiredClaimError:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail=(
-                            "There is no required field in your token. " "Please contact the administrator."
-                        ),
-                    )
+                # decode_token maps JWT failures to HTTPException
+                payload = decode_token(token)
 
                 user_id = payload["sub"]
 

@@ -132,8 +132,7 @@ backend/
 │   │   │   ├── email.py      # Core email functions
 │   │   │   └── reset_password.py # Password reset email utilities
 │   │   ├── background_tasks.py # Background task utilities
-│   │   ├── token.py          # Token validation and management
-│   │   ├── token_manager.py  # Advanced token management
+│   │   ├── token.py          # Redis allowlist token helpers
 │   │   ├── password_validation.py # Password validation utilities
 │   │   ├── security_audit.py # Security audit utilities
 │   │   ├── role_utils.py     # Role management utilities

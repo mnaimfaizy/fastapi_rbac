@@ -163,16 +163,14 @@ async def cleanup_expired_tokens(
 
 async def _cleanup_tokens_task(redis_client: Redis, user_id: UUID, token_type: TokenType) -> None:
     """
-    Clean up expired tokens for a user.
-    This is the actual task that gets executed in the background.
-    """
-    # Implementation details...
-    # Delete user tokens based on token type
-    key_pattern = f"user:{user_id}:{token_type.value}:*"
-    keys = await redis_client.keys(key_pattern)
+    Clean up tokens for a user.
 
-    if keys:
-        await redis_client.delete(*keys)
+    Must use the same Redis key as ``app.utils.token`` allowlist helpers:
+    ``user:{user_id}:{token_type}`` (a SET). The previous ``…:*`` pattern
+    did not match that key and left sessions valid after logout.
+    """
+    token_key = f"user:{user_id}:{token_type}"
+    await redis_client.delete(token_key)
 
 
 async def log_security_event(
