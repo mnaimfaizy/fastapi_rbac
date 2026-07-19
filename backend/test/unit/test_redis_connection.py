@@ -20,7 +20,7 @@ from app.utils.redis_connection import RedisConnectionFactory
 
 
 @pytest.fixture(autouse=True)
-def reset_factory() -> Generator[None, None, None]:
+def _reset_factory() -> Generator[None, None, None]:
     """Reset RedisConnectionFactory singleton state between tests."""
     RedisConnectionFactory._pool = None
     RedisConnectionFactory._client = None
@@ -80,18 +80,19 @@ class TestRedisConnectionFactory:
             params = RedisConnectionFactory._get_connection_params(db=0)
 
             assert params["host"] == settings.REDIS_HOST
-            assert params["port"] == int(settings.REDIS_PORT)
+            expected_port = int(settings.REDIS_PORT) if settings.REDIS_PORT else 6379
+            assert params["port"] == expected_port
             assert params["db"] == 0
             assert params["decode_responses"] is True
             assert "ssl" not in params or params["ssl"] is False
             assert params["socket_keepalive"] is True
             if hasattr(socket, "TCP_KEEPIDLE"):
-                assert params["socket_keepalive_options"][socket.TCP_KEEPIDLE] == 60
-                assert params["socket_keepalive_options"][socket.TCP_KEEPINTVL] == 10
-                assert params["socket_keepalive_options"][socket.TCP_KEEPCNT] == 3
-                assert 1 not in params["socket_keepalive_options"]
-                assert 2 not in params["socket_keepalive_options"]
-                assert 3 not in params["socket_keepalive_options"]
+                expected_keepalive_options = {
+                    socket.TCP_KEEPIDLE: 60,
+                    socket.TCP_KEEPINTVL: 10,
+                    socket.TCP_KEEPCNT: 3,
+                }
+                assert params["socket_keepalive_options"] == expected_keepalive_options
 
     @patch("app.utils.redis_connection.RedisConnectionFactory._get_ssl_context")
     def test_get_connection_params_production(self, mock_get_ssl_context: MagicMock) -> None:

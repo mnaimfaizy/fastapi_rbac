@@ -7,7 +7,7 @@ from typing import AsyncGenerator, Callable, Dict, List, Optional, Tuple
 
 from fastapi import FastAPI, Request, Response, status
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi_async_sqlalchemy import SQLAlchemyMiddleware
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
@@ -196,6 +196,7 @@ fastapi_app = FastAPI(
     title=settings.PROJECT_NAME or "FastAPI RBAC",
     version=settings.API_VERSION,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    docs_url=None,
     description=("FastAPI RBAC system with comprehensive " "authentication and authorization features"),
     lifespan=lifespan,
 )
@@ -270,6 +271,76 @@ async def root() -> Dict[str, str]:
     """
     # if oso.is_allowed(user, "read", message):
     return {"message": "Hello World"}
+
+
+@fastapi_app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui_html() -> HTMLResponse:
+    """Serve Swagger UI with CSRF support for state-changing requests."""
+    csrf_token_url = f"{settings.API_V1_STR}/auth/csrf-token"
+    openapi_url = f"{settings.API_V1_STR}/openapi.json"
+
+    return HTMLResponse(
+        f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
+            <title>{settings.PROJECT_NAME or "FastAPI RBAC"} - Swagger UI</title>
+        </head>
+        <body>
+            <div id="swagger-ui"></div>
+            <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+            <script>
+            const csrfTokenUrl = "{csrf_token_url}";
+            const unsafeMethods = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+            let csrfToken = null;
+
+            async function ensureCsrfToken() {{
+                if (csrfToken) {{
+                    return csrfToken;
+                }}
+
+                const response = await fetch(csrfTokenUrl, {{ credentials: "same-origin" }});
+                if (!response.ok) {{
+                    throw new Error(`Unable to fetch CSRF token: ${{response.status}}`);
+                }}
+
+                const payload = await response.json();
+                csrfToken = payload?.data?.csrf_token;
+                if (!csrfToken) {{
+                    throw new Error("CSRF token response did not include data.csrf_token");
+                }}
+
+                return csrfToken;
+            }}
+
+            window.ui = SwaggerUIBundle({{
+                url: "{openapi_url}",
+                dom_id: "#swagger-ui",
+                deepLinking: true,
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIBundle.SwaggerUIStandalonePreset,
+                ],
+                requestInterceptor: async (request) => {{
+                    const method = (request.method || "GET").toUpperCase();
+                    const isApiRequest = request.url.includes("{settings.API_V1_STR}/");
+                    const isCsrfRequest = request.url.includes(csrfTokenUrl);
+
+                    if (unsafeMethods.has(method) && isApiRequest && !isCsrfRequest) {{
+                        request.headers = request.headers || {{}};
+                        request.headers["X-CSRF-Token"] = await ensureCsrfToken();
+                    }}
+
+                    request.credentials = "same-origin";
+                    return request;
+                }},
+            }});
+            </script>
+        </body>
+        </html>
+        """
+    )
 
 
 # Exception handlers for consistent error responses

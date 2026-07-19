@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 import jwt
 
 from app.core.config import settings
+from app.core.security import add_token_claims
 from app.utils.uuid6 import uuid7
 
 
@@ -43,14 +44,16 @@ class TokenFactory:
         scopes = scopes or ["user:read"]
         expires = expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
 
-        to_encode = {
-            "sub": user_id,
-            "exp": datetime.now(timezone.utc) + expires,
-            "iat": datetime.now(timezone.utc),
-            "scopes": scopes,
-            "is_superuser": is_superuser,
-            **extra_claims,
-        }
+        to_encode = add_token_claims(
+            {
+                "sub": user_id,
+                "exp": datetime.now(timezone.utc) + expires,
+                "type": "access",
+                "scopes": scopes,
+                "is_superuser": is_superuser,
+                **extra_claims,
+            }
+        )
 
         encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
         return encoded_jwt
@@ -73,17 +76,18 @@ class TokenFactory:
             JWT refresh token string
         """
         user_id = user_id or str(uuid7())
-        expires = expires_delta or timedelta(days=settings.REFRESH_TOKEN_EXPIRE_MINUTES)
+        expires = expires_delta or timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES)
 
-        to_encode = {
-            "sub": user_id,
-            "exp": datetime.now(timezone.utc) + expires,
-            "iat": datetime.now(timezone.utc),
-            "token_type": "refresh",
-            **extra_claims,
-        }
+        to_encode = add_token_claims(
+            {
+                "sub": user_id,
+                "exp": datetime.now(timezone.utc) + expires,
+                "type": "refresh",
+                **extra_claims,
+            }
+        )
 
-        encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+        encoded_jwt = jwt.encode(to_encode, settings.JWT_REFRESH_SECRET_KEY, algorithm=settings.ALGORITHM)
         return encoded_jwt
 
     @staticmethod

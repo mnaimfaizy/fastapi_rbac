@@ -187,7 +187,7 @@ def decode_token(
                     "verify_exp": verify_exp,
                     "verify_aud": True,
                     "verify_iss": True,
-                    "verify_iat": True,
+                    "verify_iat": False,
                     "verify_nbf": True,
                 },
             )
@@ -199,7 +199,10 @@ def decode_token(
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token not yet valid")
         except InvalidAudienceError as e:
             logger.warning(f"JWT validation failed: {str(e)}")
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token audience")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token audience",
+            )
         except InvalidIssuerError as e:
             logger.warning(f"JWT validation failed: {str(e)}")
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token issuer")

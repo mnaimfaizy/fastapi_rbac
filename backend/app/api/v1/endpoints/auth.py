@@ -40,7 +40,7 @@ from app.utils.background_tasks import (
     send_password_reset_email,
     send_verification_email,
 )
-from app.utils.token import add_token_to_redis, get_valid_tokens
+from app.utils.token import add_token_to_redis, get_valid_tokens, token_is_allowlisted
 from app.utils.user_utils import serialize_user
 
 logger = logging.getLogger("fastapi_rbac")
@@ -1194,7 +1194,7 @@ async def get_new_access_token(
         if payload["type"] == "refresh":
             user_id_from_token = payload["sub"]
             valid_refresh_tokens = await get_valid_tokens(redis_client, user_id_from_token, TokenType.REFRESH)
-            if valid_refresh_tokens and body.refresh_token not in valid_refresh_tokens:
+            if not token_is_allowlisted(valid_refresh_tokens, body.refresh_token):
                 background_tasks.add_task(
                     log_security_event,
                     background_tasks=background_tasks,
@@ -1469,15 +1469,13 @@ async def login_access_token(
         )
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = security.create_access_token(user.id, user.email, expires_delta=access_token_expires)
-    valid_access_tokens = await get_valid_tokens(redis_client, user.id, TokenType.ACCESS)
-    if valid_access_tokens:
-        await add_token_to_redis(
-            redis_client,
-            user,
-            access_token,
-            TokenType.ACCESS,
-            settings.ACCESS_TOKEN_EXPIRE_MINUTES,
-        )
+    await add_token_to_redis(
+        redis_client,
+        user,
+        access_token,
+        TokenType.ACCESS,
+        settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+    )
     # Log successful OAuth2 login
     background_tasks.add_task(
         log_security_event,
@@ -1746,7 +1744,7 @@ async def confirm_password_reset(
             )
         # Verify token in Redis
         valid_reset_tokens = await get_valid_tokens(redis_client, user.id, TokenType.RESET)
-        if not valid_reset_tokens or reset_confirm.token not in valid_reset_tokens:
+        if not token_is_allowlisted(valid_reset_tokens, reset_confirm.token):
             # Log invalid token in Redis as a background task
             background_tasks.add_task(
                 log_security_event,
@@ -1941,7 +1939,7 @@ async def reset_password(
             )
         # Verify token in Redis
         valid_reset_tokens = await get_valid_tokens(redis_client, user.id, TokenType.RESET)
-        if not valid_reset_tokens or body_in.token not in valid_reset_tokens:
+        if not token_is_allowlisted(valid_reset_tokens, body_in.token):
             # Log invalid token in Redis as a background task
             background_tasks.add_task(
                 log_security_event,

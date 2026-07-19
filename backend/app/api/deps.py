@@ -20,7 +20,7 @@ from app.db.session import SessionLocal, get_redis_client
 from app.models.user_model import User
 from app.schemas.common_schema import TokenType
 from app.utils.sanitization import InputSanitizer
-from app.utils.token import get_valid_tokens
+from app.utils.token import get_valid_tokens, token_is_allowlisted
 
 # Import CSRF protection for dependency injection
 csrf_protect = None  # Will be set by main.py during startup
@@ -80,7 +80,7 @@ def get_current_user(
             )
 
         valid_access_tokens = await get_valid_tokens(redis_client, user_id_str, TokenType.ACCESS)
-        if valid_access_tokens and access_token not in valid_access_tokens:
+        if not token_is_allowlisted(valid_access_tokens, access_token):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Could not validate credentials, token invalid or revoked.",
