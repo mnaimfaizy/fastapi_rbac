@@ -141,7 +141,6 @@ async def user_id_identifier(request: Request) -> Optional[str]:
             header_parts = auth_header.split()
             if len(header_parts) == 2 and header_parts[0].lower() == "bearer":
                 token = header_parts[1]
-                # decode_token maps JWT failures to HTTPException
                 payload = decode_token(token)
 
                 user_id = payload["sub"]

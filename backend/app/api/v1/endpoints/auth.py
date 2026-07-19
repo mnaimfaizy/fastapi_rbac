@@ -677,7 +677,6 @@ async def verify_email(
         )
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid input data")
     try:
-        # decode_token maps JWT failures to HTTPException (actual runtime behavior)
         payload = security.decode_token(body.token, token_type="verification")
         email_from_token_str = payload.get("sub")
         if not email_from_token_str:
@@ -1189,7 +1188,6 @@ async def get_new_access_token(
     ip_address = request.client.host if request.client else "Unknown"  # Get IP address
     payload = None  # Initialize payload for broader scope in exception handling
     try:
-        # decode_token maps JWT failures to HTTPException (actual runtime behavior)
         payload = decode_token(body.refresh_token, token_type="refresh")
         if payload["type"] == "refresh":
             user_id_from_token = payload["sub"]

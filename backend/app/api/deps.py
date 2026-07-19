@@ -62,7 +62,6 @@ def get_current_user(
         redis_client: Redis = Depends(get_redis_client),
         db_session: AsyncSession = Depends(get_db),
     ) -> User:
-        # decode_token maps JWT failures to HTTPException (preserve that behavior)
         payload = decode_token(access_token)
 
         user_id_str = payload.get("sub")
