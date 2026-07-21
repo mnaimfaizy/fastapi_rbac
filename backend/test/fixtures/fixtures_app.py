@@ -3,8 +3,8 @@ FastAPI app test fixtures.
 """
 
 import os
+from test.fixtures.mock_redis_client import MockRedisClient
 from typing import Any, AsyncGenerator, Callable
-from unittest.mock import AsyncMock
 
 import pytest_asyncio
 from fastapi import FastAPI
@@ -16,7 +16,7 @@ from app.main import fastapi_app as main_app
 
 
 @pytest_asyncio.fixture(scope="function")
-async def app(db: AsyncSession, redis_mock: AsyncMock) -> FastAPI:
+async def app(db: AsyncSession, redis_mock: MockRedisClient) -> FastAPI:
     """Return a FastAPI app instance with test dependencies."""
 
     # Override the get_db dependency
@@ -27,7 +27,7 @@ async def app(db: AsyncSession, redis_mock: AsyncMock) -> FastAPI:
             pass
 
     # Override the get_redis dependency
-    async def get_test_redis() -> AsyncGenerator[AsyncMock, None]:
+    async def get_test_redis() -> AsyncGenerator[MockRedisClient, None]:
         yield redis_mock
 
     # Override the dependencies
