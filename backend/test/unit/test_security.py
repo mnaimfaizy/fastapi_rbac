@@ -1,11 +1,19 @@
 from datetime import timedelta
+from typing import Literal
 
 import jwt
 import pytest
+from fastapi import HTTPException, status
 from jwt.exceptions import ExpiredSignatureError
 
 from app.core.config import settings
-from app.core.security import PasswordValidator, create_access_token, create_refresh_token, decode_token
+from app.core.security import (
+    PasswordValidator,
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+    map_jwt_http_error_to_event,
+)
 
 
 def test_password_hashing() -> None:
@@ -120,3 +128,30 @@ def test_decode_token() -> None:
 
     # Check if the token is decoded correctly
     assert decoded["sub"] == user_id
+
+
+@pytest.mark.parametrize(
+    ("detail", "flow", "expected"),
+    [
+        ("Token has expired", "refresh", "refresh_token_expired"),
+        ("Missing required claims: {'sub'}", "refresh", "refresh_token_missing_claim"),
+        ("Invalid token format", "refresh", "refresh_token_decode_error"),
+        ("Invalid token", "refresh", "refresh_token_decode_error"),
+        ("Invalid token audience", "refresh", "refresh_token_decode_error"),
+        ("Token has expired", "verify_email", "verify_email_token_invalid_expired"),
+        (
+            "Missing required claims: {'jti'}",
+            "verify_email",
+            "verify_email_token_invalid_missing_claim",
+        ),
+        ("Invalid token format", "verify_email", "verify_email_token_invalid_decode"),
+        ("Invalid token", "verify_email", "verify_email_token_invalid_decode"),
+        ("Token not yet valid", "verify_email", "verify_email_token_invalid_decode"),
+    ],
+)
+def test_map_jwt_http_error_to_event(
+    detail: str, flow: Literal["refresh", "verify_email"], expected: str
+) -> None:
+    """Map decode_token HTTPException details to typed security audit event names."""
+    exc = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail)
+    assert map_jwt_http_error_to_event(exc, flow=flow) == expected

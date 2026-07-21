@@ -19,7 +19,11 @@ from app.api import deps
 from app.api.deps import get_redis_client, get_strict_sanitizer
 from app.core import security  # security module contains token functions
 from app.core.config import ModeEnum, settings
-from app.core.security import PasswordValidator, decode_token  # For password complexity
+from app.core.security import (  # For password complexity / JWT audit mapping
+    PasswordValidator,
+    decode_token,
+    map_jwt_http_error_to_event,
+)
 from app.models.user_model import User
 from app.schemas.common_schema import TokenType
 from app.schemas.response_schema import IPostResponseBase, create_response
@@ -677,7 +681,19 @@ async def verify_email(
         )
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid input data")
     try:
-        payload = security.decode_token(body.token, token_type="verification")
+        try:
+            payload = security.decode_token(body.token, token_type="verification")
+        except HTTPException as exc:
+            background_tasks.add_task(
+                log_security_event,
+                background_tasks=background_tasks,
+                event_type=map_jwt_http_error_to_event(exc, flow="verify_email"),
+                details={
+                    "error": (exc.detail if isinstance(exc.detail, str) else str(exc.detail)),
+                    "ip_address": ip_address,
+                },
+            )
+            raise
         email_from_token_str = payload.get("sub")
         if not email_from_token_str:
             background_tasks.add_task(
@@ -1188,7 +1204,19 @@ async def get_new_access_token(
     ip_address = request.client.host if request.client else "Unknown"  # Get IP address
     payload = None  # Initialize payload for broader scope in exception handling
     try:
-        payload = decode_token(body.refresh_token, token_type="refresh")
+        try:
+            payload = decode_token(body.refresh_token, token_type="refresh")
+        except HTTPException as exc:
+            background_tasks.add_task(
+                log_security_event,
+                background_tasks=background_tasks,
+                event_type=map_jwt_http_error_to_event(exc, flow="refresh"),
+                details={
+                    "token_error": (exc.detail if isinstance(exc.detail, str) else str(exc.detail)),
+                    "ip_address": ip_address,
+                },
+            )
+            raise
         if payload["type"] == "refresh":
             user_id_from_token = payload["sub"]
             valid_refresh_tokens = await get_valid_tokens(redis_client, user_id_from_token, TokenType.REFRESH)
