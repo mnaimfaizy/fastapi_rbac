@@ -482,6 +482,31 @@ class TestAuthenticationEdgeCases:
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     @pytest.mark.asyncio
+    async def test_verify_email_expired_emits_typed_security_event(self, client: AsyncClient) -> None:
+        """Expired verification JWT should emit verify_email_token_invalid_expired."""
+        from fastapi import BackgroundTasks
+
+        _, headers = await get_csrf_token(client)
+        with patch("app.core.security.decode_token") as mock_decode:
+            mock_decode.side_effect = HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has expired"
+            )
+            with patch.object(BackgroundTasks, "add_task") as mock_add_task:
+                response = await client.post(
+                    f"{settings.API_V1_STR}/auth/verify-email",
+                    json={"token": "expired.verification.token"},
+                    headers=headers,
+                )
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        event_types = [
+            call.kwargs.get("event_type")
+            for call in mock_add_task.call_args_list
+            if call.kwargs.get("event_type")
+        ]
+        assert "verify_email_token_invalid_expired" in event_types
+
+    @pytest.mark.asyncio
     async def test_refresh_token_with_invalid_token(self, client: AsyncClient) -> None:
         """Test token refresh with invalid refresh token."""
 
@@ -490,6 +515,29 @@ class TestAuthenticationEdgeCases:
         )
 
         assert response.status_code in [400, 401, 403, 422]
+
+    @pytest.mark.asyncio
+    async def test_refresh_token_expired_emits_typed_security_event(self, client: AsyncClient) -> None:
+        """Expired refresh JWT should emit refresh_token_expired audit event."""
+        from fastapi import BackgroundTasks
+
+        with patch("app.api.v1.endpoints.auth.decode_token") as mock_decode:
+            mock_decode.side_effect = HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has expired"
+            )
+            with patch.object(BackgroundTasks, "add_task") as mock_add_task:
+                response = await client.post(
+                    f"{settings.API_V1_STR}/auth/new_access_token",
+                    json={"refresh_token": "expired.refresh.token"},
+                )
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        event_types = [
+            call.kwargs.get("event_type")
+            for call in mock_add_task.call_args_list
+            if call.kwargs.get("event_type")
+        ]
+        assert "refresh_token_expired" in event_types
 
     @pytest.mark.asyncio
     async def test_change_password_with_weak_password(

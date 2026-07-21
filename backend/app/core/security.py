@@ -229,6 +229,39 @@ def decode_token(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token validation failed")
 
 
+def map_jwt_http_error_to_event(
+    exc: HTTPException,
+    *,
+    flow: Literal["refresh", "verify_email"],
+) -> str:
+    """
+    Map an HTTPException from decode_token to a typed security audit event name.
+
+    Call sites should catch only the decode_token failure, log this event, then re-raise.
+    """
+    detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
+
+    if detail == "Token has expired":
+        kind = "expired"
+    elif "Missing required claims" in detail:
+        kind = "missing_claim"
+    else:
+        kind = "decode"
+
+    if flow == "refresh":
+        return {
+            "expired": "refresh_token_expired",
+            "missing_claim": "refresh_token_missing_claim",
+            "decode": "refresh_token_decode_error",
+        }[kind]
+
+    return {
+        "expired": "verify_email_token_invalid_expired",
+        "missing_claim": "verify_email_token_invalid_missing_claim",
+        "decode": "verify_email_token_invalid_decode",
+    }[kind]
+
+
 def validate_token_claims(payload: dict) -> None:
     """Verify required token claims and values."""
     required_claims = {"sub", "iat", "exp", "iss", "aud", "type", "jti", "nbf"}
