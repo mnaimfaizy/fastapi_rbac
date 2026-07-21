@@ -104,7 +104,7 @@ pytest-xdist==3.8.0
 python-crontab==3.2.0
 python-dateutil==2.9.0.post0
 python-dotenv==1.1.0
-python-json-logger==3.3.0
+python-json-logger==4.1.0
 python-multipart==0.0.32
 pytokens==0.4.1
 pytz==2025.2
