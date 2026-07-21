@@ -19,7 +19,7 @@ The backend implements a comprehensive RBAC system with these key components:
 
    - JWT-based token authentication with separate access and refresh tokens
    - Password hashing with bcrypt and password history management
-   - Token blacklisting and management with Redis
+   - Token allowlisting and management with Redis
    - Password reset functionality with email notifications
 
 2. **Database Models**:
@@ -132,8 +132,7 @@ backend/
 │   │   │   ├── email.py      # Core email functions
 │   │   │   └── reset_password.py # Password reset email utilities
 │   │   ├── background_tasks.py # Background task utilities
-│   │   ├── token.py          # Token validation and management
-│   │   ├── token_manager.py  # Advanced token management
+│   │   ├── token.py          # Redis allowlist token helpers
 │   │   ├── password_validation.py # Password validation utilities
 │   │   ├── security_audit.py # Security audit utilities
 │   │   ├── role_utils.py     # Role management utilities
@@ -418,7 +417,7 @@ react-frontend/
 2. **Token Validation**:
 
    - Protected routes check for valid access tokens via auth guards
-   - Backend validates token signatures, expiry, and checks against Redis blacklist
+   - Backend validates token signatures, expiry, and checks against Redis allowlist
    - API interceptors automatically add tokens to outgoing requests
 
 3. **Token Refresh**:

@@ -1,6 +1,6 @@
 # Session Management Security - Quick Reference
 
-**Last Updated:** 2025-12-21  
+**Last Updated:** 2025-12-21
 **Related Documents:**
 - [Full Security Analysis](SESSION_MANAGEMENT_SECURITY_ANALYSIS.md)
 - [Implementation Guide](SESSION_SECURITY_IMPLEMENTATION_GUIDE.md)
@@ -66,9 +66,9 @@ Frontend (React)          Backend (FastAPI)         Redis Cache
 ### Priority 1: High Impact, Low Effort
 
 #### 1. Refresh Token Rotation
-**Status:** Not implemented  
-**Risk:** Medium (if token compromised, valid for 100 days)  
-**Effort:** 4-6 hours  
+**Status:** Not implemented
+**Risk:** Medium (if token compromised, valid for 100 days)
+**Effort:** 4-6 hours
 **Benefit:** Industry standard, reduces attack window
 
 **What it does:**
@@ -79,9 +79,9 @@ Frontend (React)          Backend (FastAPI)         Redis Cache
 **Implementation:** See [Implementation Guide](SESSION_SECURITY_IMPLEMENTATION_GUIDE.md#1-refresh-token-rotation)
 
 #### 2. HTTP-Only Cookies for Refresh Tokens
-**Status:** Using localStorage (XSS vulnerable)  
-**Risk:** Medium-Low (requires XSS vulnerability)  
-**Effort:** 6-8 hours  
+**Status:** Using localStorage (XSS vulnerable)
+**Risk:** Medium-Low (requires XSS vulnerability)
+**Effort:** 6-8 hours
 **Benefit:** Immune to XSS attacks
 
 **What it does:**
@@ -94,9 +94,9 @@ Frontend (React)          Backend (FastAPI)         Redis Cache
 ### Priority 2: Medium Impact, Medium Effort
 
 #### 3. Token Refresh Queue
-**Status:** Basic retry flag  
-**Risk:** Low (UX issue, not security)  
-**Effort:** 2-3 hours  
+**Status:** Basic retry flag
+**Risk:** Low (UX issue, not security)
+**Effort:** 2-3 hours
 **Benefit:** Prevents race conditions
 
 **What it does:**
@@ -105,9 +105,9 @@ Frontend (React)          Backend (FastAPI)         Redis Cache
 - More efficient
 
 #### 4. Session Management Dashboard
-**Status:** Not implemented  
-**Risk:** Low (users can't see/manage sessions)  
-**Effort:** 8-12 hours  
+**Status:** Not implemented
+**Risk:** Low (users can't see/manage sessions)
+**Effort:** 8-12 hours
 **Benefit:** User visibility and control
 
 **What it does:**
@@ -259,8 +259,8 @@ Consider revisiting in 6 months or when:
 ## Key Files Reference
 
 ### Backend
-- `app/core/security.py` - Token generation & validation
-- `app/utils/token_manager.py` - Advanced token management
+- `app/core/security.py` - JWT create/decode (PyJWT) & password hashing
+- `app/utils/token.py` - Redis session allowlist (`user:{id}:{token_type}`)
 - `app/api/v1/endpoints/auth.py` - Auth endpoints
 - `app/core/config.py` - Security configuration
 
@@ -306,5 +306,5 @@ The recommended enhancements are **preventive measures** to achieve "best-in-cla
 
 ---
 
-**Document maintained by:** Security/Development Team  
+**Document maintained by:** Security/Development Team
 **Questions?** Refer to the full analysis or implementation guide.

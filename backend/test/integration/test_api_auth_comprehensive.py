@@ -16,6 +16,7 @@ from test.utils import get_csrf_token, random_email
 from unittest.mock import MagicMock, patch
 
 import pytest
+from fastapi import HTTPException, status
 from httpx import AsyncClient
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -451,28 +452,34 @@ class TestAuthenticationEdgeCases:
     async def test_verify_email_with_invalid_token(self, client: AsyncClient) -> None:
         """Test email verification with invalid token."""
 
+        _, headers = await get_csrf_token(client)
         response = await client.post(
-            f"{settings.API_V1_STR}/auth/verify-email", json={"token": "invalid_token"}
+            f"{settings.API_V1_STR}/auth/verify-email",
+            json={"token": "invalid_token"},
+            headers=headers,
         )
 
-        # Should only allow 400 or 403 for invalid email verification
-        assert response.status_code in [400, 403]
+        # decode_token raises HTTP 401 for malformed/invalid JWTs
+        assert response.status_code in [400, 401]
 
     @pytest.mark.asyncio
     async def test_verify_email_with_expired_token(self, client: AsyncClient) -> None:
         """Test email verification with expired token."""
 
+        _, headers = await get_csrf_token(client)
         with patch("app.core.security.decode_token") as mock_decode:
-            from jwt import ExpiredSignatureError
-
-            mock_decode.side_effect = ExpiredSignatureError("Token expired")
-
-            response = await client.post(
-                f"{settings.API_V1_STR}/auth/verify-email", json={"token": "expired_token"}
+            # decode_token maps expiry to HTTPException (not raw PyJWT errors)
+            mock_decode.side_effect = HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has expired"
             )
 
-        # Should only allow 400 or 403 for expired token
-        assert response.status_code in [400, 403]
+            response = await client.post(
+                f"{settings.API_V1_STR}/auth/verify-email",
+                json={"token": "expired_token"},
+                headers=headers,
+            )
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     @pytest.mark.asyncio
     async def test_refresh_token_with_invalid_token(self, client: AsyncClient) -> None:

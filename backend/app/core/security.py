@@ -7,9 +7,16 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Literal, Union
 
 import bcrypt
+import jwt
 from cryptography.fernet import Fernet
 from fastapi import HTTPException, status
-from jose import JWTError, jwt
+from jwt.exceptions import (
+    ExpiredSignatureError,
+    ImmatureSignatureError,
+    InvalidAudienceError,
+    InvalidIssuerError,
+    PyJWTError,
+)
 
 from app.core.config import settings
 
@@ -168,37 +175,40 @@ def decode_token(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token format")
 
         try:
-            # Full token validation
+            # Full token validation (PyJWT: leeway is a decode() kwarg, not an options key)
             payload = jwt.decode(
                 token,
                 key,
                 algorithms=[JWT_ALGORITHM],
                 audience=settings.TOKEN_AUDIENCE,
                 issuer=settings.TOKEN_ISSUER,
+                leeway=leeway,
                 options={
                     "verify_exp": verify_exp,
                     "verify_aud": True,
                     "verify_iss": True,
-                    "verify_iat": True,
+                    "verify_iat": False,
                     "verify_nbf": True,
-                    "leeway": leeway,
                 },
             )
-        except JWTError as e:
-            error_type = type(e).__name__
-            if "ExpiredSignature" in error_type:
-                detail = "Token has expired"
-            elif "ImmatureSignature" in error_type:
-                detail = "Token not yet valid"
-            elif "InvalidAudience" in error_type:
-                detail = "Invalid token audience"
-            elif "InvalidIssuer" in error_type:
-                detail = "Invalid token issuer"
-            else:
-                detail = "Invalid token"
-
+        except ExpiredSignatureError as e:
             logger.warning(f"JWT validation failed: {str(e)}")
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail)
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has expired")
+        except ImmatureSignatureError as e:
+            logger.warning(f"JWT validation failed: {str(e)}")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token not yet valid")
+        except InvalidAudienceError as e:
+            logger.warning(f"JWT validation failed: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token audience",
+            )
+        except InvalidIssuerError as e:
+            logger.warning(f"JWT validation failed: {str(e)}")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token issuer")
+        except PyJWTError as e:
+            logger.warning(f"JWT validation failed: {str(e)}")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
         # Token type validation
         if verify_type and payload.get("type") != token_type:

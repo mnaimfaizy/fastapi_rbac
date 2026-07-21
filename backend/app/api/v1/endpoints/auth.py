@@ -8,7 +8,6 @@ from uuid import UUID
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi_csrf_protect import CsrfProtect
-from jwt import DecodeError, ExpiredSignatureError, MissingRequiredClaimError
 from pydantic import EmailStr
 from redis.asyncio import Redis as AsyncRedis
 from slowapi import Limiter
@@ -41,7 +40,7 @@ from app.utils.background_tasks import (
     send_password_reset_email,
     send_verification_email,
 )
-from app.utils.token import add_token_to_redis, get_valid_tokens
+from app.utils.token import add_token_to_redis, get_valid_tokens, token_is_allowlisted
 from app.utils.user_utils import serialize_user
 
 logger = logging.getLogger("fastapi_rbac")
@@ -678,36 +677,9 @@ async def verify_email(
         )
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid input data")
     try:
-        # First validate the token structure and signature
-        try:
-            payload = security.decode_token(body.token, token_type="verification")
-            email_from_token_str = payload.get("sub")
-            if not email_from_token_str:  # Should be validated by decode_token
-                raise MissingRequiredClaimError("sub")
-        except (
-            ExpiredSignatureError,
-            DecodeError,
-            MissingRequiredClaimError,
-            ValueError,  # For other potential decode issues
-        ) as e:
-            error_type = type(e).__name__
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type=f"verify_email_token_invalid_{error_type.lower()}",
-                details={
-                    "error": str(e),
-                    "token_used": body.token,
-                    "ip_address": ip_address,
-                },
-            )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid or expired verification token.",
-            )
-        # Ensure email_from_token_str is not None before creating EmailStr
+        payload = security.decode_token(body.token, token_type="verification")
+        email_from_token_str = payload.get("sub")
         if not email_from_token_str:
-            # This case should ideally be caught by MissingRequiredClaimError
             background_tasks.add_task(
                 log_security_event,
                 background_tasks=background_tasks,
@@ -1216,60 +1188,11 @@ async def get_new_access_token(
     ip_address = request.client.host if request.client else "Unknown"  # Get IP address
     payload = None  # Initialize payload for broader scope in exception handling
     try:
-        try:
-            payload = decode_token(body.refresh_token, token_type="refresh")
-        except ExpiredSignatureError:
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="refresh_token_expired",
-                details={"token_error": "Token expired", "ip_address": ip_address},
-            )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail={
-                    "status": False,
-                    "message": "Your token has expired. Please log in again.",
-                },
-            )
-        except DecodeError:
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="refresh_token_decode_error",
-                details={
-                    "token_error": "Invalid token format",
-                    "ip_address": ip_address,
-                },
-            )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail={
-                    "status": False,
-                    "message": "Error when decoding the token. Please check your request.",
-                },
-            )
-        except MissingRequiredClaimError:
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="refresh_token_missing_claim",
-                details={
-                    "token_error": "Missing required claim",
-                    "ip_address": ip_address,
-                },
-            )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail={
-                    "status": False,
-                    "message": "There is no required field in your token. Please contact the administrator.",
-                },
-            )
+        payload = decode_token(body.refresh_token, token_type="refresh")
         if payload["type"] == "refresh":
             user_id_from_token = payload["sub"]
             valid_refresh_tokens = await get_valid_tokens(redis_client, user_id_from_token, TokenType.REFRESH)
-            if valid_refresh_tokens and body.refresh_token not in valid_refresh_tokens:
+            if not token_is_allowlisted(valid_refresh_tokens, body.refresh_token):
                 background_tasks.add_task(
                     log_security_event,
                     background_tasks=background_tasks,
@@ -1544,15 +1467,13 @@ async def login_access_token(
         )
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = security.create_access_token(user.id, user.email, expires_delta=access_token_expires)
-    valid_access_tokens = await get_valid_tokens(redis_client, user.id, TokenType.ACCESS)
-    if valid_access_tokens:
-        await add_token_to_redis(
-            redis_client,
-            user,
-            access_token,
-            TokenType.ACCESS,
-            settings.ACCESS_TOKEN_EXPIRE_MINUTES,
-        )
+    await add_token_to_redis(
+        redis_client,
+        user,
+        access_token,
+        TokenType.ACCESS,
+        settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+    )
     # Log successful OAuth2 login
     background_tasks.add_task(
         log_security_event,
@@ -1780,35 +1701,9 @@ async def confirm_password_reset(
                     "errors": errors,
                 },
             )
-        try:
-            payload = security.decode_token(reset_confirm.token, token_type="reset")
-            email_from_token_str = payload.get("sub")
-            if not email_from_token_str:  # Should be validated by decode_token
-                raise MissingRequiredClaimError("sub")
-        except (
-            ExpiredSignatureError,
-            DecodeError,
-            MissingRequiredClaimError,
-            ValueError,  # For other potential decode issues
-        ) as e:
-            error_type = type(e).__name__
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type=f"password_reset_token_invalid_{error_type.lower()}",
-                details={
-                    "error": str(e),
-                    "token_used": reset_confirm.token,
-                    "ip_address": ip_address,
-                },
-            )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid or expired token",
-            )
-        # Ensure email_from_token_str is not None before creating EmailStr
+        payload = security.decode_token(reset_confirm.token, token_type="reset")
+        email_from_token_str = payload.get("sub")
         if not email_from_token_str:
-            # This case should ideally be caught by MissingRequiredClaimError
             background_tasks.add_task(
                 log_security_event,
                 background_tasks=background_tasks,
@@ -1847,7 +1742,7 @@ async def confirm_password_reset(
             )
         # Verify token in Redis
         valid_reset_tokens = await get_valid_tokens(redis_client, user.id, TokenType.RESET)
-        if not valid_reset_tokens or reset_confirm.token not in valid_reset_tokens:
+        if not token_is_allowlisted(valid_reset_tokens, reset_confirm.token):
             # Log invalid token in Redis as a background task
             background_tasks.add_task(
                 log_security_event,
@@ -2001,35 +1896,9 @@ async def reset_password(
                     "errors": errors,
                 },
             )
-        try:
-            payload = security.decode_token(body_in.token, token_type="reset")
-            email_from_token_str = payload.get("sub")
-            if not email_from_token_str:  # Should be validated by decode_token
-                raise MissingRequiredClaimError("sub")
-        except (
-            ExpiredSignatureError,
-            DecodeError,
-            MissingRequiredClaimError,
-            ValueError,  # For other potential decode issues
-        ) as e:
-            error_type = type(e).__name__
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type=f"password_reset_token_invalid_{error_type.lower()}",
-                details={
-                    "error": str(e),
-                    "token_used": body_in.token,
-                    "ip_address": ip_address,
-                },
-            )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid or expired token",
-            )
-        # Ensure email_from_token_str is not None before creating EmailStr
+        payload = security.decode_token(body_in.token, token_type="reset")
+        email_from_token_str = payload.get("sub")
         if not email_from_token_str:
-            # This case should ideally be caught by MissingRequiredClaimError
             background_tasks.add_task(
                 log_security_event,
                 background_tasks=background_tasks,
@@ -2068,7 +1937,7 @@ async def reset_password(
             )
         # Verify token in Redis
         valid_reset_tokens = await get_valid_tokens(redis_client, user.id, TokenType.RESET)
-        if not valid_reset_tokens or body_in.token not in valid_reset_tokens:
+        if not token_is_allowlisted(valid_reset_tokens, body_in.token):
             # Log invalid token in Redis as a background task
             background_tasks.add_task(
                 log_security_event,

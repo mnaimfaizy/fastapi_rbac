@@ -1,8 +1,8 @@
 # Session Management Security Analysis
 
-**Date:** 2025-12-21  
-**Project:** FastAPI RBAC  
-**Version:** 1.0  
+**Date:** 2025-12-21
+**Project:** FastAPI RBAC
+**Version:** 1.0
 **Status:** Investigation Complete
 
 ---
@@ -153,49 +153,28 @@ The project implements a dual-token JWT authentication system:
      - Geographic location tracking
      - Anomaly detection
 
-### Token Management (`app/utils/token_manager.py`)
+### Token Management (live path)
 
-#### Strengths
+Canonical JWT create/decode lives in `app/core/security.py` (**PyJWT only**).
+Session tracking uses a Redis **allowlist** in `app/utils/token.py`
+(`user:{user_id}:{token_type}` sets via `add_token_to_redis` / `get_valid_tokens` /
+`delete_tokens`). Logout clears those keys via background/Celery cleanup.
 
-1. **Advanced Security Features**
-   ```python
-   class TokenManager:
-       async def create_token(self, user: User, token_type: TokenType,
-                             ip_address: Optional[str], user_agent: Optional[str]):
-           claims = {
-               "version": user.password_version,  # Invalidate on password change
-               "ip": self._hash_ip(ip_address),   # IP validation
-               "ua": hashlib.sha256(user_agent.encode()).hexdigest()  # User agent
-           }
-   ```
-   - **Password Version:** Tokens invalidated on password change
-   - **IP Validation:** Hashed IP addresses for privacy and security
-   - **User Agent Tracking:** Detects session hijacking attempts
+> **Note:** An unused `TokenManager` (jti blacklist, IP/UA binding, concurrent-session
+> checks, `password_version` claim) was removed in the PyJWT consolidation. Several
+> related config flags still exist but are **not enforced** on the live path — tracked
+> as follow-ups under the security-debt slice (#63 / #30).
 
-2. **Comprehensive Validation**
-   - Signature validation
-   - Expiry checking
-   - Type verification
-   - Redis blacklist checking
-   - IP validation (configurable)
-   - Concurrent session limits
+#### Strengths (live)
 
-3. **Token Blacklisting**
-   ```python
-   async def invalidate_token(self, token: str, token_type: TokenType):
-       await self.redis.setex(
-           f"token_blacklist:{jti}",
-           timedelta(seconds=settings.TOKEN_BLACKLIST_EXPIRY),
-           "1",
-       )
-   ```
-   - Tokens properly blacklisted on logout
-   - Automatic expiry management in Redis
+1. **JWT validation** (`security.py`) — signature, expiry, `aud`/`iss`/`nbf`/`iat`, token `type`
+2. **Redis allowlist** — only tokens recorded at login/refresh are accepted
+3. **Logout / password flows** — delete allowlist keys for the user/token type
 
 #### Areas for Enhancement
 
 1. **Session Metadata Storage**
-   - Current: Limited metadata in Redis
+   - Current: Allowlist stores raw token strings in a Redis SET
    - Enhancement: Store comprehensive session information:
      - Login time
      - Last activity time
@@ -203,8 +182,12 @@ The project implements a dual-token JWT authentication system:
      - Location data (IP geolocation)
 
 2. **Concurrent Session Management**
-   - Current: Basic limit checking
-   - Enhancement: Allow users to view and revoke active sessions
+   - Current: `CONCURRENT_SESSION_LIMIT` is configured but not enforced on the allowlist
+   - Enhancement: Enforce max sessions; allow users to view and revoke active sessions
+
+3. **Deferred controls** (config/DB exist; not wired)
+   - `password_version` column incremented on password change but not checked at auth
+   - `VALIDATE_TOKEN_IP` / UA binding / jti `TOKEN_BLACKLIST_*` — aspirational leftovers
 
 ### Authentication Endpoints (`app/api/v1/endpoints/auth.py`)
 
@@ -604,25 +587,25 @@ async def get_new_access_token(
     Implements refresh token rotation for enhanced security.
     """
     payload = decode_token(body.refresh_token, token_type="refresh")
-    
+
     # Check if token is in Redis (valid)
     valid_refresh_tokens = await get_valid_tokens(redis_client, user_id, TokenType.REFRESH)
     if not valid_refresh_tokens or body.refresh_token not in valid_refresh_tokens:
         # Token reuse detected - possible attack
         await invalidate_all_user_tokens(redis_client, user_id)
         raise HTTPException(status_code=403, detail="Token reuse detected")
-    
+
     # Generate NEW access and refresh tokens
     new_access_token = security.create_access_token(user.id, user.email)
     new_refresh_token = security.create_refresh_token(user.id)
-    
+
     # Invalidate old refresh token
     await delete_tokens(redis_client, user, TokenType.REFRESH)
-    
+
     # Store new tokens
     await add_token_to_redis(redis_client, user, new_access_token, TokenType.ACCESS, ...)
     await add_token_to_redis(redis_client, user, new_refresh_token, TokenType.REFRESH, ...)
-    
+
     return create_response(
         data=Token(
             access_token=new_access_token,
@@ -640,12 +623,12 @@ if (error.response?.status === 401 && !originalRequest?._retry) {
     const response = await store.dispatch(refreshAccessToken(refreshToken)).unwrap();
     if (response && response.access_token) {
         setStoredAccessToken(response.access_token);
-        
+
         // NEW: Store the rotated refresh token
         if (response.refresh_token) {
             setStoredRefreshToken(response.refresh_token);
         }
-        
+
         originalRequest.headers.Authorization = `Bearer ${response.access_token}`;
         return api(originalRequest);
     }
@@ -721,10 +704,10 @@ async def login(
     ...
 ) -> IPostResponseBase[Token]:
     # ... authentication logic ...
-    
+
     access_token = security.create_access_token(user.id, user.email)
     refresh_token = security.create_refresh_token(user.id)
-    
+
     # Set refresh token in HTTP-only cookie
     response.set_cookie(
         key="refresh_token",
@@ -735,7 +718,7 @@ async def login(
         max_age=settings.REFRESH_TOKEN_EXPIRE_MINUTES * 60,
         path="/api/v1/auth",  # Restrict to auth endpoints only
     )
-    
+
     # Return only access token (refresh token in cookie)
     return create_response(
         data=Token(
@@ -791,24 +774,22 @@ Allow users to view and manage active sessions.
 
 **Implementation Approach:**
 
-1. **Backend - Add Session Metadata**:
+1. **Backend - Add Session Metadata** (proposed; extend `app/utils/token.py` allowlist model):
 ```python
-# app/utils/token_manager.py
-async def _store_token_metadata(self, user_id: UUID, token_type: TokenType, 
-                                session_id: str, claims: dict) -> None:
-    """Store comprehensive session metadata"""
+# proposed: app/utils/token.py (or a dedicated sessions helper)
+async def store_session_metadata(
+    redis_client, user_id: UUID, token_type: TokenType, session_id: str, claims: dict
+) -> None:
+    """Store comprehensive session metadata alongside the allowlist."""
     metadata = {
         "jti": session_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "expires_at": claims["exp"].isoformat(),
         "last_activity": datetime.now(timezone.utc).isoformat(),
         "ip": claims.get("ip"),
-        "ip_raw": self._get_ip_location(claims.get("ip")),  # Store for display
         "ua": claims.get("ua"),
-        "ua_parsed": self._parse_user_agent(claims.get("ua")),  # Device, browser info
-        "device_fingerprint": self._generate_device_fingerprint(...),
     }
-    await self.redis.setex(key, ttl, json.dumps(metadata))
+    await redis_client.setex(key, ttl, json.dumps(metadata))
 ```
 
 2. **Backend - Add Session Management Endpoints**:
@@ -839,7 +820,7 @@ async def revoke_session(
 // src/features/sessions/SessionList.tsx
 const SessionList: React.FC = () => {
   const sessions = useAppSelector((state) => state.sessions.items);
-  
+
   return (
     <div>
       <h2>Active Sessions</h2>
@@ -878,20 +859,20 @@ Prevent race conditions when multiple requests trigger token refresh simultaneou
 // src/services/authTokenManager.ts
 class AuthTokenManager {
     private refreshPromise: Promise<any> | null = null;
-    
+
     async refreshToken(refreshToken: string): Promise<string> {
         // If refresh already in progress, return existing promise
         if (this.refreshPromise) {
             return this.refreshPromise;
         }
-        
+
         // Start new refresh
         this.refreshPromise = store.dispatch(refreshAccessToken(refreshToken))
             .unwrap()
             .finally(() => {
                 this.refreshPromise = null;  // Reset after completion
             });
-        
+
         return this.refreshPromise;
     }
 }
@@ -911,29 +892,27 @@ Optionally extend session expiry on user activity.
 - Configurable per deployment
 - Standard feature in enterprise applications
 
-**Implementation:**
+**Implementation (proposed):**
 ```python
 # app/core/config.py
 SESSION_EXTEND_ON_ACTIVITY: bool = True
 SESSION_ACTIVITY_EXTENSION_MINUTES: int = 30
 
-# app/utils/token_manager.py
-async def update_session_activity(self, user_id: UUID, session_id: str):
-    """Update last activity time and optionally extend session"""
+# proposed helper alongside app/utils/token.py allowlist
+async def update_session_activity(redis_client, user_id: UUID, session_id: str):
+    """Update last activity time and optionally extend session metadata TTL."""
     if not settings.SESSION_EXTEND_ON_ACTIVITY:
         return
-    
-    key = f"token_metadata:{user_id}:access:{session_id}"
-    metadata = await self.redis.get(key)
+
+    key = f"session_metadata:{user_id}:{session_id}"
+    metadata = await redis_client.get(key)
     if metadata:
         data = json.loads(metadata)
         data["last_activity"] = datetime.now(timezone.utc).isoformat()
-        
-        # Extend expiry
-        await self.redis.setex(
+        await redis_client.setex(
             key,
             timedelta(minutes=settings.SESSION_ACTIVITY_EXTENSION_MINUTES),
-            json.dumps(data)
+            json.dumps(data),
         )
 ```
 
@@ -1022,7 +1001,7 @@ Support WebAuthn, Magic Links, or Passkeys.
 - [x] JWT with standard claims (iat, exp, iss, aud, jti, nbf)
 - [x] Token signature validation
 - [x] Token type validation
-- [x] Token blacklisting on logout
+- [x] Token allowlist cleared on logout (`app/utils/token.py`)
 - [x] Redis-backed session storage
 - [x] IP address validation (optional)
 - [x] User agent tracking
@@ -1064,9 +1043,8 @@ Support WebAuthn, Magic Links, or Passkeys.
 ### Backend
 
 **Core Security:**
-- `app/core/security.py` - Token generation, password hashing, validation
-- `app/utils/token.py` - Basic Redis token operations
-- `app/utils/token_manager.py` - Advanced token management
+- `app/core/security.py` - JWT create/decode (PyJWT), password hashing, validation
+- `app/utils/token.py` - Redis session allowlist helpers
 
 **Authentication:**
 - `app/api/v1/endpoints/auth.py` - Authentication endpoints
@@ -1228,8 +1206,8 @@ The development team should be commended for:
 
 ---
 
-**Document Version:** 1.0  
-**Last Updated:** 2025-12-21  
-**Next Review:** 2025-06-21 (6 months)  
-**Owner:** Security Team / Development Team  
+**Document Version:** 1.0
+**Last Updated:** 2025-12-21
+**Next Review:** 2025-06-21 (6 months)
+**Owner:** Security Team / Development Team
 **Classification:** Internal Use

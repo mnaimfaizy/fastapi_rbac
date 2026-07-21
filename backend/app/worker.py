@@ -42,12 +42,9 @@ def cleanup_tokens_task(user_id: str, token_type: str) -> None:
             user_id = UUID(user_id_str)
             token_type_enum = TokenType(token_type_str)
 
-            # Delete user tokens based on token type
-            key_pattern = f"user:{user_id}:{token_type_enum.value}:*"
-            keys = await redis_client.keys(key_pattern)
-
-            if keys:
-                await redis_client.delete(*keys)
+            # Same key as app.utils.token allowlist (SET), not a …:* pattern
+            token_key = f"user:{user_id}:{token_type_enum}"
+            await redis_client.delete(token_key)
             # Redis client is closed automatically after exiting the async for loop
             break  # Exit after first iteration
 

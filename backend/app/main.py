@@ -5,16 +5,15 @@ from contextlib import asynccontextmanager
 from logging.config import fileConfig
 from typing import AsyncGenerator, Callable, Dict, List, Optional, Tuple
 
-from fastapi import FastAPI, HTTPException, Request, Response, status
+from fastapi import FastAPI, Request, Response, status
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi_async_sqlalchemy import SQLAlchemyMiddleware
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
 from fastapi_csrf_protect import CsrfProtect
 from fastapi_limiter import FastAPILimiter
 from fastapi_pagination import add_pagination
-from jwt import DecodeError, ExpiredSignatureError, MissingRequiredClaimError
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -142,25 +141,7 @@ async def user_id_identifier(request: Request) -> Optional[str]:
             header_parts = auth_header.split()
             if len(header_parts) == 2 and header_parts[0].lower() == "bearer":
                 token = header_parts[1]
-                try:
-                    payload = decode_token(token)
-                except ExpiredSignatureError:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Your token has expired. Please log in again.",
-                    )
-                except DecodeError:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail=("Error when decoding the token. " "Please check your request."),
-                    )
-                except MissingRequiredClaimError:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail=(
-                            "There is no required field in your token. " "Please contact the administrator."
-                        ),
-                    )
+                payload = decode_token(token)
 
                 user_id = payload["sub"]
 
@@ -214,6 +195,7 @@ fastapi_app = FastAPI(
     title=settings.PROJECT_NAME or "FastAPI RBAC",
     version=settings.API_VERSION,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    docs_url=None,
     description=("FastAPI RBAC system with comprehensive " "authentication and authorization features"),
     lifespan=lifespan,
 )
@@ -288,6 +270,76 @@ async def root() -> Dict[str, str]:
     """
     # if oso.is_allowed(user, "read", message):
     return {"message": "Hello World"}
+
+
+@fastapi_app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui_html() -> HTMLResponse:
+    """Serve Swagger UI with CSRF support for state-changing requests."""
+    csrf_token_url = f"{settings.API_V1_STR}/auth/csrf-token"
+    openapi_url = f"{settings.API_V1_STR}/openapi.json"
+
+    return HTMLResponse(
+        f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
+            <title>{settings.PROJECT_NAME or "FastAPI RBAC"} - Swagger UI</title>
+        </head>
+        <body>
+            <div id="swagger-ui"></div>
+            <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+            <script>
+            const csrfTokenUrl = "{csrf_token_url}";
+            const unsafeMethods = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+            let csrfToken = null;
+
+            async function ensureCsrfToken() {{
+                if (csrfToken) {{
+                    return csrfToken;
+                }}
+
+                const response = await fetch(csrfTokenUrl, {{ credentials: "same-origin" }});
+                if (!response.ok) {{
+                    throw new Error(`Unable to fetch CSRF token: ${{response.status}}`);
+                }}
+
+                const payload = await response.json();
+                csrfToken = payload?.data?.csrf_token;
+                if (!csrfToken) {{
+                    throw new Error("CSRF token response did not include data.csrf_token");
+                }}
+
+                return csrfToken;
+            }}
+
+            window.ui = SwaggerUIBundle({{
+                url: "{openapi_url}",
+                dom_id: "#swagger-ui",
+                deepLinking: true,
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIBundle.SwaggerUIStandalonePreset,
+                ],
+                requestInterceptor: async (request) => {{
+                    const method = (request.method || "GET").toUpperCase();
+                    const isApiRequest = request.url.includes("{settings.API_V1_STR}/");
+                    const isCsrfRequest = request.url.includes(csrfTokenUrl);
+
+                    if (unsafeMethods.has(method) && isApiRequest && !isCsrfRequest) {{
+                        request.headers = request.headers || {{}};
+                        request.headers["X-CSRF-Token"] = await ensureCsrfToken();
+                    }}
+
+                    request.credentials = "same-origin";
+                    return request;
+                }},
+            }});
+            </script>
+        </body>
+        </html>
+        """
+    )
 
 
 # Exception handlers for consistent error responses
