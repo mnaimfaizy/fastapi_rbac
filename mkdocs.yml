@@ -38,6 +38,7 @@ nav:
       - "Overview": "development/index.md"
       - "Developer Setup": "development/DEVELOPER_SETUP.md"
       - "Testing Guide": "development/TESTING.md"
+      - "Frontend Architecture": "development/FRONTEND_ARCHITECTURE.md"
       - "Dependency Upgrades": "development/DEPENDENCY_UPGRADES.md"
       - "Knowledge Graph (graphify)": "agents/graphify.md"
   - "Deployment":
@@ -49,8 +50,10 @@ nav:
   - "Troubleshooting":
       - "Overview": "troubleshooting/index.md"
       - "Common Issues": "troubleshooting/common-issues.md"
+      - "Frontend Issues": "troubleshooting/frontend-issues.md"
   - "API Reference":
       - "Overview": "reference/index.md"
+      - "System Architecture": "reference/architecture.md"
       - "Authentication": "reference/api/auth.md"
       - "Users": "reference/api/users.md"
       - "Roles": "reference/api/roles.md"

@@ -21,6 +21,10 @@ Use the label vocabulary defined in `docs/agents/triage-labels.md`.
 
 Use domain docs guidance in `docs/agents/domain.md` for terminology and architectural decision context.
 
+### Architecture (canonical)
+
+System architecture, directory layout, domain model overview, and Redis allowlist auth flow: `docs/reference/architecture.md`. Do not reintroduce long architecture manuals into harness files.
+
 ### Knowledge graph (graphify)
 
 If `graphify-out/graph.json` exists, **query it first** for architecture and module-relationship questions (`graphify query` / `path` / `explain`). Build and update instructions: `docs/agents/graphify.md`. `GRAPH_REPORT.md` is committed; heavy artifacts are gitignored and rebuilt locally.

@@ -16,4 +16,4 @@ graphify explain "NodeLabel"
 
 If the graph is missing, follow `docs/agents/graphify.md` to build (`graphify extract . --code-only --out .`). Do not invent edges. Prefer domain terms from `docs/agents/domain.md`: user, role, permission, role group, permission group.
 
-This does not replace MkDocs or runtime application behavior.
+For written architecture / auth-flow narrative (not graph edges), use `docs/reference/architecture.md`. This rule does not replace MkDocs or runtime application behavior.
