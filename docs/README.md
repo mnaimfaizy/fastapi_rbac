@@ -14,10 +14,9 @@ This directory contains all project documentation organized by purpose and audie
 
 - [`development/`](./development/) - Development guides and workflows
   - `DEVELOPER_SETUP.md` - IDE setup, dependencies, common workflows
-  - `CODING_STANDARDS.md` - Code style and contribution guidelines
   - `TESTING.md` - How to run tests and write new ones
-  - `API_DOCUMENTATION.md` - API endpoints and usage examples
-  - `INTEGRATION_TEST_REFACTOR_GUIDE.md` - Required standards and step-by-step instructions for writing and refactoring integration tests (see backend/test/integration/)
+  - `FRONTEND_ARCHITECTURE.md` - React patterns, token handling, feature layout
+  - `DEPENDENCY_UPGRADES.md` - Dependency upgrade lanes and audit practice
 
 ### Deployment & Operations
 
@@ -35,13 +34,15 @@ This directory contains all project documentation organized by purpose and audie
   - `DOCKER_ISSUES.md` - Common Docker problems and solutions
   - `DATABASE_ISSUES.md` - Database connection and migration problems
   - `DOCKER_SECURITY_FIXES.md` - Security configuration issues
+  - `frontend-issues.md` - React / Vite / auth-client troubleshooting
 
 ### Reference
 
 - [`reference/`](./reference/) - Technical reference materials
+  - `architecture.md` - **Canonical** system architecture, directory layout, allowlist auth flow
   - `ENVIRONMENT_VARIABLES.md` - All environment variables explained
   - `DATABASE_SCHEMA.md` - Database structure documentation
-  - `SECURITY_FEATURES.md` - **NEW**: Comprehensive security implementations
+  - `SECURITY_FEATURES.md` - Comprehensive security implementations
   - `API_REFERENCE.md` - Complete API endpoint documentation
 
 ## 🚀 Quick Start
@@ -62,7 +63,7 @@ This project features **enterprise-grade security** and **comprehensive testing*
 - **Input Sanitization**: XSS prevention with HTML content sanitization
 - **Rate Limiting**: API endpoint protection against abuse
 - **Security Headers**: CSP, HSTS, and security policy enforcement
-- **JWT Security**: Secure token management with blacklisting
+- **JWT Security**: Secure token management with Redis allowlist
 - **Password Security**: History tracking, complexity requirements, account lockout
 
 ### Testing Infrastructure ✅
@@ -93,7 +94,7 @@ When adding new documentation:
 
 ## 📊 Documentation Status
 
-**Last Updated**: June 11, 2025
+**Last Updated**: July 22, 2026
 **Completeness**: ⭐⭐⭐⭐⭐ (Production Ready)
 **Security Documentation**: ✅ Complete
 **Testing Documentation**: ✅ Complete

@@ -2,6 +2,8 @@
 
 ## System Architecture
 
+> **Canonical architecture:** [docs/reference/architecture.md](../reference/architecture.md) — layers, directory layout, domain model, and Redis allowlist auth flow. This page keeps a product-oriented summary.
+
 The FastAPI RBAC project is designed as a modern, scalable user management microservice with a clear separation of concerns between backend API services and frontend user interface.
 
 ### High-Level Architecture
@@ -140,11 +142,7 @@ async def admin_function(
 
 ### Authentication Flow
 
-1. **Login**: User submits credentials → JWT access/refresh tokens issued
-2. **Request**: Access token included in Authorization header
-3. **Validation**: Token signature, expiry, and blacklist checked
-4. **Refresh**: Expired access tokens refreshed using refresh token
-5. **Logout**: Tokens added to Redis blacklist
+See the canonical flow in [System Architecture — Authentication flow](../reference/architecture.md#authentication-flow) (Redis **allowlist**, not a jti blacklist).
 
 ### Authorization Layers
 
@@ -156,7 +154,7 @@ async def admin_function(
 ### Security Features
 
 - **Password Security**: Complexity requirements, account lockout, history tracking
-- **JWT Security**: Token blacklisting, secure refresh mechanism
+- **JWT Security**: Redis token allowlist, secure refresh mechanism
 - **CSRF Protection**: Complete implementation with token management
 - **Input Sanitization**: XSS prevention with HTML content sanitization
 - **Rate Limiting**: API endpoint protection against abuse

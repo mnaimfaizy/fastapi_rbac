@@ -93,24 +93,24 @@ Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'
 
 ### 5. JWT Token Security
 
-**Implementation**: Custom JWT handling with blacklisting
+**Implementation**: PyJWT signing/verification plus Redis **allowlist** session invalidation (`app/utils/token.py`). See [System Architecture](./architecture.md#authentication-flow) and [ADR 0001](../adr/0001-pyjwt-sole-jwt-library.md).
 
 **Features**:
 
 - **Access Tokens**: Short-lived, stored in memory (Redux state)
 - **Refresh Tokens**: Long-lived, stored in localStorage
-- **Token Blacklisting**: Redis-based token invalidation
+- **Token Allowlisting**: Only tokens recorded at login/refresh are accepted
 - **Automatic Refresh**: Transparent token renewal
-- **Secure Logout**: Complete token invalidation
+- **Secure Logout**: Allowlist keys removed for the user/token type
 
 **Security Measures**:
 
 ```python
-# Token blacklisting
-await redis_client.set(f"blacklist:{token_jti}", "true", ex=token_exp_time)
+# Record token on allowlist at login/refresh (simplified)
+await redis_client.set(f"user:{user_id}:{token_type}", token, ex=token_exp_time)
 
-# Token validation with blacklist check
-if await redis_client.get(f"blacklist:{token_jti}"):
+# Reject tokens missing from the allowlist
+if not await redis_client.get(f"user:{user_id}:{token_type}"):
     raise HTTPException(status_code=401, detail="Token has been revoked")
 ```
 
@@ -249,7 +249,7 @@ read_only: true
 - [ ] **Input Sanitization**: Test XSS prevention on all form inputs
 - [ ] **Rate Limiting**: Validate rate limits are working on auth endpoints
 - [ ] **Security Headers**: Confirm all security headers are present
-- [ ] **JWT Security**: Test token generation, validation, and blacklisting
+- [ ] **JWT Security**: Test token generation, validation, and allowlist invalidation
 - [ ] **Password Security**: Verify password policies and account locking
 - [ ] **Audit Logging**: Confirm security events are being logged
 - [ ] **HTTPS**: Ensure all communications are encrypted in production

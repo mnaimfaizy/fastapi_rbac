@@ -83,7 +83,7 @@ fastapi_rbac/
 
 - JWT-based authentication with access/refresh tokens
 - Password hashing with bcrypt
-- Token blacklisting and management
+- Token allowlisting and management
 - Password reset functionality
 - Account lockout protection
 
