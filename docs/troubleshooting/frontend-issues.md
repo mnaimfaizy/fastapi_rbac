@@ -1,8 +1,8 @@
 # Frontend Issues
 
-Common React / Vite / auth client problems and fixes. Moved out of AI harness files so troubleshooting stays in the docs site.
+Common React / Vite / auth client problems and fixes.
 
-Related: [Frontend Architecture](../development/FRONTEND_ARCHITECTURE.md), [CORS Troubleshooting](./CORS_TROUBLESHOOTING.md), [Common Issues](./common-issues.md).
+Related: [Frontend overview](../frontend/index.md), [React architecture](../frontend/react/architecture.md), [CORS Troubleshooting](./CORS_TROUBLESHOOTING.md), [Common Issues](./common-issues.md).
 
 ## CORS errors
 

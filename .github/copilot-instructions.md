@@ -10,12 +10,12 @@ This project is a user-management microservice: FastAPI backend + React/TypeScri
 | --- | --- |
 | System architecture, directory layout, domain model, Redis allowlist auth flow | [`docs/reference/architecture.md`](../docs/reference/architecture.md) |
 | Product / tech-stack overview | [`docs/getting-started/PROJECT_OVERVIEW.md`](../docs/getting-started/PROJECT_OVERVIEW.md) |
-| Frontend patterns | [`docs/development/FRONTEND_ARCHITECTURE.md`](../docs/development/FRONTEND_ARCHITECTURE.md) |
+| Frontend patterns | [`docs/frontend/react/architecture.md`](../docs/frontend/react/architecture.md) (section: [`docs/frontend/`](../docs/frontend/index.md)) |
 | Auth API contracts | [`docs/reference/api/auth.md`](../docs/reference/api/auth.md) |
 | Security features | [`docs/reference/SECURITY_FEATURES.md`](../docs/reference/SECURITY_FEATURES.md) |
 | Domain vocabulary / ADR conflicts | [`docs/agents/domain.md`](../docs/agents/domain.md) |
 | JWT / allowlist ADR | [`docs/adr/0001-pyjwt-sole-jwt-library.md`](../docs/adr/0001-pyjwt-sole-jwt-library.md) |
-| Testing | [`docs/development/TESTING.md`](../docs/development/TESTING.md), [`backend/test/README.md`](../backend/test/README.md) |
+| Testing | [`docs/development/TESTING.md`](../docs/development/TESTING.md), [`docs/frontend/react/testing.md`](../docs/frontend/react/testing.md), [`backend/test/README.md`](../backend/test/README.md) |
 | Frontend troubleshooting | [`docs/troubleshooting/frontend-issues.md`](../docs/troubleshooting/frontend-issues.md) |
 | Knowledge graph | [`docs/agents/graphify.md`](../docs/agents/graphify.md) |
 
@@ -49,7 +49,7 @@ If `graphify-out/graph.json` exists, prefer `graphify query` / `path` / `explain
 - Features → `react-frontend/src/features/`
 - Shared UI → `react-frontend/src/components/`
 - Keep Pydantic schemas and TypeScript interfaces aligned.
-- Patterns: [`docs/development/FRONTEND_ARCHITECTURE.md`](../docs/development/FRONTEND_ARCHITECTURE.md)
+- Patterns: [`docs/frontend/react/architecture.md`](../docs/frontend/react/architecture.md)
 
 ### When making changes
 
