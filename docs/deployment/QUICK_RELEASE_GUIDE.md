@@ -147,13 +147,17 @@ git push origin :refs/tags/v1.2.3
 ### Problem: "Docker build fails in CI"
 
 **Solutions:**
-1. Check GitHub Actions logs for specific error
-2. Verify Dockerfile syntax locally:
+1. Check GitHub Actions logs for specific error (which step failed: validation, login, backend/frontend/worker build)
+2. Verify Dockerfiles locally:
    ```bash
    docker build -f backend/Dockerfile.prod backend/
+   docker build -f backend/queue.dockerfile.prod backend/
+   docker build -f react-frontend/Dockerfile.prod react-frontend/
    ```
-3. Check Docker Hub credentials in GitHub secrets
+   The worker image must use `queue.dockerfile.prod` (compose does too). Do **not** use `--target worker` on `Dockerfile.prod` — that stage does not exist.
+3. Check Docker Hub credentials in GitHub secrets (`DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`)
 4. Verify all required files exist in context
+5. After fixing, re-run **Actions → Docker Publish → Run workflow** (or push a `v*` tag) so the README badge updates — the badge reflects the latest run, which may be an old failure
 
 ### Problem: "Multi-arch build fails for ARM64"
 

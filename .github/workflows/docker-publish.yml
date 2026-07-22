@@ -9,7 +9,7 @@ on:
   workflow_dispatch: # Allow manual triggering
     inputs:
       tag:
-        description: 'Version tag to release (e.g., v1.0.0)'
+        description: "Version tag to release (e.g., v1.0.0)"
         required: true
         type: string
 
@@ -32,12 +32,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
 
       - name: Set up Docker Buildx
+        # Keep defaults — custom buildkit image + network=host previously caused opaque failures.
         uses: docker/setup-buildx-action@v3
-        with:
-          platforms: linux/amd64,linux/arm64
-          driver-opts: |
-            image=moby/buildkit:latest
-            network=host
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
@@ -46,30 +42,82 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Create production .env file for backend
-        run: cp backend/.env.example backend/.env.production
+        run: |
+          set -euo pipefail
+          if [[ -f backend/.env.example ]]; then
+            cp backend/.env.example backend/.env.production
+          elif [[ -f backend/production.env.example ]]; then
+            cp backend/production.env.example backend/.env.production
+          else
+            echo "::error::No backend/.env.example or backend/production.env.example found"
+            exit 1
+          fi
         shell: bash
 
       - name: Set IMAGE_TAG and metadata
         id: meta
         run: |
+          set -euo pipefail
+
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "IMAGE_TAG=${{ github.event.inputs.tag }}" >> $GITHUB_ENV
-            echo "Using manual workflow dispatch tag: ${{ github.event.inputs.tag }}"
+            IMAGE_TAG="${{ github.event.inputs.tag }}"
+            echo "Using manual workflow_dispatch tag: ${IMAGE_TAG}"
           elif [[ "${{ github.ref_type }}" == "tag" ]]; then
-            echo "IMAGE_TAG=${{ github.ref_name }}" >> $GITHUB_ENV
-            echo "Using Git tag as IMAGE_TAG: ${{ github.ref_name }}"
+            IMAGE_TAG="${{ github.ref_name }}"
+            echo "Using Git tag as IMAGE_TAG: ${IMAGE_TAG}"
           elif [[ "${{ github.event_name }}" == "release" ]]; then
-            echo "IMAGE_TAG=latest" >> $GITHUB_ENV
-            echo "Release published, using IMAGE_TAG=latest"
+            IMAGE_TAG="${{ github.event.release.tag_name }}"
+            echo "Using release tag_name as IMAGE_TAG: ${IMAGE_TAG}"
           else
-            echo "Not a release or tag. IMAGE_TAG not set by workflow. Script will use its fallback logic."
+            echo "::error::Unsupported event '${{ github.event_name }}'. Trigger via release, v* tag, or workflow_dispatch."
+            exit 1
           fi
-          
-          # Extract version info for labels
-          VERSION="${{ github.ref_name }}"
-          echo "VERSION=${VERSION}" >> $GITHUB_ENV
-          echo "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_ENV
-          echo "VCS_REF=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+          if [[ -z "${IMAGE_TAG}" ]]; then
+            echo "::error::IMAGE_TAG resolved empty. Refusing to push untagged images."
+            exit 1
+          fi
+
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> "$GITHUB_ENV"
+          echo "VERSION=${IMAGE_TAG}" >> "$GITHUB_ENV"
+          echo "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
+          echo "VCS_REF=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+        shell: bash
+
+      - name: Validate Dockerfiles and Hub README paths
+        run: |
+          set -euo pipefail
+          missing=0
+          for path in \
+            backend/Dockerfile.prod \
+            backend/queue.dockerfile.prod \
+            react-frontend/Dockerfile.prod \
+            backend/README.dockerhub.md \
+            react-frontend/README.dockerhub.md \
+            backend/README.worker.dockerhub.md
+          do
+            if [[ ! -f "${path}" ]]; then
+              echo "::error::Missing required file: ${path}"
+              missing=1
+            fi
+          done
+
+          # Guard against the Dec 2025 regression: worker is a separate Dockerfile,
+          # not a multi-stage target on Dockerfile.prod.
+          if grep -qE '^FROM .* AS worker$' backend/Dockerfile.prod; then
+            echo "::warning::Dockerfile.prod unexpectedly defines an AS worker stage"
+          fi
+          if ! grep -qE '^FROM ' backend/queue.dockerfile.prod; then
+            echo "::error::backend/queue.dockerfile.prod has no FROM instructions"
+            missing=1
+          fi
+
+          if [[ "${missing}" -ne 0 ]]; then
+            exit 1
+          fi
+
+          echo "IMAGE_TAG=${IMAGE_TAG}"
+          echo "Validation OK"
         shell: bash
 
       - name: Build and push backend image (multi-arch)
@@ -126,7 +174,8 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ./backend
-          file: ./backend/Dockerfile.prod
+          # Worker/beat/flower use the dedicated queue image, matching docker-compose.prod.yml
+          file: ./backend/queue.dockerfile.prod
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
@@ -142,7 +191,6 @@ jobs:
             org.opencontainers.image.url=https://github.com/mnaimfaizy/fastapi_rbac
           cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-worker:buildcache
           cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-worker:buildcache,mode=max
-          target: worker
           build-args: |
             BUILD_DATE=${{ env.BUILD_DATE }}
             VCS_REF=${{ env.VCS_REF }}
@@ -178,42 +226,40 @@ jobs:
       - name: Create release summary
         if: success()
         run: |
-          echo "## 🚀 Release Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** ${{ env.IMAGE_TAG }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Commit:** ${{ env.VCS_REF }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Build Date:** ${{ env.BUILD_DATE }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📦 Published Images" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- \`${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-backend:${{ env.IMAGE_TAG }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- \`${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-frontend:${{ env.IMAGE_TAG }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- \`${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-worker:${{ env.IMAGE_TAG }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 🏗️ Architecture Support" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- linux/amd64" >> $GITHUB_STEP_SUMMARY
-          echo "- linux/arm64" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📋 Next Steps" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "1. Verify images on [Docker Hub](https://hub.docker.com/u/${{ secrets.DOCKERHUB_USERNAME }})" >> $GITHUB_STEP_SUMMARY
-          echo "2. Test deployment in staging environment" >> $GITHUB_STEP_SUMMARY
-          echo "3. Update production deployments" >> $GITHUB_STEP_SUMMARY
-          echo "4. Monitor application logs and metrics" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Release Summary"
+            echo ""
+            echo "**Version:** ${{ env.IMAGE_TAG }}"
+            echo "**Commit:** ${{ env.VCS_REF }}"
+            echo "**Build Date:** ${{ env.BUILD_DATE }}"
+            echo ""
+            echo "### Published Images"
+            echo ""
+            echo "- \`${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-backend:${{ env.IMAGE_TAG }}\`"
+            echo "- \`${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-frontend:${{ env.IMAGE_TAG }}\`"
+            echo "- \`${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-worker:${{ env.IMAGE_TAG }}\`"
+            echo ""
+            echo "### Architecture Support"
+            echo ""
+            echo "- linux/amd64"
+            echo "- linux/arm64"
+          } >> "$GITHUB_STEP_SUMMARY"
+        shell: bash
 
       - name: Notify on failure
         if: failure()
         run: |
-          echo "## ❌ Release Failed" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "The Docker image build and push process failed." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Please check the workflow logs for details." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 🔧 Troubleshooting Steps" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "1. Review build logs above" >> $GITHUB_STEP_SUMMARY
-          echo "2. Verify Docker Hub credentials" >> $GITHUB_STEP_SUMMARY
-          echo "3. Check Dockerfile syntax" >> $GITHUB_STEP_SUMMARY
-          echo "4. Ensure all dependencies are available" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Release Failed"
+            echo ""
+            echo "The Docker image build and push process failed."
+            echo ""
+            echo "### Troubleshooting"
+            echo ""
+            echo "1. Check which step failed above (validation, login, backend/frontend/worker build, or Hub description)."
+            echo "2. Worker must build from \`backend/queue.dockerfile.prod\` (not \`Dockerfile.prod --target worker\`)."
+            echo "3. Verify \`DOCKERHUB_USERNAME\` / \`DOCKERHUB_TOKEN\` secrets."
+            echo "4. Confirm \`IMAGE_TAG\` was set (release tag, \`v*\` push, or workflow_dispatch input)."
+            echo "5. Re-run via Actions → Docker Publish → Run workflow after fixing."
+          } >> "$GITHUB_STEP_SUMMARY"
+        shell: bash
