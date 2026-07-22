@@ -36,7 +36,8 @@ async def db_engine() -> AsyncGenerator[AsyncEngine, None]:
     """Create test database tables and return engine."""
     # Determine connect_args based on driver
     if TEST_SQLALCHEMY_DATABASE_URI.startswith("sqlite"):
-        connect_args = {"check_same_thread": False}
+        # timeout reduces flaky "database is locked" under shared-cache aiosqlite on Windows
+        connect_args = {"check_same_thread": False, "timeout": 30}
     else:
         connect_args = {}
     engine = create_async_engine(TEST_SQLALCHEMY_DATABASE_URI, echo=False, connect_args=connect_args)
