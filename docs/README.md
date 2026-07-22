@@ -9,14 +9,27 @@ This directory contains all project documentation organized by purpose and audie
 - [`GETTING_STARTED.md`](./getting-started/GETTING_STARTED.md) - Start here for your first setup
 - [`DEVELOPER_SETUP.md`](./development/DEVELOPER_SETUP.md) - Complete development environment setup
 - [`PROJECT_OVERVIEW.md`](./getting-started/PROJECT_OVERVIEW.md) - Architecture and project structure
+- [`frontend/`](./frontend/) - **Frontend** MkDocs section (React setup through deployment)
 
 ### Development
 
 - [`development/`](./development/) - Development guides and workflows
   - `DEVELOPER_SETUP.md` - IDE setup, dependencies, common workflows
   - `TESTING.md` - How to run tests and write new ones
-  - `FRONTEND_ARCHITECTURE.md` - React patterns, token handling, feature layout
+  - `FRONTEND_ARCHITECTURE.md` - Redirect to `frontend/react/architecture.md`
   - `DEPENDENCY_UPGRADES.md` - Dependency upgrade lanes and audit practice
+
+### Frontend
+
+- [`frontend/`](./frontend/) - UI documentation (extensible for future frameworks)
+  - `index.md` - Overview and multi-framework placeholder
+  - `react/setup.md` - Install, env, commands
+  - `react/architecture.md` - Layout and patterns
+  - `react/auth.md` - Client auth and RBAC guards
+  - `react/state.md` - Redux Toolkit
+  - `react/ui.md` - ShadCN / Tailwind
+  - `react/testing.md` - Vitest and Playwright
+  - `react/deployment.md` - Docker / Nginx / production build
 
 ### Deployment & Operations
 

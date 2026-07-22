@@ -34,6 +34,16 @@ nav:
   - "Getting Started":
       - "Overview": "getting-started/index.md"
       - "Project Overview": "getting-started/PROJECT_OVERVIEW.md"
+  - "Frontend":
+      - "Overview": "frontend/index.md"
+      - "React":
+          - "Setup": "frontend/react/setup.md"
+          - "Architecture": "frontend/react/architecture.md"
+          - "Authentication": "frontend/react/auth.md"
+          - "State management": "frontend/react/state.md"
+          - "UI components": "frontend/react/ui.md"
+          - "Testing": "frontend/react/testing.md"
+          - "Deployment": "frontend/react/deployment.md"
   - "Development":
       - "Overview": "development/index.md"
       - "Developer Setup": "development/DEVELOPER_SETUP.md"

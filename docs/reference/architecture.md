@@ -66,7 +66,7 @@ The project is a user-management microservice: authentication and authorization 
 - Types: `react-frontend/src/models/`
 - Hooks: `react-frontend/src/hooks/` (`useAuth`, `usePermissions`, …)
 
-See [Frontend Architecture](../development/FRONTEND_ARCHITECTURE.md) for patterns.
+See [Frontend — React architecture](../frontend/react/architecture.md) for patterns.
 
 ## Key directory layout
 
