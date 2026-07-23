@@ -18,10 +18,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python 3.10
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.10"
           cache: "pip"
@@ -114,10 +114,10 @@ jobs:
       ENCRYPT_KEY: "a_very_strong_encryption_key_32" # Must be 32 url-safe base64-encoded bytes
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python 3.10
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.10"
           cache: "pip"
@@ -154,7 +154,7 @@ jobs:
       #   # See backend/test/README.md for details.
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v7
         with:
           directory: ./backend/
           fail_ci_if_error: false
