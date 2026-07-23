@@ -29,6 +29,10 @@ System architecture, directory layout, domain model overview, and Redis allowlis
 
 If `graphify-out/graph.json` exists, **query it first** for architecture and module-relationship questions (`graphify query` / `path` / `explain`). Build and update instructions: `docs/agents/graphify.md`. `GRAPH_REPORT.md` is committed; heavy artifacts are gitignored and rebuilt locally.
 
+### Commit messages (mandatory)
+
+Commit messages must follow [`docs/agents/commit-messages.md`](docs/agents/commit-messages.md). This is not optional: plain conventional commits, no emoji, component/domain scopes. Release-note generation depends on consistent history.
+
 ## Notes
 
 - Canonical skill location is `.claude/skills`.

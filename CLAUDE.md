@@ -34,10 +34,15 @@ System architecture and auth-flow narrative: `docs/reference/architecture.md`. H
 
 If `graphify-out/graph.json` exists, query it first for architecture questions. See `docs/agents/graphify.md` for install, build (`--code-only`), update, and git policy.
 
+### Commit messages (mandatory)
+
+Commit messages must follow [`docs/agents/commit-messages.md`](docs/agents/commit-messages.md). This is not optional: plain conventional commits, no emoji, component/domain scopes.
+
 ## Project conventions
 
 When working in this repository, follow conventions in:
 
 - `.github/copilot-instructions.md`
+- `docs/agents/commit-messages.md` (commit message SSOT)
 - `.github/instructions/pre-commit.instructions.md`
 - `.github/instructions/resolve-issue.instructions.md`

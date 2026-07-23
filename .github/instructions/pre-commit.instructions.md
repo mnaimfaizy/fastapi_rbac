@@ -14,8 +14,9 @@ When performing a commit in this project, always follow this workflow:
 
 2. **Commit Message**
 
-   - Use the commit message format and rules from the commit prompt (which will be provided at commit time).
-   - Ensure the commit message follows the Angular standard with emojis and correct scope.
+   - Follow [`docs/agents/commit-messages.md`](../../docs/agents/commit-messages.md) **strictly** (mandatory SSOT).
+   - Format: `<type>(<scope>): <subject>` — no emoji; component/domain scopes.
+   - The `/commit` prompt (`.github/prompts/commit.prompt.md`) also points at that SSOT.
 
 3. **Pre-commit Hook Enforcement**
 
@@ -38,6 +39,6 @@ When performing a commit in this project, always follow this workflow:
 
 **Summary:**
 
-- Always stage, check, and commit using the provided commit prompt.
+- Always stage, check, and commit using the canonical commit-message SSOT.
 - Strictly follow and resolve all pre-commit hook issues before completing the commit.
 - Repeat as needed until the commit is successful and clean.

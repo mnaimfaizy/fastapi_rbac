@@ -95,14 +95,14 @@ Automatically updated by release script:
 - ✅ Automatically synced with release
 - ✅ No version drift between components
 
-### 3. Changelog Management
+### 3. Release Notes Management
 
 #### Before (Old Process)
 ```bash
-# Manual changelog generation
+# Manual draft generation (ephemeral changelog.txt)
 git log v1.2.2..HEAD --pretty=format:"- %s" > changelog.txt
 
-# Manual categorization required
+# Manual categorization required into docs/release-notes.md
 # No convention enforcement
 # Inconsistent format
 ```
@@ -239,8 +239,8 @@ RELEASE.md (comprehensive guide)
 #### Before (Old Process)
 ```bash
 # Basic flow
-1. Generate changelog
-2. Update release notes
+1. Generate ephemeral changelog.txt draft
+2. Update docs/release-notes.md (SSOT)
 3. Create tag
 4. Push tag
 5. (Optional) Build Docker
@@ -256,9 +256,9 @@ RELEASE.md (comprehensive guide)
 ```bash
 # Enhanced flow
 1. Validate environment
-2. Generate changelog
+2. Generate ephemeral changelog.txt draft
 3. Update VERSION file
-4. Update release notes
+4. Update docs/release-notes.md (SSOT)
 5. Commit changes
 6. Create tag
 7. Push tag
@@ -339,7 +339,7 @@ When creating the next release with the new process:
 2. ✅ Test with dry-run first: `./create-release.sh -v vX.Y.Z --dry-run`
 3. ✅ Verify multi-arch images work on both platforms
 4. ✅ Check VERSION file is updated correctly
-5. ✅ Confirm changelog follows new conventions
+5. ✅ Confirm `docs/release-notes.md` follows conventions (no root `CHANGELOG.md`)
 6. ✅ Monitor GitHub Actions workflow
 7. ✅ Verify all three images (backend, frontend, worker) published
 8. ✅ Test images in staging environment
