@@ -1,6 +1,8 @@
 # Quick Release Guide
 
-This is a quick reference for common release scenarios. For comprehensive documentation, see [RELEASE.md](../RELEASE.md).
+This is a quick reference for common release scenarios. For comprehensive documentation, see [RELEASE.md](../../RELEASE.md) (from repo root) or the deployment release docs.
+
+**Release history SSOT:** [`docs/release-notes.md`](../release-notes.md). There is no root `CHANGELOG.md`. Docker Hub descriptions come from `*.dockerhub.md` via `docker-publish.yml`, not from release notes.
 
 ## 🚀 Quick Start
 
@@ -125,8 +127,9 @@ After creating a release, verify:
   - `mnaimfaizy/fastapi-rbac-worker:vX.Y.Z`
 - [ ] Images support both architectures (linux/amd64, linux/arm64)
 - [ ] VERSION file updated to `X.Y.Z` (without 'v')
-- [ ] Release notes updated in `docs/release-notes.md`
+- [ ] Release notes updated in `docs/release-notes.md` (release history SSOT)
 - [ ] Git tag created and pushed
+- [ ] Docker Hub repo descriptions reflect `*.dockerhub.md` sources (updated by `docker-publish.yml`)
 
 ## 🐛 Quick Troubleshooting
 
@@ -246,7 +249,7 @@ git push origin :refs/tags/v1.2.3
 
 ## 📞 Getting Help
 
-- **Documentation**: [RELEASE.md](../RELEASE.md)
+- **Documentation**: [RELEASE.md](../../RELEASE.md)
 - **Process Changes**: [RELEASE_IMPROVEMENTS.md](docs/deployment/RELEASE_IMPROVEMENTS.md)
 - **Original Process**: [RELEASE_PROCESS.md](docs/deployment/RELEASE_PROCESS.md)
 - **Issues**: [GitHub Issues](https://github.com/mnaimfaizy/fastapi_rbac/issues)

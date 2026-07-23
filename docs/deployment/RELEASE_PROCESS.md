@@ -10,6 +10,8 @@ This document outlines the steps to create and publish a new release for the Fas
     - `DOCKERHUB_USERNAME`: Your Docker Hub username.
     - `DOCKERHUB_TOKEN`: A Docker Hub access token with read/write permissions.
 
+**Release history SSOT:** [`docs/release-notes.md`](../release-notes.md). There is no root `CHANGELOG.md`. Docker Hub repository descriptions are updated from `backend/README.dockerhub.md`, `react-frontend/README.dockerhub.md`, and `backend/README.worker.dockerhub.md` via `.github/workflows/docker-publish.yml` — not from release notes.
+
 ## Versioning Strategy
 
 We use [Semantic Versioning](https://semver.org/) for our releases. Tags should follow these patterns:
@@ -23,17 +25,17 @@ The GitHub Actions workflow is configured to trigger on any tag starting with `v
 
 1.  **Update Release Notes:**
 
-    - Before creating a release, ensure the `docs/release-notes.md` file is updated with the new version information.
+    - Before creating a release, ensure the `docs/release-notes.md` file (release history SSOT) is updated with the new version information.
     - Add a new entry at the top of the version history section with:
       - Version number (e.g., `v1.0.0` or `v0.1.0-beta.1`)
       - Release date in YYYY-MM-DD format
       - Summary of changes categorized as "New Features", "Bug Fixes", and "Breaking Changes"
       - Optionally, include "Technical Details" with implementation notes
-    - You can generate a draft of changes from Git history with:
+    - You can generate an ephemeral draft of changes from Git history with:
       ```powershell
       git log <previous_tag>..HEAD --pretty=format:"- %s" > changelog.txt
       ```
-    - Review and edit the generated list, then add it to `docs/release-notes.md` under the appropriate categories.
+    - Review and edit the generated list (`changelog.txt` is gitignored), then add it to `docs/release-notes.md` under the appropriate categories.
 
 2.  **Prepare Your Branch:**
 
@@ -71,7 +73,7 @@ The GitHub Actions workflow is configured to trigger on any tag starting with `v
 
 1.  **GitHub Actions Workflow Triggered:** Pushing a tag matching the `v*` pattern automatically triggers the "Docker Publish" workflow defined in `.github/workflows/docker-publish.yml`.
 2.  **Image Build & Tag:** The workflow checks out the code corresponding to the pushed Git tag. It then builds the Docker images for the backend, frontend, and worker services. The Docker images will be tagged with the same version as the Git tag (e.g., `yourusername/fastapi-rbac-backend:v1.0.0`).
-3.  **Push to Docker Hub:** After a successful build, the tagged Docker images are pushed to your configured Docker Hub repository.
+3.  **Push to Docker Hub:** After a successful build, the tagged Docker images are pushed to your configured Docker Hub repository. The workflow also updates Hub repository descriptions from `backend/README.dockerhub.md`, `react-frontend/README.dockerhub.md`, and `backend/README.worker.dockerhub.md` (not from `docs/release-notes.md`).
 
 ## Verifying the Release
 

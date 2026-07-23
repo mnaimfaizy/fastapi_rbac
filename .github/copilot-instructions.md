@@ -18,8 +18,11 @@ This project is a user-management microservice: FastAPI backend + React/TypeScri
 | Testing | [`docs/development/TESTING.md`](../docs/development/TESTING.md), [`docs/frontend/react/testing.md`](../docs/frontend/react/testing.md), [`backend/test/README.md`](../backend/test/README.md) |
 | Frontend troubleshooting | [`docs/troubleshooting/frontend-issues.md`](../docs/troubleshooting/frontend-issues.md) |
 | Knowledge graph | [`docs/agents/graphify.md`](../docs/agents/graphify.md) |
+| Commit messages (mandatory SSOT) | [`docs/agents/commit-messages.md`](../docs/agents/commit-messages.md) |
 
 If `graphify-out/graph.json` exists, prefer `graphify query` / `path` / `explain` for “how does X connect to Y” questions.
+
+**Commit messages are mandatory:** follow [`docs/agents/commit-messages.md`](../docs/agents/commit-messages.md) strictly (plain conventional commits, no emoji, component/domain scopes). Do not invent alternate formats.
 
 ## Coding constraints
 

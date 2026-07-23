@@ -10,7 +10,7 @@ When the `/commit` command is invoked in chat, the agent must:
 2. Immediately begin the commit workflow:
    - Check git status.
    - Stage all relevant changes.
-   - Prompt for or generate a commit message following the rules below.
+   - Prompt for or generate a commit message following **`docs/agents/commit-messages.md`** (mandatory SSOT).
    - Run pre-commit hooks and resolve any issues.
    - Repeat as needed until the commit is successful and clean.
 3. Do NOT simply acknowledge these instructions—always proceed with the commit process.
@@ -19,66 +19,24 @@ This ensures that including `/commit` in chat will always trigger the full commi
 
 # Commit Message Instructions for Agents and LLMs
 
-When making commits in this project, always follow these rules:
+**Follow [`docs/agents/commit-messages.md`](../../docs/agents/commit-messages.md) strictly.** Do not invent alternate formats.
 
-## 1. Use Angular Commit Message Standards with Emojis
+Summary (full rules live in the SSOT):
 
-- Start every commit message with a relevant emoji.
-- Use the Angular commit type (feat, fix, chore, docs, refactor, test, perf, ci, build, style, etc.).
-- If the change is in a specific directory (e.g., backend, react-frontend, docs, scripts), include the directory in parentheses after the type.
-- For root-level or global changes (e.g., .github, LICENSE, README.md), use the directory or file name in parentheses.
+- Format: `<type>(<scope>): <subject>`
+- **No emoji**
+- Component/domain scopes (`auth`, `api`, `ui`, `docker`, `ci`, …) — not top-level directory names
+- Imperative mood; breaking changes use `!` and/or `BREAKING CHANGE:` footer
 
 ### Examples
 
-- For root-level or global changes:
-
-  - 🛠️ chore(github): update GitHub Actions workflow for CI
-  - 📄 docs(README): update project overview and usage instructions
-  - 📝 chore(LICENSE): update copyright
-
-- For changes in subdirectories:
-  - 🐍 fix(backend): correct user role assignment logic
-  - ⚛️ feat(react-frontend): add user profile page
-  - 📝 docs(docs): add API usage section to documentation
-  - 🛠️ chore(scripts): update deployment script for production
-
-## 2. Commit Message Structure
-
-- **Title:**
-  `<emoji> <type>(<scope>): <short summary>`
-- **Body (optional):**
-  Add a longer description if needed, explaining what and why.
-
-## 3. Scopes
-
-- Use the directory or file name as the scope, e.g.:
-  - backend
-  - react-frontend
-  - docs
-  - scripts
-  - .github
-  - LICENSE
-  - README
-
-## 4. Best Practices
-
-- Be concise and clear.
-- Use imperative mood (“add”, “fix”, “update”, not “added”, “fixed”, “updated”).
-- Always include an emoji at the start.
-- If multiple directories are affected, use a general scope or list the main ones.
+```
+feat(auth): add two-factor authentication support
+fix(api): resolve rate limiting bypass vulnerability
+docs(release): update release notes for v1.2.3
+chore(ci): update GitHub Actions workflow for CI
+```
 
 ---
 
-**Example Commit Messages:**
-
-- 🐛 fix(backend): resolve permission deletion bug in API
-- ✨ feat(react-frontend): implement dark mode toggle
-- 📝 docs(docs): add troubleshooting guide for Docker Compose
-- 🛠️ chore(scripts): update test runner for new test structure
-- 📄 docs(README): clarify environment setup instructions
-- 🧹 chore(.github): update issue templates
-
----
-
-**Summary:**
-Always use Angular commit standards with emojis, specify the directory or file in the scope, and write clear, concise messages. This ensures easy release note generation and maintainable commit history.
+**Summary:** Always use the canonical commit-message SSOT. That keeps history consistent for automated release notes.

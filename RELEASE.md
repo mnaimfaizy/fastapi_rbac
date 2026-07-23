@@ -11,7 +11,7 @@ This document describes the complete release process for the FastAPI RBAC projec
 - [Release Process](#release-process)
 - [Automated Release Workflow](#automated-release-workflow)
 - [Multi-Architecture Support](#multi-architecture-support)
-- [Changelog Management](#changelog-management)
+- [Release Notes Management](#release-notes-management)
 - [Rollback Procedures](#rollback-procedures)
 - [Security Considerations](#security-considerations)
 - [Troubleshooting](#troubleshooting)
@@ -35,6 +35,8 @@ FastAPI RBAC uses a fully automated CI/CD pipeline for releases:
 5. **Security**: Secure handling of credentials and secrets
 6. **Rollback Ready**: Easy rollback to previous versions
 
+**Release history SSOT:** [`docs/release-notes.md`](docs/release-notes.md). There is no root `CHANGELOG.md`. Docker Hub repository descriptions come from `*.dockerhub.md` files (see workflow step 9 below), not from release notes.
+
 ## Versioning Strategy
 
 We follow [Semantic Versioning 2.0.0](https://semver.org/):
@@ -46,7 +48,7 @@ MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]
 ### Version Format
 
 - **Stable Releases**: `vMAJOR.MINOR.PATCH` (e.g., `v1.2.3`)
-- **Pre-releases**: 
+- **Pre-releases**:
   - Alpha: `vMAJOR.MINOR.PATCH-alpha.N` (e.g., `v1.0.0-alpha.1`)
   - Beta: `vMAJOR.MINOR.PATCH-beta.N` (e.g., `v1.0.0-beta.2`)
   - Release Candidate: `vMAJOR.MINOR.PATCH-rc.N` (e.g., `v1.0.0-rc.1`)
@@ -133,8 +135,7 @@ Before creating a release, ensure:
 ### Version and Documentation
 
 - [ ] Version number decided and validated
-- [ ] CHANGELOG.md updated with all changes
-- [ ] Release notes prepared in docs/release-notes.md
+- [ ] Release notes prepared in `docs/release-notes.md` (release history SSOT)
 - [ ] README.md updated if needed
 - [ ] API documentation updated
 
@@ -222,7 +223,7 @@ Edit `docs/release-notes.md`:
 
 ```bash
 git add docs/release-notes.md
-git commit -m "docs: update release notes for v1.2.3"
+git commit -m "docs(release): update release notes for v1.2.3"
 git push origin main
 ```
 
@@ -280,11 +281,15 @@ The `docker-publish.yml` workflow triggers on:
 5. Determine version tag
 6. Build Docker images:
    - Backend (FastAPI app)
-   - Frontend (React app) 
+   - Frontend (React app)
    - Worker (Celery worker)
 7. Tag images with version
 8. Push to Docker Hub
-9. Update Docker Hub descriptions
+9. Update Docker Hub descriptions from:
+   - `backend/README.dockerhub.md`
+   - `react-frontend/README.dockerhub.md`
+   - `backend/README.worker.dockerhub.md`
+   (via `.github/workflows/docker-publish.yml` — not from `docs/release-notes.md`)
 ```
 
 ### Multi-Architecture Builds
@@ -346,34 +351,38 @@ docker buildx build --platform linux/amd64 ...
 docker buildx build --platform linux/arm64 ...
 ```
 
-## Changelog Management
+## Release Notes Management
 
-### Automated Changelog Generation
+**SSOT:** [`docs/release-notes.md`](docs/release-notes.md). Ephemeral `changelog.txt` is a gitignored draft only. This repo does not maintain a root `CHANGELOG.md`.
 
-The release script generates changelogs from Git commit history:
+### Automated Draft Generation
+
+The release script generates a temporary draft from Git commit history:
 
 ```bash
-# Generate changelog between tags
+# Generate draft between tags (merge curated bullets into docs/release-notes.md)
 git log v1.2.2..HEAD --pretty=format:"- %s" > changelog.txt
 ```
 
 ### Conventional Commits
 
-Use conventional commit format for better changelog generation:
+Commit messages must follow [`docs/agents/commit-messages.md`](docs/agents/commit-messages.md) (mandatory SSOT: plain conventional commits, no emoji, component scopes). Examples:
 
 ```
-feat: add user profile feature
-fix: resolve authentication bug
-docs: update API documentation
-chore: update dependencies
-test: add integration tests
-refactor: improve code structure
-perf: optimize database queries
+feat(auth): add user profile feature
+fix(api): resolve authentication bug
+docs(api): update API documentation
+chore(deps): update dependencies
+test(auth): add integration tests
+refactor(crud): improve code structure
+perf(db): optimize database queries
 ```
+
+Type → section mapping for release notes: see the commit-message SSOT and [`.changelogrc.md`](.changelogrc.md).
 
 ### Categorizing Changes
 
-Organize changes into categories:
+Organize changes into categories in `docs/release-notes.md`:
 
 - **New Features**: New functionality added
 - **Bug Fixes**: Bugs and issues resolved
@@ -429,7 +438,7 @@ git push origin :refs/tags/v1.2.3
 
 ```bash
 # Fix issues
-git commit -m "fix: resolve issue from v1.2.3"
+git commit -m "fix(api): resolve issue from v1.2.3"
 
 # Create new patch version
 ./scripts/deployment/release/create-release.sh -v v1.2.4
@@ -444,7 +453,7 @@ For critical bugs requiring immediate fix:
 git checkout -b hotfix/v1.2.4 v1.2.3
 
 # Apply fix
-git commit -m "fix: critical security vulnerability"
+git commit -m "fix(security): critical security vulnerability"
 
 # Merge to main
 git checkout main
@@ -588,27 +597,27 @@ If you encounter issues not covered here:
 
 ### Before Every Release
 
-✅ Run full test suite  
-✅ Update documentation  
-✅ Review and update changelog  
-✅ Test in staging environment  
-✅ Verify all CI checks pass  
+✅ Run full test suite
+✅ Update documentation
+✅ Review and update `docs/release-notes.md`
+✅ Test in staging environment
+✅ Verify all CI checks pass
 
 ### During Release
 
-✅ Use automation scripts when possible  
-✅ Test with dry-run first  
-✅ Monitor CI/CD workflow  
-✅ Verify images on Docker Hub  
-✅ Test deployed images  
+✅ Use automation scripts when possible
+✅ Test with dry-run first
+✅ Monitor CI/CD workflow
+✅ Verify images on Docker Hub
+✅ Test deployed images
 
 ### After Release
 
-✅ Announce release to team/users  
-✅ Monitor for issues  
-✅ Update production deployments  
-✅ Archive release artifacts  
-✅ Plan next release cycle  
+✅ Announce release to team/users
+✅ Monitor for issues
+✅ Update production deployments
+✅ Archive release artifacts
+✅ Plan next release cycle
 
 ## Quick Reference
 

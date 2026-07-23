@@ -10,7 +10,7 @@ The project needed a better release process optimized for a complete application
 
 1. Consistent versioning and tagging
 2. Automated builds and multi-arch Docker image publishing
-3. Clear changelogs and release notes
+3. Clear release notes in `docs/release-notes.md` (SSOT; no root `CHANGELOG.md`)
 4. Secure handling of secrets and credentials
 5. Easy rollback and traceability
 6. Alignment with best practices for application releases
@@ -265,7 +265,7 @@ From the original issue checklist:
   - [x] Automated versioning and tagging (VERSION file + script)
   - [x] Automated Docker multi-arch builds
   - [x] Automated publishing to Docker Hub
-  - [x] Changelog and release notes generation (guidelines)
+  - [x] Release notes generation into `docs/release-notes.md` (guidelines; ephemeral `changelog.txt` draft)
   - [x] Secure handling of secrets (documented)
   - [x] Rollback and traceability strategy
 - [x] Document the new process in the repository

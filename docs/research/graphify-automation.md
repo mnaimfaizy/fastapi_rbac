@@ -195,7 +195,7 @@ Design rules:
 - **Never** fail other CI / never add as a required status check.
 - **Never** commit gitignored heavy artifacts (`graph.json`, `graph.html`).
 - Full-repo extract is intentional; no LLM / no API keys (`--code-only`, `--no-label`).
-- Bot commit/PR title must follow repo Angular+emoji style from [`.github/prompts/commit.prompt.md`](../../.github/prompts/commit.prompt.md) (e.g. `📝 docs(graphify-out): …`).
+- Bot commit/PR title must follow [`docs/agents/commit-messages.md`](../agents/commit-messages.md) (e.g. `docs(graphify): refresh GRAPH_REPORT.md`).
 - Human reviews and merges the maintenance PR like any other chore.
 
 ### Secondary: optional local hooks (option C)

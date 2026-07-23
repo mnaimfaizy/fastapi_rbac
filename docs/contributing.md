@@ -173,18 +173,18 @@ Use descriptive branch names with prefixes:
 
 ### Commit Messages
 
-Follow [Conventional Commits](https://www.conventionalcommits.org/):
+Follow the canonical rules in [`docs/agents/commit-messages.md`](agents/commit-messages.md) (mandatory for humans and agents). Summary:
+
+- Format: `<type>(<scope>): <subject>` — [Conventional Commits](https://www.conventionalcommits.org/)
+- **No emoji**
+- Component/domain scopes (`auth`, `api`, `ui`, …)
 
 ```
-type(scope): description
-
 feat(auth): add password strength validation
-fix(user): resolve email validation issue
+fix(api): resolve email validation issue
 docs(api): update authentication endpoints
-test(user): add integration tests for user creation
+test(auth): add integration tests for user creation
 ```
-
-**Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
 
 ## Code Standards
 
