@@ -145,14 +145,48 @@ God-node / surprise highlights worth keeping in mind:
 
 Re-read `graphify-out/GRAPH_REPORT.md` after each full rebuild — numbers and community IDs drift.
 
-## Non-goals (v1)
+## Automation (committed report)
+
+CI keeps the **committed** summary fresh without pushing to protected `main` and without opening one bot PR per feature PR.
+
+| Trigger | Workflow |
+| --- | --- |
+| Weekly (Monday 06:00 UTC) | [`.github/workflows/graphify-report.yml`](../../.github/workflows/graphify-report.yml) |
+| Manual | Actions → **Refresh graphify report** → **Run workflow** |
+
+Behavior:
+
+1. Full-repo `extract --code-only` + `cluster-only --no-label` (no API key).
+2. If `graphify-out/GRAPH_REPORT.md` changed, push fixed branch `chore/graphify-report`.
+3. Create **or update** a single maintenance PR into `main` (never stacks multiple graphify PRs).
+4. A human reviews and merges; the bot does **not** push to `main`.
+
+This job is **not** a required status check and must not block feature PRs.
+
+Design notes: [`docs/research/graphify-automation.md`](../research/graphify-automation.md).
+
+### Optional local hooks
+
+For a live local `graph.json` while developing (gitignored; not published by CI):
+
+```bash
+graphify hook install    # post-commit + post-checkout, AST only
+# GRAPHIFY_SKIP_HOOK=1   # opt out for one command
+graphify hook uninstall
+```
+
+Prefer the update scripts above if you do not want git hooks.
+
+## Non-goals
 
 - Replacing MkDocs / human docs
-- CI that blocks on graph freshness
-- Auto post-commit hooks (optional later via `graphify hook install`)
+- CI that **blocks** merges on graph freshness
+- Committing heavy `graphify-out/` artifacts (`graph.json`, `graph.html`, cache)
+- One automated graphify PR per feature PR
 
 ## References
 
 - Upstream: <https://github.com/safishamsi/graphify>
 - Package: `graphifyy` on PyPI (CLI remains `graphify`)
 - Issue: [#28](https://github.com/mnaimfaizy/fastapi_rbac/issues/28)
+- Automation research: [`docs/research/graphify-automation.md`](../research/graphify-automation.md)

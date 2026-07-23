@@ -1,0 +1,92 @@
+name: Refresh graphify report
+
+# Batched maintenance refresh for graphify-out/GRAPH_REPORT.md.
+# - Weekly cron + manual workflow_dispatch
+# - Never pushes to protected main
+# - At most one open PR on chore/graphify-report (create-or-update)
+# See docs/research/graphify-automation.md and docs/agents/graphify.md
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Monday 06:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: graphify-report
+  cancel-in-progress: true
+
+jobs:
+  refresh-report:
+    name: Refresh GRAPH_REPORT.md
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install graphify
+        run: pip install graphifyy
+
+      - name: Full-repo code-only rebuild
+        run: bash ./scripts/development/graphify/update-graphify.sh --full
+        env:
+          PYTHONHASHSEED: "0"
+
+      - name: Create or update maintenance PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: chore/graphify-report
+          PR_TITLE: "📝 docs(graphify-out): refresh GRAPH_REPORT.md"
+          PR_BODY: |
+            ## Summary
+
+            Automated full-repo code-only graphify rebuild (`extract --code-only` + `cluster-only --no-label`).
+
+            - Updates only `graphify-out/GRAPH_REPORT.md`
+            - Does not change runtime application behavior
+            - Heavy artifacts (`graph.json`, etc.) remain gitignored
+
+            Triggered by weekly schedule or manual `workflow_dispatch`.
+            See `docs/agents/graphify.md` and `docs/research/graphify-automation.md`.
+
+            ## Test plan
+
+            - [ ] Skim `GRAPH_REPORT.md` for obvious nonsense after large refactors
+            - [ ] Confirm diff touches only `graphify-out/GRAPH_REPORT.md`
+        run: |
+          set -euo pipefail
+
+          if git diff --quiet -- graphify-out/GRAPH_REPORT.md; then
+            echo "GRAPH_REPORT.md unchanged; nothing to PR"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git checkout -B "$BRANCH"
+          git add graphify-out/GRAPH_REPORT.md
+          git commit -m "$PR_TITLE"
+
+          # Bot-owned branch: latest full rebuild wins (create-or-update semantics).
+          git push -u origin "HEAD:$BRANCH" --force
+
+          OPEN_COUNT="$(gh pr list --head "$BRANCH" --base main --state open --json number --jq 'length')"
+          if [ "$OPEN_COUNT" = "0" ]; then
+            gh pr create --base main --head "$BRANCH" \
+              --title "$PR_TITLE" \
+              --body "$PR_BODY"
+            echo "Opened new maintenance PR for $BRANCH"
+          else
+            echo "Updated existing open PR for $BRANCH"
+          fi
