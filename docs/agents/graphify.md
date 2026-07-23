@@ -163,6 +163,15 @@ Behavior:
 
 This job is **not** a required status check and must not block feature PRs.
 
+### Repo setup (required for PR creation)
+
+`GITHUB_TOKEN` can push the maintenance branch, but creating the PR needs one of:
+
+1. **Preferred:** Settings → Actions → General → Workflow permissions → enable **Allow GitHub Actions to create and approve pull requests**, or
+2. Add a PAT (contents + pull requests) as repository secret `GRAPHIFY_PR_TOKEN`.
+
+Without one of those, the workflow refreshes and pushes `chore/graphify-report` but fails at `gh pr create`.
+
 Design notes: [`docs/research/graphify-automation.md`](../research/graphify-automation.md).
 
 ### Optional local hooks
