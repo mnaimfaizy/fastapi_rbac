@@ -3,9 +3,11 @@
 #
 # This script automates the release process for the FastAPI RBAC project by:
 # 1. Generating a changelog from Git history
-# 2. Updating the release notes file
+# 2. Updating VERSION (strip leading v) and docs/release-notes.md
 # 3. Creating and pushing a Git tag
 # 4. Optionally building and pushing Docker images
+#
+# Kept in parity with Create-Release.ps1 (Phase B / issue #84).
 #
 # Author: FastAPI RBAC Team
 # Created: July 2, 2025
@@ -62,9 +64,14 @@ function show_help {
 
     echo -e "\n${YELLOW}📝 Process:${NC}"
     echo -e "${WHITE}  1. Generate changelog from Git history${NC}"
-    echo -e "${WHITE}  2. Update release notes file (docs/release-notes.md)${NC}"
+    echo -e "${WHITE}  2. Update VERSION (strip leading v) and docs/release-notes.md${NC}"
     echo -e "${WHITE}  3. Create and push Git tag${NC}"
     echo -e "${WHITE}  4. Optionally build and push Docker images (with -b/--build-docker flag)${NC}"
+
+    echo -e "\n${YELLOW}🔍 Dry-run notes:${NC}"
+    echo -e "${WHITE}  • Does not pull origin/main, write release notes/VERSION, commit, tag, or push${NC}"
+    echo -e "${WHITE}  • Still writes temporary changelog.txt (left in place after dry-run)${NC}"
+    echo -e "${WHITE}  • Still requires interactive confirmations for warnings${NC}"
 
     echo -e "\n${YELLOW}🔧 Requirements:${NC}"
     echo -e "${WHITE}  • Git installed and configured${NC}"
@@ -113,7 +120,12 @@ function confirm_main_branch {
         echo -e "${GREEN}✅ Working directory is clean${NC}"
     fi
 
-    # Pull latest changes
+    # Pull latest changes (skipped in dry-run so the simulation stays non-mutating)
+    if [ "$DRY_RUN" = true ]; then
+        echo -e "${CYAN}🔍 [DRY RUN] Skipping git pull origin main${NC}"
+        return
+    fi
+
     echo -e "${CYAN}Pulling latest changes from origin/main...${NC}"
     if ! git pull origin main; then
         echo -e "${RED}❌ Failed to pull latest changes. Please resolve any conflicts and try again.${NC}"
@@ -301,24 +313,26 @@ function create_git_tag {
         return
     fi
 
-    # Check if tag already exists
+    # Refuse if the tag already exists on remote — we do not force-push tags
+    if git ls-remote --tags origin "refs/tags/$version" | grep -q "$version"; then
+        echo -e "${RED}❌ Tag $version already exists on remote. Refusing to retag.${NC}"
+        echo -e "${YELLOW}This script does not force-push tags. Delete the remote tag explicitly if you intend to replace it, then re-run.${NC}"
+        exit 1
+    fi
+
+    # Check if tag already exists locally
     if git tag -l "$version" | grep -q "$version"; then
-        echo -e "${YELLOW}⚠️ WARNING: Tag $version already exists.${NC}"
-        read -p "Do you want to force update the existing tag? (y/n): " confirmation
+        echo -e "${YELLOW}⚠️ WARNING: Tag $version already exists locally.${NC}"
+        read -p "Do you want to replace the local tag and push it? (y/n): " confirmation
         if [ "$confirmation" != "y" ]; then
             echo -e "${RED}Operation cancelled.${NC}"
             exit 1
         fi
 
-        # Delete existing tag
+        # Delete existing local tag only
         if ! git tag -d "$version"; then
-            echo -e "${RED}❌ Failed to delete existing tag.${NC}"
+            echo -e "${RED}❌ Failed to delete existing local tag.${NC}"
             exit 1
-        fi
-
-        # If tag was already pushed, we need to force push
-        if git ls-remote --tags origin "$version" &>/dev/null; then
-            echo -e "${YELLOW}⚠️ WARNING: Tag $version exists on remote. It will be force updated.${NC}"
         fi
     fi
 
@@ -329,7 +343,7 @@ function create_git_tag {
     fi
     echo -e "${GREEN}✅ Git tag created successfully${NC}"
 
-    # Push the tag
+    # Push the tag (non-force)
     echo -e "\n${CYAN}Pushing Git tag to remote...${NC}"
     if ! git push origin "$version"; then
         echo -e "${RED}❌ Failed to push Git tag to remote.${NC}"
@@ -505,7 +519,7 @@ if [ "$DRY_RUN" = true ]; then
 else
     echo -e "\n${GREEN}✅ Release process completed successfully for version: $VERSION${NC}"
     echo -e "\n${YELLOW}📋 Next steps:${NC}"
-    echo -e "${WHITE}  1. Monitor GitHub Actions workflow at: https://github.com/yourusername/fastapi_rbac/actions${NC}"
+    echo -e "${WHITE}  1. Monitor GitHub Actions workflow at: https://github.com/mnaimfaizy/fastapi_rbac/actions${NC}"
     echo -e "${WHITE}  2. Verify Docker images on Docker Hub${NC}"
     echo -e "${WHITE}  3. Notify team members about the new release${NC}"
 fi

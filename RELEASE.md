@@ -178,8 +178,10 @@ cd scripts/deployment/release
 - `-p, --previous-tag`: Previous tag for changelog generation (optional)
 - `-s, --skip-notes`: Skip updating release notes
 - `-b, --build-docker`: Build and push Docker images immediately
-- `-r, --dry-run`: Simulate without making changes
+- `-r, --dry-run`: Simulate without making changes (skips `git pull`; leaves temporary `changelog.txt`; does not write `VERSION` / release notes, commit, tag, or push)
 - `-h, --help`: Show help message
+
+PowerShell equivalent: `.\Create-Release.ps1 -Version v1.2.3` (same behavior: updates root `VERSION` without the `v` prefix, commits `docs/release-notes.md` + `VERSION` with `docs: update release notes and version for …`, refuses remote retags without force-push).
 
 ### Manual Release Process
 
