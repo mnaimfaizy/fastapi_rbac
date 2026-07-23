@@ -28,6 +28,10 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: main
+          # Prefer GRAPHIFY_PR_TOKEN when set so PR creation works even if the
+          # repo setting "Allow GitHub Actions to create and approve pull
+          # requests" is off. Falls back to GITHUB_TOKEN.
+          token: ${{ secrets.GRAPHIFY_PR_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -44,7 +48,7 @@ jobs:
 
       - name: Create or update maintenance PR
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GRAPHIFY_PR_TOKEN || secrets.GITHUB_TOKEN }}
           BRANCH: chore/graphify-report
           PR_TITLE: "📝 docs(graphify-out): refresh GRAPH_REPORT.md"
           PR_BODY: |
@@ -63,6 +67,7 @@ jobs:
 
             - [ ] Skim `GRAPH_REPORT.md` for obvious nonsense after large refactors
             - [ ] Confirm diff touches only `graphify-out/GRAPH_REPORT.md`
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
 
@@ -82,11 +87,18 @@ jobs:
           git push -u origin "HEAD:$BRANCH" --force
 
           OPEN_COUNT="$(gh pr list --head "$BRANCH" --base main --state open --json number --jq 'length')"
-          if [ "$OPEN_COUNT" = "0" ]; then
-            gh pr create --base main --head "$BRANCH" \
-              --title "$PR_TITLE" \
-              --body "$PR_BODY"
-            echo "Opened new maintenance PR for $BRANCH"
-          else
+          if [ "$OPEN_COUNT" != "0" ]; then
             echo "Updated existing open PR for $BRANCH"
+            exit 0
           fi
+
+          if gh pr create --base main --head "$BRANCH" \
+            --title "$PR_TITLE" \
+            --body "$PR_BODY"; then
+            echo "Opened new maintenance PR for $BRANCH"
+            exit 0
+          fi
+
+          echo "::error::Failed to create pull request. Branch was pushed: https://github.com/${REPO}/compare/main...${BRANCH}"
+          echo "::error::Enable Settings → Actions → General → Workflow permissions → 'Allow GitHub Actions to create and approve pull requests', or add a classic/fine-grained PAT as secret GRAPHIFY_PR_TOKEN (contents + pull requests)."
+          exit 1
