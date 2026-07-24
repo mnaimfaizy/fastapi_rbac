@@ -1,0 +1,152 @@
+name: Release Tag on Merge
+
+# When a Release PR (head branch release/v*) is merged into main, create the
+# annotated SemVer tag and a GitHub Release. Branch name is the version SSOT.
+# Docker images publish via docker-publish.yml on the v* tag push (not on
+# release: published — that trigger was removed to avoid double builds).
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  tag-and-release:
+    name: Tag and GitHub Release
+    if: >
+      github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.head.ref, 'release/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Parse version from release branch
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          BRANCH="${{ github.event.pull_request.head.ref }}"
+          VERSION="${BRANCH#release/}"
+
+          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            echo "::error::Invalid release branch '${BRANCH}'. Expected release/vX.Y.Z or release/vX.Y.Z-suffix."
+            exit 1
+          fi
+
+          VERSION_FILE_EXPECTED="${VERSION#v}"
+          if [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-.+ ]]; then
+            PRERELEASE=true
+          else
+            PRERELEASE=false
+          fi
+
+          echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "version_file=${VERSION_FILE_EXPECTED}" >> "$GITHUB_OUTPUT"
+          echo "prerelease=${PRERELEASE}" >> "$GITHUB_OUTPUT"
+          echo "Parsed version=${VERSION} prerelease=${PRERELEASE}"
+
+      - name: Checkout merge commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          fetch-depth: 0
+
+      - name: Verify VERSION file matches branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED="${{ steps.version.outputs.version_file }}"
+          if [[ ! -f VERSION ]]; then
+            echo "::error::VERSION file missing on merge commit."
+            exit 1
+          fi
+          ACTUAL="$(tr -d '[:space:]' < VERSION)"
+          if [[ "$ACTUAL" != "$EXPECTED" ]]; then
+            echo "::error::VERSION file ('${ACTUAL}') does not match branch SSOT ('${EXPECTED}' from ${{ steps.version.outputs.branch }})."
+            exit 1
+          fi
+          echo "VERSION file matches branch SSOT: ${ACTUAL}"
+
+      - name: Refuse if tag already exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          if git ls-remote --tags origin "refs/tags/${VERSION}" | grep -q "${VERSION}"; then
+            echo "::error::Tag ${VERSION} already exists on remote. Refusing to retag (no force-push)."
+            exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/${VERSION}" >/dev/null 2>&1; then
+            echo "::error::Tag ${VERSION} already exists locally after checkout. Refusing to retag."
+            exit 1
+          fi
+          echo "Tag ${VERSION} does not exist yet — OK to create."
+
+      - name: Extract release notes section
+        id: notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          NOTES_FILE="${RUNNER_TEMP}/release-notes-body.md"
+
+          if [[ ! -f docs/release-notes.md ]]; then
+            echo "::error::docs/release-notes.md missing."
+            exit 1
+          fi
+
+          # Capture from "### vX.Y.Z (" until the next "### " heading (exclusive).
+          awk -v ver="$VERSION" '
+            $0 ~ "^### " ver " \\(" {flag=1; print; next}
+            /^### / {flag=0}
+            flag {print}
+          ' docs/release-notes.md > "$NOTES_FILE"
+
+          if [[ ! -s "$NOTES_FILE" ]]; then
+            echo "::warning::No matching section for ${VERSION} in docs/release-notes.md; using a minimal body."
+            printf 'Release %s\n' "$VERSION" > "$NOTES_FILE"
+          fi
+
+          echo "path=${NOTES_FILE}" >> "$GITHUB_OUTPUT"
+          echo "Extracted notes ($(wc -l < "$NOTES_FILE") lines):"
+          head -n 40 "$NOTES_FILE"
+
+      - name: Create annotated tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${VERSION}" -m "Release ${VERSION}"
+          git push origin "refs/tags/${VERSION}"
+          echo "Pushed annotated tag ${VERSION}"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          NOTES_FILE="${{ steps.notes.outputs.path }}"
+          PRERELEASE="${{ steps.version.outputs.prerelease }}"
+
+          EXTRA_ARGS=()
+          if [[ "$PRERELEASE" == "true" ]]; then
+            EXTRA_ARGS+=(--prerelease)
+          fi
+
+          gh release create "${VERSION}" \
+            --title "${VERSION}" \
+            --notes-file "${NOTES_FILE}" \
+            "${EXTRA_ARGS[@]}"
+
+          echo "Created GitHub Release ${VERSION} (prerelease=${PRERELEASE})"
+          echo "### Release created" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Tag / release: \`${VERSION}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Branch SSOT: \`${{ steps.version.outputs.branch }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Pre-release: \`${PRERELEASE}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Docker Publish should run once from the tag push." >> "$GITHUB_STEP_SUMMARY"
