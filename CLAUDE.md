@@ -38,6 +38,10 @@ If `graphify-out/graph.json` exists, query it first for architecture questions. 
 
 Commit messages must follow [`docs/agents/commit-messages.md`](docs/agents/commit-messages.md). This is not optional: plain conventional commits, no emoji, component/domain scopes.
 
+### Release
+
+User-invoked skill: `.claude/skills/release`. Opens a Release PR (notes via release-notes sub-agent). Canonical notes behavior: [`docs/agents/release-notes-agent.md`](docs/agents/release-notes-agent.md).
+
 ## Project conventions
 
 When working in this repository, follow conventions in:

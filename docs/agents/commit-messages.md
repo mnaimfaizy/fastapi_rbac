@@ -161,5 +161,6 @@ Format is mandatory for humans and agents. A commit-msg / commitlint hook is a d
 
 - [`.changelogrc.md`](../../.changelogrc.md) — changelog section mapping, SemVer bump rules, tooling notes
 - [`docs/release-notes.md`](../release-notes.md) — committed release history (SSOT)
+- [`docs/agents/release-notes-agent.md`](release-notes-agent.md) — how to draft a release-notes section from commits
 - [Conventional Commits](https://www.conventionalcommits.org/)
 - [Semantic Versioning](https://semver.org/)

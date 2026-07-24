@@ -1,12 +1,9 @@
 # Create-Release.ps1 - FastAPI RBAC Release Automation Script
 #
-# This script automates the release process for the FastAPI RBAC project by:
-# 1. Generating a changelog from Git history
-# 2. Updating VERSION (strip leading v) and docs/release-notes.md
-# 3. Creating and pushing a Git tag
-# 4. Optionally building and pushing Docker images
+# Default: Release PR mode (branch release/vX.Y.Z, VERSION + notes, push, gh pr create).
+# Emergency: -DirectTag tags from main (discouraged).
+# Kept in parity with create-release.sh (Phase C1).
 #
-# Kept in parity with create-release.sh (Phase B / issue #84).
 # Author: FastAPI RBAC Team
 # Created: July 2, 2025
 
@@ -18,10 +15,19 @@ param(
     [string]$PreviousTag,
 
     [Parameter(Mandatory=$false)]
+    [string]$NotesFile,
+
+    [Parameter(Mandatory=$false)]
     [switch]$SkipNotes,
 
     [Parameter(Mandatory=$false)]
     [switch]$BuildDocker,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$DirectTag,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$Yes,
 
     [Parameter(Mandatory=$false)]
     [switch]$DryRun,
@@ -34,54 +40,50 @@ $ErrorActionPreference = "Stop"
 $RootDir = (Get-Item (Split-Path -Parent $PSCommandPath)).Parent.Parent.Parent.FullName
 $ReleaseNotesPath = Join-Path -Path $RootDir -ChildPath "docs\release-notes.md"
 $ChangelogPath = Join-Path -Path $RootDir -ChildPath "changelog.txt"
+$VersionFilePath = Join-Path -Path $RootDir -ChildPath "VERSION"
 $DockerBuildScript = Join-Path -Path $RootDir -ChildPath "scripts\deployment\production\build-and-push.ps1"
+$RepoActionsUrl = "https://github.com/mnaimfaizy/fastapi_rbac/actions"
 
-# Add a trap to ensure we clean up the changelog file even on error
-# Skip cleanup in dry-run so behavior matches create-release.sh
 trap {
     if (-not $DryRun -and (Test-Path -Path $ChangelogPath)) {
         Write-Host "Cleaning up changelog file after error..." -ForegroundColor Yellow
         Remove-Item -Path $ChangelogPath -Force -ErrorAction SilentlyContinue
     }
-    # Re-throw the error to ensure the script exits with the proper error code
     throw $_
 }
 
 function Show-Help {
-    Write-Host "`n🚀 FastAPI RBAC Release Automation Script" -ForegroundColor Cyan
-    Write-Host "==========================================" -ForegroundColor Cyan
-    Write-Host "`nThis script automates the release process for the FastAPI RBAC project.`n" -ForegroundColor White
+    Write-Host "`nFastAPI RBAC Release Automation Script" -ForegroundColor Cyan
+    Write-Host "======================================" -ForegroundColor Cyan
+    Write-Host "`nDefault mode opens a Release PR (release/vX.Y.Z). Use -DirectTag only for emergencies.`n" -ForegroundColor White
 
-    Write-Host "📋 Parameters:" -ForegroundColor Yellow
-    Write-Host "  -Version        : Version to release (e.g., v1.0.0, v0.1.0-beta.1)" -ForegroundColor White
-    Write-Host "  -PreviousTag    : Previous tag to generate changelog from (defaults to latest tag)" -ForegroundColor White
-    Write-Host "  -SkipNotes      : Skip updating release notes (just create and push tag)" -ForegroundColor White
-    Write-Host "  -BuildDocker    : Build and push Docker images (opt-in)" -ForegroundColor White
-    Write-Host "  -DryRun         : Simulate the release process without making actual changes" -ForegroundColor White
-    Write-Host "  -Help           : Show this help message" -ForegroundColor White
+    Write-Host "Parameters:" -ForegroundColor Yellow
+    Write-Host "  -Version        : Version to release (e.g., v1.0.0, v0.1.0-beta.1) [required]" -ForegroundColor White
+    Write-Host "  -PreviousTag    : Previous tag for changelog (defaults to latest tag)" -ForegroundColor White
+    Write-Host "  -NotesFile      : Path to a release-notes section to insert (full ### entry or body)" -ForegroundColor White
+    Write-Host "  -SkipNotes      : Skip updating docs/release-notes.md (still updates VERSION in PR mode)" -ForegroundColor White
+    Write-Host "  -DirectTag      : EMERGENCY — commit on main and push tag (skips Release PR)" -ForegroundColor White
+    Write-Host '  -Yes            : Non-interactive (no prompts; fail closed on unsafe warnings)' -ForegroundColor White
+    Write-Host '  -BuildDocker    : Build/push images locally (DirectTag only; opt-in)' -ForegroundColor White
+    Write-Host "  -DryRun         : Simulate without mutating git remotes or release files" -ForegroundColor White
+    Write-Host "  -Help           : Show this help" -ForegroundColor White
 
-    Write-Host "`n💡 Examples:" -ForegroundColor Yellow
-    Write-Host "  .\Create-Release.ps1 -Version v1.0.0" -ForegroundColor White
-    Write-Host "  .\Create-Release.ps1 -Version v1.0.0 -PreviousTag v0.9.0" -ForegroundColor White
-    Write-Host "  .\Create-Release.ps1 -Version v1.0.0 -SkipNotes" -ForegroundColor White
-    Write-Host "  .\Create-Release.ps1 -Version v1.0.0 -BuildDocker" -ForegroundColor White
+    Write-Host "`nExamples:" -ForegroundColor Yellow
+    Write-Host "  .\Create-Release.ps1 -Version v1.0.0 -Yes" -ForegroundColor White
+    Write-Host "  .\Create-Release.ps1 -Version v1.0.0 -NotesFile .\notes-section.md -Yes" -ForegroundColor White
     Write-Host "  .\Create-Release.ps1 -Version v1.0.0 -DryRun" -ForegroundColor White
+    Write-Host "  .\Create-Release.ps1 -Version v1.0.0 -DirectTag -Yes   # discouraged" -ForegroundColor White
 
-    Write-Host "`n📝 Process:" -ForegroundColor Yellow
-    Write-Host "  1. Generate changelog from Git history" -ForegroundColor White
-    Write-Host "  2. Update VERSION (strip leading v) and docs/release-notes.md" -ForegroundColor White
-    Write-Host "  3. Create and push Git tag" -ForegroundColor White
-    Write-Host "  4. Optionally build and push Docker images (with -BuildDocker flag)" -ForegroundColor White
+    Write-Host "`nDefault process (Release PR):" -ForegroundColor Yellow
+    Write-Host "  1. Ensure main is clean and up to date" -ForegroundColor White
+    Write-Host "  2. Create branch release/<version> (branch name is version SSOT)" -ForegroundColor White
+    Write-Host "  3. Update VERSION + docs/release-notes.md and commit" -ForegroundColor White
+    Write-Host "  4. Push branch and open PR with gh; print PR URL" -ForegroundColor White
+    Write-Host "  5. After merge, CI creates the tag / GitHub Release (Phase C2+)" -ForegroundColor White
 
-    Write-Host "`n🔍 Dry-run notes:" -ForegroundColor Yellow
-    Write-Host "  • Does not pull origin/main, write files, commit, tag, or push" -ForegroundColor White
-    Write-Host "  • Still writes temporary changelog.txt (left in place; matches bash dry-run)" -ForegroundColor White
-    Write-Host "  • Still requires interactive confirmations for warnings" -ForegroundColor White
-
-    Write-Host "`n🔧 Requirements:" -ForegroundColor Yellow
-    Write-Host "  • Git installed and configured" -ForegroundColor White
-    Write-Host "  • Access to the repository" -ForegroundColor White
-    Write-Host "  • Docker installed and running (if using -BuildDocker)" -ForegroundColor White
+    Write-Host "`nDry-run notes:" -ForegroundColor Yellow
+    Write-Host "  • Skips git pull, file writes, commit, push, tag, and gh pr create" -ForegroundColor White
+    Write-Host "  • Still writes temporary changelog.txt (left in place)" -ForegroundColor White
 
     Write-Host ""
 }
@@ -96,10 +98,24 @@ function Test-GitAvailable {
     }
 }
 
+function Test-GhAvailable {
+    try {
+        $null = gh --version
+        return $true
+    }
+    catch {
+        return $false
+    }
+}
+
 function Get-LatestGitTag {
     try {
-        $tag = git describe --tags --abbrev=0
-        return $tag
+        $tag = git describe --tags --abbrev=0 2>$null
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($tag)) {
+            Write-Host "No previous tags found. This appears to be the first release." -ForegroundColor Yellow
+            return $null
+        }
+        return $tag.Trim()
     }
     catch {
         Write-Host "No previous tags found. This appears to be the first release." -ForegroundColor Yellow
@@ -107,47 +123,77 @@ function Get-LatestGitTag {
     }
 }
 
-function Confirm-MainBranch {
+function Confirm-Continue {
+    param (
+        [string]$Prompt,
+        [switch]$AllowYesContinue
+    )
+    if ($Yes) {
+        if ($AllowYesContinue) {
+            Write-Host "Continuing (-Yes): $Prompt" -ForegroundColor Yellow
+            return $true
+        }
+        Write-Host "Non-interactive (-Yes): refusing to continue without confirmation." -ForegroundColor Red
+        Write-Host "  $Prompt" -ForegroundColor Yellow
+        exit 1
+    }
+    $confirmation = Read-Host "$Prompt (y/n)"
+    return ($confirmation -eq "y")
+}
+
+function Assert-MainClean {
+    param (
+        [switch]$PullMain
+    )
+
     $currentBranch = git rev-parse --abbrev-ref HEAD
     if ($currentBranch -ne "main") {
-        Write-Host "⚠️ WARNING: You are not on the 'main' branch. Current branch: $currentBranch" -ForegroundColor Yellow
-        $confirmation = Read-Host "Do you want to continue anyway? (y/n)"
-        if ($confirmation -ne "y") {
+        Write-Host "WARNING: You are not on the 'main' branch. Current branch: $currentBranch" -ForegroundColor Yellow
+        if ($Yes) {
+            Write-Host "Non-interactive (-Yes): must start from main." -ForegroundColor Red
+            exit 1
+        }
+        if (-not (Confirm-Continue -Prompt "Do you want to continue anyway?")) {
             Write-Host "Operation cancelled. Please switch to the main branch and try again." -ForegroundColor Red
             exit 1
         }
     }
     else {
-        Write-Host "✅ Current branch is 'main'" -ForegroundColor Green
+        Write-Host "Current branch is 'main'" -ForegroundColor Green
     }
 
-    # Check for uncommitted changes
     $status = git status --porcelain
     if ($status) {
-        Write-Host "⚠️ WARNING: You have uncommitted changes in your working directory." -ForegroundColor Yellow
-        $confirmation = Read-Host "Do you want to continue anyway? (y/n)"
-        if ($confirmation -ne "y") {
+        Write-Host "WARNING: You have uncommitted changes in your working directory." -ForegroundColor Yellow
+        if ($Yes) {
+            Write-Host "Non-interactive (-Yes): working tree must be clean." -ForegroundColor Red
+            exit 1
+        }
+        if (-not (Confirm-Continue -Prompt "Do you want to continue anyway?")) {
             Write-Host "Operation cancelled. Please commit or stash your changes and try again." -ForegroundColor Red
             exit 1
         }
     }
     else {
-        Write-Host "✅ Working directory is clean" -ForegroundColor Green
+        Write-Host "Working directory is clean" -ForegroundColor Green
     }
 
-    # Pull latest changes (skipped in dry-run so the simulation stays non-mutating)
+    if (-not $PullMain) {
+        return
+    }
+
     if ($DryRun) {
-        Write-Host "🔍 [DRY RUN] Skipping git pull origin main" -ForegroundColor Cyan
+        Write-Host "[DRY RUN] Skipping git pull origin main" -ForegroundColor Cyan
         return
     }
 
     Write-Host "Pulling latest changes from origin/main..." -ForegroundColor Cyan
     git pull origin main
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "❌ Failed to pull latest changes. Please resolve any conflicts and try again." -ForegroundColor Red
+        Write-Host "Failed to pull latest changes. Please resolve any conflicts and try again." -ForegroundColor Red
         exit 1
     }
-    Write-Host "✅ Successfully pulled latest changes" -ForegroundColor Green
+    Write-Host "Successfully pulled latest changes" -ForegroundColor Green
 }
 
 function New-Changelog {
@@ -158,38 +204,33 @@ function New-Changelog {
 
     Write-Host "Generating changelog from Git history..." -ForegroundColor Cyan
 
-    # Clean up any existing changelog file
     if (Test-Path -Path $ChangelogPath) {
         Remove-Item -Path $ChangelogPath -Force
         Write-Host "Removed existing changelog file" -ForegroundColor Cyan
     }
 
     if ([string]::IsNullOrEmpty($previousTag)) {
-        # If this is the first release, get all commits
         git log --pretty=format:"- %s" > $ChangelogPath
     }
     else {
-        # Get commits between tags
         git log "$previousTag..HEAD" --pretty=format:"- %s" > $ChangelogPath
     }
 
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "❌ Failed to generate changelog." -ForegroundColor Red
+        Write-Host "Failed to generate changelog." -ForegroundColor Red
         exit 1
     }
 
-    # Read the changelog
     $changelog = Get-Content -Path $ChangelogPath -Raw
     if ([string]::IsNullOrWhiteSpace($changelog)) {
-        Write-Host "⚠️ WARNING: No commits found between $previousTag and HEAD." -ForegroundColor Yellow
-        $confirmation = Read-Host "Do you want to continue anyway? (y/n)"
-        if ($confirmation -ne "y") {
+        Write-Host "WARNING: No commits found between $previousTag and HEAD." -ForegroundColor Yellow
+        if (-not (Confirm-Continue -Prompt "Do you want to continue anyway?" -AllowYesContinue)) {
             Write-Host "Operation cancelled." -ForegroundColor Red
             exit 1
         }
     }
     else {
-        Write-Host "✅ Changelog generated successfully" -ForegroundColor Green
+        Write-Host "Changelog generated successfully" -ForegroundColor Green
         Write-Host "`nRaw Changelog:" -ForegroundColor Cyan
         Write-Host $changelog -ForegroundColor White
     }
@@ -197,47 +238,33 @@ function New-Changelog {
     return $changelog
 }
 
-function Update-ReleaseNotes {
+function Get-ReleaseNotesEntry {
     param (
         [string]$version,
         [string]$changelog
     )
 
-    Write-Host "`nUpdating release notes and VERSION file..." -ForegroundColor Cyan
+    $today = Get-Date -Format "yyyy-MM-dd"
 
-    # Update VERSION file (strip leading 'v' to match create-release.sh)
-    $versionWithoutV = $version -replace '^v', ''
-    $versionFilePath = Join-Path -Path $RootDir -ChildPath "VERSION"
-    if ($DryRun) {
-        Write-Host "🔍 [DRY RUN] Would update VERSION file to: $versionWithoutV" -ForegroundColor Cyan
-    }
-    else {
-        Set-Content -Path $versionFilePath -Value $versionWithoutV
-        Write-Host "✅ Updated VERSION file to: $versionWithoutV" -ForegroundColor Green
-    }
-
-    # Check if release notes file exists
-    if (-not (Test-Path -Path $ReleaseNotesPath)) {
-        Write-Host "❌ Release notes file not found at: $ReleaseNotesPath" -ForegroundColor Red
-        exit 1
-    }
-
-    # Read the release notes file
-    $releaseNotes = Get-Content -Path $ReleaseNotesPath -Raw
-
-    # Check if version already exists in release notes
-    if ($releaseNotes -match "### $version ") {
-        Write-Host "⚠️ WARNING: Version $version already exists in release notes." -ForegroundColor Yellow
-        $confirmation = Read-Host "Do you want to continue anyway? (y/n)"
-        if ($confirmation -ne "y") {
-            Write-Host "Operation cancelled." -ForegroundColor Red
+    if (-not [string]::IsNullOrWhiteSpace($NotesFile)) {
+        if (-not (Test-Path -Path $NotesFile)) {
+            Write-Host "Notes file not found: $NotesFile" -ForegroundColor Red
             exit 1
         }
+        $notesContent = (Get-Content -Path $NotesFile -Raw).TrimEnd()
+        if ($notesContent -match "(?m)^###\s+") {
+            return "`n$notesContent`n"
+        }
+        return @"
+
+### $version ($today)
+
+$notesContent
+
+"@
     }
 
-    # Prepare new release notes entry
-    $today = Get-Date -Format "yyyy-MM-dd"
-    $newEntry = @"
+    return @"
 
 ### $version ($today)
 
@@ -258,72 +285,117 @@ function Update-ReleaseNotes {
 $changelog
 
 "@
+}
 
-    # Find the position to insert the new entry (after "## Version History" section)
+function Update-VersionAndNotes {
+    param (
+        [string]$version,
+        [string]$changelog,
+        [switch]$CommitChanges
+    )
+
+    Write-Host "`nUpdating release notes and VERSION file..." -ForegroundColor Cyan
+
+    $versionWithoutV = $version -replace '^v', ''
+    if ($DryRun) {
+        Write-Host "[DRY RUN] Would update VERSION file to: $versionWithoutV" -ForegroundColor Cyan
+    }
+    else {
+        # VERSION file: single line, no extra blank line from Set-Content quirks on some hosts
+        [System.IO.File]::WriteAllText($VersionFilePath, "$versionWithoutV`n")
+        Write-Host "Updated VERSION file to: $versionWithoutV" -ForegroundColor Green
+    }
+
+    if ($SkipNotes) {
+        Write-Host "Skipping docs/release-notes.md update (-SkipNotes)." -ForegroundColor Yellow
+        if ($CommitChanges -and -not $DryRun) {
+            Write-Host "`nCommitting VERSION file..." -ForegroundColor Cyan
+            git add $VersionFilePath
+            git commit -m "chore(release): prepare $version"
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "Failed to commit VERSION." -ForegroundColor Red
+                exit 1
+            }
+            Write-Host "VERSION committed successfully" -ForegroundColor Green
+        }
+        elseif ($CommitChanges -and $DryRun) {
+            Write-Host "[DRY RUN] Would commit VERSION for $version" -ForegroundColor Cyan
+        }
+        return
+    }
+
+    if (-not (Test-Path -Path $ReleaseNotesPath)) {
+        Write-Host "Release notes file not found at: $ReleaseNotesPath" -ForegroundColor Red
+        exit 1
+    }
+
+    $releaseNotes = Get-Content -Path $ReleaseNotesPath -Raw
+    if ($releaseNotes -match "### $([regex]::Escape($version)) ") {
+        Write-Host "WARNING: Version $version already exists in release notes." -ForegroundColor Yellow
+        if (-not (Confirm-Continue -Prompt "Do you want to continue anyway?" -AllowYesContinue)) {
+            Write-Host "Operation cancelled." -ForegroundColor Red
+            exit 1
+        }
+    }
+
+    $newEntry = Get-ReleaseNotesEntry -version $version -changelog $changelog
+
     $versionHistoryIndex = $releaseNotes.IndexOf("## Version History")
     if ($versionHistoryIndex -eq -1) {
-        Write-Host "❌ Could not find '## Version History' section in release notes." -ForegroundColor Red
+        Write-Host "Could not find '## Version History' section in release notes." -ForegroundColor Red
         exit 1
     }
 
-    # Find the end of the "## Version History" line
     $insertPosition = $releaseNotes.IndexOf("`n", $versionHistoryIndex) + 1
     if ($insertPosition -le 0) {
-        Write-Host "❌ Could not determine where to insert new release entry." -ForegroundColor Red
+        Write-Host "Could not determine where to insert new release entry." -ForegroundColor Red
         exit 1
     }
 
-    # Insert the new entry
     $updatedReleaseNotes = $releaseNotes.Substring(0, $insertPosition) + $newEntry + $releaseNotes.Substring($insertPosition)
 
     if ($DryRun) {
-        Write-Host "🔍 [DRY RUN] Would create backup of release notes at: $ReleaseNotesPath.bak" -ForegroundColor Cyan
-        Write-Host "🔍 [DRY RUN] Would update release notes with new version $version" -ForegroundColor Cyan
-        Write-Host "🔍 [DRY RUN] Would commit the updated release notes and VERSION file" -ForegroundColor Cyan
-        Write-Host "`nPreview of release notes changes:" -ForegroundColor Yellow
+        Write-Host "[DRY RUN] Would update release notes with new version $version" -ForegroundColor Cyan
+        Write-Host "[DRY RUN] Would commit the updated release notes and VERSION file" -ForegroundColor Cyan
+        Write-Host "`nPreview of release notes entry:" -ForegroundColor Yellow
         Write-Host "=================================" -ForegroundColor Yellow
         Write-Host $newEntry -ForegroundColor White
         Write-Host "=================================`n" -ForegroundColor Yellow
         return
     }
 
-    # Create backup of current release notes
     $backupPath = "$ReleaseNotesPath.bak"
     Copy-Item -Path $ReleaseNotesPath -Destination $backupPath -Force
-    Write-Host "✅ Created backup of release notes at: $backupPath" -ForegroundColor Green
+    [System.IO.File]::WriteAllText($ReleaseNotesPath, $updatedReleaseNotes)
+    Write-Host "Updated release notes with new version $version" -ForegroundColor Green
 
-    # Write updated release notes to file
-    Set-Content -Path $ReleaseNotesPath -Value $updatedReleaseNotes
-    Write-Host "✅ Updated release notes with new version $version" -ForegroundColor Green
-    Write-Host "`n⚠️ IMPORTANT: Please review and edit the release notes manually before continuing." -ForegroundColor Yellow
-    Write-Host "The generated changelog has been added to the 'Technical Details' section." -ForegroundColor Yellow
-    Write-Host "You should categorize the changes into 'New Features', 'Bug Fixes', and 'Breaking Changes'." -ForegroundColor Yellow
-
-    $confirmation = Read-Host "Have you reviewed and edited the release notes? (y/n)"
-    if ($confirmation -ne "y") {
-        Write-Host "Please edit the release notes at: $ReleaseNotesPath" -ForegroundColor Cyan
-        Write-Host "Then run this script again with the -SkipNotes flag to continue." -ForegroundColor Cyan
-        exit 0
-    } else {
-        # Clean up backup file after confirmation
-        if (Test-Path -Path $backupPath) {
-            Remove-Item -Path $backupPath -Force
-            Write-Host "✅ Removed backup file after confirmation" -ForegroundColor Green
+    if (-not $Yes -and [string]::IsNullOrWhiteSpace($NotesFile)) {
+        Write-Host "`nIMPORTANT: Please review and edit the release notes before continuing." -ForegroundColor Yellow
+        Write-Host "Stub sections may need categorization; or pass -NotesFile / -Yes for agents." -ForegroundColor Yellow
+        if (-not (Confirm-Continue -Prompt "Have you reviewed and edited the release notes?")) {
+            Write-Host "Please edit the release notes at: $ReleaseNotesPath" -ForegroundColor Cyan
+            Write-Host "Then re-run with -SkipNotes (and -DirectTag if tagging) or provide -NotesFile -Yes." -ForegroundColor Cyan
+            exit 0
         }
+    }
 
-        # Commit the updated release notes and VERSION file (match create-release.sh)
+    if (Test-Path -Path $backupPath) {
+        Remove-Item -Path $backupPath -Force
+    }
+
+    if ($CommitChanges) {
         Write-Host "`nCommitting the updated release notes and VERSION file..." -ForegroundColor Cyan
-        git add $ReleaseNotesPath $versionFilePath
-        git commit -m "docs: update release notes and version for $version"
+        git add $ReleaseNotesPath $VersionFilePath
+        git commit -m "chore(release): prepare $version"
         if ($LASTEXITCODE -ne 0) {
-            Write-Host "⚠️ WARNING: Failed to commit the updated files." -ForegroundColor Yellow
-            $confirmation = Read-Host "Do you want to continue anyway? (y/n)"
-            if ($confirmation -ne "y") {
+            Write-Host "WARNING: Failed to commit the updated files." -ForegroundColor Yellow
+            if (-not (Confirm-Continue -Prompt "Do you want to continue anyway?")) {
                 Write-Host "Operation cancelled." -ForegroundColor Red
                 exit 1
             }
-        } else {
-            Write-Host "✅ Release notes and VERSION file committed successfully" -ForegroundColor Green
+        }
+        else {
+            Write-Host "Release notes and VERSION file committed successfully" -ForegroundColor Green
         }
     }
 }
@@ -336,63 +408,56 @@ function New-GitTag {
     Write-Host "`nCreating Git tag: $version..." -ForegroundColor Cyan
 
     if ($DryRun) {
-        Write-Host "🔍 [DRY RUN] Would create Git tag: $version" -ForegroundColor Cyan
-        Write-Host "🔍 [DRY RUN] Would push Git tag to remote" -ForegroundColor Cyan
+        Write-Host "[DRY RUN] Would create Git tag: $version" -ForegroundColor Cyan
+        Write-Host "[DRY RUN] Would push Git tag to remote" -ForegroundColor Cyan
         return
     }
 
-    # Check if tag already exists locally
     $existingTags = git tag -l $version
     if ($existingTags -contains $version) {
-        Write-Host "⚠️ WARNING: Tag $version already exists locally." -ForegroundColor Yellow
+        Write-Host "WARNING: Tag $version already exists locally." -ForegroundColor Yellow
 
-        # Refuse if the tag already exists on remote — we do not force-push tags
         $remoteTag = git ls-remote --tags origin "refs/tags/$version" 2>$null
         if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($remoteTag)) {
-            Write-Host "❌ Tag $version already exists on remote. Refusing to retag." -ForegroundColor Red
+            Write-Host "Tag $version already exists on remote. Refusing to retag." -ForegroundColor Red
             Write-Host "This script does not force-push tags. Delete the remote tag explicitly if you intend to replace it, then re-run." -ForegroundColor Yellow
             exit 1
         }
 
-        $confirmation = Read-Host "Do you want to replace the local tag and push it? (y/n)"
-        if ($confirmation -ne "y") {
+        if (-not (Confirm-Continue -Prompt "Do you want to replace the local tag and push it?")) {
             Write-Host "Operation cancelled." -ForegroundColor Red
             exit 1
         }
 
-        # Delete existing local tag only
         git tag -d $version
         if ($LASTEXITCODE -ne 0) {
-            Write-Host "❌ Failed to delete existing local tag." -ForegroundColor Red
+            Write-Host "Failed to delete existing local tag." -ForegroundColor Red
             exit 1
         }
     }
     else {
-        # Also refuse when remote has the tag even if local does not
         $remoteTag = git ls-remote --tags origin "refs/tags/$version" 2>$null
         if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($remoteTag)) {
-            Write-Host "❌ Tag $version already exists on remote. Refusing to retag." -ForegroundColor Red
+            Write-Host "Tag $version already exists on remote. Refusing to retag." -ForegroundColor Red
             Write-Host "This script does not force-push tags. Delete the remote tag explicitly if you intend to replace it, then re-run." -ForegroundColor Yellow
             exit 1
         }
     }
 
-    # Create the tag
     git tag -a $version -m "Release $version"
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "❌ Failed to create Git tag." -ForegroundColor Red
+        Write-Host "Failed to create Git tag." -ForegroundColor Red
         exit 1
     }
-    Write-Host "✅ Git tag created successfully" -ForegroundColor Green
+    Write-Host "Git tag created successfully" -ForegroundColor Green
 
-    # Push the tag (non-force)
     Write-Host "`nPushing Git tag to remote..." -ForegroundColor Cyan
     git push origin $version
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "❌ Failed to push Git tag to remote." -ForegroundColor Red
+        Write-Host "Failed to push Git tag to remote." -ForegroundColor Red
         exit 1
     }
-    Write-Host "✅ Git tag pushed successfully" -ForegroundColor Green
+    Write-Host "Git tag pushed successfully" -ForegroundColor Green
 }
 
 function Build-DockerImages {
@@ -402,21 +467,18 @@ function Build-DockerImages {
 
     Write-Host "`nChecking Docker availability..." -ForegroundColor Cyan
 
-    # Check if Docker is installed
     try {
         $null = docker --version
     }
     catch {
-        Write-Host "❌ Docker is not installed or not in PATH. Cannot build Docker images." -ForegroundColor Red
-        $confirmation = Read-Host "Do you want to continue without building Docker images? (y/n)"
-        if ($confirmation -ne "y") {
+        Write-Host "Docker is not installed or not in PATH. Cannot build Docker images." -ForegroundColor Red
+        if (-not (Confirm-Continue -Prompt "Do you want to continue without building Docker images?" -AllowYesContinue)) {
             Write-Host "Operation cancelled." -ForegroundColor Red
             exit 1
         }
         return
     }
 
-    # Check if Docker is running
     try {
         $null = docker info
         if ($LASTEXITCODE -ne 0) {
@@ -424,9 +486,8 @@ function Build-DockerImages {
         }
     }
     catch {
-        Write-Host "❌ Docker engine is not running. Cannot build Docker images." -ForegroundColor Red
-        $confirmation = Read-Host "Do you want to continue without building Docker images? (y/n)"
-        if ($confirmation -ne "y") {
+        Write-Host "Docker engine is not running. Cannot build Docker images." -ForegroundColor Red
+        if (-not (Confirm-Continue -Prompt "Do you want to continue without building Docker images?" -AllowYesContinue)) {
             Write-Host "Operation cancelled." -ForegroundColor Red
             exit 1
         }
@@ -436,119 +497,238 @@ function Build-DockerImages {
     Write-Host "`nBuilding and pushing Docker images..." -ForegroundColor Cyan
 
     if ($DryRun) {
-        Write-Host "🔍 [DRY RUN] Would build and push Docker images with tag: $version" -ForegroundColor Cyan
-        Write-Host "🔍 [DRY RUN] Would execute: $DockerBuildScript -Tag $version" -ForegroundColor Cyan
+        Write-Host "[DRY RUN] Would build and push Docker images with tag: $version" -ForegroundColor Cyan
+        Write-Host "[DRY RUN] Would execute: $DockerBuildScript -Tag $version" -ForegroundColor Cyan
         return
     }
 
-    # Check if build script exists
     if (-not (Test-Path -Path $DockerBuildScript)) {
-        Write-Host "❌ Docker build script not found at: $DockerBuildScript" -ForegroundColor Red
-        $confirmation = Read-Host "Do you want to continue without building Docker images? (y/n)"
-        if ($confirmation -ne "y") {
+        Write-Host "Docker build script not found at: $DockerBuildScript" -ForegroundColor Red
+        if (-not (Confirm-Continue -Prompt "Do you want to continue without building Docker images?" -AllowYesContinue)) {
             Write-Host "Operation cancelled." -ForegroundColor Red
             exit 1
         }
         return
     }
 
-    # Run the build script
     Write-Host "Running Docker build script with tag: $version" -ForegroundColor Cyan
     & $DockerBuildScript -Tag $version
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "❌ Docker build script failed." -ForegroundColor Red
-        $confirmation = Read-Host "Do you want to continue anyway? (y/n)"
-        if ($confirmation -ne "y") {
+        Write-Host "Docker build script failed." -ForegroundColor Red
+        if (-not (Confirm-Continue -Prompt "Do you want to continue anyway?")) {
             Write-Host "Operation cancelled." -ForegroundColor Red
             exit 1
         }
     }
     else {
-        Write-Host "✅ Docker images built and pushed successfully" -ForegroundColor Green
+        Write-Host "Docker images built and pushed successfully" -ForegroundColor Green
     }
 }
 
-# Main execution flow
+function Invoke-ReleasePrMode {
+    param (
+        [string]$version,
+        [string]$changelog
+    )
+
+    $releaseBranch = "release/$version"
+    Write-Host "`nRelease PR mode (default). Branch SSOT: $releaseBranch" -ForegroundColor Cyan
+
+    if ($BuildDocker) {
+        Write-Host "WARNING: -BuildDocker is ignored in Release PR mode (images publish after tag on merge)." -ForegroundColor Yellow
+    }
+
+    if ($DryRun) {
+        Write-Host "[DRY RUN] Would create branch: $releaseBranch" -ForegroundColor Cyan
+        Update-VersionAndNotes -version $version -changelog $changelog -CommitChanges
+        Write-Host "[DRY RUN] Would push $releaseBranch and run: gh pr create --base main --head $releaseBranch" -ForegroundColor Cyan
+        Write-Host "[DRY RUN] Would print the PR URL" -ForegroundColor Cyan
+        return
+    }
+
+    # Refuse early if remote tag already exists
+    $remoteTag = git ls-remote --tags origin "refs/tags/$version" 2>$null
+    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($remoteTag)) {
+        Write-Host "Tag $version already exists on remote. Refusing to open a Release PR for it." -ForegroundColor Red
+        Write-Host "This script does not force-push tags." -ForegroundColor Yellow
+        exit 1
+    }
+
+    $existingBranch = git branch --list $releaseBranch
+    if ($existingBranch) {
+        Write-Host "Local branch $releaseBranch already exists." -ForegroundColor Red
+        exit 1
+    }
+
+    $remoteBranch = git ls-remote --heads origin $releaseBranch 2>$null
+    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($remoteBranch)) {
+        Write-Host "Remote branch $releaseBranch already exists." -ForegroundColor Red
+        exit 1
+    }
+
+    if (-not (Test-GhAvailable)) {
+        Write-Host "GitHub CLI (gh) is required for Release PR mode. Install gh or use -DirectTag (discouraged)." -ForegroundColor Red
+        exit 1
+    }
+
+    Write-Host "Creating branch $releaseBranch..." -ForegroundColor Cyan
+    git checkout -b $releaseBranch
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Failed to create branch $releaseBranch." -ForegroundColor Red
+        exit 1
+    }
+
+    Update-VersionAndNotes -version $version -changelog $changelog -CommitChanges
+
+    Write-Host "`nPushing branch $releaseBranch..." -ForegroundColor Cyan
+    git push -u origin $releaseBranch
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Failed to push branch $releaseBranch." -ForegroundColor Red
+        exit 1
+    }
+
+    $prBody = @"
+## Summary
+- Prepare release **$version** (branch ``$releaseBranch`` is version SSOT).
+- Updates ``VERSION`` and ``docs/release-notes.md``.
+
+## After merge
+- Tagging / GitHub Release should be created by CI (release-tag-on-merge).
+- Docker Hub images publish from the ``v*`` tag via Docker Publish.
+
+## Test plan
+- [ ] Release notes look correct
+- [ ] VERSION matches branch (without leading ``v``)
+- [ ] CI green before merge
+"@
+
+    Write-Host "`nCreating pull request..." -ForegroundColor Cyan
+    $prUrl = gh pr create --base main --head $releaseBranch --title "chore(release): $version" --body $prBody
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Failed to create pull request." -ForegroundColor Red
+        exit 1
+    }
+
+    Write-Host "`nRelease PR created:" -ForegroundColor Green
+    Write-Host $prUrl -ForegroundColor White
+    Write-Host "`nMerge the PR to cut the release. Monitor: $RepoActionsUrl" -ForegroundColor Yellow
+}
+
+function Invoke-DirectTagMode {
+    param (
+        [string]$version,
+        [string]$changelog
+    )
+
+    Write-Host "`nWARNING: -DirectTag is an emergency path (tags from main, no Release PR)." -ForegroundColor Yellow
+
+    Update-VersionAndNotes -version $version -changelog $changelog -CommitChanges
+
+    if ($DryRun) {
+        Write-Host "[DRY RUN] Would push main after notes/VERSION commit" -ForegroundColor Cyan
+    }
+    else {
+        Write-Host "`nPushing main (release notes / VERSION commit)..." -ForegroundColor Cyan
+        git push origin main
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Failed to push main. Tag will not be created until main is pushed." -ForegroundColor Red
+            exit 1
+        }
+    }
+
+    New-GitTag -version $version
+
+    if ($BuildDocker) {
+        Build-DockerImages -version $version
+    }
+    else {
+        Write-Host "`nSkipping Docker build (use -BuildDocker with -DirectTag to build images locally)." -ForegroundColor Yellow
+    }
+
+    if ($DryRun) {
+        Write-Host "`nDry run completed for direct-tag path: $version" -ForegroundColor Green
+    }
+    else {
+        Write-Host "`nDirect-tag release completed for: $version" -ForegroundColor Green
+        Write-Host "Next steps:" -ForegroundColor Yellow
+        Write-Host "  1. Monitor GitHub Actions: $RepoActionsUrl" -ForegroundColor White
+        Write-Host "  2. Verify Docker images on Docker Hub" -ForegroundColor White
+    }
+}
+
+function Clear-ChangelogArtifact {
+    if (Test-Path -Path $ChangelogPath) {
+        if ($DryRun) {
+            Write-Host "[DRY RUN] Would clean up temporary files (changelog.txt left in place)" -ForegroundColor Cyan
+        }
+        else {
+            Remove-Item -Path $ChangelogPath -Force
+            Write-Host "Removed temporary changelog file" -ForegroundColor Green
+        }
+    }
+}
+
+# --- main ---
 if ($Help) {
     Show-Help
     exit 0
 }
 
 if ([string]::IsNullOrEmpty($Version)) {
-    Write-Host "❌ Version parameter is required. Use -Version to specify the version to release." -ForegroundColor Red
+    Write-Host "Version parameter is required. Use -Version to specify the version to release." -ForegroundColor Red
     Show-Help
     exit 1
 }
 
-# Validate version format
 if (-not ($Version -match '^v\d+\.\d+\.\d+(-[a-zA-Z0-9\.]+)?$')) {
-    Write-Host "❌ Invalid version format. Version should be in the format 'vX.Y.Z' or 'vX.Y.Z-suffix'" -ForegroundColor Red
+    Write-Host "Invalid version format. Use 'vX.Y.Z' or 'vX.Y.Z-suffix'." -ForegroundColor Red
     Write-Host "Examples: v1.0.0, v0.1.0-beta.1, v2.0.0-rc.3" -ForegroundColor Cyan
     exit 1
 }
 
-# Check if Git is available
 if (-not (Test-GitAvailable)) {
-    Write-Host "❌ Git is not available. Please install Git and try again." -ForegroundColor Red
+    Write-Host "Git is not available. Please install Git and try again." -ForegroundColor Red
     exit 1
 }
 
-# Get previous tag if not specified
 if ([string]::IsNullOrEmpty($PreviousTag)) {
     $PreviousTag = Get-LatestGitTag
 }
 
-# Start the release process
-if ($DryRun) {
-    Write-Host "`n🔍 [DRY RUN] Starting release process simulation for version: $Version" -ForegroundColor Cyan
-    Write-Host "🔍 No actual changes will be made to files or repositories." -ForegroundColor Cyan
-} else {
-    Write-Host "`n🚀 Starting release process for version: $Version" -ForegroundColor Green
-}
-
-# Confirm and prepare main branch
-Confirm-MainBranch
-
-# Generate changelog
-$changelog = New-Changelog -previousTag $PreviousTag -currentTag $Version
-
-# Update release notes
-if (-not $SkipNotes) {
-    Update-ReleaseNotes -version $Version -changelog $changelog
-}
-else {
-    Write-Host "`n⚠️ Skipping release notes update as requested." -ForegroundColor Yellow
-}
-
-# Create and push Git tag
-New-GitTag -version $Version
-
-# Build and push Docker images (only if -BuildDocker is specified)
-if ($BuildDocker) {
-    Build-DockerImages -version $Version
-}
-else {
-    Write-Host "`n⚠️ Skipping Docker build (use -BuildDocker flag to build images)." -ForegroundColor Yellow
-}
-
-# Clean up temporary files
-if (Test-Path -Path $ChangelogPath) {
+Push-Location $RootDir
+try {
     if ($DryRun) {
-        Write-Host "🔍 [DRY RUN] Would clean up temporary files" -ForegroundColor Cyan
-    } else {
-        Remove-Item -Path $ChangelogPath -Force
-        Write-Host "✅ Removed temporary changelog file" -ForegroundColor Green
+        Write-Host "`n[DRY RUN] Starting release simulation for version: $Version" -ForegroundColor Cyan
+        if ($DirectTag) {
+            Write-Host "[DRY RUN] Mode: DirectTag (emergency)" -ForegroundColor Cyan
+        }
+        else {
+            Write-Host "[DRY RUN] Mode: Release PR (default)" -ForegroundColor Cyan
+        }
     }
-}
+    else {
+        Write-Host "`nStarting release process for version: $Version" -ForegroundColor Green
+        if ($DirectTag) {
+            Write-Host "Mode: DirectTag (emergency)" -ForegroundColor Yellow
+        }
+        else {
+            Write-Host "Mode: Release PR (default)" -ForegroundColor Green
+        }
+    }
 
-if ($DryRun) {
-    Write-Host "`n✅ Dry run completed successfully for version: $Version" -ForegroundColor Green
-    Write-Host "No actual changes were made. Run without -DryRun to execute the release process." -ForegroundColor Cyan
-} else {
-    Write-Host "`n✅ Release process completed successfully for version: $Version" -ForegroundColor Green
-    Write-Host "`n📋 Next steps:" -ForegroundColor Yellow
-    Write-Host "  1. Monitor GitHub Actions workflow at: https://github.com/mnaimfaizy/fastapi_rbac/actions" -ForegroundColor White
-    Write-Host "  2. Verify Docker images on Docker Hub" -ForegroundColor White
-    Write-Host "  3. Notify team members about the new release" -ForegroundColor White
+    Assert-MainClean -PullMain
+    $changelog = New-Changelog -previousTag $PreviousTag -currentTag $Version
+
+    if ($DirectTag) {
+        Invoke-DirectTagMode -version $Version -changelog $changelog
+    }
+    else {
+        Invoke-ReleasePrMode -version $Version -changelog $changelog
+    }
+
+    Clear-ChangelogArtifact
+    Write-Host "`nThank you for using the FastAPI RBAC Release Automation Script!" -ForegroundColor Cyan
 }
-Write-Host "`nThank you for using the FastAPI RBAC Release Automation Script! 🎉" -ForegroundColor Cyan
+finally {
+    Pop-Location
+}

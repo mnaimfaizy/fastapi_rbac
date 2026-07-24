@@ -1,8 +1,10 @@
 name: Docker Publish
 
+# Publish on v* tag push (or manual dispatch). Do not also trigger on
+# release: published — Release Tag on Merge creates a GitHub Release after the
+# tag, which would double-build images if both triggers were enabled.
+
 on:
-  release:
-    types: [published]
   push:
     tags:
       - "v*" # Trigger on version tags like v1.0, v1.1.2, etc.
@@ -65,11 +67,8 @@ jobs:
           elif [[ "${{ github.ref_type }}" == "tag" ]]; then
             IMAGE_TAG="${{ github.ref_name }}"
             echo "Using Git tag as IMAGE_TAG: ${IMAGE_TAG}"
-          elif [[ "${{ github.event_name }}" == "release" ]]; then
-            IMAGE_TAG="${{ github.event.release.tag_name }}"
-            echo "Using release tag_name as IMAGE_TAG: ${IMAGE_TAG}"
           else
-            echo "::error::Unsupported event '${{ github.event_name }}'. Trigger via release, v* tag, or workflow_dispatch."
+            echo "::error::Unsupported event '${{ github.event_name }}'. Trigger via v* tag push or workflow_dispatch."
             exit 1
           fi
 
@@ -259,7 +258,7 @@ jobs:
             echo "1. Check which step failed above (validation, login, backend/frontend/worker build, or Hub description)."
             echo "2. Worker must build from \`backend/queue.dockerfile.prod\` (not \`Dockerfile.prod --target worker\`)."
             echo "3. Verify \`DOCKERHUB_USERNAME\` / \`DOCKERHUB_TOKEN\` secrets."
-            echo "4. Confirm \`IMAGE_TAG\` was set (release tag, \`v*\` push, or workflow_dispatch input)."
+            echo "4. Confirm \`IMAGE_TAG\` was set (\`v*\` tag push or workflow_dispatch input)."
             echo "5. Re-run via Actions → Docker Publish → Run workflow after fixing."
           } >> "$GITHUB_STEP_SUMMARY"
         shell: bash
