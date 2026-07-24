@@ -6,6 +6,45 @@ This file serves as the single source of truth for release history and versionin
 
 ## Version History
 
+### v0.1.0-beta (2026-07-24)
+
+_Pre-release._
+
+**New Features:**
+
+- Release PR flow as the default path, with tag-on-merge and an updated release skill for publishing
+- Playwright end-to-end testing suite with environment validation and operator docs
+- Enhanced Redis SSL/TLS connection management with dedicated documentation and examples
+- Consolidated environment variables into a single `.env.example` (removed `production.env.example`) with a migration guide
+- Modular Docker Compose, entrypoints, and environment scripts for dev/test/prod, plus improved connectivity checks with retries
+- MCP server configuration and docs for GitHub Copilot integration
+- Global prune option in `cleanup-environments.ps1` for fuller Docker resource cleanup
+
+**Bug Fixes:**
+
+- Enforce Redis JWT allowlist checks and restore typed JWT security audit events
+- Align PowerShell release scripting with bash; repair Docker Publish worker image builds and release-triggered image tagging
+- Resolve Dockerfile `FROM`/`AS` casing warnings and build-and-push network/command issues
+- Stabilize backend dev runtime for the dependency upgrade track (CORS origin coercion, SQLModel `ScalarResult` usage, tooling pins)
+
+**Breaking Changes:**
+
+- None
+
+**Documentation:**
+
+- Expand MkDocs with a dedicated Frontend section, fuller API reference (including roles, permissions, role groups, permission groups, and dashboard), and a clearer architecture narrative outside AI harnesses
+- Add dependency upgrade policy and Dependabot guidance; integrate graphify for codebase navigation
+- Add Redis SSL, session-security analysis, E2E quick-reference, and release-process docs; refresh README status badges
+
+**Technical Details:**
+
+- Consolidate JWT handling onto PyJWT
+- Multi-lane dependency upgrades across backend, frontend, workers/ops, GitHub Actions, and Docker/CI base images
+- Docker publish builds once from `v*` tags on release; skip frontend Playwright in CI until full-stack CI is wired
+- Reorganize backend scripts, harden Redis TLS defaults, enforce LF line endings for shell scripts, and add a project LICENSE
+- Add weekly graphify report refresh workflow (maintenance PRs enabled)
+
 ### v0.0.3-beta (2025-07-02)
 
 **New Features:**
