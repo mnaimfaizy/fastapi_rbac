@@ -2,10 +2,11 @@
 #
 # This script automates the release process for the FastAPI RBAC project by:
 # 1. Generating a changelog from Git history
-# 2. Updating the release notes file
+# 2. Updating VERSION (strip leading v) and docs/release-notes.md
 # 3. Creating and pushing a Git tag
 # 4. Optionally building and pushing Docker images
 #
+# Kept in parity with create-release.sh (Phase B / issue #84).
 # Author: FastAPI RBAC Team
 # Created: July 2, 2025
 
@@ -36,8 +37,9 @@ $ChangelogPath = Join-Path -Path $RootDir -ChildPath "changelog.txt"
 $DockerBuildScript = Join-Path -Path $RootDir -ChildPath "scripts\deployment\production\build-and-push.ps1"
 
 # Add a trap to ensure we clean up the changelog file even on error
+# Skip cleanup in dry-run so behavior matches create-release.sh
 trap {
-    if (Test-Path -Path $ChangelogPath) {
+    if (-not $DryRun -and (Test-Path -Path $ChangelogPath)) {
         Write-Host "Cleaning up changelog file after error..." -ForegroundColor Yellow
         Remove-Item -Path $ChangelogPath -Force -ErrorAction SilentlyContinue
     }
@@ -67,9 +69,14 @@ function Show-Help {
 
     Write-Host "`n📝 Process:" -ForegroundColor Yellow
     Write-Host "  1. Generate changelog from Git history" -ForegroundColor White
-    Write-Host "  2. Update release notes file (docs/release-notes.md)" -ForegroundColor White
+    Write-Host "  2. Update VERSION (strip leading v) and docs/release-notes.md" -ForegroundColor White
     Write-Host "  3. Create and push Git tag" -ForegroundColor White
     Write-Host "  4. Optionally build and push Docker images (with -BuildDocker flag)" -ForegroundColor White
+
+    Write-Host "`n🔍 Dry-run notes:" -ForegroundColor Yellow
+    Write-Host "  • Does not pull origin/main, write files, commit, tag, or push" -ForegroundColor White
+    Write-Host "  • Still writes temporary changelog.txt (left in place; matches bash dry-run)" -ForegroundColor White
+    Write-Host "  • Still requires interactive confirmations for warnings" -ForegroundColor White
 
     Write-Host "`n🔧 Requirements:" -ForegroundColor Yellow
     Write-Host "  • Git installed and configured" -ForegroundColor White
@@ -128,7 +135,12 @@ function Confirm-MainBranch {
         Write-Host "✅ Working directory is clean" -ForegroundColor Green
     }
 
-    # Pull latest changes
+    # Pull latest changes (skipped in dry-run so the simulation stays non-mutating)
+    if ($DryRun) {
+        Write-Host "🔍 [DRY RUN] Skipping git pull origin main" -ForegroundColor Cyan
+        return
+    }
+
     Write-Host "Pulling latest changes from origin/main..." -ForegroundColor Cyan
     git pull origin main
     if ($LASTEXITCODE -ne 0) {
@@ -191,7 +203,18 @@ function Update-ReleaseNotes {
         [string]$changelog
     )
 
-    Write-Host "`nUpdating release notes..." -ForegroundColor Cyan
+    Write-Host "`nUpdating release notes and VERSION file..." -ForegroundColor Cyan
+
+    # Update VERSION file (strip leading 'v' to match create-release.sh)
+    $versionWithoutV = $version -replace '^v', ''
+    $versionFilePath = Join-Path -Path $RootDir -ChildPath "VERSION"
+    if ($DryRun) {
+        Write-Host "🔍 [DRY RUN] Would update VERSION file to: $versionWithoutV" -ForegroundColor Cyan
+    }
+    else {
+        Set-Content -Path $versionFilePath -Value $versionWithoutV
+        Write-Host "✅ Updated VERSION file to: $versionWithoutV" -ForegroundColor Green
+    }
 
     # Check if release notes file exists
     if (-not (Test-Path -Path $ReleaseNotesPath)) {
@@ -256,7 +279,7 @@ $changelog
     if ($DryRun) {
         Write-Host "🔍 [DRY RUN] Would create backup of release notes at: $ReleaseNotesPath.bak" -ForegroundColor Cyan
         Write-Host "🔍 [DRY RUN] Would update release notes with new version $version" -ForegroundColor Cyan
-        Write-Host "🔍 [DRY RUN] Would commit the updated release notes" -ForegroundColor Cyan
+        Write-Host "🔍 [DRY RUN] Would commit the updated release notes and VERSION file" -ForegroundColor Cyan
         Write-Host "`nPreview of release notes changes:" -ForegroundColor Yellow
         Write-Host "=================================" -ForegroundColor Yellow
         Write-Host $newEntry -ForegroundColor White
@@ -288,19 +311,19 @@ $changelog
             Write-Host "✅ Removed backup file after confirmation" -ForegroundColor Green
         }
 
-        # Commit the updated release notes
-        Write-Host "`nCommitting the updated release notes..." -ForegroundColor Cyan
-        git add $ReleaseNotesPath
-        git commit -m "Update release notes for $version"
+        # Commit the updated release notes and VERSION file (match create-release.sh)
+        Write-Host "`nCommitting the updated release notes and VERSION file..." -ForegroundColor Cyan
+        git add $ReleaseNotesPath $versionFilePath
+        git commit -m "docs: update release notes and version for $version"
         if ($LASTEXITCODE -ne 0) {
-            Write-Host "⚠️ WARNING: Failed to commit the updated release notes." -ForegroundColor Yellow
+            Write-Host "⚠️ WARNING: Failed to commit the updated files." -ForegroundColor Yellow
             $confirmation = Read-Host "Do you want to continue anyway? (y/n)"
             if ($confirmation -ne "y") {
                 Write-Host "Operation cancelled." -ForegroundColor Red
                 exit 1
             }
         } else {
-            Write-Host "✅ Release notes committed successfully" -ForegroundColor Green
+            Write-Host "✅ Release notes and VERSION file committed successfully" -ForegroundColor Green
         }
     }
 }
@@ -318,35 +341,39 @@ function New-GitTag {
         return
     }
 
-    # Check if tag already exists
+    # Check if tag already exists locally
     $existingTags = git tag -l $version
     if ($existingTags -contains $version) {
-        Write-Host "⚠️ WARNING: Tag $version already exists." -ForegroundColor Yellow
-        $confirmation = Read-Host "Do you want to force update the existing tag? (y/n)"
+        Write-Host "⚠️ WARNING: Tag $version already exists locally." -ForegroundColor Yellow
+
+        # Refuse if the tag already exists on remote — we do not force-push tags
+        $remoteTag = git ls-remote --tags origin "refs/tags/$version" 2>$null
+        if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($remoteTag)) {
+            Write-Host "❌ Tag $version already exists on remote. Refusing to retag." -ForegroundColor Red
+            Write-Host "This script does not force-push tags. Delete the remote tag explicitly if you intend to replace it, then re-run." -ForegroundColor Yellow
+            exit 1
+        }
+
+        $confirmation = Read-Host "Do you want to replace the local tag and push it? (y/n)"
         if ($confirmation -ne "y") {
             Write-Host "Operation cancelled." -ForegroundColor Red
             exit 1
         }
 
-        # Delete existing tag
+        # Delete existing local tag only
         git tag -d $version
         if ($LASTEXITCODE -ne 0) {
-            Write-Host "❌ Failed to delete existing tag." -ForegroundColor Red
+            Write-Host "❌ Failed to delete existing local tag." -ForegroundColor Red
             exit 1
         }
-
-        # If tag was already pushed, we need to force push
-        $tagExistsRemote = $false
-        try {
-            git ls-remote --tags origin $version | Out-Null
-            $tagExistsRemote = $LASTEXITCODE -eq 0
-        }
-        catch {
-            # Ignore errors
-        }
-
-        if ($tagExistsRemote) {
-            Write-Host "⚠️ WARNING: Tag $version exists on remote. It will be force updated." -ForegroundColor Yellow
+    }
+    else {
+        # Also refuse when remote has the tag even if local does not
+        $remoteTag = git ls-remote --tags origin "refs/tags/$version" 2>$null
+        if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($remoteTag)) {
+            Write-Host "❌ Tag $version already exists on remote. Refusing to retag." -ForegroundColor Red
+            Write-Host "This script does not force-push tags. Delete the remote tag explicitly if you intend to replace it, then re-run." -ForegroundColor Yellow
+            exit 1
         }
     }
 
@@ -358,7 +385,7 @@ function New-GitTag {
     }
     Write-Host "✅ Git tag created successfully" -ForegroundColor Green
 
-    # Push the tag
+    # Push the tag (non-force)
     Write-Host "`nPushing Git tag to remote..." -ForegroundColor Cyan
     git push origin $version
     if ($LASTEXITCODE -ne 0) {
@@ -473,10 +500,10 @@ if ([string]::IsNullOrEmpty($PreviousTag)) {
 
 # Start the release process
 if ($DryRun) {
-    Write-Host "`n� [DRY RUN] Starting release process simulation for version: $Version" -ForegroundColor Cyan
+    Write-Host "`n🔍 [DRY RUN] Starting release process simulation for version: $Version" -ForegroundColor Cyan
     Write-Host "🔍 No actual changes will be made to files or repositories." -ForegroundColor Cyan
 } else {
-    Write-Host "`n�🚀 Starting release process for version: $Version" -ForegroundColor Green
+    Write-Host "`n🚀 Starting release process for version: $Version" -ForegroundColor Green
 }
 
 # Confirm and prepare main branch
@@ -520,12 +547,8 @@ if ($DryRun) {
 } else {
     Write-Host "`n✅ Release process completed successfully for version: $Version" -ForegroundColor Green
     Write-Host "`n📋 Next steps:" -ForegroundColor Yellow
-    Write-Host "  1. Monitor GitHub Actions workflow at: https://github.com/yourusername/fastapi_rbac/actions" -ForegroundColor White
+    Write-Host "  1. Monitor GitHub Actions workflow at: https://github.com/mnaimfaizy/fastapi_rbac/actions" -ForegroundColor White
     Write-Host "  2. Verify Docker images on Docker Hub" -ForegroundColor White
     Write-Host "  3. Notify team members about the new release" -ForegroundColor White
 }
-Write-Host "`n📋 Next steps:" -ForegroundColor Yellow
-Write-Host "  1. Monitor GitHub Actions workflow at: https://github.com/yourusername/fastapi_rbac/actions" -ForegroundColor White
-Write-Host "  2. Verify Docker images on Docker Hub" -ForegroundColor White
-Write-Host "  3. Notify team members about the new release" -ForegroundColor White
 Write-Host "`nThank you for using the FastAPI RBAC Release Automation Script! 🎉" -ForegroundColor Cyan

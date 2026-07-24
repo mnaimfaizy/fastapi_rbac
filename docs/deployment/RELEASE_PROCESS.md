@@ -110,8 +110,9 @@ We have automation scripts that simplify the release process by handling all the
 These scripts will:
 
 - Generate a changelog from Git history
-- Update the release notes file
-- Create and push the Git tag
+- Update root `VERSION` (without the leading `v`) and `docs/release-notes.md`
+- Commit those files with `docs: update release notes and version for <tag>`
+- Create and push the Git tag (refuses if the tag already exists on remote; no force-push)
 - Optionally build and push Docker images
 
 You can use the `-DryRun` (PowerShell) or `--dry-run` (Bash) flag to simulate the release process without making any actual changes:
@@ -123,6 +124,13 @@ You can use the `-DryRun` (PowerShell) or `--dry-run` (Bash) flag to simulate th
 ```bash
 ./create-release.sh -v v0.2.0 --dry-run
 ```
+
+Dry-run behavior (both scripts):
+
+- Skips `git pull origin main` (non-mutating simulation)
+- Does not write `VERSION` or `docs/release-notes.md`, commit, tag, or push
+- Still generates temporary `changelog.txt` and leaves it in place (same as a successful dry-run cleanup message: “Would clean up”)
+- Still prompts for interactive confirmations when warnings apply
 
 For more options, run the scripts with the `-Help` or `--help` flag.
 
