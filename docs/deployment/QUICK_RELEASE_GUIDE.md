@@ -108,11 +108,16 @@ git branch -d hotfix/v1.2.4
 
 ### Scenario 6: Manual Workflow Trigger
 
-**When:** Need to rebuild/republish existing version
+**When:** Need to rebuild/republish an existing version, or publish when the automatic dispatch after Release Tag on Merge did not run
+
+Docker Publish supports two triggers (both valid):
+
+- **Automatic after Release PR merge:** `release-tag-on-merge` creates the `v*` tag/Release, then dispatches Docker Publish (a tag push from `GITHUB_TOKEN` alone does not start other workflows).
+- **Manual:** push a `v*` tag yourself, or use **Actions → Docker Publish → Run workflow** with the version tag.
 
 1. Go to GitHub Actions → Docker Publish workflow
 2. Click "Run workflow"
-3. Select branch (usually main)
+3. Select branch (usually main; the workflow checks out the **tag** you enter next)
 4. Enter version tag (e.g., `v1.2.3`)
 5. Click "Run workflow"
 

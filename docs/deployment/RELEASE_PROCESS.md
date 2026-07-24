@@ -71,7 +71,7 @@ The GitHub Actions workflow is configured to trigger on any tag starting with `v
 
 ## What Happens Next (Automation)
 
-1.  **GitHub Actions Workflow Triggered:** Pushing a tag matching the `v*` pattern automatically triggers the "Docker Publish" workflow defined in `.github/workflows/docker-publish.yml` (same workflow can be re-run via `workflow_dispatch` with a tag input).
+1.  **GitHub Actions Workflow Triggered:** Docker Publish runs when a `v*` tag is pushed (human/local push), or via **workflow_dispatch** (Actions → Run workflow, or automatic dispatch from **Release Tag on Merge** after a Release PR). Tags created with `GITHUB_TOKEN` inside Actions do not start other workflows on push alone, which is why the Release Tag job dispatches Docker Publish explicitly. The workflow checks out the tagged commit (including on workflow_dispatch).
 2.  **Prepare:** Resolves `IMAGE_TAG` / metadata and validates Dockerfiles plus Hub README paths before any multi-arch build starts.
 3.  **Parallel image builds (matrix):** Backend, frontend, and worker build in parallel (`fail-fast: false` so every shard finishes for diagnosis). Each image is pushed to Docker Hub as `:${IMAGE_TAG}` only (e.g. `yourusername/fastapi-rbac-backend:v1.0.0`) — not `:latest` yet.
 4.  **Promote `:latest`:** Only if all three builds succeed, a promote job retags each image’s `:latest` from the version tag via `docker buildx imagetools create` (no rebuild). See [`docs/adr/0002-docker-publish-job-dag.md`](../adr/0002-docker-publish-job-dag.md).

@@ -1,8 +1,11 @@
 name: Docker Publish
 
-# Publish on v* tag push (or manual dispatch). Do not also trigger on
-# release: published — Release Tag on Merge creates a GitHub Release after the
-# tag, which would double-build images if both triggers were enabled.
+# Publish paths (keep both):
+# 1) push of a v* tag (human / non-GITHUB_TOKEN push)
+# 2) workflow_dispatch with tag input (manual Run workflow, or Release Tag on
+#    Merge after it creates the tag — GITHUB_TOKEN tag pushes do not start this
+#    workflow, so that job dispatches instead)
+# Do not also trigger on release: published (would double-build with path 2).
 #
 # Job DAG (see docs/adr/0002-docker-publish-job-dag.md):
 #   prepare → build (matrix) → promote-latest → hub-descriptions
@@ -39,6 +42,9 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          # Manual/auto dispatch must build the tagged commit, not whatever branch
+          # was selected in the Actions UI (often main after later commits).
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
 
       - name: Set IMAGE_TAG and metadata
         id: meta
@@ -148,6 +154,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
 
       - name: Create production .env file for backend
         if: matrix.needs_env == 'true'
@@ -243,6 +250,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
 
       - name: Update Docker Hub Description for Backend
         uses: peter-evans/dockerhub-description@v5
