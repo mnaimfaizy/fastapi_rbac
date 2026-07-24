@@ -100,7 +100,7 @@ Optional dry-run first: add `-DryRun` / `--dry-run` (still writes `changelog.txt
 ### 7. Finish
 
 - Print the **PR URL** from the script output (primary deliverable).
-- One-line reminder: after merge, `release-tag-on-merge` creates the tag + GitHub Release; `docker-publish` builds images once from the `v*` tag.
+- One-line reminder: after merge, `release-tag-on-merge` creates the tag + GitHub Release and dispatches `docker-publish` (manual `v*` tag push or Actions → Run workflow still work).
 - Do not merge the PR unless the user asks.
 - Do not push tags yourself.
 

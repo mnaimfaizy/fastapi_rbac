@@ -71,8 +71,8 @@ The GitHub Actions workflow is configured to trigger on any tag starting with `v
 
 ## What Happens Next (Automation)
 
-1.  **GitHub Actions Workflow Triggered:** Pushing a tag matching the `v*` pattern automatically triggers the "Docker Publish" workflow defined in `.github/workflows/docker-publish.yml`.
-2.  **Image Build & Tag:** The workflow checks out the code corresponding to the pushed Git tag. It then builds the Docker images for the backend, frontend, and worker services. The Docker images will be tagged with the same version as the Git tag (e.g., `yourusername/fastapi-rbac-backend:v1.0.0`).
+1.  **GitHub Actions Workflow Triggered:** Docker Publish runs when a `v*` tag is pushed (human/local push), or via **workflow_dispatch** (Actions → Run workflow, or automatic dispatch from **Release Tag on Merge** after a Release PR). Tags created with `GITHUB_TOKEN` inside Actions do not start other workflows on push alone, which is why the Release Tag job dispatches Docker Publish explicitly.
+2.  **Image Build & Tag:** The workflow checks out the tagged commit (including when started via workflow_dispatch). It then builds the Docker images for the backend, frontend, and worker services. The Docker images will be tagged with the same version as the Git tag (e.g., `yourusername/fastapi-rbac-backend:v1.0.0`).
 3.  **Push to Docker Hub:** After a successful build, the tagged Docker images are pushed to your configured Docker Hub repository. The workflow also updates Hub repository descriptions from `backend/README.dockerhub.md`, `react-frontend/README.dockerhub.md`, and `backend/README.worker.dockerhub.md` (not from `docs/release-notes.md`).
 
 ## Verifying the Release
