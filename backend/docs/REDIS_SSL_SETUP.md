@@ -18,7 +18,8 @@ This document provides comprehensive guidance on configuring and managing Redis 
 The FastAPI RBAC application uses Redis for:
 - Session management and token storage
 - Caching via FastAPI-Cache
-- Rate limiting via FastAPI-Limiter
+- HTTP rate limit storage via slowapi (`storage_uri`, non-testing modes)
+- Abuse counters for registration / resend-verification (hand-rolled keys in auth)
 - Celery message broker and result backend
 
 In production, all Redis connections **must** use SSL/TLS to ensure:

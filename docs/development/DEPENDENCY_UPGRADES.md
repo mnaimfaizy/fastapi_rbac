@@ -41,7 +41,7 @@ A follow-up may align Poetry with `requirements.txt`; until then, always pin and
 Upgrade carefully (changelog review; prefer split PRs if needed):
 
 - SQLModel / SQLAlchemy API (`AsyncSession` + `.exec()`, not `.execute()`)
-- FastAPI middleware affecting CSRF / rate limiting (`fastapi-csrf-protect`, `fastapi-limiter` / `slowapi`)
+- FastAPI middleware affecting CSRF / HTTP rate limits (`fastapi-csrf-protect`, `slowapi`)
 - Redis client + token utilities
 - Celery / kombu / broker compatibility
 - PyJWT / passlib / bcrypt
@@ -90,7 +90,7 @@ About **76** advisory hits across pinned packages (many packages have multiple a
 | `ecdsa` | **Removed** with `python-jose` (HS256-only app; no direct imports) — see #63 | Lane 2 follow-up |
 | `python-jose` | **Removed** — consolidated JWT onto PyJWT only (#63 / [ADR 0001](../adr/0001-pyjwt-sole-jwt-library.md)) | Lane 2 follow-up |
 | `redis` | Patched in Lane 2 → `5.3.1` (no OSV hits on 5.2.1; **major 6+/8 deferred** — hard-stop) | Lane 2 / later |
-| `fastapi-limiter` | Kept `0.1.6` — `0.2.0` is a breaking rewrite (drops Redis `FastAPILimiter`) | Lane 2 follow-up |
+| `fastapi-limiter` | **Removed** — unused scaffold init only; HTTP rate limits consolidated onto `slowapi` (#64 / [ADR 0002](../adr/0002-slowapi-sole-http-rate-limit.md)) | Lane 2 follow-up |
 | `bcrypt` / `passlib` | No OSV hits; left on `4.3.0` / `1.7.4` | Lane 2 |
 | `gunicorn` | **Fixed in Lane 4** → `26.0.0` (request-smuggling advisories needed ≥22) | Lane 4 |
 | `tornado` | **Fixed in Lane 4** → `6.5.7` (flower still requires `<7`) | Lane 4 |
@@ -111,6 +111,12 @@ About **76** advisory hits across pinned packages (many packages have multiple a
 - **Runtime:** `app/core/security.py` encode/decode; session invalidation remains Redis **allowlist** (`app/utils/token.py`), not jti blacklist.
 - **Removed:** unused `app/utils/token_manager.py` (never imported by live auth).
 - **Deferred (security debt, not part of #63 behavior change):** see umbrella [#67](https://github.com/mnaimfaizy/fastapi_rbac/issues/67) — enforce/retire `password_version`; `VALIDATE_TOKEN_IP` honesty/implement; concurrent session limit; orphan `TOKEN_BLACKLIST_*` settings.
+
+### Lane 2 hard-stop follow-up — HTTP rate limit consolidation (#64, 2026-07-24)
+
+- **Decision:** `slowapi` is the only HTTP rate limit library; unused `fastapi-limiter` removed. See [ADR 0002](../adr/0002-slowapi-sole-http-rate-limit.md) and [research note](../internal/research/rate-limiting-library-consolidation.md).
+- **Runtime:** shared `Limiter` in `app/core/rate_limit.py` (Redis `storage_uri` outside testing; memory + disabled in testing); auth routes keep existing `@limiter.limit` thresholds.
+- **Kept separate:** Redis **abuse counters** for registration / resend-verification in `auth.py` (not folded into slowapi in this change).
 
 ### Lane 3 notes (2026-07-17)
 

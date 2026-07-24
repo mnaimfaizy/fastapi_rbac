@@ -6,6 +6,9 @@ This file adds the current directory to the Python path.
 import os
 import sys
 
+# Must run before pytest_plugins import app.main (via fixtures_app).
+os.environ["MODE"] = "testing"
+
 # Add the project root directory to Python's path
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 

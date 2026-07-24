@@ -40,7 +40,6 @@ fastapi-async-sqlalchemy==0.6.1
 fastapi-cache2==0.2.2
 fastapi-cli==0.0.7
 fastapi-csrf-protect==1.0.7
-fastapi-limiter==0.1.6
 fastapi-pagination==0.13.1
 filelock==3.18.0
 flake8==7.3.0
