@@ -3,6 +3,10 @@ name: Docker Publish
 # Publish on v* tag push (or manual dispatch). Do not also trigger on
 # release: published — Release Tag on Merge creates a GitHub Release after the
 # tag, which would double-build images if both triggers were enabled.
+#
+# Job DAG (see docs/adr/0002-docker-publish-job-dag.md):
+#   prepare → build (matrix) → promote-latest → hub-descriptions
+# Builds push only :${IMAGE_TAG}; :latest is promoted after all shards succeed.
 
 on:
   push:
@@ -15,46 +19,26 @@ on:
         required: true
         type: string
 
+concurrency:
+  group: docker-publish-${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
-  build-and-push:
+  prepare:
+    name: Prepare
     runs-on: ubuntu-latest
     permissions:
-      contents: read # Needed to checkout the repository
-      packages: write # Needed for GitHub Container Registry (optional)
-
+      contents: read
+    outputs:
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+      version: ${{ steps.meta.outputs.version }}
+      build_date: ${{ steps.meta.outputs.build_date }}
+      vcs_ref: ${{ steps.meta.outputs.vcs_ref }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
-          fetch-depth: 0 # Fetches all history and tags, useful if script falls back to git describe
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-        with:
-          platforms: linux/amd64,linux/arm64
-
-      - name: Set up Docker Buildx
-        # Keep defaults — custom buildkit image + network=host previously caused opaque failures.
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Create production .env file for backend
-        run: |
-          set -euo pipefail
-          if [[ -f backend/.env.example ]]; then
-            cp backend/.env.example backend/.env.production
-          elif [[ -f backend/production.env.example ]]; then
-            cp backend/production.env.example backend/.env.production
-          else
-            echo "::error::No backend/.env.example or backend/production.env.example found"
-            exit 1
-          fi
-        shell: bash
+          fetch-depth: 0
 
       - name: Set IMAGE_TAG and metadata
         id: meta
@@ -77,10 +61,19 @@ jobs:
             exit 1
           fi
 
-          echo "IMAGE_TAG=${IMAGE_TAG}" >> "$GITHUB_ENV"
-          echo "VERSION=${IMAGE_TAG}" >> "$GITHUB_ENV"
-          echo "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
-          echo "VCS_REF=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+          BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          VCS_REF="$(git rev-parse --short HEAD)"
+
+          {
+            echo "image_tag=${IMAGE_TAG}"
+            echo "version=${IMAGE_TAG}"
+            echo "build_date=${BUILD_DATE}"
+            echo "vcs_ref=${VCS_REF}"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "IMAGE_TAG=${IMAGE_TAG}"
+          echo "BUILD_DATE=${BUILD_DATE}"
+          echo "VCS_REF=${VCS_REF}"
         shell: bash
 
       - name: Validate Dockerfiles and Hub README paths
@@ -115,85 +108,141 @@ jobs:
             exit 1
           fi
 
-          echo "IMAGE_TAG=${IMAGE_TAG}"
+          echo "IMAGE_TAG=${{ steps.meta.outputs.image_tag }}"
           echo "Validation OK"
         shell: bash
 
-      - name: Build and push backend image (multi-arch)
-        uses: docker/build-push-action@v7
+  build:
+    name: Build ${{ matrix.image }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: backend
+            context: ./backend
+            file: ./backend/Dockerfile.prod
+            name: fastapi-rbac-backend
+            title: FastAPI RBAC Backend
+            description: Backend service for FastAPI RBAC project
+            needs_env: "true"
+          - image: frontend
+            context: ./react-frontend
+            file: ./react-frontend/Dockerfile.prod
+            name: fastapi-rbac-frontend
+            title: FastAPI RBAC Frontend
+            description: React frontend for FastAPI RBAC project
+            needs_env: "false"
+          - image: worker
+            context: ./backend
+            file: ./backend/queue.dockerfile.prod
+            name: fastapi-rbac-worker
+            title: FastAPI RBAC Worker
+            description: Celery worker for FastAPI RBAC project
+            needs_env: "true"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
         with:
-          context: ./backend
-          file: ./backend/Dockerfile.prod
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-backend:${{ env.IMAGE_TAG }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-backend:latest
-          labels: |
-            org.opencontainers.image.title=FastAPI RBAC Backend
-            org.opencontainers.image.description=Backend service for FastAPI RBAC project
-            org.opencontainers.image.version=${{ env.VERSION }}
-            org.opencontainers.image.created=${{ env.BUILD_DATE }}
-            org.opencontainers.image.revision=${{ env.VCS_REF }}
-            org.opencontainers.image.source=https://github.com/mnaimfaizy/fastapi_rbac
-            org.opencontainers.image.url=https://github.com/mnaimfaizy/fastapi_rbac
-          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-backend:buildcache
-          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-backend:buildcache,mode=max
-          build-args: |
-            BUILD_DATE=${{ env.BUILD_DATE }}
-            VCS_REF=${{ env.VCS_REF }}
-            VERSION=${{ env.VERSION }}
+          fetch-depth: 0
 
-      - name: Build and push frontend image (multi-arch)
-        uses: docker/build-push-action@v7
-        with:
-          context: ./react-frontend
-          file: ./react-frontend/Dockerfile.prod
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-frontend:${{ env.IMAGE_TAG }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-frontend:latest
-          labels: |
-            org.opencontainers.image.title=FastAPI RBAC Frontend
-            org.opencontainers.image.description=React frontend for FastAPI RBAC project
-            org.opencontainers.image.version=${{ env.VERSION }}
-            org.opencontainers.image.created=${{ env.BUILD_DATE }}
-            org.opencontainers.image.revision=${{ env.VCS_REF }}
-            org.opencontainers.image.source=https://github.com/mnaimfaizy/fastapi_rbac
-            org.opencontainers.image.url=https://github.com/mnaimfaizy/fastapi_rbac
-          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-frontend:buildcache
-          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-frontend:buildcache,mode=max
-          build-args: |
-            BUILD_DATE=${{ env.BUILD_DATE }}
-            VCS_REF=${{ env.VCS_REF }}
-            VERSION=${{ env.VERSION }}
+      - name: Create production .env file for backend
+        if: matrix.needs_env == 'true'
+        run: |
+          set -euo pipefail
+          if [[ -f backend/.env.example ]]; then
+            cp backend/.env.example backend/.env.production
+          elif [[ -f backend/production.env.example ]]; then
+            cp backend/production.env.example backend/.env.production
+          else
+            echo "::error::No backend/.env.example or backend/production.env.example found"
+            exit 1
+          fi
+        shell: bash
 
-      - name: Build and push worker image (multi-arch)
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+        with:
+          platforms: linux/amd64,linux/arm64
+
+      - name: Set up Docker Buildx
+        # Keep defaults — custom buildkit image + network=host previously caused opaque failures.
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push ${{ matrix.image }} image (multi-arch)
         uses: docker/build-push-action@v7
         with:
-          context: ./backend
-          # Worker/beat/flower use the dedicated queue image, matching docker-compose.prod.yml
-          file: ./backend/queue.dockerfile.prod
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-worker:${{ env.IMAGE_TAG }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-worker:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.name }}:${{ needs.prepare.outputs.image_tag }}
           labels: |
-            org.opencontainers.image.title=FastAPI RBAC Worker
-            org.opencontainers.image.description=Celery worker for FastAPI RBAC project
-            org.opencontainers.image.version=${{ env.VERSION }}
-            org.opencontainers.image.created=${{ env.BUILD_DATE }}
-            org.opencontainers.image.revision=${{ env.VCS_REF }}
+            org.opencontainers.image.title=${{ matrix.title }}
+            org.opencontainers.image.description=${{ matrix.description }}
+            org.opencontainers.image.version=${{ needs.prepare.outputs.version }}
+            org.opencontainers.image.created=${{ needs.prepare.outputs.build_date }}
+            org.opencontainers.image.revision=${{ needs.prepare.outputs.vcs_ref }}
             org.opencontainers.image.source=https://github.com/mnaimfaizy/fastapi_rbac
             org.opencontainers.image.url=https://github.com/mnaimfaizy/fastapi_rbac
-          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-worker:buildcache
-          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-worker:buildcache,mode=max
+          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.name }}:buildcache
+          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.name }}:buildcache,mode=max
           build-args: |
-            BUILD_DATE=${{ env.BUILD_DATE }}
-            VCS_REF=${{ env.VCS_REF }}
-            VERSION=${{ env.VERSION }}
+            BUILD_DATE=${{ needs.prepare.outputs.build_date }}
+            VCS_REF=${{ needs.prepare.outputs.vcs_ref }}
+            VERSION=${{ needs.prepare.outputs.version }}
+
+  promote-latest:
+    name: Promote latest
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Promote :latest from version tags (no rebuild)
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          IMAGE_TAG: ${{ needs.prepare.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+          for name in fastapi-rbac-backend fastapi-rbac-frontend fastapi-rbac-worker; do
+            echo "Promoting ${DOCKERHUB_USERNAME}/${name}:${IMAGE_TAG} → :latest"
+            docker buildx imagetools create \
+              --tag "${DOCKERHUB_USERNAME}/${name}:latest" \
+              "${DOCKERHUB_USERNAME}/${name}:${IMAGE_TAG}"
+          done
+        shell: bash
+
+  hub-descriptions:
+    name: Hub descriptions
+    needs: [prepare, promote-latest]
+    runs-on: ubuntu-latest
+    # Soft-fail: Hub API flake must not fail the release or force image rebuilds.
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
 
       - name: Update Docker Hub Description for Backend
         uses: peter-evans/dockerhub-description@v5
@@ -222,31 +271,55 @@ jobs:
           readme-filepath: ./backend/README.worker.dockerhub.md
           short-description: "Celery worker for FastAPI RBAC project."
 
+  release-summary:
+    name: Release summary
+    needs: [prepare, build, promote-latest]
+    if: success()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
       - name: Create release summary
-        if: success()
+        env:
+          IMAGE_TAG: ${{ needs.prepare.outputs.image_tag }}
+          VCS_REF: ${{ needs.prepare.outputs.vcs_ref }}
+          BUILD_DATE: ${{ needs.prepare.outputs.build_date }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
         run: |
           {
             echo "## Release Summary"
             echo ""
-            echo "**Version:** ${{ env.IMAGE_TAG }}"
-            echo "**Commit:** ${{ env.VCS_REF }}"
-            echo "**Build Date:** ${{ env.BUILD_DATE }}"
+            echo "**Version:** ${IMAGE_TAG}"
+            echo "**Commit:** ${VCS_REF}"
+            echo "**Build Date:** ${BUILD_DATE}"
             echo ""
             echo "### Published Images"
             echo ""
-            echo "- \`${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-backend:${{ env.IMAGE_TAG }}\`"
-            echo "- \`${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-frontend:${{ env.IMAGE_TAG }}\`"
-            echo "- \`${{ secrets.DOCKERHUB_USERNAME }}/fastapi-rbac-worker:${{ env.IMAGE_TAG }}\`"
+            echo "- \`${DOCKERHUB_USERNAME}/fastapi-rbac-backend:${IMAGE_TAG}\` (+ \`:latest\` promoted)"
+            echo "- \`${DOCKERHUB_USERNAME}/fastapi-rbac-frontend:${IMAGE_TAG}\` (+ \`:latest\` promoted)"
+            echo "- \`${DOCKERHUB_USERNAME}/fastapi-rbac-worker:${IMAGE_TAG}\` (+ \`:latest\` promoted)"
             echo ""
             echo "### Architecture Support"
             echo ""
             echo "- linux/amd64"
             echo "- linux/arm64"
+            echo ""
+            echo "### Jobs"
+            echo ""
+            echo "- Matrix builds pushed version tags only; \`:latest\` advanced in Promote latest."
+            echo "- Hub descriptions run after promote (soft-fail; check Hub descriptions job if listings look stale)."
           } >> "$GITHUB_STEP_SUMMARY"
         shell: bash
 
-      - name: Notify on failure
-        if: failure()
+  notify-failure:
+    name: Notify on failure
+    needs: [prepare, build, promote-latest]
+    if: failure()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Write failure summary
         run: |
           {
             echo "## Release Failed"
@@ -255,10 +328,12 @@ jobs:
             echo ""
             echo "### Troubleshooting"
             echo ""
-            echo "1. Check which step failed above (validation, login, backend/frontend/worker build, or Hub description)."
-            echo "2. Worker must build from \`backend/queue.dockerfile.prod\` (not \`Dockerfile.prod --target worker\`)."
-            echo "3. Verify \`DOCKERHUB_USERNAME\` / \`DOCKERHUB_TOKEN\` secrets."
-            echo "4. Confirm \`IMAGE_TAG\` was set (\`v*\` tag push or workflow_dispatch input)."
-            echo "5. Re-run via Actions → Docker Publish → Run workflow after fixing."
+            echo "1. Check which job failed (Prepare, Build backend/frontend/worker, or Promote latest)."
+            echo "2. Matrix shards use \`fail-fast: false\` — inspect every Build job, not only the first failure."
+            echo "3. Worker must build from \`backend/queue.dockerfile.prod\` (not \`Dockerfile.prod --target worker\`)."
+            echo "4. Verify \`DOCKERHUB_USERNAME\` / \`DOCKERHUB_TOKEN\` secrets."
+            echo "5. Confirm \`IMAGE_TAG\` was set (\`v*\` tag push or workflow_dispatch input)."
+            echo "6. A failed run may leave some \`:${{ needs.prepare.outputs.image_tag }}\` tags on Hub; \`:latest\` is only moved when Promote latest succeeds. Re-run overwrites version tags."
+            echo "7. Re-run via Actions → Docker Publish → Run workflow after fixing."
           } >> "$GITHUB_STEP_SUMMARY"
         shell: bash

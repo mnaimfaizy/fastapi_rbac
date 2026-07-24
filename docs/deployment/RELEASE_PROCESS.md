@@ -71,9 +71,12 @@ The GitHub Actions workflow is configured to trigger on any tag starting with `v
 
 ## What Happens Next (Automation)
 
-1.  **GitHub Actions Workflow Triggered:** Pushing a tag matching the `v*` pattern automatically triggers the "Docker Publish" workflow defined in `.github/workflows/docker-publish.yml`.
-2.  **Image Build & Tag:** The workflow checks out the code corresponding to the pushed Git tag. It then builds the Docker images for the backend, frontend, and worker services. The Docker images will be tagged with the same version as the Git tag (e.g., `yourusername/fastapi-rbac-backend:v1.0.0`).
-3.  **Push to Docker Hub:** After a successful build, the tagged Docker images are pushed to your configured Docker Hub repository. The workflow also updates Hub repository descriptions from `backend/README.dockerhub.md`, `react-frontend/README.dockerhub.md`, and `backend/README.worker.dockerhub.md` (not from `docs/release-notes.md`).
+1.  **GitHub Actions Workflow Triggered:** Pushing a tag matching the `v*` pattern automatically triggers the "Docker Publish" workflow defined in `.github/workflows/docker-publish.yml` (same workflow can be re-run via `workflow_dispatch` with a tag input).
+2.  **Prepare:** Resolves `IMAGE_TAG` / metadata and validates Dockerfiles plus Hub README paths before any multi-arch build starts.
+3.  **Parallel image builds (matrix):** Backend, frontend, and worker build in parallel (`fail-fast: false` so every shard finishes for diagnosis). Each image is pushed to Docker Hub as `:${IMAGE_TAG}` only (e.g. `yourusername/fastapi-rbac-backend:v1.0.0`) — not `:latest` yet.
+4.  **Promote `:latest`:** Only if all three builds succeed, a promote job retags each image’s `:latest` from the version tag via `docker buildx imagetools create` (no rebuild). See [`docs/adr/0002-docker-publish-job-dag.md`](../adr/0002-docker-publish-job-dag.md).
+5.  **Hub descriptions:** After promote, repository long descriptions are updated from `backend/README.dockerhub.md`, `react-frontend/README.dockerhub.md`, and `backend/README.worker.dockerhub.md` (not from `docs/release-notes.md`). That job soft-fails so Hub API flake does not fail the release.
+6.  **Failed runs:** The workflow fails if prepare, any build shard, or promote fails. A failed run may leave some `:${IMAGE_TAG}` tags on Hub; `:latest` stays on the previous good release until promote succeeds. Re-run overwrites the same version tags.
 
 ## Verifying the Release
 
@@ -81,7 +84,7 @@ The GitHub Actions workflow is configured to trigger on any tag starting with `v
 
     - Navigate to the "Actions" tab in your GitHub repository.
     - You should see the "Docker Publish" workflow running or completed for the tag you pushed.
-    - Verify that all steps in the workflow have passed successfully.
+    - Verify that **Prepare**, all three **Build** matrix jobs, and **Promote latest** have succeeded. Hub descriptions may soft-fail without invalidating the image release.
 
 2.  **Check Docker Hub:**
     - Log in to your Docker Hub account.

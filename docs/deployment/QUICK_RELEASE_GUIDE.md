@@ -120,16 +120,17 @@ git branch -d hotfix/v1.2.4
 
 After creating a release, verify:
 
-- [ ] GitHub Actions workflow completes successfully
-- [ ] All three Docker images published to Docker Hub:
+- [ ] GitHub Actions **Docker Publish** completes: Prepare + Build backend/frontend/worker + Promote latest
+- [ ] All three Docker images published to Docker Hub with the version tag:
   - `mnaimfaizy/fastapi-rbac-backend:vX.Y.Z`
   - `mnaimfaizy/fastapi-rbac-frontend:vX.Y.Z`
   - `mnaimfaizy/fastapi-rbac-worker:vX.Y.Z`
+- [ ] `:latest` advanced for all three only after Promote latest (not during individual builds)
 - [ ] Images support both architectures (linux/amd64, linux/arm64)
 - [ ] VERSION file updated to `X.Y.Z` (without 'v')
 - [ ] Release notes updated in `docs/release-notes.md` (release history SSOT)
 - [ ] Git tag created and pushed
-- [ ] Docker Hub repo descriptions reflect `*.dockerhub.md` sources (updated by `docker-publish.yml`)
+- [ ] Docker Hub repo descriptions reflect `*.dockerhub.md` sources (updated after promote; soft-fail OK)
 
 ## 🐛 Quick Troubleshooting
 
