@@ -328,26 +328,29 @@ class TestAuthenticationSecurity:
 
     @pytest.mark.asyncio
     async def test_rate_limiting_on_login(self, client: AsyncClient) -> None:
-        """Test rate limiting on login attempts."""
+        """Burst auth login stays within expected client-error statuses.
+
+        HTTP rate limits are disabled in testing by default. Asserted 429 behavior
+        for slowapi lives in ``test/unit/test_rate_limit.py``.
+        """
 
         email = random_email()
-        login_data = {"username": email, "password": "any_password"}
+        login_data = {"email": email, "password": "any_password"}
 
         # Get CSRF token for requests
         csrf_token, csrf_headers = await get_csrf_token(client)
-        csrf_headers["Content-Type"] = "application/x-www-form-urlencoded"
+        csrf_headers["Content-Type"] = "application/json"
 
-        # Make rapid login attempts to trigger rate limiting
+        # Make rapid login attempts (limiter off in testing — expect auth/validation errors)
         responses = []
-        for i in range(10):  # Exceed typical rate limit
+        for i in range(10):
             response = await client.post(
                 f"{settings.API_V1_STR}/auth/login",
-                data=login_data,
+                json=login_data,
                 headers=csrf_headers,
             )
             responses.append(response.status_code)
 
-        # Should see 429 (Too Many Requests) after several attempts OR consistent error handling
         valid_responses = [400, 401, 422, 429]
         assert all(status in valid_responses for status in responses)
 

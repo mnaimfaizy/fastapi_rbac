@@ -45,28 +45,20 @@ const csrfToken = await csrfService.getCsrfToken();
 - `sanitize_url()`: URL validation and cleaning
 - `sanitize_search()`: Search query cleaning
 
-### 3. Rate Limiting
+### 3. HTTP Rate Limiting
 
-**Implementation**: `slowapi==0.1.9`
+**Implementation**: `slowapi` (sole HTTP rate limit library; see [ADR 0002](../adr/0002-slowapi-sole-http-rate-limit.md))
 
-**Protected Endpoints**:
+**Protected Endpoints** (HTTP rate limits, IP key):
 
 - **Login**: 5 attempts per minute
 - **Registration**: 3 attempts per hour
-- **Password Reset**: 3 attempts per hour
-- **Token Refresh**: 5 attempts per minute
+- **Password Reset request**: 3 attempts per hour
+- **Access token**: 5 attempts per minute
 
-**Configuration**:
+**Configuration**: shared `Limiter` in `app/core/rate_limit.py` (`get_remote_address`; Redis `storage_uri` outside testing).
 
-```python
-# Rate limiter with user identification
-limiter = Limiter(key_func=user_id_identifier)
-
-# Applied to endpoints
-@limiter.limit("5/minute")
-async def login_endpoint():
-    pass
-```
+Registration / resend-verification also use separate Redis **abuse counters** (not slowapi).
 
 ### 4. Enhanced Security Headers
 

@@ -10,8 +10,6 @@ from fastapi.security import OAuth2PasswordRequestForm
 from fastapi_csrf_protect import CsrfProtect
 from pydantic import EmailStr
 from redis.asyncio import Redis as AsyncRedis
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app import crud
@@ -19,6 +17,7 @@ from app.api import deps
 from app.api.deps import get_redis_client, get_strict_sanitizer
 from app.core import security  # security module contains token functions
 from app.core.config import ModeEnum, settings
+from app.core.rate_limit import limiter
 from app.core.security import (  # For password complexity / JWT audit mapping
     PasswordValidator,
     decode_token,
@@ -48,20 +47,6 @@ from app.utils.token import add_token_to_redis, get_valid_tokens, token_is_allow
 from app.utils.user_utils import serialize_user
 
 logger = logging.getLogger("fastapi_rbac")
-
-# Create limiter instance for this module
-limiter = Limiter(key_func=get_remote_address)
-
-
-# Disable or relax rate limiting in test mode
-def _relax_limiter_for_testing() -> None:
-    from app.core.config import ModeEnum, settings
-
-    if getattr(settings, "MODE", None) == ModeEnum.testing or settings.MODE == "testing":
-        limiter.enabled = False  # Completely disable rate limiting in test mode
-
-
-_relax_limiter_for_testing()
 
 router = APIRouter()
 
