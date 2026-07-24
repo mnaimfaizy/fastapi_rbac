@@ -4,7 +4,7 @@ This repository includes Matt Pocock engineering skills in `.claude/skills`.
 
 Use these skills as available workflows:
 
-- User-invoked: `ask-matt`, `grill-with-docs`, `triage`, `improve-codebase-architecture`, `setup-matt-pocock-skills`, `to-issues`, `to-prd`, `implement`
+- User-invoked: `ask-matt`, `grill-with-docs`, `triage`, `improve-codebase-architecture`, `setup-matt-pocock-skills`, `to-issues`, `to-prd`, `implement`, `release`
 - Model-invoked: `prototype`, `diagnosing-bugs`, `research`, `tdd`, `domain-modeling`, `codebase-design`, `code-review`
 
 ## Agent skills
@@ -32,6 +32,10 @@ If `graphify-out/graph.json` exists, **query it first** for architecture and mod
 ### Commit messages (mandatory)
 
 Commit messages must follow [`docs/agents/commit-messages.md`](docs/agents/commit-messages.md). This is not optional: plain conventional commits, no emoji, component/domain scopes. Release-note generation depends on consistent history.
+
+### Release
+
+User-invoked [`release`](.claude/skills/release/SKILL.md) skill: propose version → release-notes sub-agent → Release PR → return PR URL. Notes agent SSOT: [`docs/agents/release-notes-agent.md`](docs/agents/release-notes-agent.md).
 
 ## Notes
 

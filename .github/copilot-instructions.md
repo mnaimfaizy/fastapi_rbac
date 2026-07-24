@@ -19,6 +19,8 @@ This project is a user-management microservice: FastAPI backend + React/TypeScri
 | Frontend troubleshooting | [`docs/troubleshooting/frontend-issues.md`](../docs/troubleshooting/frontend-issues.md) |
 | Knowledge graph | [`docs/agents/graphify.md`](../docs/agents/graphify.md) |
 | Commit messages (mandatory SSOT) | [`docs/agents/commit-messages.md`](../docs/agents/commit-messages.md) |
+| Release notes agent (canonical) | [`docs/agents/release-notes-agent.md`](../docs/agents/release-notes-agent.md) |
+| Release skill (Release PR) | [`.claude/skills/release/SKILL.md`](../.claude/skills/release/SKILL.md) |
 
 If `graphify-out/graph.json` exists, prefer `graphify query` / `path` / `explain` for “how does X connect to Y” questions.
 
