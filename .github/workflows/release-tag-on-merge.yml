@@ -2,8 +2,11 @@ name: Release Tag on Merge
 
 # When a Release PR (head branch release/v*) is merged into main, create the
 # annotated SemVer tag and a GitHub Release. Branch name is the version SSOT.
-# Docker images publish via docker-publish.yml on the v* tag push (not on
-# release: published — that trigger was removed to avoid double builds).
+#
+# Docker Publish: tags pushed with GITHUB_TOKEN do not start other workflows, so
+# this job dispatches docker-publish.yml via workflow_dispatch after the tag
+# exists. Manual paths remain: push a v* tag yourself, or Run workflow on
+# Docker Publish. Do not also trigger on release: published (avoids double builds).
 
 on:
   pull_request:
@@ -12,6 +15,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   tag-and-release:
@@ -149,4 +153,19 @@ jobs:
           echo "- Tag / release: \`${VERSION}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Branch SSOT: \`${{ steps.version.outputs.branch }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Pre-release: \`${PRERELEASE}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Docker Publish should run once from the tag push." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Trigger Docker Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # workflow_dispatch is allowed to chain from GITHUB_TOKEN; tag push is not.
+          gh workflow run docker-publish.yml \
+            --repo "${{ github.repository }}" \
+            -f tag="${VERSION}"
+
+          echo "Dispatched Docker Publish for ${VERSION}"
+          echo "- Docker Publish: dispatched (\`${VERSION}\`)." >> "$GITHUB_STEP_SUMMARY"
