@@ -29,3 +29,7 @@ A grouping construct for roles in this product's RBAC model.
 
 **Permission group**:
 A grouping construct for permissions in this product's RBAC model.
+
+**Hub runtime**:
+The deployable API package: published Docker Hub backend and worker images (including the Beat scheduler process), plus Postgres, Redis, and external SMTP. Does not include the admin UI.
+_Avoid_: Microservices (when meaning this package), full stack (when including the React frontend)

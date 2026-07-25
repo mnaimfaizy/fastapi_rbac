@@ -38,6 +38,10 @@ Go to: [`../development/DEVELOPER_SETUP.md`](../development/DEVELOPER_SETUP.md)
 
 Go to: [`../deployment/PRODUCTION_SETUP.md`](../deployment/PRODUCTION_SETUP.md)
 
+### 🐳 I want to validate published Hub API images (free Oracle path)
+
+Go to: [`../deployment/hub-runtime/index.md`](../deployment/hub-runtime/index.md) and [Oracle Always Free setup](../deployment/hub-runtime/oracle-always-free-setup.md)
+
 ### ❓ I'm having issues
 
 Browse: [`../troubleshooting/`](../troubleshooting/)
