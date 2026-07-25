@@ -53,6 +53,9 @@ nav:
       - "Knowledge Graph (graphify)": "agents/graphify.md"
   - "Deployment":
       - "Overview": "deployment/index.md"
+      - "Hub runtime":
+          - "Overview": "deployment/hub-runtime/index.md"
+          - "Oracle Always Free setup": "deployment/hub-runtime/oracle-always-free-setup.md"
       - "Production Deployment": "deployment/production-deployment-guide.md"
       - "Quick Release Guide": "deployment/QUICK_RELEASE_GUIDE.md"
       - "Release Process": "deployment/RELEASE_PROCESS.md"

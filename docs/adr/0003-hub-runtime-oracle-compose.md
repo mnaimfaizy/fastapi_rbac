@@ -1,0 +1,3 @@
+# Hub runtime validated on Oracle Always Free via Compose
+
+We need a free, intermittent way to prove the published Docker Hub API images work in a production-shaped environment (#96). We treat staging and production as the **same Hub runtime package** (backend + worker + Beat + Postgres + Redis; SMTP external; frontend out of scope for now), run it with Docker Compose on **Oracle Cloud Always Free**, terminate TLS with **Caddy** at `rbac-api.mnfprofile.com`, pin image tags by default, and document first-time OCI setup with Created/Last verified dates. Paid always-on VPS and free PaaS were rejected for maintainer validation: VPS costs money we do not want for start/stop testing; free PaaS cannot honestly host an always-on worker plus persistent Redis.
