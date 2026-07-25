@@ -112,8 +112,8 @@ git branch -d hotfix/v1.2.4
 
 Docker Publish supports two triggers (both valid):
 
-- **Automatic after Release PR merge:** `release-tag-on-merge` creates the `v*` tag/Release, then dispatches Docker Publish (a tag push from `GITHUB_TOKEN` alone does not start other workflows).
-- **Manual:** push a `v*` tag yourself, or use **Actions → Docker Publish → Run workflow** with the version tag.
+- **Automatic after Release PR merge:** `release-tag-on-merge` creates the `v*` tag/Release, then dispatches **Docker Publish** and **Admin UI cPanel Deploy** (a tag push from `GITHUB_TOKEN` alone does not start other workflows).
+- **Manual:** push a `v*` tag yourself, or use **Actions → Docker Publish / Admin UI cPanel Deploy → Run workflow**.
 
 1. Go to GitHub Actions → Docker Publish workflow
 2. Click "Run workflow"
@@ -132,10 +132,12 @@ After creating a release, verify:
   - `mnaimfaizy/fastapi-rbac-worker:vX.Y.Z`
 - [ ] `:latest` advanced for all three only after Promote latest (not during individual builds)
 - [ ] Images support both architectures (linux/amd64, linux/arm64)
+- [ ] GitHub Actions **Admin UI cPanel Deploy** completes: Build Admin UI Assets → Upload Admin UI to cPanel → Smoke Admin UI HTTPS (needs cPanel FTP secrets)
 - [ ] VERSION file updated to `X.Y.Z` (without 'v')
 - [ ] Release notes updated in `docs/release-notes.md` (release history SSOT)
 - [ ] Git tag created and pushed
 - [ ] Docker Hub repo descriptions reflect `*.dockerhub.md` sources (updated after promote; soft-fail OK)
+- [ ] Admin UI host reachable at `https://rbac.mnfprofile.com` (when dogfood host is configured)
 
 ## 🐛 Quick Troubleshooting
 

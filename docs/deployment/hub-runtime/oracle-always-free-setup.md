@@ -373,6 +373,9 @@ cp env.example .env
 #   DOMAIN=rbac-api.mnfprofile.com
 #   FIRST_SUPERUSER_EMAIL=...
 #   SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASSWORD / EMAILS_FROM_EMAIL
+# Admin UI host (when rbac.mnfprofile.com is live — see env.example):
+#   FRONTEND_URL / EMAIL_VERIFICATION_URL / PASSWORD_RESET_URL
+#   BACKEND_CORS_ORIGINS=["https://rbac.mnfprofile.com"]
 nano .env   # or vim
 
 chmod +x bootstrap.sh
@@ -382,6 +385,8 @@ chmod +x bootstrap.sh
 `bootstrap.sh` fills empty `SECRET_KEY` / DB / Redis / superuser password fields, pulls Hub images, starts Compose, and waits for API health.
 
 The API container entrypoint runs migrations and initial data (including the first superuser).
+
+When the [Admin UI host](../admin-ui/index.md) is deployed, keep those CORS / `FRONTEND_URL` / email link values on the UI origin and recreate the API container after editing `.env`.
 
 ---
 
@@ -398,6 +403,8 @@ Exercise login, a password-reset email (SMTP), and confirm worker/beat stay up:
 docker compose --env-file .env -f compose.yml ps
 docker compose --env-file .env -f compose.yml logs -f worker beat
 ```
+
+With the Admin UI host live, also open `https://rbac.mnfprofile.com`, confirm login (no CORS errors), and that reset/verify email links use that host.
 
 ---
 

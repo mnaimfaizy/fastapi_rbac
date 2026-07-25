@@ -2,7 +2,9 @@
 
 Build and run the React SPA for Docker and production.
 
-Related: [Setup](./setup.md), [Deployment overview](../../deployment/index.md), [Production setup](../../deployment/PRODUCTION_SETUP.md).
+Related: [Setup](./setup.md), [Deployment overview](../../deployment/index.md), [Admin UI host (cPanel)](../../deployment/admin-ui/index.md), [Production setup](../../deployment/PRODUCTION_SETUP.md).
+
+For maintainer dogfood and the adopter static-host path, prefer **[Admin UI host](../../deployment/admin-ui/index.md)** over running the Hub frontend container.
 
 ## Production build
 
