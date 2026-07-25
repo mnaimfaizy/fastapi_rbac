@@ -373,6 +373,8 @@ cp env.example .env
 #   DOMAIN=rbac-api.mnfprofile.com
 #   FIRST_SUPERUSER_EMAIL=...
 #   SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASSWORD / EMAILS_FROM_EMAIL
+#   TOKEN_ISSUER / TOKEN_AUDIENCE / USER_CHANGED_PASSWORD_DATE
+#     (env.example + bootstrap.sh set defaults if missing)
 # Admin UI host (when rbac.mnfprofile.com is live — see env.example):
 #   FRONTEND_URL / EMAIL_VERIFICATION_URL / PASSWORD_RESET_URL
 #   BACKEND_CORS_ORIGINS=["https://rbac.mnfprofile.com"]
