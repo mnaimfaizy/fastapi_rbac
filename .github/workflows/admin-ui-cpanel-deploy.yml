@@ -76,11 +76,11 @@ jobs:
       - name: FTP sync to cPanel document root
         uses: SamKirkland/FTP-Deploy-Action@v4.3.6
         with:
-          server: ${{ secrets.CPANEL_FTP_SERVER }}
-          username: ${{ secrets.CPANEL_FTP_USERNAME }}
-          password: ${{ secrets.CPANEL_FTP_PASSWORD }}
+          server: ${{ secrets.UI_FTP_SERVER }}
+          username: ${{ secrets.UI_FTP_USERNAME }}
+          password: ${{ secrets.UI_FTP_PASSWORD }}
           local-dir: dist/
-          server-dir: ${{ secrets.CPANEL_FTP_SERVER_DIR }}
+          server-dir: ${{ secrets.UI_FTP_SERVER_DIR }}
           dangerous-clean-slate: false
 
   smoke-admin-ui-https:

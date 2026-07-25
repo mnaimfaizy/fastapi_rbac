@@ -49,12 +49,12 @@ Create an FTP (or FTPS) account in cPanel that can write to the subdomain docume
 
 | Name | Purpose |
 | --- | --- |
-| `CPANEL_FTP_SERVER` | Host (often your domain or a host like `ftp.mnfprofile.com`) |
-| `CPANEL_FTP_USERNAME` | FTP username |
-| `CPANEL_FTP_PASSWORD` | FTP password |
-| `CPANEL_FTP_SERVER_DIR` | Remote directory for the docroot (e.g. `/rbac.mnfprofile.com/` — trailing slash recommended) |
+| `UI_FTP_SERVER` | Host (often your domain or a host like `ftp.mnfprofile.com`) |
+| `UI_FTP_USERNAME` | FTP username |
+| `UI_FTP_PASSWORD` | FTP password |
+| `UI_FTP_SERVER_DIR` | Remote directory for the docroot (e.g. `/rbac.mnfprofile.com/` — trailing slash recommended) |
 
-Do not commit these values.
+These are separate from the MkDocs deploy secrets (`FTP_SERVER`, `FTP_USERNAME`, `FTP_PASSWORD`, …). Do not commit these values.
 
 ---
 
