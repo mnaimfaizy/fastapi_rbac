@@ -3,10 +3,11 @@ name: Release Tag on Merge
 # When a Release PR (head branch release/v*) is merged into main, create the
 # annotated SemVer tag and a GitHub Release. Branch name is the version SSOT.
 #
-# Docker Publish: tags pushed with GITHUB_TOKEN do not start other workflows, so
-# this job dispatches docker-publish.yml via workflow_dispatch after the tag
-# exists. Manual paths remain: push a v* tag yourself, or Run workflow on
-# Docker Publish. Do not also trigger on release: published (avoids double builds).
+# Downstream workflows: tags pushed with GITHUB_TOKEN do not start other
+# workflows, so this job dispatches docker-publish.yml and
+# admin-ui-cpanel-deploy.yml via workflow_dispatch after the tag exists.
+# Manual paths remain: push a v* tag yourself, or Run workflow on those
+# workflows. Do not also trigger on release: published (avoids double builds).
 
 on:
   pull_request:
@@ -169,3 +170,18 @@ jobs:
 
           echo "Dispatched Docker Publish for ${VERSION}"
           echo "- Docker Publish: dispatched (\`${VERSION}\`)." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Trigger Admin UI cPanel Deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+
+          gh workflow run admin-ui-cpanel-deploy.yml \
+            --repo "${{ github.repository }}" \
+            -f ref="${VERSION}"
+
+          echo "Dispatched Admin UI cPanel Deploy for ${VERSION}"
+          echo "- Admin UI cPanel Deploy: dispatched (\`${VERSION}\`)." >> "$GITHUB_STEP_SUMMARY"

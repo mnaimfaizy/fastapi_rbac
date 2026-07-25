@@ -33,3 +33,7 @@ A grouping construct for permissions in this product's RBAC model.
 **Hub runtime**:
 The deployable API package: published Docker Hub backend and worker images (including the Beat scheduler process), plus Postgres, Redis, and external SMTP. Does not include the admin UI.
 _Avoid_: Microservices (when meaning this package), full stack (when including the React frontend)
+
+**Admin UI host**:
+The deployable admin UI package: a static SPA build served from a static host (maintainer dogfood: cPanel at `rbac.mnfprofile.com`), calling the Hub runtime API cross-origin. Does not include the Hub runtime.
+_Avoid_: Hub runtime (when meaning the UI), frontend container (when meaning the static host path), full stack

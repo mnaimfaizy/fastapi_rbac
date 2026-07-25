@@ -1,0 +1,3 @@
+# Admin UI host on cPanel via release-only static deploy
+
+We need a maintainer dogfood path and adopter runbook for the admin UI while keeping it **outside** the Hub runtime. The UI is a cross-origin static SPA at `rbac.mnfprofile.com` (cPanel Apache/LiteSpeed), built with `VITE_API_BASE_URL` pointing at `https://rbac-api.mnfprofile.com/api/v1`, deployed by a **separate** GitHub Actions workflow on `v*` tags plus `workflow_dispatch` (not on every `main` push), with distinctly named jobs for build, upload, and smoke. Vercel/Pages and the Hub `fastapi-rbac-frontend` nginx image remain secondary adopter options; Node-on-cPanel was rejected for dogfood because production Vite output is static files.

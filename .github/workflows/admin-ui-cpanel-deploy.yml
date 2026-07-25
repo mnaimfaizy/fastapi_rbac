@@ -1,0 +1,100 @@
+# Admin UI host → cPanel (static dist/)
+# Triggers: v* tags (same release cadence as Docker Hub) + workflow_dispatch.
+# Not on every push to main. Separate named jobs — do not collapse into one job.
+name: Admin UI cPanel Deploy
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to build (tag, branch, or SHA). Empty = current default branch."
+        required: false
+        default: ""
+
+concurrency:
+  group: admin-ui-cpanel-${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.ref || github.sha) || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  build-admin-ui-assets:
+    name: Build Admin UI Assets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref != '' && github.event.inputs.ref || github.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: react-frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: react-frontend
+        run: npm ci --legacy-peer-deps
+
+      - name: Build production assets
+        working-directory: react-frontend
+        env:
+          VITE_API_BASE_URL: ${{ vars.ADMIN_UI_VITE_API_BASE_URL }}
+        run: |
+          export VITE_API_BASE_URL="${VITE_API_BASE_URL:-https://rbac-api.mnfprofile.com/api/v1}"
+          echo "VITE_API_BASE_URL=${VITE_API_BASE_URL}"
+          npm run build
+
+      - name: Ensure SPA .htaccess in dist
+        working-directory: react-frontend
+        run: |
+          if [ ! -f dist/.htaccess ]; then
+            cp public/.htaccess dist/.htaccess
+          fi
+
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-ui-dist
+          path: react-frontend/dist/
+          retention-days: 7
+
+  upload-admin-ui-cpanel:
+    name: Upload Admin UI to cPanel
+    needs: build-admin-ui-assets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download dist artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: admin-ui-dist
+          path: dist
+
+      - name: FTP sync to cPanel document root
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.6
+        with:
+          server: ${{ secrets.UI_FTP_SERVER }}
+          username: ${{ secrets.UI_FTP_USERNAME }}
+          password: ${{ secrets.UI_FTP_PASSWORD }}
+          local-dir: dist/
+          server-dir: ${{ secrets.UI_FTP_SERVER_DIR }}
+          dangerous-clean-slate: false
+
+  smoke-admin-ui-https:
+    name: Smoke Admin UI HTTPS
+    needs: upload-admin-ui-cpanel
+    runs-on: ubuntu-latest
+    steps:
+      - name: HTTPS reachability check
+        env:
+          ADMIN_UI_PUBLIC_URL: ${{ vars.ADMIN_UI_PUBLIC_URL }}
+        run: |
+          set -euo pipefail
+          ADMIN_UI_PUBLIC_URL="${ADMIN_UI_PUBLIC_URL:-https://rbac.mnfprofile.com}"
+          echo "Checking ${ADMIN_UI_PUBLIC_URL}/"
+          curl -fsSI --max-time 30 "${ADMIN_UI_PUBLIC_URL}/" | head -n 20
+          curl -fsS --max-time 30 "${ADMIN_UI_PUBLIC_URL}/" -o /dev/null
+          echo "Admin UI host smoke OK"

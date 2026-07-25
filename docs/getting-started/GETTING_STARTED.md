@@ -42,6 +42,10 @@ Go to: [`../deployment/PRODUCTION_SETUP.md`](../deployment/PRODUCTION_SETUP.md)
 
 Go to: [`../deployment/hub-runtime/index.md`](../deployment/hub-runtime/index.md) and [Oracle Always Free setup](../deployment/hub-runtime/oracle-always-free-setup.md)
 
+### 🖥️ I want to host the admin UI (cPanel / static)
+
+Go to: [`../deployment/admin-ui/index.md`](../deployment/admin-ui/index.md) and [cPanel setup](../deployment/admin-ui/cpanel-setup.md)
+
 ### ❓ I'm having issues
 
 Browse: [`../troubleshooting/`](../troubleshooting/)

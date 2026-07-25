@@ -7,7 +7,7 @@ Deploy the published Docker Hub **API package** (not the admin UI):
 
 plus Postgres, Redis, and external SMTP, behind Caddy HTTPS.
 
-This is the same topology for staging and production-style validation. Frontend hosting is out of scope here.
+This is the same topology for staging and production-style validation. Admin UI hosting is out of scope here — see [Admin UI host](../admin-ui/index.md).
 
 ## Contents
 
@@ -35,6 +35,7 @@ chmod +x bootstrap.sh
 
 ## Related
 
+- Admin UI host: [index](../admin-ui/index.md) · [cPanel setup](../admin-ui/cpanel-setup.md)
 - Research: [Hosting Docker Hub images](../../internal/research/hosting-docker-hub-images.md)
 - ADR: [0003 — Hub runtime on Oracle Always Free](../../adr/0003-hub-runtime-oracle-compose.md)
 - Issue: [#96](https://github.com/mnaimfaizy/fastapi_rbac/issues/96)
