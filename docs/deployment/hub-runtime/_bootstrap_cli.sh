@@ -81,9 +81,20 @@ hub_validate_services() {
   done
 }
 
+hub_env_get() {
+  local key="$1"
+  local line
+  line="$(grep -E "^${key}=" "$ENV_FILE" 2>/dev/null | tail -n1 || true)"
+  if [[ -z "$line" ]]; then
+    printf ''
+    return 0
+  fi
+  printf '%s' "${line#*=}" | tr -d '"' | tr -d "'" | tr -d '\r'
+}
+
 hub_domain() {
   local domain
-  domain="$(grep -E '^DOMAIN=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"' | tr -d "'")"
+  domain="$(hub_env_get DOMAIN)"
   echo "${domain:-rbac-api.mnfprofile.com}"
 }
 
@@ -110,7 +121,11 @@ hub_wait_api_health() {
 }
 
 cmd_up() {
-  local services=("$@")
+  local -a services=()
+  if [[ $# -gt 0 ]]; then
+    services=("$@")
+  fi
+  echo "==> ${SCRIPT_NAME}: up (${HUB_ROLE})${services[*]:+ — ${services[*]}}"
   prepare_env
   hub_require_docker
   if [[ "${HUB_NO_PULL}" -eq 0 ]]; then
@@ -351,6 +366,15 @@ hub_bootstrap_main() {
         ;;
       --no-wait)
         HUB_NO_WAIT=1
+        shift
+        ;;
+      # Accept --up style for users who treat subcommands as flags
+      --up | --down | --restart | --pull | --status | --ps | --logs | --health | --env | --prepare | --config)
+        if [[ -n "$cmd" ]]; then
+          echo "Unexpected flag after command: $1" >&2
+          exit 1
+        fi
+        cmd="${1#--}"
         shift
         ;;
       up | down | restart | pull | status | ps | logs | health | env | prepare | config | exec)

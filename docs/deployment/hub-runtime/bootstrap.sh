@@ -16,6 +16,17 @@ SCRIPT_NAME="$(basename "$0")"
 # shellcheck source=_bootstrap_cli.sh
 source "${ROOT_DIR}/_bootstrap_cli.sh"
 
+env_get() {
+  local key="$1"
+  local line
+  line="$(grep -E "^${key}=" "$ENV_FILE" 2>/dev/null | tail -n1 || true)"
+  if [[ -z "$line" ]]; then
+    printf ''
+    return 0
+  fi
+  printf '%s' "${line#*=}" | tr -d '"' | tr -d "'" | tr -d '\r'
+}
+
 gen_secret() {
   if command -v openssl >/dev/null 2>&1; then
     openssl rand -hex 32
@@ -65,13 +76,13 @@ prepare_env() {
     set_kv_if_empty "$key" "$(gen_secret)"
   done
 
-  db_user="$(grep -E '^DATABASE_USER=' "$ENV_FILE" | cut -d= -f2- | tr -d '"' | tr -d "'")"
-  db_pass="$(grep -E '^DATABASE_PASSWORD=' "$ENV_FILE" | cut -d= -f2- | tr -d '"' | tr -d "'")"
-  db_name="$(grep -E '^DATABASE_NAME=' "$ENV_FILE" | cut -d= -f2- | tr -d '"' | tr -d "'")"
+  db_user="$(env_get DATABASE_USER)"
+  db_pass="$(env_get DATABASE_PASSWORD)"
+  db_name="$(env_get DATABASE_NAME)"
   db_user="${db_user:-postgres}"
   db_name="${db_name:-fastapi_db}"
 
-  domain="$(grep -E '^DOMAIN=' "$ENV_FILE" | cut -d= -f2- | tr -d '"' | tr -d "'")"
+  domain="$(env_get DOMAIN)"
   domain="${domain:-rbac-api.mnfprofile.com}"
 
   if ! grep -qE "^TOKEN_ISSUER=" "$ENV_FILE"; then
