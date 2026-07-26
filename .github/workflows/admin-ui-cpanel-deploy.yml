@@ -51,9 +51,12 @@ jobs:
       - name: Ensure SPA .htaccess in dist
         working-directory: react-frontend
         run: |
-          if [ ! -f dist/.htaccess ]; then
-            cp public/.htaccess dist/.htaccess
-          fi
+          set -euo pipefail
+          # Always overwrite so LiteSpeed rules stay in sync with the repo.
+          cp -f public/.htaccess dist/.htaccess
+          test -f dist/.htaccess
+          echo "dist/.htaccess present ($(wc -c < dist/.htaccess) bytes)"
+          ls -la dist/.htaccess dist/index.html
 
       - name: Upload dist artifact
         uses: actions/upload-artifact@v4
@@ -61,6 +64,8 @@ jobs:
           name: admin-ui-dist
           path: react-frontend/dist/
           retention-days: 7
+          # Dotfiles (.htaccess) must ship for SPA fallback on cPanel/LiteSpeed.
+          include-hidden-files: true
 
   upload-admin-ui-cpanel:
     name: Upload Admin UI to cPanel
@@ -97,4 +102,21 @@ jobs:
           echo "Checking ${ADMIN_UI_PUBLIC_URL}/"
           curl -fsSI --max-time 30 "${ADMIN_UI_PUBLIC_URL}/" | head -n 20
           curl -fsS --max-time 30 "${ADMIN_UI_PUBLIC_URL}/" -o /dev/null
-          echo "Admin UI host smoke OK"
+
+          # Hard-refresh / deep-link path must return the SPA shell, not LiteSpeed 404 HTML.
+          ROUTE="${ADMIN_UI_PUBLIC_URL%/}/login"
+          echo "Checking SPA fallback: ${ROUTE}"
+          BODY="$(mktemp)"
+          CODE="$(curl -sS --max-time 30 -o "${BODY}" -w "%{http_code}" "${ROUTE}")"
+          # Rewrite → 200; ErrorDocument 404 /index.html → 404 with SPA body (still usable).
+          if [[ "${CODE}" != "200" && "${CODE}" != "404" ]]; then
+            echo "::error::Unexpected HTTP ${CODE} for ${ROUTE}"
+            head -c 500 "${BODY}" || true
+            exit 1
+          fi
+          if ! grep -qE 'id="root"|/assets/index-' "${BODY}"; then
+            echo "::error::SPA shell not found at ${ROUTE} (LiteSpeed/host 404 page? HTTP ${CODE})"
+            head -c 800 "${BODY}" || true
+            exit 1
+          fi
+          echo "Admin UI host smoke OK (root + /login SPA shell, HTTP ${CODE})"

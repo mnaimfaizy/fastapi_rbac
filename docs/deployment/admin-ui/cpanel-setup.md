@@ -1,7 +1,7 @@
 # Admin UI host — cPanel setup
 
 **Created:** 2026-07-25
-**Last verified:** 2026-07-25
+**Last verified:** 2026-07-26
 
 First-time path to serve the Admin UI host on cPanel at `rbac.mnfprofile.com`, deployed by GitHub Actions on product releases.
 
@@ -93,7 +93,9 @@ curl -fsSI "https://rbac.mnfprofile.com/"
 # Trigger a password-reset email and confirm the link uses rbac.mnfprofile.com
 ```
 
-Client-side routes (e.g. `/reset-password`) must not 404 on refresh — that is what `.htaccess` is for.
+Client-side routes (e.g. `/login`, `/reset-password`) must not show the host/LiteSpeed 404 page on refresh — that is what `react-frontend/public/.htaccess` is for (rewrite to `index.html`, `ErrorDocument 404`, LiteSpeed `CacheDisable`).
+
+If a deep link still shows a **cached** LiteSpeed 404 after deploy: in cPanel → **LiteSpeed Web Cache Manager** (or Cache), purge that subdomain, then hard-refresh. Confirm `.htaccess` exists in the subdomain document root (FTP must upload dotfiles).
 
 ---
 
