@@ -6,6 +6,36 @@ This file serves as the single source of truth for release history and versionin
 
 ## Version History
 
+### v0.1.1-beta (2026-07-26)
+
+_Pre-release._
+
+**New Features:**
+
+- Hub runtime split Compose package and bootstraps for Neon + Upstash deployments
+- Admin UI host cPanel release deploy workflow
+
+**Bug Fixes:**
+
+- Hub runtime deployment fixes: required JWT env defaults, host CA bundle for Upstash TLS, and SSLConnection for async Redis TLS
+- Dispatch Docker Publish workflow after release tag creation (GITHUB_TOKEN tag pushes do not start dependent workflows)
+
+**Breaking Changes:**
+
+- None
+
+**Documentation:**
+
+- Hub runtime package with Oracle Always Free setup guide and .env-only secrets bootstrap
+- Hub runtime split requirements for Neon, Upstash, and hostname-only REDIS_HOST
+- Document UI_FTP_* secrets in the release checklist
+
+**Technical Details:**
+
+- Consolidate HTTP rate limits onto slowapi with shared Redis-backed limiter; remove unused fastapi-limiter scaffold
+- Split Docker publish into parallel matrix job DAG; promote :latest only after all builds succeed (ADR 0002)
+- Rename Admin UI FTP CI secrets to UI_FTP_*
+
 ### v0.1.0-beta (2026-07-24)
 
 _Pre-release._
