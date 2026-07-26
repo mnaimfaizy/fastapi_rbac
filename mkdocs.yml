@@ -56,6 +56,7 @@ nav:
       - "Hub runtime":
           - "Overview": "deployment/hub-runtime/index.md"
           - "Oracle Always Free setup": "deployment/hub-runtime/oracle-always-free-setup.md"
+          - "Split + managed data": "deployment/hub-runtime/split-managed-data.md"
       - "Admin UI host":
           - "Overview": "deployment/admin-ui/index.md"
           - "cPanel setup": "deployment/admin-ui/cpanel-setup.md"
