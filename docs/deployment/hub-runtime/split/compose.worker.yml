@@ -32,6 +32,9 @@ services:
   beat:
     image: mnaimfaizy/fastapi-rbac-worker:${IMAGE_TAG:-v1.2.3}
     restart: unless-stopped
+    # Named volumes are root-owned; image USER is appuser (uid 1000). Start as
+    # root only long enough to chown the schedule dir, then drop privileges.
+    user: "0:0"
     env_file:
       - .env
     environment:
@@ -45,7 +48,7 @@ services:
       [
         "/bin/bash",
         "-c",
-        "python ./app/backend_pre_start.py && exec celery -A app.celery_app beat --loglevel=info --schedule=/var/lib/celery/celerybeat-schedule.db",
+        "set -euo pipefail && mkdir -p /var/lib/celery && chown -R appuser:appuser /var/lib/celery && exec runuser -u appuser -- env PYTHONPATH=/app bash -c 'python ./app/backend_pre_start.py && exec celery -A app.worker:celery_app beat --loglevel=info --schedule=/var/lib/celery/celerybeat-schedule.db'",
       ]
     depends_on:
       worker:
