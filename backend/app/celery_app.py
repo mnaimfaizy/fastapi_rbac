@@ -17,6 +17,10 @@ celery_config = get_cached_celery_config()
 # Update the Celery configuration
 celery_app.conf.update(celery_config)
 
+# Eagerly import task modules so `celery -A app.celery_app` registers them even
+# when conf.imports is not applied yet (e.g. inspect / early worker boot).
+from app import worker as _worker_tasks  # noqa: E402, F401
+
 # Conditional configuration for development mode
 if settings.MODE == ModeEnum.development:
     # Print debug information when running in development mode

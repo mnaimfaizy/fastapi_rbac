@@ -8,4 +8,5 @@ export PYTHONPATH="/app"
 python ./app/backend_pre_start.py
 
 echo "Starting Celery worker..."
-exec celery -A app.celery_app worker --loglevel=info -Q emails,maintenance,logging,user_management,default,periodic_tasks --concurrency=2
+# Load app.worker so @celery_app.task handlers are registered (not just the app).
+exec celery -A app.worker:celery_app worker --loglevel=info -Q emails,maintenance,logging,user_management,default,periodic_tasks --concurrency=2

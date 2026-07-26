@@ -33,7 +33,7 @@ PYTHONPATH=$PYTHONPATH python -c "import sys; print('Python path:', sys.path)"
 python ./app/backend_pre_start.py
 
 echo "Starting Celery worker..."
-celery -A app.celery_app worker --loglevel=info -Q emails,maintenance,logging,user_management,default,periodic_tasks --concurrency=2
+celery -A app.worker:celery_app worker --loglevel=info -Q emails,maintenance,logging,user_management,default,periodic_tasks --concurrency=2
 
 # If you want to run Celery beat (scheduler) in the same container
 # Start with:
