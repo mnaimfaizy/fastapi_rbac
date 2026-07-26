@@ -76,6 +76,11 @@ require_managed_data_env() {
     echo "Set REDIS_HOST in ${ENV_FILE} to your managed Redis host (not Compose 'redis')." >&2
     exit 1
   fi
+  if [[ "$redis_host" == *"://"* || "$redis_host" == *"@"* || "$redis_host" == *":"* ]]; then
+    echo "REDIS_HOST must be a hostname only (e.g. xxx.upstash.io), not a rediss:// URL." >&2
+    echo "Put the full URL in CELERY_BROKER_URL / CELERY_RESULT_BACKEND; password in REDIS_PASSWORD." >&2
+    exit 1
+  fi
   if [[ -z "$broker" || "$broker" == redis://redis:* || "$broker" == redis://redis/* ]]; then
     echo "Set CELERY_BROKER_URL in ${ENV_FILE} to your managed Redis URL (e.g. Upstash rediss://...)." >&2
     exit 1

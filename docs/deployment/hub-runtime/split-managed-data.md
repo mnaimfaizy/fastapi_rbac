@@ -73,13 +73,17 @@ Default single-VM [`bootstrap.sh`](./bootstrap.sh) still forces `CELERY_*` → `
 2. Copy the TLS URL into both:
 
 ```bash
-CELERY_BROKER_URL=rediss://default:TOKEN@HOST:PORT
-CELERY_RESULT_BACKEND=rediss://default:TOKEN@HOST:PORT
-REDIS_HOST=HOST
-REDIS_PORT=PORT
-REDIS_PASSWORD=TOKEN
+# Hostname only — never paste the full rediss:// URL into REDIS_HOST
+REDIS_HOST=prompt-hippo-xxxxx.upstash.io
+REDIS_PORT=6379
+REDIS_PASSWORD=YOUR_UPSTASH_TOKEN
 REDIS_SSL=true
+# Full TLS URLs for Celery only:
+CELERY_BROKER_URL=rediss://default:YOUR_UPSTASH_TOKEN@prompt-hippo-xxxxx.upstash.io:6379
+CELERY_RESULT_BACKEND=rediss://default:YOUR_UPSTASH_TOKEN@prompt-hippo-xxxxx.upstash.io:6379
 ```
+
+If `REDIS_HOST` includes `rediss://…@…:6379`, the app appends `:6379` again and Redis wait fails with `idna` / `label empty or too long`.
 
 3. **CA bundle:** production images require `/app/certs/ca.crt`. Split Compose mounts the host trust store (`/etc/ssl/certs/ca-certificates.crt`) there for Upstash public CAs. On the VM:
 
