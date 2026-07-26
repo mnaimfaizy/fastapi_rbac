@@ -15,13 +15,14 @@ This is the same topology for staging and production-style validation. Admin UI 
 | --- | --- |
 | [`compose.yml`](./compose.yml) | One-package Compose: `caddy`, `api`, `worker`, `beat`, `db`, `redis` |
 | [`env.example`](./env.example) | Copy to `.env` on the host (never commit `.env`) |
-| [`bootstrap.sh`](./bootstrap.sh) | Generate empty secrets, pull images, start stack, wait for health |
+| [`bootstrap.sh`](./bootstrap.sh) | CLI: prepare `.env`, pull/start/stop, status, logs, health (default: `up`) |
+| [`_bootstrap_cli.sh`](./_bootstrap_cli.sh) | Shared subcommands/flags (sourced by one-box + split bootstraps) |
 | [`Caddyfile`](./Caddyfile) | TLS for `DOMAIN` → `api:8000` |
 | [Oracle Always Free first-time setup](./oracle-always-free-setup.md) | Free VM path for maintainers (single-VM Compose) |
 | [Split + managed data (alternative)](./split-managed-data.md) | Two AMD micros + Neon + Upstash; stop worker when idle |
 | [`split/compose.api.yml`](./split/compose.api.yml) | Edge only: Caddy + API |
 | [`split/compose.worker.yml`](./split/compose.worker.yml) | Worker + Beat only |
-| [`split/bootstrap-api.sh`](./split/bootstrap-api.sh) / [`bootstrap-worker.sh`](./split/bootstrap-worker.sh) | Per-role bootstrap (managed DB/Redis required) |
+| [`split/bootstrap-api.sh`](./split/bootstrap-api.sh) / [`bootstrap-worker.sh`](./split/bootstrap-worker.sh) | Same CLI for API edge / worker edge (managed DB/Redis required) |
 
 ## Quick start (VM already prepared)
 
@@ -30,12 +31,18 @@ cd docs/deployment/hub-runtime
 cp env.example .env
 # Edit .env: IMAGE_TAG, DOMAIN, SMTP_*, FIRST_SUPERUSER_EMAIL
 chmod +x bootstrap.sh
-./bootstrap.sh
+./bootstrap.sh --help
+./bootstrap.sh                 # same as: ./bootstrap.sh up
+./bootstrap.sh status
+./bootstrap.sh logs -f api
+./bootstrap.sh up api          # single service
+./bootstrap.sh health
 ```
 
 - Pin `IMAGE_TAG=vX.Y.Z` by default; set `IMAGE_TAG=latest` only for a quick check.
 - Default public host: `https://rbac-api.mnfprofile.com`
 - API health: `https://rbac-api.mnfprofile.com/api/v1/health`
+- Global flags: `--env-file`, `--no-pull`, `--no-wait`
 
 ## Related
 
