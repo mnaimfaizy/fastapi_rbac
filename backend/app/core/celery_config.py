@@ -34,6 +34,10 @@ def get_celery_config() -> Dict[str, Any]:
         # Broker and Backend
         "broker_url": settings.CELERY_BROKER_URL,
         "result_backend": settings.CELERY_RESULT_BACKEND,
+        # Task modules must be imported by the worker process. The API registers
+        # them via background_tasks → app.worker; celery -A app.celery_app alone
+        # does not load that module, which leaves [tasks] empty and discards work.
+        "imports": ("app.worker",),
         # Serialization
         "task_serializer": settings.CELERY_TASK_SERIALIZER,
         "result_serializer": settings.CELERY_RESULT_SERIALIZER,

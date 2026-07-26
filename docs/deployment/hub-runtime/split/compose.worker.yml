@@ -24,7 +24,7 @@ services:
       [
         "/bin/bash",
         "-c",
-        "export PYTHONPATH=/app && python ./app/backend_pre_start.py && exec celery -A app.celery_app worker --loglevel=info -Q emails,maintenance,logging,user_management,default,periodic_tasks --concurrency=1",
+        "export PYTHONPATH=/app && python ./app/backend_pre_start.py && exec celery -A app.worker:celery_app worker --loglevel=info -Q emails,maintenance,logging,user_management,default,periodic_tasks --concurrency=1",
       ]
     networks:
       - hub_worker

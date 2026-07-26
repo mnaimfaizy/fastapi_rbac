@@ -85,6 +85,8 @@ CELERY_RESULT_BACKEND=rediss://default:YOUR_UPSTASH_TOKEN@prompt-hippo-xxxxx.ups
 
 If `REDIS_HOST` includes `rediss://…@…:6379`, the app appends `:6379` again and Redis wait fails with `idna` / `label empty or too long`.
 
+Worker logs with an empty `[tasks]` list and `Received unregistered task of type 'app.worker…'` mean the process loaded `app.celery_app` without importing `app.worker`. Use `compose.worker.yml` as shipped (`celery -A app.worker:celery_app`) or a worker image that registers `imports=("app.worker",)`.
+
 3. **CA bundle:** production images require `/app/certs/ca.crt`. Split Compose mounts the host trust store (`/etc/ssl/certs/ca-certificates.crt`) there for Upstash public CAs. On the VM:
 
 ```bash
