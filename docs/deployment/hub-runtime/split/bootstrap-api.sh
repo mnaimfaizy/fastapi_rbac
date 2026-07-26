@@ -17,6 +17,7 @@ fill_secrets_and_tokens
 require_managed_data_env
 warn_smtp_if_placeholder
 require_docker
+require_host_ca_bundle
 
 echo "Pulling API edge images (IMAGE_TAG from ${ENV_FILE})..."
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" pull

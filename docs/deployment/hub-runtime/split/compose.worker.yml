@@ -17,6 +17,8 @@ services:
     environment:
       MODE: production
       PYTHONPATH: /app
+    volumes:
+      - ${HOST_CA_BUNDLE:-/etc/ssl/certs/ca-certificates.crt}:/app/certs/ca.crt:ro
     # 1 GB micro: lower concurrency than the image default (2).
     command:
       [
@@ -36,14 +38,15 @@ services:
       MODE: production
       CELERY_BEAT_SCHEDULER: celery.beat:PersistentScheduler
       PYTHONPATH: /app
+    volumes:
+      - ${HOST_CA_BUNDLE:-/etc/ssl/certs/ca-certificates.crt}:/app/certs/ca.crt:ro
+      - beat_schedule:/var/lib/celery
     command:
       [
         "/bin/bash",
         "-c",
         "python ./app/backend_pre_start.py && exec celery -A app.celery_app beat --loglevel=info --schedule=/var/lib/celery/celerybeat-schedule.db",
       ]
-    volumes:
-      - beat_schedule:/var/lib/celery
     depends_on:
       worker:
         condition: service_started

@@ -98,3 +98,15 @@ require_docker() {
     exit 1
   fi
 }
+
+require_host_ca_bundle() {
+  local bundle
+  bundle="$(grep -E '^HOST_CA_BUNDLE=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"' | tr -d "'")"
+  bundle="${bundle:-/etc/ssl/certs/ca-certificates.crt}"
+  if [[ ! -f "$bundle" ]]; then
+    echo "CA bundle not found at ${bundle}." >&2
+    echo "Install with: sudo apt-get update && sudo apt-get install -y ca-certificates" >&2
+    echo "Or set HOST_CA_BUNDLE in ${ENV_FILE} to a PEM bundle path." >&2
+    exit 1
+  fi
+}

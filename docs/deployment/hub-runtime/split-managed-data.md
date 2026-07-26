@@ -81,6 +81,15 @@ REDIS_PASSWORD=TOKEN
 REDIS_SSL=true
 ```
 
+3. **CA bundle:** production images require `/app/certs/ca.crt`. Split Compose mounts the host trust store (`/etc/ssl/certs/ca-certificates.crt`) there for Upstash public CAs. On the VM:
+
+```bash
+sudo apt-get update && sudo apt-get install -y ca-certificates
+ls -la /etc/ssl/certs/ca-certificates.crt
+```
+
+Override with `HOST_CA_BUNDLE=/path/to/bundle.crt` in `.env` if needed.
+
 ---
 
 ## 2. Oracle micro #1 — API + Caddy

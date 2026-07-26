@@ -33,6 +33,10 @@ services:
       - .env
     environment:
       MODE: production
+    # Production Redis TLS expects /app/certs/ca.crt (self-hosted Redis).
+    # Upstash uses public CAs — mount the host trust store as that path.
+    volumes:
+      - ${HOST_CA_BUNDLE:-/etc/ssl/certs/ca-certificates.crt}:/app/certs/ca.crt:ro
     # Published image entrypoint uses 4 Gunicorn workers — too heavy for 1 GB micros.
     command:
       [

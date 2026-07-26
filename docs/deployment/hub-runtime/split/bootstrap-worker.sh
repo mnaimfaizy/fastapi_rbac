@@ -17,6 +17,7 @@ fill_secrets_and_tokens
 require_managed_data_env
 warn_smtp_if_placeholder
 require_docker
+require_host_ca_bundle
 
 # Prefer scp/copy of the API VM .env so JWT/DB/Redis secrets match exactly.
 
