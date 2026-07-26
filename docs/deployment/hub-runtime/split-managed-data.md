@@ -88,6 +88,8 @@ If `REDIS_HOST` includes `rediss://…@…:6379`, the app appends `:6379` again 
 
 Worker logs with an empty `[tasks]` list and `Received unregistered task of type 'app.worker…'` mean the process loaded `app.celery_app` without importing `app.worker`. Use `compose.worker.yml` as shipped (`celery -A app.worker:celery_app`) or a worker image that registers `imports=("app.worker",)`.
 
+Beat `Permission denied: '/var/lib/celery/celerybeat-schedule.db'`: the schedule volume is root-owned while the image runs as `appuser`. Current `compose.worker.yml` chowns that dir on start. After pulling the fix: `git pull` then `docker compose --env-file .env -f compose.worker.yml up -d --force-recreate beat` (or `./bootstrap-worker.sh up beat` once the compose file is updated).
+
 3. **CA bundle:** production images require `/app/certs/ca.crt`. Split Compose mounts the host trust store (`/etc/ssl/certs/ca-certificates.crt`) there for Upstash public CAs. On the VM:
 
 ```bash
