@@ -14,6 +14,7 @@ Features:
 - Health check capabilities
 """
 
+import asyncio
 import logging
 import os
 import socket
@@ -52,6 +53,8 @@ class RedisConnectionFactory:
 
     _pool: Optional[ConnectionPool] = None
     _client: Optional[Redis] = None
+    # asyncio loop id that owns _pool (Celery uses a new loop per asyncio.run)
+    _pool_loop_id: Optional[int] = None
 
     @classmethod
     def _is_ssl_enabled(cls, mode: ModeEnum) -> bool:
@@ -246,6 +249,25 @@ class RedisConnectionFactory:
         return ConnectionPool(**pool_params)
 
     @classmethod
+    def _current_loop_id(cls) -> Optional[int]:
+        try:
+            return id(asyncio.get_running_loop())
+        except RuntimeError:
+            return None
+
+    @classmethod
+    def discard_pool(cls) -> None:
+        """
+        Drop the cached pool without awaiting disconnect.
+
+        Used when the owning asyncio loop is already closed (e.g. after
+        Celery ``asyncio.run``), where ``await pool.disconnect()`` would fail.
+        """
+        cls._pool = None
+        cls._client = None
+        cls._pool_loop_id = None
+
+    @classmethod
     def get_connection_pool(cls, db: int = 0, max_connections: int = 50) -> ConnectionPool:
         """
         Get or create a singleton connection pool.
@@ -257,8 +279,16 @@ class RedisConnectionFactory:
         Returns:
             ConnectionPool instance
         """
+        loop_id = cls._current_loop_id()
+        # Prefork Celery workers call asyncio.run() per task; a pool created on
+        # loop A must not be reused on loop B ("Future attached to a different loop").
+        if cls._pool is not None and cls._pool_loop_id != loop_id:
+            logger.info("Redis pool was bound to another event loop; creating a new pool")
+            cls.discard_pool()
+
         if cls._pool is None:
             cls._pool = cls._create_connection_pool(db=db, max_connections=max_connections)
+            cls._pool_loop_id = loop_id
         return cls._pool
 
     @classmethod
@@ -330,13 +360,22 @@ class RedisConnectionFactory:
         Close the connection pool and cleanup resources.
         """
         if cls._pool is not None:
-            await cls._pool.disconnect()
+            try:
+                await cls._pool.disconnect()
+            except RuntimeError as e:
+                # Loop already closed (Celery task teardown) — drop references.
+                logger.debug("Redis pool disconnect skipped: %s", e)
             cls._pool = None
             logger.info("Redis connection pool closed")
 
         if cls._client is not None:
-            await cls._client.close()
+            try:
+                await cls._client.close()
+            except RuntimeError as e:
+                logger.debug("Redis client close skipped: %s", e)
             cls._client = None
+
+        cls._pool_loop_id = None
 
 
 # Convenience functions for backward compatibility

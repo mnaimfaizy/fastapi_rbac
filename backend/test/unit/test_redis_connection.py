@@ -23,11 +23,9 @@ from app.utils.redis_connection import RedisConnectionFactory
 @pytest.fixture(autouse=True)
 def _reset_factory() -> Generator[None, None, None]:
     """Reset RedisConnectionFactory singleton state between tests."""
-    RedisConnectionFactory._pool = None
-    RedisConnectionFactory._client = None
+    RedisConnectionFactory.discard_pool()
     yield
-    RedisConnectionFactory._pool = None
-    RedisConnectionFactory._client = None
+    RedisConnectionFactory.discard_pool()
 
 
 class TestRedisConnectionFactory:
@@ -184,6 +182,23 @@ class TestRedisConnectionFactory:
         pool2 = RedisConnectionFactory.get_connection_pool()
         assert pool2 == mock_pool
         assert mock_create_pool.call_count == 1  # Not called again
+
+    @patch("app.utils.redis_connection.RedisConnectionFactory._create_connection_pool")
+    def test_get_connection_pool_recreates_for_new_event_loop(self, mock_create_pool: MagicMock) -> None:
+        """Celery asyncio.run per task must not reuse a pool from a closed loop."""
+        mock_pool_a = MagicMock(spec=ConnectionPool)
+        mock_pool_b = MagicMock(spec=ConnectionPool)
+        mock_create_pool.return_value = mock_pool_b
+
+        RedisConnectionFactory._pool = mock_pool_a
+        RedisConnectionFactory._pool_loop_id = 111
+
+        with patch.object(RedisConnectionFactory, "_current_loop_id", return_value=222):
+            pool = RedisConnectionFactory.get_connection_pool()
+
+        assert pool == mock_pool_b
+        assert mock_create_pool.call_count == 1
+        assert RedisConnectionFactory._pool_loop_id == 222
 
     @pytest_asyncio.fixture
     async def mock_redis_pool(self) -> AsyncGenerator[MagicMock, None]:
