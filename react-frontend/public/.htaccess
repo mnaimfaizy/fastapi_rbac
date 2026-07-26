@@ -1,9 +1,32 @@
-# SPA fallback for Apache / LiteSpeed (cPanel Admin UI host)
+# SPA fallback for Apache / LiteSpeed (cPanel Admin UI host).
+# Without this, hard refresh / deep links (e.g. /login) hit a real 404;
+# LiteSpeed Cache can then keep serving that cached 404 page.
+
+DirectoryIndex index.html
+
+# Content negotiation can map /login to a non-existent login.* and 404.
+<IfModule mod_negotiation.c>
+  Options -MultiViews
+</IfModule>
+
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
+
+  # Serve real files (hashed /assets/*) and directories as-is.
   RewriteRule ^index\.html$ - [L]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteRule . /index.html [L]
+  RewriteCond %{REQUEST_FILENAME} !-l
+  # Relative target is more reliable on LiteSpeed than an absolute /index.html.
+  RewriteRule . index.html [L]
+</IfModule>
+
+# Backup when rewrite is disabled: still return the SPA shell.
+ErrorDocument 404 /index.html
+
+# Do not let LiteSpeed Cache store HTML/404 responses for client routes.
+# Hashed assets under /assets/ remain fine to cache by URL uniqueness.
+<IfModule LiteSpeed>
+  CacheDisable public /
 </IfModule>
