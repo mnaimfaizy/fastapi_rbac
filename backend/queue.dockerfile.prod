@@ -97,9 +97,9 @@ RUN chown -R appuser:appuser /app
 # Switch to non-root user
 USER appuser
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD celery -A app.celery_app inspect ping || exit 1
+# Health check (worker). Compose overrides this for beat (inspect ping is worker-only).
+HEALTHCHECK --interval=60s --timeout=20s --start-period=120s --retries=3 \
+    CMD celery -A app.worker:celery_app inspect ping -t 10 || exit 1
 
 # The actual command will be specified in docker-compose
 CMD ["/bin/bash", "/app/scripts/docker/start-worker.sh"]
