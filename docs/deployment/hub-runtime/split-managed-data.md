@@ -90,6 +90,8 @@ Worker logs with an empty `[tasks]` list and `Received unregistered task of type
 
 Beat `Permission denied: '/var/lib/celery/celerybeat-schedule.db'`: the schedule volume is root-owned while the image runs as `appuser`. Current `compose.worker.yml` chowns that dir on start. After pulling the fix: `git pull` then `docker compose --env-file .env -f compose.worker.yml up -d --force-recreate beat` (or `./bootstrap-worker.sh up beat` once the compose file is updated).
 
+`STATUS … (unhealthy)` while logs show worker/beat ready: the worker image’s default HEALTHCHECK (`celery inspect ping` on `app.celery_app`) is a false negative for Hub (and is wrong for beat). Compose overrides healthchecks; recreate after pull: `docker compose --env-file .env -f compose.worker.yml up -d --force-recreate`.
+
 3. **CA bundle:** production images require `/app/certs/ca.crt`. Split Compose mounts the host trust store (`/etc/ssl/certs/ca-certificates.crt`) there for Upstash public CAs. On the VM:
 
 ```bash
