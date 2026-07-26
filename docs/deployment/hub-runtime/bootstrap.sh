@@ -51,6 +51,9 @@ db_name="$(grep -E '^DATABASE_NAME=' "$ENV_FILE" | cut -d= -f2- | tr -d '"' | tr
 db_user="${db_user:-postgres}"
 db_name="${db_name:-fastapi_db}"
 
+domain="$(grep -E '^DOMAIN=' "$ENV_FILE" | cut -d= -f2- | tr -d '"' | tr -d "'")"
+domain="${domain:-rbac-api.mnfprofile.com}"
+
 sync_kv() {
   local key="$1"
   local value="$2"
@@ -63,6 +66,26 @@ sync_kv() {
   fi
   rm -f "${ENV_FILE}.bak"
 }
+
+# Production Settings require these (not secrets — stable JWT iss/aud + password-date floor)
+if ! grep -qE "^TOKEN_ISSUER=" "$ENV_FILE"; then
+  printf 'TOKEN_ISSUER=fastapi-rbac\n' >>"$ENV_FILE"
+  echo "Added TOKEN_ISSUER"
+else
+  set_kv_if_empty "TOKEN_ISSUER" "fastapi-rbac"
+fi
+if ! grep -qE "^TOKEN_AUDIENCE=" "$ENV_FILE"; then
+  printf 'TOKEN_AUDIENCE=%s\n' "$domain" >>"$ENV_FILE"
+  echo "Added TOKEN_AUDIENCE=${domain}"
+else
+  set_kv_if_empty "TOKEN_AUDIENCE" "$domain"
+fi
+if ! grep -qE "^USER_CHANGED_PASSWORD_DATE=" "$ENV_FILE"; then
+  printf 'USER_CHANGED_PASSWORD_DATE=2026-01-01\n' >>"$ENV_FILE"
+  echo "Added USER_CHANGED_PASSWORD_DATE"
+else
+  set_kv_if_empty "USER_CHANGED_PASSWORD_DATE" "2026-01-01"
+fi
 
 sync_kv "POSTGRES_USER" "$db_user"
 sync_kv "POSTGRES_PASSWORD" "$db_pass"

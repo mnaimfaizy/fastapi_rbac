@@ -54,81 +54,103 @@ class RedisConnectionFactory:
     _client: Optional[Redis] = None
 
     @classmethod
-    def _get_ssl_context(cls, mode: ModeEnum) -> Optional[ssl.SSLContext]:
-        """
-        Create and configure SSL context for Redis connections.
-
-        Args:
-            mode: Current application mode (development, testing, production)
-
-        Returns:
-            Configured SSL context for production, None for development/testing
-
-        Raises:
-            RuntimeError: If SSL is required but certificates are missing
-        """
+    def _is_ssl_enabled(cls, mode: ModeEnum) -> bool:
+        """Return whether Redis TLS should be used for the given mode."""
         if mode == ModeEnum.development:
-            logger.info("Development mode: SSL disabled for Redis")
-            return None
-
+            return False
         if mode == ModeEnum.testing:
-            # Testing mode may use SSL depending on environment
-            redis_ssl = os.getenv("REDIS_SSL", "false").lower() == "true"
-            if not redis_ssl:
-                logger.info("Testing mode: SSL disabled for Redis")
-                return None
+            return os.getenv("REDIS_SSL", "false").lower() == "true"
+        # Production defaults to TLS (self-hosted Redis); set REDIS_SSL=false for
+        # plain Compose Redis on the one-box Hub runtime.
+        return os.getenv("REDIS_SSL", "true").lower() == "true"
 
-        # Create SSL context for production and testing (when enabled)
-        ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
-
-        # Path to certificate files
+    @classmethod
+    def _get_cert_dir(cls) -> str:
+        """Resolve the directory that holds Redis TLS materials."""
         cert_path = os.getenv("REDIS_CERT_PATH", "/app/certs")
         if not os.path.exists(cert_path):
             # Fallback to local certs directory for development containers
             cert_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "certs")
             logger.info(f"Using fallback certificate path: {cert_path}")
+        return cert_path
 
+    @classmethod
+    def _get_ssl_connection_kwargs(cls, mode: ModeEnum) -> Optional[Dict[str, Any]]:
+        """
+        Build kwargs for redis.asyncio.SSLConnection.
+
+        redis-py asyncio does not accept a boolean ``ssl=`` kwarg on Connection;
+        TLS requires ``SSLConnection`` plus ``ssl_ca_certs`` / related fields.
+        """
+        if not cls._is_ssl_enabled(mode):
+            if mode == ModeEnum.development:
+                logger.info("Development mode: SSL disabled for Redis")
+            elif mode == ModeEnum.testing:
+                logger.info("Testing mode: SSL disabled for Redis")
+            else:
+                logger.info("Production mode: REDIS_SSL disabled for Redis")
+            return None
+
+        cert_path = cls._get_cert_dir()
         ca_cert_path = os.path.join(cert_path, "ca.crt")
 
-        # Verify CA certificate exists
         if not os.path.exists(ca_cert_path):
             error_msg = (
                 f"Redis SSL is enabled but CA certificate not found at {ca_cert_path}. "
-                "Generate certificates using backend/certs/generate-certs.sh"
+                "Generate certificates using backend/certs/generate-certs.sh "
+                "or mount a CA bundle at that path for managed Redis (e.g. Upstash)."
             )
             if mode == ModeEnum.production:
                 logger.error(error_msg)
                 raise RuntimeError(error_msg)
-            else:
-                logger.warning(error_msg)
-                return None
+            logger.warning(error_msg)
+            return None
 
-        # Load CA certificate
-        try:
-            ssl_context.load_verify_locations(cafile=ca_cert_path)
-            logger.info(f"Loaded CA certificate from {ca_cert_path}")
-        except Exception as e:
-            error_msg = f"Failed to load CA certificate: {e}"
-            if mode == ModeEnum.production:
-                logger.error(error_msg)
-                raise RuntimeError(error_msg)
-            else:
-                logger.warning(error_msg)
-                return None
+        logger.info(f"Loaded CA certificate from {ca_cert_path}")
 
-        # Configure SSL context for security
-        ssl_context.check_hostname = True
+        check_hostname = True
+        if mode == ModeEnum.testing:
+            check_hostname = os.getenv("REDIS_SSL_CHECK_HOSTNAME", "false").lower() == "true"
+            logger.info(f"Testing mode: SSL hostname verification = {check_hostname}")
+
+        kwargs: Dict[str, Any] = {
+            "ssl_ca_certs": ca_cert_path,
+            "ssl_cert_reqs": "required",
+            "ssl_check_hostname": check_hostname,
+            "ssl_min_version": ssl.TLSVersion.TLSv1_2,
+        }
+
+        # Optional mTLS client certificates (self-hosted Redis); managed Redis
+        # such as Upstash typically only needs the CA / system trust store.
+        certfile = os.path.join(cert_path, "redis.crt")
+        keyfile = os.path.join(cert_path, "redis.key")
+        if os.path.exists(certfile) and os.path.exists(keyfile):
+            kwargs["ssl_certfile"] = certfile
+            kwargs["ssl_keyfile"] = keyfile
+
+        logger.info("SSL configured for Redis with certificate validation")
+        return kwargs
+
+    @classmethod
+    def _get_ssl_context(cls, mode: ModeEnum) -> Optional[ssl.SSLContext]:
+        """
+        Create and configure SSL context for Redis connections.
+
+        Retained for callers/tests that need an ``ssl.SSLContext``. Runtime
+        pooling uses :meth:`_get_ssl_connection_kwargs` with ``SSLConnection``.
+        """
+        ssl_kwargs = cls._get_ssl_connection_kwargs(mode)
+        if not ssl_kwargs:
+            return None
+
+        ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+        ssl_context.load_verify_locations(cafile=ssl_kwargs["ssl_ca_certs"])
+        ssl_context.check_hostname = bool(ssl_kwargs.get("ssl_check_hostname", True))
         ssl_context.verify_mode = ssl.CERT_REQUIRED
-
-        # Use modern TLS protocols only
         ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
         ssl_context.maximum_version = ssl.TLSVersion.TLSv1_3
-
-        # Set strong cipher suites
         ssl_context.set_ciphers("ECDHE+AESGCM:ECDHE+CHACHA20:DHE+AESGCM:DHE+CHACHA20:!aNULL:!MD5:!DSS")
-
         logger.info("SSL context configured for Redis with certificate validation")
-
         return ssl_context
 
     @classmethod
@@ -176,20 +198,10 @@ class RedisConnectionFactory:
             params["password"] = redis_password
             params["username"] = "default"  # Redis 6+ ACL username
 
-        # Configure SSL for production
-        if mode == ModeEnum.production or (
-            mode == ModeEnum.testing and os.getenv("REDIS_SSL", "false").lower() == "true"
-        ):
-            ssl_context = cls._get_ssl_context(mode)
-            if ssl_context:
-                params["ssl"] = True
-                params["ssl_context"] = ssl_context
-
-                # Override host verification if needed (for self-signed certs in testing)
-                if mode == ModeEnum.testing:
-                    check_hostname = os.getenv("REDIS_SSL_CHECK_HOSTNAME", "false").lower() == "true"
-                    ssl_context.check_hostname = check_hostname
-                    logger.info(f"Testing mode: SSL hostname verification = {check_hostname}")
+        ssl_kwargs = cls._get_ssl_connection_kwargs(mode)
+        if ssl_kwargs:
+            params.update(ssl_kwargs)
+            params["_use_ssl"] = True
 
         # Connection timeout settings
         params["socket_connect_timeout"] = 5  # 5 seconds for initial connection
@@ -216,17 +228,19 @@ class RedisConnectionFactory:
             Configured ConnectionPool instance
         """
         params = cls._get_connection_params(db)
+        use_ssl = bool(params.pop("_use_ssl", False))
+        connection_class = aioredis.SSLConnection if use_ssl else aioredis.Connection
 
         # Add pooling-specific parameters
         pool_params = {
             **params,
             "max_connections": max_connections,
-            "connection_class": aioredis.Connection,
+            "connection_class": connection_class,
         }
 
         logger.info(
             f"Creating Redis connection pool for {params['host']}:{params['port']}, "
-            f"db={db}, max_connections={max_connections}, ssl={params.get('ssl', False)}"
+            f"db={db}, max_connections={max_connections}, ssl={use_ssl}"
         )
 
         return ConnectionPool(**pool_params)
