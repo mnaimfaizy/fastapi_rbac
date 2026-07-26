@@ -6,6 +6,26 @@ This file serves as the single source of truth for release history and versionin
 
 ## Version History
 
+### v0.2.0-beta (2026-07-26)
+
+_Pre-release._
+
+**New Features:**
+
+- Hub bootstrap CLI subcommands (up, down, status, logs, health, env) shared across one-box and split API/worker deployments; running bootstrap with no arguments still performs a full stack up
+
+**Bug Fixes:**
+
+- Celery workers that discarded tasks (e.g. `log_security_event_task`) and async tasks that failed across asyncio loops (e.g. `cleanup_tokens_task`) by registering tasks through `app.worker:celery_app` and recreating the Redis pool when the owning event loop changes
+- Hub Celery worker and beat containers reporting unhealthy in Docker Compose by targeting the correct app module for worker healthchecks and using a process check for beat
+- Celery beat unable to write its schedule file on named volumes by chowning the schedule directory for the application user at startup
+- Hub bootstrap exiting silently when optional environment keys were missing by reading env safely, stripping CRLF from `.env` values, printing a startup banner, and accepting `--up`-style flags
+- Admin UI deep links and hard refreshes on LiteSpeed by hardening SPA `.htaccess` (disable MultiViews, relative index fallback, 404 fallback, cache disable); `.htaccess` is always shipped with UI deploys and smoke-tested on `/login`
+
+**Breaking Changes:**
+
+- None
+
 ### v0.1.1-beta (2026-07-26)
 
 _Pre-release._
