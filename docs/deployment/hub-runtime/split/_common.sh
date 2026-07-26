@@ -9,6 +9,19 @@ gen_secret() {
   fi
 }
 
+# Read KEY=value from ENV_FILE without tripping `set -e` when the key is absent.
+env_get() {
+  local key="$1"
+  local line
+  line="$(grep -E "^${key}=" "$ENV_FILE" 2>/dev/null | tail -n1 || true)"
+  if [[ -z "$line" ]]; then
+    printf ''
+    return 0
+  fi
+  # Strip CR so Windows/CRLF .env files do not yield a non-empty $'\r' value.
+  printf '%s' "${line#*=}" | tr -d '"' | tr -d "'" | tr -d '\r'
+}
+
 set_kv_if_empty() {
   local key="$1"
   local value="$2"
@@ -38,7 +51,7 @@ fill_secrets_and_tokens() {
     set_kv_if_empty "$key" "$(gen_secret)"
   done
 
-  domain="$(grep -E '^DOMAIN=' "$ENV_FILE" | cut -d= -f2- | tr -d '"' | tr -d "'")"
+  domain="$(env_get DOMAIN)"
   domain="${domain:-rbac-api.mnfprofile.com}"
 
   if ! grep -qE "^TOKEN_ISSUER=" "$ENV_FILE"; then
@@ -63,10 +76,10 @@ fill_secrets_and_tokens() {
 
 require_managed_data_env() {
   local db_host redis_host broker backend
-  db_host="$(grep -E '^DATABASE_HOST=' "$ENV_FILE" | cut -d= -f2- | tr -d '"' | tr -d "'")"
-  redis_host="$(grep -E '^REDIS_HOST=' "$ENV_FILE" | cut -d= -f2- | tr -d '"' | tr -d "'")"
-  broker="$(grep -E '^CELERY_BROKER_URL=' "$ENV_FILE" | cut -d= -f2- | tr -d '"' | tr -d "'")"
-  backend="$(grep -E '^CELERY_RESULT_BACKEND=' "$ENV_FILE" | cut -d= -f2- | tr -d '"' | tr -d "'")"
+  db_host="$(env_get DATABASE_HOST)"
+  redis_host="$(env_get REDIS_HOST)"
+  broker="$(env_get CELERY_BROKER_URL)"
+  backend="$(env_get CELERY_RESULT_BACKEND)"
 
   if [[ -z "$db_host" || "$db_host" == "db" ]]; then
     echo "Set DATABASE_HOST in ${ENV_FILE} to your managed Postgres host (not Compose 'db')." >&2
@@ -106,7 +119,8 @@ require_docker() {
 
 require_host_ca_bundle() {
   local bundle
-  bundle="$(grep -E '^HOST_CA_BUNDLE=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"' | tr -d "'")"
+  # Optional key (often commented in env.example). Must not use bare grep under set -e.
+  bundle="$(env_get HOST_CA_BUNDLE)"
   bundle="${bundle:-/etc/ssl/certs/ca-certificates.crt}"
   if [[ ! -f "$bundle" ]]; then
     echo "CA bundle not found at ${bundle}." >&2
