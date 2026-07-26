@@ -381,10 +381,13 @@ cp env.example .env
 nano .env   # or vim
 
 chmod +x bootstrap.sh
-./bootstrap.sh
+./bootstrap.sh --help
+./bootstrap.sh                 # prepare .env, pull, up, wait for health
+./bootstrap.sh status
+./bootstrap.sh logs -f worker
 ```
 
-`bootstrap.sh` fills empty `SECRET_KEY` / DB / Redis / superuser password fields, pulls Hub images, starts Compose, and waits for API health.
+`bootstrap.sh` fills empty `SECRET_KEY` / DB / Redis / superuser password fields, pulls Hub images, starts Compose, and waits for API health. Use `./bootstrap.sh up api` (or other services) to target one container; `env` only prepares `.env`.
 
 The API container entrypoint runs migrations and initial data (including the first superuser).
 
@@ -402,8 +405,8 @@ curl -fsS "https://rbac-api.mnfprofile.com/api/v1/health"
 Exercise login, a password-reset email (SMTP), and confirm worker/beat stay up:
 
 ```bash
-docker compose --env-file .env -f compose.yml ps
-docker compose --env-file .env -f compose.yml logs -f worker beat
+./bootstrap.sh status
+./bootstrap.sh logs -f worker beat
 ```
 
 With the Admin UI host live, also open `https://rbac.mnfprofile.com`, confirm login (no CORS errors), and that reset/verify email links use that host.
@@ -414,7 +417,7 @@ With the Admin UI host live, also open `https://rbac.mnfprofile.com`, confirm lo
 
 ```bash
 cd ~/fastapi_rbac/docs/deployment/hub-runtime   # or your path
-docker compose --env-file .env -f compose.yml down
+./bootstrap.sh down
 ```
 
 Optional: in Console → instance → **Stop** until the next test (avoids burning Always Free hours while idle; also reduces idle-reclaim risk from low utilization).

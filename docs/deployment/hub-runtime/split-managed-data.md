@@ -41,9 +41,10 @@ Admin UI                        [Admin UI host](../admin-ui/index.md) (unchanged
 | [`split/env.example`](./split/env.example) | Copy to `.env` on **each** VM; fill Neon + Upstash (no `db` / `redis` hosts) |
 | [`split/compose.api.yml`](./split/compose.api.yml) | `caddy` + `api` only |
 | [`split/compose.worker.yml`](./split/compose.worker.yml) | `worker` + `beat` only |
-| [`split/bootstrap-api.sh`](./split/bootstrap-api.sh) | Secrets/JWT defaults, validate managed hosts, pull/up API stack, wait health |
-| [`split/bootstrap-worker.sh`](./split/bootstrap-worker.sh) | Same env checks, pull/up worker + Beat |
-| [`split/_common.sh`](./split/_common.sh) | Shared helpers (sourced by both bootstraps) |
+| [`split/bootstrap-api.sh`](./split/bootstrap-api.sh) | CLI for API edge (`up`/`status`/`logs`/`health`/…); managed hosts required |
+| [`split/bootstrap-worker.sh`](./split/bootstrap-worker.sh) | Same CLI for worker + Beat |
+| [`split/_common.sh`](./split/_common.sh) | Shared env/CA helpers (sourced by both bootstraps) |
+| [`_bootstrap_cli.sh`](./_bootstrap_cli.sh) | Shared subcommands/flags (parent of `split/`) |
 | [`Caddyfile`](./Caddyfile) | Shared with single-VM path (mounted as `../Caddyfile`) |
 
 Default single-VM [`bootstrap.sh`](./bootstrap.sh) still forces `CELERY_*` → `redis://redis:6379/0` for Compose Redis. **Split bootstraps never do that** — they require your managed URLs.
@@ -109,13 +110,18 @@ cd docs/deployment/hub-runtime/split
 cp env.example .env
 # Edit .env: Neon, Upstash, SMTP, FIRST_SUPERUSER_EMAIL, DOMAIN, IMAGE_TAG
 chmod +x bootstrap-api.sh bootstrap-worker.sh
-./bootstrap-api.sh
+./bootstrap-api.sh --help
+./bootstrap-api.sh                 # prepare .env, pull, up caddy+api, wait health
+./bootstrap-api.sh status
+./bootstrap-api.sh logs -f api
+./bootstrap-api.sh up api          # recreate API only
 ```
 
 6. Smoke:
 
 ```bash
-curl -fsS "https://${DOMAIN}/api/v1/health"
+./bootstrap-api.sh health
+# or: curl -fsS "https://${DOMAIN}/api/v1/health"
 ```
 
 7. Copy the finished `.env` to the worker VM (same secrets):
@@ -136,7 +142,11 @@ scp .env ubuntu@<worker-private-or-public-ip>:~/hub-split.env
 ```bash
 cd docs/deployment/hub-runtime/split
 chmod +x bootstrap-worker.sh
-./bootstrap-worker.sh
+./bootstrap-worker.sh --help
+./bootstrap-worker.sh              # pull + up worker + beat
+./bootstrap-worker.sh status
+./bootstrap-worker.sh logs -f worker
+./bootstrap-worker.sh restart worker
 ```
 
 5. When finished testing:
