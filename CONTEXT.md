@@ -31,8 +31,12 @@ A grouping construct for roles in this product's RBAC model.
 A grouping construct for permissions in this product's RBAC model.
 
 **Hub runtime**:
-The deployable API package: published Docker Hub backend and worker images (including the Beat scheduler process), plus Postgres, Redis, and external SMTP. Does not include the admin UI.
+The deployable API package: published Docker Hub backend and worker images (including the Beat scheduler process), plus Postgres, Redis, and external SMTP. Does not include the admin UI. Default topology is one Compose host; an optional split uses separate Always Free VMs and hobby managed Postgres/Redis.
 _Avoid_: Microservices (when meaning this package), full stack (when including the React frontend)
+
+**Hub runtime split**:
+Optional Hub runtime topology: Oracle Always Free AMD micro for Caddy+API, a second micro for Celery worker+Beat (stop when idle), and free hobby Neon Postgres + Upstash Redis via env. Alternative to single-VM Compose.
+_Avoid_: Microservices (when meaning this topology), full stack
 
 **Admin UI host**:
 The deployable admin UI package: a static SPA build served from a static host (maintainer dogfood: cPanel at `rbac.mnfprofile.com`), calling the Hub runtime API cross-origin. Does not include the Hub runtime.

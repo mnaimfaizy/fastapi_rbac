@@ -17,7 +17,8 @@ This is the same topology for staging and production-style validation. Admin UI 
 | [`env.example`](./env.example) | Copy to `.env` on the host (never commit `.env`) |
 | [`bootstrap.sh`](./bootstrap.sh) | Generate empty secrets, pull images, start stack, wait for health |
 | [`Caddyfile`](./Caddyfile) | TLS for `DOMAIN` → `api:8000` |
-| [Oracle Always Free first-time setup](./oracle-always-free-setup.md) | Free VM path for maintainers |
+| [Oracle Always Free first-time setup](./oracle-always-free-setup.md) | Free VM path for maintainers (single-VM Compose) |
+| [Split + managed data (alternative)](./split-managed-data.md) | Two AMD micros + Neon + Upstash; stop worker when idle |
 
 ## Quick start (VM already prepared)
 
@@ -36,6 +37,7 @@ chmod +x bootstrap.sh
 ## Related
 
 - Admin UI host: [index](../admin-ui/index.md) · [cPanel setup](../admin-ui/cpanel-setup.md)
-- Research: [Hosting Docker Hub images](../../internal/research/hosting-docker-hub-images.md)
-- ADR: [0003 — Hub runtime on Oracle Always Free](../../adr/0003-hub-runtime-oracle-compose.md)
+- Alternative topology: [Split + managed data](./split-managed-data.md)
+- Research: [Hosting Docker Hub images](../../internal/research/hosting-docker-hub-images.md) · [Always Free split](../../internal/research/oracle-always-free-split-runtime.md)
+- ADR: [0003 — Hub runtime on Oracle Always Free](../../adr/0003-hub-runtime-oracle-compose.md) · [0005 — split + managed data](../../adr/0005-hub-runtime-split-managed-data.md)
 - Issue: [#96](https://github.com/mnaimfaizy/fastapi_rbac/issues/96)
