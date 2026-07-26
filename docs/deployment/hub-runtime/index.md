@@ -19,6 +19,9 @@ This is the same topology for staging and production-style validation. Admin UI 
 | [`Caddyfile`](./Caddyfile) | TLS for `DOMAIN` → `api:8000` |
 | [Oracle Always Free first-time setup](./oracle-always-free-setup.md) | Free VM path for maintainers (single-VM Compose) |
 | [Split + managed data (alternative)](./split-managed-data.md) | Two AMD micros + Neon + Upstash; stop worker when idle |
+| [`split/compose.api.yml`](./split/compose.api.yml) | Edge only: Caddy + API |
+| [`split/compose.worker.yml`](./split/compose.worker.yml) | Worker + Beat only |
+| [`split/bootstrap-api.sh`](./split/bootstrap-api.sh) / [`bootstrap-worker.sh`](./split/bootstrap-worker.sh) | Per-role bootstrap (managed DB/Redis required) |
 
 ## Quick start (VM already prepared)
 

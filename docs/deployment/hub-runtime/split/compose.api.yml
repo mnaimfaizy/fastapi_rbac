@@ -1,0 +1,58 @@
+# Hub runtime SPLIT — API edge (no Postgres/Redis/worker).
+# Usage (from this directory, after .env is ready):
+#   ./bootstrap-api.sh
+#   # or: docker compose --env-file .env -f compose.api.yml up -d
+#
+# DATABASE_* / REDIS_* / CELERY_* come from .env (Neon + Upstash).
+
+name: fastapi-rbac-hub-api
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-rbac-api.mnfprofile.com}
+    volumes:
+      - ../Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - hub_api
+
+  api:
+    image: mnaimfaizy/fastapi-rbac-backend:${IMAGE_TAG:-v1.2.3}
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      MODE: production
+    # Published image entrypoint uses 4 Gunicorn workers — too heavy for 1 GB micros.
+    command:
+      [
+        "/bin/bash",
+        "-c",
+        "python ./app/backend_pre_start.py && alembic upgrade head && python ./app/initial_data.py && exec gunicorn app.main:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --log-level info --access-logfile - --error-logfile -",
+      ]
+    networks:
+      - hub_api
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  hub_api:
+    driver: bridge
