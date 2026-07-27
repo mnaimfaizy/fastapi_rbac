@@ -106,7 +106,7 @@ python-dotenv==1.1.0
 python-json-logger==4.1.0
 python-multipart==0.0.32
 pytokens==0.4.1
-pytz==2025.2
+pytz==2026.3.post1
 PyYAML==6.0.2
 redis==5.3.1
 requests==2.34.2
