@@ -29,7 +29,7 @@ A follow-up may align Poetry with `requirements.txt`; until then, always pin and
 |------|---------|------------------|-------|
 | 0 | Inventory & automation | Dependabot, this doc, CVE snapshot | Docs review; valid Dependabot config |
 | 1 | Dev / test tooling | pytest*, black, isort, flake8*, mypy, coverage, pre-commit, factory_boy, Faker; eslint*, prettier, vitest*, testing-library*, Playwright | Backend unit + lint; frontend lint/build/e2e; local `npm run test:run` |
-| 2 | Backend security / auth | FastAPI, Starlette, Pydantic, PyJWT, passlib, bcrypt, cryptography, redis, CSRF/limiter, bleach | Backend tests; login/refresh/logout smoke; CSRF if middleware touched |
+| 2 | Backend security / auth | FastAPI, Starlette, Pydantic, PyJWT, bcrypt, cryptography, redis, CSRF/limiter, bleach | Backend tests; login/refresh/logout smoke; CSRF if middleware touched |
 | 3 | Backend data / async DB | SQLAlchemy, sqlmodel, asyncpg, aiosqlite, alembic, greenlet, sqlakeyset | Migrations on empty DB; CRUD-heavy tests; keep `AsyncSession` + `.exec()` |
 | 4 | Backend workers / ops | celery, kombu, flower, gunicorn, uvicorn, sentry-sdk, httpx, tenacity | Worker import smoke; Docker health if images change |
 | 5 | Frontend runtime (non-major) | axios, Redux Toolkit, react-hook-form, zod, Radix, lucide-react, recharts | lint, `test:run`, build; Playwright auth if HTTP client touched |
@@ -44,7 +44,7 @@ Upgrade carefully (changelog review; prefer split PRs if needed):
 - FastAPI middleware affecting CSRF / HTTP rate limits (`fastapi-csrf-protect`, `slowapi`)
 - Redis client + token utilities
 - Celery / kombu / broker compatibility
-- PyJWT / passlib / bcrypt
+- PyJWT / bcrypt
 - Frontend axios interceptors + react-router + Redux auth slice
 
 ## Automation
@@ -91,7 +91,8 @@ About **76** advisory hits across pinned packages (many packages have multiple a
 | `python-jose` | **Removed** — consolidated JWT onto PyJWT only (#63 / [ADR 0001](../adr/0001-pyjwt-sole-jwt-library.md)) | Lane 2 follow-up |
 | `redis` | Patched in Lane 2 → `5.3.1` (no OSV hits on 5.2.1; **major 6+/8 deferred** — hard-stop) | Lane 2 / later |
 | `fastapi-limiter` | **Removed** — unused scaffold init only; HTTP rate limits consolidated onto `slowapi` (#64 / [ADR 0002](../adr/0002-slowapi-sole-http-rate-limit.md)) | Lane 2 follow-up |
-| `bcrypt` / `passlib` | No OSV hits; left on `4.3.0` / `1.7.4` | Lane 2 |
+| `bcrypt` | No OSV hits; left on `5.0.0` | Lane 2 |
+| `passlib` | **Removed** — unused; hashing already uses `bcrypt` directly (#65) | Lane 2 follow-up |
 | `gunicorn` | **Fixed in Lane 4** → `26.0.0` (request-smuggling advisories needed ≥22) | Lane 4 |
 | `tornado` | **Fixed in Lane 4** → `6.5.7` (flower still requires `<7`) | Lane 4 |
 | `urllib3` / `requests` / `idna` | **Fixed in Lane 4** → `2.7.0` / `2.34.2` / `3.18` | Lane 4 |
@@ -117,6 +118,11 @@ About **76** advisory hits across pinned packages (many packages have multiple a
 - **Decision:** `slowapi` is the only HTTP rate limit library; unused `fastapi-limiter` removed. See [ADR 0002](../adr/0002-slowapi-sole-http-rate-limit.md) and [research note](../internal/research/rate-limiting-library-consolidation.md).
 - **Runtime:** shared `Limiter` in `app/core/rate_limit.py` (Redis `storage_uri` outside testing; memory + disabled in testing); auth routes keep existing `@limiter.limit` thresholds.
 - **Kept separate:** Redis **abuse counters** for registration / resend-verification in `auth.py` (not folded into slowapi in this change).
+
+### Lane 2 hard-stop follow-up — remove unused passlib (#65, 2026-07-27)
+
+- **Decision:** `passlib` removed; password hash/verify already uses `bcrypt.hashpw` / `bcrypt.checkpw` in `app/core/security.py`.
+- **Unchanged:** bcrypt work factor / hash format (`PASSWORD_HASHING_ITERATIONS`); no algorithm migration.
 
 ### Lane 3 notes (2026-07-17)
 
