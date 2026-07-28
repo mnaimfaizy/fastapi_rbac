@@ -6,7 +6,9 @@ from .user_schema import IUserRead
 class Token(BaseModel):
     access_token: str
     token_type: str
-    refresh_token: str
+    # Refresh token is delivered via HttpOnly cookie for the first-party SPA.
+    # Optional body field retained for non-browser API clients when documented.
+    refresh_token: str | None = None
     user: IUserRead
 
 
@@ -16,7 +18,8 @@ class TokenRead(BaseModel):
 
 
 class RefreshToken(BaseModel):
-    refresh_token: str
+    # Prefer HttpOnly cookie; body is a documented fallback for non-browser clients.
+    refresh_token: str | None = None
 
 
 class PasswordResetRequest(BaseModel):

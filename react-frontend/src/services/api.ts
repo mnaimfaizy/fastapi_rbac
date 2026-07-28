@@ -1,6 +1,6 @@
 import axios, { AxiosError } from 'axios';
 import {
-  getStoredRefreshToken,
+  hasAuthSessionHint,
   getStoredAccessToken,
   setStoredAccessToken,
 } from '../lib/tokenStorage';
@@ -138,15 +138,13 @@ api.interceptors.response.use(
         originalRequest._retry = true;
 
         try {
-          const refreshToken = getStoredRefreshToken();
-          if (!refreshToken) {
+          // Only attempt cookie refresh when a prior login set the session hint
+          if (!hasAuthSessionHint()) {
             store.dispatch(logout());
             return Promise.reject(error);
           }
 
-          const response = await store
-            .dispatch(refreshAccessToken(refreshToken))
-            .unwrap();
+          const response = await store.dispatch(refreshAccessToken()).unwrap();
           if (response && response.access_token) {
             setStoredAccessToken(response.access_token);
             if (originalRequest?.headers) {

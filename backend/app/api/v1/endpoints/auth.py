@@ -35,6 +35,7 @@ from app.schemas.user_schema import (  # PasswordResetConfirm, # Not used in thi
     UserRegister,
     VerifyEmail,
 )
+from app.utils.auth_cookies import clear_refresh_token_cookie, set_refresh_token_cookie
 from app.utils.background_tasks import (
     cleanup_expired_tokens,
     cleanup_unverified_account,
@@ -55,6 +56,7 @@ router = APIRouter()
 @limiter.limit("5/minute")
 async def login(
     request: Request,
+    response: Response,
     email: EmailStr = Body(...),
     password: str = Body(...),
     background_tasks: BackgroundTasks = BackgroundTasks(),
@@ -311,6 +313,7 @@ async def login(
                 TokenType.REFRESH,
                 settings.REFRESH_TOKEN_EXPIRE_MINUTES,
             )
+            set_refresh_token_cookie(response, refresh_token)
         except Exception as e:
             background_tasks.add_task(
                 log_security_event,
@@ -328,7 +331,7 @@ async def login(
         data = Token(
             access_token=access_token,
             token_type="bearer",
-            refresh_token=refresh_token,
+            refresh_token=None,  # HttpOnly cookie; not exposed to JS
             user=user_read,
         )
         background_tasks.add_task(
@@ -979,6 +982,7 @@ async def resend_verification_email(
 @router.post("/change_password")
 async def change_password(
     request: Request,
+    response: Response,
     current_password: str = Body(...),
     new_password: str = Body(...),
     background_tasks: BackgroundTasks = BackgroundTasks(),
@@ -1108,7 +1112,7 @@ async def change_password(
         data = Token(
             access_token=access_token,
             token_type="bearer",
-            refresh_token=refresh_token,
+            refresh_token=None,  # HttpOnly cookie; not exposed to JS
             user=user_read_for_token,  # Pass the IUserRead instance
         )
         # Clean up old tokens and add new ones to Redis
@@ -1138,6 +1142,11 @@ async def change_password(
             refresh_token,
             TokenType.REFRESH,
             int(refresh_token_expires.total_seconds() / 60),
+        )
+        set_refresh_token_cookie(
+            response,
+            refresh_token,
+            max_age=int(refresh_token_expires.total_seconds()),
         )
         background_tasks.add_task(
             log_security_event,
@@ -1177,20 +1186,42 @@ async def change_password(
 
 @router.post("/new_access_token", status_code=201)
 async def get_new_access_token(
-    request: Request,  # Added request parameter
-    body: RefreshToken = Body(...),
+    request: Request,
+    body: RefreshToken | None = Body(default=None),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     redis_client: AsyncRedis = Depends(get_redis_client),
     db_session: AsyncSession = Depends(deps.get_db),
+    _: None = Depends(deps.validate_csrf_token),
 ) -> IPostResponseBase[TokenRead]:
     """
-    Gets a new access token using the refresh token for future requests
+    Gets a new access token using the refresh token.
+
+    Prefer the HttpOnly refresh cookie (first-party SPA). An optional JSON body
+    ``refresh_token`` remains as a documented fallback for non-browser API clients.
+    Redis allowlist validation is unchanged (no rotation in this change).
     """
     ip_address = request.client.host if request.client else "Unknown"  # Get IP address
     payload = None  # Initialize payload for broader scope in exception handling
+    refresh_token = request.cookies.get(settings.REFRESH_TOKEN_COOKIE_NAME)
+    if not refresh_token and body and body.refresh_token:
+        refresh_token = body.refresh_token
+    if not refresh_token:
+        background_tasks.add_task(
+            log_security_event,
+            background_tasks=background_tasks,
+            event_type="refresh_token_missing",
+            details={"ip_address": ip_address},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "status": False,
+                "message": "No refresh token provided. Please log in again.",
+            },
+        )
     try:
         try:
-            payload = decode_token(body.refresh_token, token_type="refresh")
+            payload = decode_token(refresh_token, token_type="refresh")
         except HTTPException as exc:
             background_tasks.add_task(
                 log_security_event,
@@ -1205,7 +1236,7 @@ async def get_new_access_token(
         if payload["type"] == "refresh":
             user_id_from_token = payload["sub"]
             valid_refresh_tokens = await get_valid_tokens(redis_client, user_id_from_token, TokenType.REFRESH)
-            if not token_is_allowlisted(valid_refresh_tokens, body.refresh_token):
+            if not token_is_allowlisted(valid_refresh_tokens, refresh_token):
                 background_tasks.add_task(
                     log_security_event,
                     background_tasks=background_tasks,
@@ -1504,13 +1535,15 @@ async def login_access_token(
 
 @router.post("/logout")
 async def logout(
-    request: Request,  # Added request parameter
+    request: Request,
+    response: Response,
     background_tasks: BackgroundTasks = BackgroundTasks(),
     current_user: User = Depends(deps.get_current_user()),
     redis_client: AsyncRedis = Depends(get_redis_client),
+    _: None = Depends(deps.validate_csrf_token),
 ) -> IPostResponseBase:
     """
-    Logout endpoint that invalidates the current user's tokens
+    Logout endpoint that invalidates the current user's tokens and clears the refresh cookie.
     """
     ip_address = request.client.host if request.client else "Unknown"
     try:
@@ -1527,6 +1560,7 @@ async def logout(
             user_id=current_user.id,
             token_type=TokenType.REFRESH,
         )
+        clear_refresh_token_cookie(response)
         # Log the logout event as a background task
         background_tasks.add_task(
             log_security_event,

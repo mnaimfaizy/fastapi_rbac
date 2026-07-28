@@ -1,7 +1,7 @@
 import { ReactNode, useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAppSelector, useAppDispatch } from '../../store/hooks';
-import { getStoredRefreshToken } from '../../lib/tokenStorage';
+import { hasAuthSessionHint } from '../../lib/tokenStorage';
 import { refreshAccessToken } from '../../store/slices/authSlice';
 
 interface ProtectedRouteProps {
@@ -16,12 +16,8 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   const dispatch = useAppDispatch();
 
   useEffect(() => {
-    // If not authenticated but has refresh token, try to refresh
-    if (!isAuthenticated && !accessToken) {
-      const refreshToken = getStoredRefreshToken();
-      if (refreshToken) {
-        dispatch(refreshAccessToken(refreshToken));
-      }
+    if (!isAuthenticated && !accessToken && hasAuthSessionHint()) {
+      dispatch(refreshAccessToken());
     }
   }, [isAuthenticated, accessToken, dispatch]);
 

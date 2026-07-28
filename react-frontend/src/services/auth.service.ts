@@ -24,12 +24,12 @@ class AuthService {
   }
 
   /**
-   * Get new access token using refresh token
+   * Get new access token using the HttpOnly refresh cookie (sent via credentials).
    */
-  async refreshToken(refreshToken: string): Promise<TokenRead> {
+  async refreshToken(): Promise<TokenRead> {
     const response = await api.post<SuccessResponse<TokenRead>>(
       '/auth/new_access_token',
-      { refresh_token: refreshToken } as RefreshTokenRequest
+      {} as RefreshTokenRequest
     );
     return response.data.data;
   }

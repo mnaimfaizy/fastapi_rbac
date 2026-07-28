@@ -39,8 +39,6 @@ Vite only exposes variables prefixed with `VITE_`. Restart the dev server after 
 | Variable | Role |
 | --- | --- |
 | `VITE_API_BASE_URL` | Backend API base (for example `http://localhost:8000/api/v1`) |
-| `VITE_AUTH_TOKEN_NAME` | Access-token storage key name |
-| `VITE_REFRESH_TOKEN_NAME` | Refresh-token storage key name |
 | `VITE_APP_NAME` / `VITE_APP_VERSION` | Display / build metadata |
 | `VITE_ENABLE_*` | Optional feature flags |
 

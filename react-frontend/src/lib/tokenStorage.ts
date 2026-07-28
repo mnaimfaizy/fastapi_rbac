@@ -1,11 +1,19 @@
-// Constants for token storage keys
-const REFRESH_TOKEN_KEY =
-  import.meta.env.VITE_AUTH_REFRESH_TOKEN_NAME || 'auth_refresh_token';
-
 /**
- * Securely stores the access token in memory (for security)
- * We don't store it in localStorage to prevent XSS attacks
+ * Access tokens stay in memory only (never localStorage) to limit XSS impact.
+ * Refresh tokens are HttpOnly cookies set by the backend — not readable by JS.
+ *
+ * A non-secret session hint in sessionStorage tells the SPA whether to attempt
+ * cookie-based session restore on reload (not a credential).
  */
+
+const LEGACY_REFRESH_TOKEN_KEY =
+  import.meta.env.VITE_AUTH_REFRESH_TOKEN_NAME ||
+  import.meta.env.VITE_REFRESH_TOKEN_NAME ||
+  'auth_refresh_token';
+
+const SESSION_HINT_KEY = 'auth_session_active';
+
+/** Module-level access token (memory only). */
 let inMemoryToken: string | null = null;
 
 /**
@@ -35,59 +43,57 @@ export const removeStoredAccessToken = (): void => {
 };
 
 /**
- * Stores refresh token in localStorage with encryption
- * In a production app, consider using HTTP-only cookies for refresh tokens
+ * Mark that a refresh-cookie session may exist (non-secret hint for restore).
  */
-export const setStoredRefreshToken = (token: string): void => {
+export const setAuthSessionHint = (): void => {
   try {
-    if (typeof token !== 'string') {
-      throw new Error('Token must be a string');
-    }
-    localStorage.setItem(REFRESH_TOKEN_KEY, token);
+    sessionStorage.setItem(SESSION_HINT_KEY, '1');
   } catch (error) {
-    console.error('Failed to store refresh token:', error);
-    // Clean up any partial data
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    console.error('Failed to set auth session hint:', error);
   }
 };
 
 /**
- * Get the stored refresh token from localStorage
+ * Whether the SPA should attempt cookie-based session restore.
  */
-export const getStoredRefreshToken = (): string | null => {
+export const hasAuthSessionHint = (): boolean => {
   try {
-    const token = localStorage.getItem(REFRESH_TOKEN_KEY);
-    if (!token) return null;
-
-    // Validate that we can parse it if it's supposed to be JSON
-    if (token.startsWith('{') || token.startsWith('[')) {
-      JSON.parse(token);
-    }
-
-    return token;
-  } catch (error) {
-    console.error('Failed to retrieve refresh token:', error);
-    // Clean up invalid data
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
-    return null;
+    return sessionStorage.getItem(SESSION_HINT_KEY) === '1';
+  } catch {
+    return false;
   }
 };
 
 /**
- * Removes the refresh token from localStorage
+ * Clear the session-restore hint (e.g. after logout).
  */
-export const removeStoredRefreshToken = (): void => {
+export const clearAuthSessionHint = (): void => {
   try {
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    sessionStorage.removeItem(SESSION_HINT_KEY);
   } catch (error) {
-    console.error('Failed to remove refresh token:', error);
+    console.error('Failed to clear auth session hint:', error);
   }
 };
 
 /**
- * Clear all authentication tokens
+ * Remove any legacy localStorage refresh tokens from pre-cookie migrations.
+ */
+export const clearLegacyRefreshTokenStorage = (): void => {
+  try {
+    localStorage.removeItem(LEGACY_REFRESH_TOKEN_KEY);
+    localStorage.removeItem('auth_refresh_token');
+    localStorage.removeItem('refresh_token');
+  } catch (error) {
+    console.error('Failed to clear legacy refresh token storage:', error);
+  }
+};
+
+/**
+ * Clear in-memory access token, session hint, and legacy refresh storage.
+ * The HttpOnly refresh cookie is cleared by the backend on logout.
  */
 export const clearAuthTokens = (): void => {
   removeStoredAccessToken();
-  removeStoredRefreshToken();
+  clearAuthSessionHint();
+  clearLegacyRefreshTokenStorage();
 };

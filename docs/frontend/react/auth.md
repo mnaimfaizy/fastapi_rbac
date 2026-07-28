@@ -6,19 +6,20 @@ Related: [System Architecture — Authentication flow](../../reference/architect
 
 ## Flow (client)
 
-1. **Login** — form posts credentials to `POST /api/v1/auth/login`.
+1. **Login** — form posts credentials to `POST /api/v1/auth/login` (with CSRF).
 2. **Token storage**
-   - Access token → Redux memory (not `localStorage`)
-   - Refresh token → `localStorage` (key from `VITE_REFRESH_TOKEN_NAME`)
-3. **Authenticated requests** — Axios client attaches `Authorization: Bearer <access_token>`.
-4. **Refresh** — on HTTP 401, interceptor calls the refresh endpoint; retries the original request or logs out.
-5. **Logout** — calls backend logout (allowlist cleared server-side) and clears client tokens.
+   - Access token → Redux / memory only (not `localStorage`)
+   - Refresh token → HttpOnly cookie set by the backend (not readable by JS)
+   - Session restore hint → non-secret `sessionStorage` flag so reload can attempt cookie refresh
+3. **Authenticated requests** — Axios client attaches `Authorization: Bearer <access_token>` and sends cookies (`withCredentials: true`).
+4. **Refresh** — on HTTP 401 (when a session hint exists), interceptor calls `POST /auth/new_access_token` with CSRF; cookie is sent automatically; retries the original request or logs out.
+5. **Logout** — calls backend logout (allowlist cleared + cookie cleared server-side) and clears client memory/hint.
 
-Backend session invalidation uses a Redis **allowlist** (`app/utils/token.py`), not a JWT `jti` blacklist. See [ADR 0001](../../adr/0001-pyjwt-sole-jwt-library.md).
+Backend session invalidation uses a Redis **allowlist** (`app/utils/token.py`), not a JWT `jti` blacklist. See [ADR 0001](../../adr/0001-pyjwt-sole-jwt-library.md) and [ADR 0006](../../adr/0006-httponly-refresh-token-cookies.md).
 
 ## CSRF
 
-State-changing calls expect CSRF protection as implemented with the backend. Obtain/attach tokens via the auth/CSRF service layer; see [Security Features](../../reference/SECURITY_FEATURES.md) and `react-frontend` CSRF-related services/tests.
+State-changing auth calls (login, refresh, logout, password change, etc.) require CSRF. Obtain/attach tokens via the auth/CSRF service layer; see [Security Features](../../reference/SECURITY_FEATURES.md) and `react-frontend` CSRF-related services/tests.
 
 ## Route and UI guards
 
@@ -29,8 +30,8 @@ Keep permission **names** aligned with backend permission records.
 
 ## Security checklist (frontend)
 
-- Do not persist access tokens in `localStorage`.
-- Clear refresh tokens on logout and failed refresh.
+- Do not persist access or refresh tokens in `localStorage`.
+- Rely on backend logout to clear the HttpOnly refresh cookie; clear the session hint on logout / failed refresh.
 - Prefer sanitized user input before display; rely on backend validation as the source of truth.
 - Treat CORS misconfiguration as an ops issue — see [CORS troubleshooting](../../troubleshooting/CORS_TROUBLESHOOTING.md).
 

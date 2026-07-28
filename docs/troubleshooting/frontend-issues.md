@@ -14,9 +14,9 @@ Symptoms: browser blocks `localhost:8000` calls from the Vite origin.
 
 ## Token refresh / 401 loops
 
-- Confirm refresh token is present in localStorage and not corrupted.
-- Verify Axios 401 interceptor and refresh endpoint behavior.
-- Clear storage and log in again if tokens are inconsistent.
+- Confirm the HttpOnly `refresh_token` cookie is present (DevTools → Application → Cookies) and that `sessionStorage` has the non-secret `auth_session_active` hint after login.
+- Verify Axios `withCredentials`, CSRF header on refresh/logout, and the 401 interceptor.
+- Clear cookies + sessionStorage and log in again if the session is inconsistent.
 
 ## Environment variables
 

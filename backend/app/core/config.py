@@ -93,6 +93,13 @@ class Settings(BaseSettings):
     TOKEN_ISSUER: Optional[str] = None  # Added
     TOKEN_AUDIENCE: Optional[str] = None  # Added
 
+    # Refresh token HttpOnly cookie (first-party SPA; see ADR 0006)
+    REFRESH_TOKEN_COOKIE_NAME: str = "refresh_token"
+    REFRESH_COOKIE_DOMAIN: Optional[str] = None  # e.g. ".example.com" in production
+    # None = Secure only when MODE=production (localhost HTTP needs Secure=false)
+    REFRESH_COOKIE_SECURE: Optional[bool] = None
+    REFRESH_COOKIE_SAMESITE: str = "lax"  # lax | strict | none (none requires Secure)
+
     # Email settings
     EMAILS_ENABLED: bool = Field(default=False)
     SMTP_TLS: bool = True
