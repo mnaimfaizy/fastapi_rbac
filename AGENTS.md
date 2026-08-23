@@ -1,21 +1,18 @@
 # Agent Operating Guide
 
-This repository includes Matt Pocock engineering skills in `.claude/skills`.
+Engineering skills are installed at user level (`~/.agents/skills`) rather than vendored into this repository. Update them with `npx skills update -g`.
 
-Use these skills as available workflows:
+Project-owned agent assets that do live here:
 
-- User-invoked: `ask-matt`, `grill-with-docs`, `triage`, `improve-codebase-architecture`, `setup-matt-pocock-skills`, `to-issues`, `to-prd`, `implement`, `release`
-- Model-invoked: `prototype`, `diagnosing-bugs`, `research`, `tdd`, `domain-modeling`, `codebase-design`, `code-review`
+- `.claude/skills/release`: Release PR workflow (see Release below)
+- `.claude/agents/release-notes.md`: release-notes sub-agent
+- `docs/agents/`: repo-side configuration the installed skills read
 
 ## Agent skills
 
 ### Issue tracker
 
 Issues are tracked in GitHub Issues for `mnaimfaizy/fastapi_rbac`. External pull requests are also part of the triage surface. See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-Use the label vocabulary defined in `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
@@ -39,6 +36,6 @@ User-invoked [`release`](.claude/skills/release/SKILL.md) skill: propose version
 
 ## Notes
 
-- Canonical skill location is `.claude/skills`.
-- Keep skills under `.claude/skills` in sync with upstream when needed.
+- Engineering skills come from the user-level install; do not re-vendor them into this repository.
+- `.claude/skills/release` is project-owned and is maintained here.
 - Prefer project conventions from `.github/copilot-instructions.md` when there is a conflict.
