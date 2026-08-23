@@ -35,6 +35,9 @@ export interface SuccessResponse<T> {
   meta?: Record<string, unknown>;
 }
 
+/** Cookie-based refresh endpoint; excluded from the 401 refresh retry flow. */
+const REFRESH_ENDPOINT = '/auth/new_access_token';
+
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1',
   headers: {
@@ -132,8 +135,18 @@ api.interceptors.response.use(
       }
     }
 
-    // Handle 401 (Unauthorized) - Token refresh flow
-    if (error.response?.status === 401 && !originalRequest?._retry) {
+    // Handle 401 (Unauthorized) - Token refresh flow.
+    // The refresh endpoint itself must never re-enter this branch: it returns 401
+    // for a missing/expired refresh cookie, and each retry carries a fresh config
+    // (so `_retry` cannot stop it), which would recurse indefinitely.
+    const isRefreshRequest = (originalRequest?.url ?? '').includes(
+      REFRESH_ENDPOINT
+    );
+    if (
+      error.response?.status === 401 &&
+      !originalRequest?._retry &&
+      !isRefreshRequest
+    ) {
       if (originalRequest) {
         originalRequest._retry = true;
 

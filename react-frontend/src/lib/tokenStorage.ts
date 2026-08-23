@@ -2,8 +2,10 @@
  * Access tokens stay in memory only (never localStorage) to limit XSS impact.
  * Refresh tokens are HttpOnly cookies set by the backend — not readable by JS.
  *
- * A non-secret session hint in sessionStorage tells the SPA whether to attempt
- * cookie-based session restore on reload (not a credential).
+ * A non-secret session hint in localStorage tells the SPA whether to attempt
+ * cookie-based session restore (not a credential). It must outlive the tab so a
+ * new tab or browser restart can still restore a session while the HttpOnly
+ * refresh cookie is valid.
  */
 
 const LEGACY_REFRESH_TOKEN_KEY =
@@ -47,7 +49,7 @@ export const removeStoredAccessToken = (): void => {
  */
 export const setAuthSessionHint = (): void => {
   try {
-    sessionStorage.setItem(SESSION_HINT_KEY, '1');
+    localStorage.setItem(SESSION_HINT_KEY, '1');
   } catch (error) {
     console.error('Failed to set auth session hint:', error);
   }
@@ -58,7 +60,7 @@ export const setAuthSessionHint = (): void => {
  */
 export const hasAuthSessionHint = (): boolean => {
   try {
-    return sessionStorage.getItem(SESSION_HINT_KEY) === '1';
+    return localStorage.getItem(SESSION_HINT_KEY) === '1';
   } catch {
     return false;
   }
@@ -69,6 +71,8 @@ export const hasAuthSessionHint = (): boolean => {
  */
 export const clearAuthSessionHint = (): void => {
   try {
+    localStorage.removeItem(SESSION_HINT_KEY);
+    // Drop the hint left behind by builds that stored it per-tab.
     sessionStorage.removeItem(SESSION_HINT_KEY);
   } catch (error) {
     console.error('Failed to clear auth session hint:', error);

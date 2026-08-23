@@ -10,9 +10,9 @@ Related: [System Architecture — Authentication flow](../../reference/architect
 2. **Token storage**
    - Access token → Redux / memory only (not `localStorage`)
    - Refresh token → HttpOnly cookie set by the backend (not readable by JS)
-   - Session restore hint → non-secret `sessionStorage` flag so reload can attempt cookie refresh
+   - Session restore hint → non-secret `localStorage` flag so a reload, a new tab, or a browser restart can attempt cookie refresh
 3. **Authenticated requests** — Axios client attaches `Authorization: Bearer <access_token>` and sends cookies (`withCredentials: true`).
-4. **Refresh** — on HTTP 401 (when a session hint exists), interceptor calls `POST /auth/new_access_token` with CSRF; cookie is sent automatically; retries the original request or logs out.
+4. **Refresh** — on HTTP 401 (when a session hint exists), interceptor calls `POST /auth/new_access_token` with CSRF; cookie is sent automatically; retries the original request or logs out. A 401 from the refresh endpoint itself is excluded from this path so it cannot recurse.
 5. **Logout** — calls backend logout (allowlist cleared + cookie cleared server-side) and clears client memory/hint.
 
 Backend session invalidation uses a Redis **allowlist** (`app/utils/token.py`), not a JWT `jti` blacklist. See [ADR 0001](../../adr/0001-pyjwt-sole-jwt-library.md) and [ADR 0006](../../adr/0006-httponly-refresh-token-cookies.md).

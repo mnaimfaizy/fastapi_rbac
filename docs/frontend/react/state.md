@@ -20,7 +20,7 @@ src/store/
     └── dashboardSlice.ts
 ```
 
-Wrap the app with the Redux `Provider` in `main.tsx` / `App` bootstrap. Access tokens live in the auth slice (memory only) — a full page reload clears them; session restore uses the HttpOnly refresh cookie plus a non-secret `sessionStorage` hint (see [Authentication](./auth.md)).
+Wrap the app with the Redux `Provider` in `main.tsx` / `App` bootstrap. Access tokens live in the auth slice (memory only) — a full page reload clears them; session restore uses the HttpOnly refresh cookie plus a non-secret `localStorage` hint (see [Authentication](./auth.md)).
 
 ## Patterns
 
