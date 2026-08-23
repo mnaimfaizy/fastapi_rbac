@@ -39,6 +39,10 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: cryptography
         update-types: ["version-update:semver-major"]
+      # Pin-managed by pydantic: each pydantic release pins an exact
+      # pydantic_core version, so bumping it on its own makes
+      # requirements.txt unresolvable. Let pydantic drive it.
+      - dependency-name: pydantic_core
 
   - package-ecosystem: npm
     directory: /react-frontend
