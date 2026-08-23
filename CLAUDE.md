@@ -1,26 +1,20 @@
 # Claude Guidance
 
-This repository includes Matt Pocock engineering skills under `.claude/skills`.
+Engineering skills are installed at user level (`~/.agents/skills`, surfaced to Claude via `~/.claude/skills`) and are no longer vendored into this repository. Update them with `npx skills update -g`.
 
-## Skill buckets
+## Project-owned agent assets
 
-- `.claude/skills`: engineering workflows and reusable coding disciplines
+Only these live in the repo; every other skill comes from the user-level install.
 
-## Usage
-
-- Use user-invoked skills when the user explicitly asks for a workflow.
-- Use model-invoked skills when the task naturally matches the discipline.
-- Keep skill behavior consistent with the source files copied into this repo.
+- `.claude/skills/release`: Release PR workflow (see Release below)
+- `.claude/agents/release-notes.md`: release-notes sub-agent
+- `docs/agents/`: repo-side configuration the installed skills read
 
 ## Agent skills
 
 ### Issue tracker
 
 Use GitHub Issues in `mnaimfaizy/fastapi_rbac` as the primary tracker and include external PR triage. See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-Apply the triage role labels configured in `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
