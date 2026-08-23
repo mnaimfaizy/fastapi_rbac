@@ -26,7 +26,7 @@ vi.mock('axios', () => {
 });
 
 vi.mock('../../lib/tokenStorage', () => ({
-  getStoredRefreshToken: vi.fn(),
+  hasAuthSessionHint: vi.fn(),
   getStoredAccessToken: vi.fn(),
   setStoredAccessToken: vi.fn(),
 }));
@@ -80,7 +80,7 @@ describe('API Service', () => {
 
     // Setup default mocks
     vi.mocked(tokenStorage.getStoredAccessToken).mockReturnValue(null);
-    vi.mocked(tokenStorage.getStoredRefreshToken).mockReturnValue(null);
+    vi.mocked(tokenStorage.hasAuthSessionHint).mockReturnValue(false);
 
     // Import API module to trigger axios.create call
     const apiModule = await import('../../services/api');

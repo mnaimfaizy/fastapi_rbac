@@ -6,7 +6,7 @@ Related: [System Architecture](../../reference/architecture.md), [Setup](./setup
 
 ## Key decisions
 
-1. **Token security** — access token in memory (Redux); refresh token in localStorage; Axios interceptors refresh on 401.
+1. **Token security** — access token in memory (Redux); refresh token in HttpOnly cookie; Axios interceptors refresh on 401 with credentials + CSRF.
 2. **State** — Redux Toolkit with feature slices and async thunks for API calls.
 3. **Components** — feature modules under `src/features/`; shared ShadCN UI under `src/components/ui/`; layouts under `src/components/layout/`.
 4. **Type safety** — TypeScript models in `src/models/`; typed Redux hooks.

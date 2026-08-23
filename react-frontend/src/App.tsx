@@ -7,7 +7,7 @@ import {
 import { Provider, useSelector } from 'react-redux';
 import { store, RootState } from './store';
 import { useEffect, useState } from 'react';
-import { getStoredRefreshToken } from './lib/tokenStorage';
+import { hasAuthSessionHint } from './lib/tokenStorage';
 import { refreshAccessToken, getCurrentUser } from './store/slices/authSlice';
 import { useAppDispatch } from './store/hooks';
 import { AppWrapper } from './components/common/AppWrapper';
@@ -62,12 +62,11 @@ const InitAuth = () => {
   const dispatch = useAppDispatch();
 
   useEffect(() => {
-    const refreshToken = getStoredRefreshToken();
-    if (refreshToken) {
-      dispatch(refreshAccessToken(refreshToken))
+    // Session restore: HttpOnly refresh cookie + non-secret session hint
+    if (hasAuthSessionHint()) {
+      dispatch(refreshAccessToken())
         .unwrap()
         .then(() => {
-          // If refresh token worked, also get the current user data
           dispatch(getCurrentUser());
         })
         .catch((error) => {

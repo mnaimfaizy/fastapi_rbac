@@ -97,8 +97,6 @@ describe('AuthService', () => {
 
   describe('refreshToken', () => {
     it('successfully refreshes access token', async () => {
-      const refreshToken = 'mock-refresh-token';
-
       const mockTokenRead: TokenRead = {
         access_token: 'new-access-token',
         token_type: 'Bearer',
@@ -118,11 +116,9 @@ describe('AuthService', () => {
 
       mockedApi.post.mockResolvedValue(mockResponse);
 
-      const result = await authService.refreshToken(refreshToken);
+      const result = await authService.refreshToken();
 
-      expect(mockedApi.post).toHaveBeenCalledWith('/auth/new_access_token', {
-        refresh_token: refreshToken,
-      });
+      expect(mockedApi.post).toHaveBeenCalledWith('/auth/new_access_token', {});
       expect(result).toEqual(mockTokenRead);
     });
 
@@ -130,7 +126,7 @@ describe('AuthService', () => {
       const mockError = new Error('Invalid refresh token');
       mockedApi.post.mockRejectedValue(mockError);
 
-      await expect(authService.refreshToken('invalid-token')).rejects.toThrow(
+      await expect(authService.refreshToken()).rejects.toThrow(
         'Invalid refresh token'
       );
     });
@@ -139,7 +135,7 @@ describe('AuthService', () => {
       const mockError = new Error('Refresh token expired');
       mockedApi.post.mockRejectedValue(mockError);
 
-      await expect(authService.refreshToken('expired-token')).rejects.toThrow(
+      await expect(authService.refreshToken()).rejects.toThrow(
         'Refresh token expired'
       );
     });

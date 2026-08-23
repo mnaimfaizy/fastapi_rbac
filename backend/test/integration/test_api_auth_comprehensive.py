@@ -127,11 +127,11 @@ class TestComprehensiveAuth:
             if response.status_code == 200:
                 login_response = response.json()
                 assert "access_token" in login_response["data"]
-                assert "refresh_token" in login_response["data"]
                 assert login_response["data"]["token_type"] == "bearer"
+                # Refresh token is HttpOnly cookie (not JSON body)
+                assert response.cookies.get(settings.REFRESH_TOKEN_COOKIE_NAME)
 
                 access_token = login_response["data"]["access_token"]
-                refresh_token = login_response["data"]["refresh_token"]
 
                 # Step 5: Access protected endpoint with token
                 headers = {"Authorization": f"Bearer {access_token}"}
@@ -139,9 +139,12 @@ class TestComprehensiveAuth:
 
                 assert response.status_code == 200
 
-                # Step 6: Refresh token
+                # Step 6: Refresh via cookie + CSRF
+                _, refresh_csrf = await get_csrf_token(client)
                 response = await client.post(
-                    f"{settings.API_V1_STR}/auth/new_access_token", json={"refresh_token": refresh_token}
+                    f"{settings.API_V1_STR}/auth/new_access_token",
+                    json={},
+                    headers=refresh_csrf,
                 )
 
                 if response.status_code == 201:
@@ -151,14 +154,18 @@ class TestComprehensiveAuth:
                     assert new_access_token != access_token
 
                     # Step 7: Logout
-                    headers = {"Authorization": f"Bearer {new_access_token}"}
+                    _, logout_csrf = await get_csrf_token(client)
+                    headers = {"Authorization": f"Bearer {new_access_token}", **logout_csrf}
                     response = await client.post(f"{settings.API_V1_STR}/auth/logout", headers=headers)
 
                     if response.status_code == 200:
                         assert "successfully logged out" in response.json()["message"].lower()
 
                         # Step 8: Try to access protected endpoint after logout (should fail)
-                        response = await client.get(f"{settings.API_V1_STR}/users/", headers=headers)
+                        response = await client.get(
+                            f"{settings.API_V1_STR}/users/",
+                            headers={"Authorization": f"Bearer {new_access_token}"},
+                        )
                         assert response.status_code == 401
 
     async def _test_login_endpoint_structure(self, client: AsyncClient) -> None:
@@ -392,7 +399,11 @@ class TestAuthenticationSecurity:
             assert response.status_code == 200
 
             # Logout
-            response = await client.post(f"{settings.API_V1_STR}/auth/logout", headers=headers)
+            _, logout_csrf = await get_csrf_token(client)
+            response = await client.post(
+                f"{settings.API_V1_STR}/auth/logout",
+                headers={**headers, **logout_csrf},
+            )
             if response.status_code == 200:
                 # Try to use token after logout (should fail)
                 response = await client.get(f"{settings.API_V1_STR}/users/", headers=headers)
@@ -512,9 +523,11 @@ class TestAuthenticationEdgeCases:
     @pytest.mark.asyncio
     async def test_refresh_token_with_invalid_token(self, client: AsyncClient) -> None:
         """Test token refresh with invalid refresh token."""
-
+        _, csrf_headers = await get_csrf_token(client)
         response = await client.post(
-            f"{settings.API_V1_STR}/auth/new_access_token", json={"refresh_token": "invalid_refresh_token"}
+            f"{settings.API_V1_STR}/auth/new_access_token",
+            json={"refresh_token": "invalid_refresh_token"},
+            headers=csrf_headers,
         )
 
         assert response.status_code in [400, 401, 403, 422]
@@ -524,6 +537,7 @@ class TestAuthenticationEdgeCases:
         """Expired refresh JWT should emit refresh_token_expired audit event."""
         from fastapi import BackgroundTasks
 
+        _, csrf_headers = await get_csrf_token(client)
         with patch("app.api.v1.endpoints.auth.decode_token") as mock_decode:
             mock_decode.side_effect = HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has expired"
@@ -532,6 +546,7 @@ class TestAuthenticationEdgeCases:
                 response = await client.post(
                     f"{settings.API_V1_STR}/auth/new_access_token",
                     json={"refresh_token": "expired.refresh.token"},
+                    headers=csrf_headers,
                 )
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -674,7 +689,11 @@ class TestAuthenticationEdgeCases:
             assert response2_me.status_code == 200
 
             # Logout from device 1
-            logout_response = await client.post(f"{settings.API_V1_STR}/auth/logout", headers=headers1)
+            _, logout_csrf = await get_csrf_token(client)
+            logout_response = await client.post(
+                f"{settings.API_V1_STR}/auth/logout",
+                headers={**headers1, **logout_csrf},
+            )
             if logout_response.status_code == 200:
                 # Token 1 should be invalid
                 response1_after_logout = await client.get(f"{settings.API_V1_STR}/users/me", headers=headers1)

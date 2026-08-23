@@ -1,6 +1,6 @@
 import axios, { AxiosError } from 'axios';
 import {
-  getStoredRefreshToken,
+  hasAuthSessionHint,
   getStoredAccessToken,
   setStoredAccessToken,
 } from '../lib/tokenStorage';
@@ -34,6 +34,9 @@ export interface SuccessResponse<T> {
   data: T;
   meta?: Record<string, unknown>;
 }
+
+/** Cookie-based refresh endpoint; excluded from the 401 refresh retry flow. */
+const REFRESH_ENDPOINT = '/auth/new_access_token';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1',
@@ -132,21 +135,29 @@ api.interceptors.response.use(
       }
     }
 
-    // Handle 401 (Unauthorized) - Token refresh flow
-    if (error.response?.status === 401 && !originalRequest?._retry) {
+    // Handle 401 (Unauthorized) - Token refresh flow.
+    // The refresh endpoint itself must never re-enter this branch: it returns 401
+    // for a missing/expired refresh cookie, and each retry carries a fresh config
+    // (so `_retry` cannot stop it), which would recurse indefinitely.
+    const isRefreshRequest = (originalRequest?.url ?? '').includes(
+      REFRESH_ENDPOINT
+    );
+    if (
+      error.response?.status === 401 &&
+      !originalRequest?._retry &&
+      !isRefreshRequest
+    ) {
       if (originalRequest) {
         originalRequest._retry = true;
 
         try {
-          const refreshToken = getStoredRefreshToken();
-          if (!refreshToken) {
+          // Only attempt cookie refresh when a prior login set the session hint
+          if (!hasAuthSessionHint()) {
             store.dispatch(logout());
             return Promise.reject(error);
           }
 
-          const response = await store
-            .dispatch(refreshAccessToken(refreshToken))
-            .unwrap();
+          const response = await store.dispatch(refreshAccessToken()).unwrap();
           if (response && response.access_token) {
             setStoredAccessToken(response.access_token);
             if (originalRequest?.headers) {

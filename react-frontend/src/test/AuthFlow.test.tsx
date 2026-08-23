@@ -13,9 +13,10 @@ const mockAuthService = vi.mocked(authService);
 // Mock token storage to prevent runtime errors
 vi.mock('../lib/tokenStorage', () => ({
   setStoredAccessToken: vi.fn(),
-  setStoredRefreshToken: vi.fn(),
+  setAuthSessionHint: vi.fn(),
+  hasAuthSessionHint: vi.fn(() => false),
+  clearAuthSessionHint: vi.fn(),
   getStoredAccessToken: vi.fn(() => null),
-  getStoredRefreshToken: vi.fn(() => null),
   clearAuthTokens: vi.fn(),
 }));
 

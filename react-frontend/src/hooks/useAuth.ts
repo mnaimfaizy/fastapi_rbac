@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useAppSelector, useAppDispatch } from '../store/hooks';
-import { getStoredRefreshToken } from '../lib/tokenStorage';
+import { hasAuthSessionHint } from '../lib/tokenStorage';
 import {
   refreshAccessToken,
   getCurrentUser,
@@ -17,11 +17,10 @@ export const useAuth = () => {
   const { user, isAuthenticated, accessToken, isLoading, error } =
     useAppSelector((state) => state.auth);
 
-  // Initialize authentication on mount if refresh token exists
+  // Restore session via HttpOnly refresh cookie when a prior login left a hint
   useEffect(() => {
-    const refreshToken = getStoredRefreshToken();
-    if (refreshToken && !isAuthenticated && !isLoading) {
-      dispatch(refreshAccessToken(refreshToken))
+    if (hasAuthSessionHint() && !isAuthenticated && !isLoading) {
+      dispatch(refreshAccessToken())
         .unwrap()
         .then(() => {
           dispatch(getCurrentUser());

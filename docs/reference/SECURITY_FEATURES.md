@@ -90,10 +90,10 @@ Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'
 **Features**:
 
 - **Access Tokens**: Short-lived, stored in memory (Redux state)
-- **Refresh Tokens**: Long-lived, stored in localStorage
+- **Refresh Tokens**: Long-lived, HttpOnly Secure cookies (see [ADR 0006](../adr/0006-httponly-refresh-token-cookies.md))
 - **Token Allowlisting**: Only tokens recorded at login/refresh are accepted
-- **Automatic Refresh**: Transparent token renewal
-- **Secure Logout**: Allowlist keys removed for the user/token type
+- **Automatic Refresh**: Transparent token renewal via cookie + CSRF
+- **Secure Logout**: Allowlist keys removed and refresh cookie cleared
 
 **Security Measures**:
 

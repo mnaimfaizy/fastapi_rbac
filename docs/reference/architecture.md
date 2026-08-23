@@ -10,6 +10,7 @@ Related:
 - [Security Features](./SECURITY_FEATURES.md) — security controls
 - [Domain docs](../agents/domain.md) — vocabulary and ADR conflict handling
 - [ADR 0001](../adr/0001-pyjwt-sole-jwt-library.md) — PyJWT + Redis allowlist decision
+- [ADR 0006](../adr/0006-httponly-refresh-token-cookies.md) — HttpOnly refresh-token cookies for the SPA
 
 ## High-level architecture
 
@@ -128,17 +129,17 @@ Frontend mirrors these in `react-frontend/src/models/` (`user.ts`, `role.ts`, `p
 
 ## Authentication flow
 
-Session invalidation uses a Redis **allowlist** (`user:{id}:{token_type}` in `app/utils/token.py`), not a JWT `jti` blacklist. See [ADR 0001](../adr/0001-pyjwt-sole-jwt-library.md).
+Session invalidation uses a Redis **allowlist** (`user:{id}:{token_type}` in `app/utils/token.py`), not a JWT `jti` blacklist. See [ADR 0001](../adr/0001-pyjwt-sole-jwt-library.md) and [ADR 0006](../adr/0006-httponly-refresh-token-cookies.md).
 
-1. **Login** — `POST /api/v1/auth/login` validates credentials, issues access + refresh tokens, records tokens on the Redis allowlist.
-2. **Authenticated requests** — client sends `Authorization: Bearer <access_token>`; backend verifies signature/expiry and that the token remains allowlisted.
-3. **Refresh** — on 401, frontend uses the refresh token; backend rotates tokens and updates the allowlist. Failed refresh → logout.
-4. **Logout** — `POST /api/v1/auth/logout` removes allowlist entries; frontend clears in-memory access token and stored refresh token.
+1. **Login** — `POST /api/v1/auth/login` validates credentials, returns the access token in JSON, sets the refresh token as an HttpOnly cookie, and records both on the Redis allowlist.
+2. **Authenticated requests** — client sends `Authorization: Bearer <access_token>` (and cookies via credentials); backend verifies signature/expiry and that the token remains allowlisted.
+3. **Refresh** — on 401, frontend calls `POST /api/v1/auth/new_access_token` with CSRF; backend reads the HttpOnly refresh cookie (optional JSON body fallback for non-browser clients), validates the allowlist, and returns a new access token. Failed refresh → logout. (Refresh rotation is not implemented; see session-security follow-ups.)
+4. **Logout** — `POST /api/v1/auth/logout` removes allowlist entries and clears the refresh cookie; frontend clears in-memory access token and session hint.
 
 Frontend storage strategy:
 
-- Access token: memory (Redux) — reduces XSS exposure vs long-lived localStorage access tokens
-- Refresh token: localStorage, cleared on logout / failed refresh
+- Access token: memory (Redux) only
+- Refresh token: HttpOnly cookie (not readable by JavaScript)
 
 ## Security architecture (summary)
 

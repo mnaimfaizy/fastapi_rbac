@@ -4,7 +4,7 @@ import authService from '../../services/auth.service';
 import authTokenManager from '../../services/authTokenManager';
 import {
   setStoredAccessToken,
-  setStoredRefreshToken,
+  setAuthSessionHint,
   clearAuthTokens,
 } from '../../lib/tokenStorage';
 
@@ -47,9 +47,10 @@ export const loginUser = createAsyncThunk(
 
 export const refreshAccessToken = createAsyncThunk(
   'auth/refreshToken',
-  async (refreshToken: string, { rejectWithValue, dispatch }) => {
+  async (_, { rejectWithValue, dispatch }) => {
     try {
-      const response = await authService.refreshToken(refreshToken);
+      // Refresh token is sent automatically via HttpOnly cookie
+      const response = await authService.refreshToken();
       return response;
     } catch (error) {
       // Log the user out whenever token refresh fails
@@ -295,14 +296,11 @@ const authSlice = createSlice({
         state.isAuthenticated = true;
         state.user = action.payload.user;
         state.accessToken = action.payload.access_token;
-        state.refreshToken = action.payload.refresh_token;
+        state.refreshToken = null; // HttpOnly cookie; not available to JS
 
         try {
-          // Store tokens securely
           setStoredAccessToken(action.payload.access_token);
-          setStoredRefreshToken(action.payload.refresh_token);
-
-          // Setup token expiry timer
+          setAuthSessionHint();
           authTokenManager.setupTokenExpiryTimer(action.payload.access_token);
         } catch (error) {
           console.error('Error storing auth tokens:', error);
@@ -321,10 +319,11 @@ const authSlice = createSlice({
         state.isLoading = false;
         state.isAuthenticated = true;
         state.accessToken = action.payload.access_token;
+        state.refreshToken = null;
 
         try {
           setStoredAccessToken(action.payload.access_token);
-          // Setup token expiry timer with new access token
+          setAuthSessionHint();
           authTokenManager.setupTokenExpiryTimer(action.payload.access_token);
         } catch (error) {
           console.error('Error storing refreshed access token:', error);
@@ -363,16 +362,12 @@ const authSlice = createSlice({
         state.isLoading = false;
         state.passwordChangeSuccess = true;
 
-        // Update tokens from the response if they exist
-        if (action.payload.access_token && action.payload.refresh_token) {
+        // Access token in memory; refresh cookie set by backend
+        if (action.payload.access_token) {
           state.accessToken = action.payload.access_token;
-          state.refreshToken = action.payload.refresh_token;
-
-          // Store tokens securely
+          state.refreshToken = null;
           setStoredAccessToken(action.payload.access_token);
-          setStoredRefreshToken(action.payload.refresh_token);
-
-          // Setup token expiry timer with new access token
+          setAuthSessionHint();
           authTokenManager.setupTokenExpiryTimer(action.payload.access_token);
         }
       })

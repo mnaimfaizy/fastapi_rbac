@@ -15,7 +15,8 @@ export interface ErrorResponseWithErrors extends ErrorResponse {
 export interface Token {
   access_token: string;
   token_type: string;
-  refresh_token: string;
+  /** Omitted for SPA — refresh token is an HttpOnly cookie. */
+  refresh_token?: string | null;
   user: User;
 }
 
@@ -29,8 +30,9 @@ export interface LoginCredentials {
   password: string;
 }
 
+/** Optional body fallback for non-browser clients; SPA relies on cookie. */
 export interface RefreshTokenRequest {
-  refresh_token: string;
+  refresh_token?: string;
 }
 
 export interface PasswordResetRequest {

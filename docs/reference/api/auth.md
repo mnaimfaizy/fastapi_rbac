@@ -36,11 +36,13 @@ Log in a user with email and password.
   "data": {
     "access_token": "...",
     "token_type": "bearer",
-    "refresh_token": "..."
+    "user": { "...": "..." }
   },
   "message": "Login successful"
 }
 ```
+
+Sets an HttpOnly `refresh_token` cookie (path `/api/v1/auth`). The refresh token is not returned in the JSON body for the SPA.
 
 **Error Responses:**
 
@@ -144,12 +146,13 @@ Resend the verification email to a user (rate-limited).
 
 ### POST /api/v1/auth/logout
 
-Log out a user by invalidating their tokens.
+Log out a user by clearing Redis allowlist entries for access/refresh tokens and deleting the HttpOnly `refresh_token` cookie. Requires CSRF (cookie-authenticated mutation).
 
 **Request Headers:**
 
 ```
 Authorization: Bearer <access_token>
+X-CSRF-Token: <csrf_token>
 ```
 
 **Response:**
@@ -187,10 +190,16 @@ Authorization: Bearer <access_token>
 
 ```json
 {
-  "data": { "access_token": "...", "refresh_token": "..." },
+  "data": {
+    "access_token": "...",
+    "token_type": "bearer",
+    "user": { "...": "..." }
+  },
   "message": "Password changed successfully."
 }
 ```
+
+Re-issues the HttpOnly `refresh_token` cookie (refresh token omitted from JSON).
 
 **Error Responses:**
 
@@ -253,11 +262,13 @@ Reset a user's password using a reset token.
 
 ---
 
-### POST /api/v1/auth/refresh
+### POST /api/v1/auth/new_access_token
 
-Refresh an access token using a refresh token.
+Refresh an access token. Prefer the HttpOnly `refresh_token` cookie (first-party SPA). Requires CSRF. Optional JSON body `refresh_token` is a documented fallback for non-browser API clients.
 
-**Request Body:**
+**Cookie:** `refresh_token` (HttpOnly; path scoped to `/api/v1/auth`)
+
+**Request Body (optional):**
 
 ```json
 {
@@ -271,16 +282,16 @@ Refresh an access token using a refresh token.
 {
   "data": {
     "access_token": "...",
-    "token_type": "bearer",
-    "refresh_token": "..."
+    "token_type": "bearer"
   },
-  "message": "Token refreshed successfully."
+  "message": "Access token generated correctly"
 }
 ```
 
 **Error Responses:**
 
-- 401 Unauthorized: Invalid or expired refresh token
+- 401 Unauthorized: Missing, invalid, or expired refresh token
+- 403 Forbidden: CSRF failure or refresh token not on Redis allowlist
 
 ---
 
