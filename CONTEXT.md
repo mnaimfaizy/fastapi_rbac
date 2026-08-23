@@ -16,6 +16,22 @@ _Avoid_: Rate limiting (when referring only to this mechanism), slowapi limit
 An account principal that authenticates and is assigned roles.
 _Avoid_: Account (when meaning the auth principal), client
 
+**Pending user**:
+A user that exists but has not completed email verification.
+_Avoid_: Unverified account, pending account, unconfirmed user
+
+**Established user**:
+A verified, active user.
+_Avoid_: Verified account, confirmed user
+
+**Disabled user**:
+A user an administrator has deactivated, regardless of verification state.
+_Avoid_: Inactive account, banned user, locked user (locking is the separate, temporary failed-attempt state)
+
+**Uniform registration response**:
+The invariant that registration and resend-verification return one fixed response for every email address, so neither confirms nor denies that a user exists.
+_Avoid_: Generic error, anti-enumeration
+
 **Role**:
 A named set of permissions assignable to users.
 _Avoid_: Group (when meaning a role)
