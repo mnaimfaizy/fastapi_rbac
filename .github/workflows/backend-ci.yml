@@ -14,7 +14,7 @@ on:
 
 jobs:
   lint:
-    name: Lint
+    name: Backend Lint
     runs-on: ubuntu-latest
 
     steps:
@@ -63,7 +63,7 @@ jobs:
           mypy --config-file pyproject.toml app
 
   test:
-    name: Test
+    name: Backend Test
     runs-on: ubuntu-latest
     services:
       postgres:
