@@ -28,6 +28,11 @@ asyncio_default_fixture_loop_scope = "function"
 # Already the pytest-asyncio default; pinned so a future default change
 # cannot silently alter which loop tests run on.
 asyncio_default_test_loop_scope = "function"
+# importlib avoids the sys.path mutation prepend performs and the duplicate
+# module names it can produce for same-named test files in sibling
+# directories. Adopted in #161 after confirming the pass/fail tally is
+# unchanged; it was dead config before #160 because pytest.ini won.
+addopts = ["--import-mode=importlib"]
 testpaths = ["test"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
