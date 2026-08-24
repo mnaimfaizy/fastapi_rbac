@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
-"""Test script to verify CSRF protection implementation for critical auth endpoints.
+"""Manual CSRF smoke check against a running server.
 
-This script tests:
-1. CSRF token generation endpoint
-2. Protected endpoints with CSRF validation
-3. CSRF token validation failures
-4. Integration with input sanitization and rate limiting
+Run this against a deployed or locally running instance to confirm CSRF
+protection survives the real HTTP stack — proxies, cookie flags, TLS
+termination — which in-process tests cannot cover.
+
+    python scripts/csrf_live_check.py
+
+This is a diagnostic, not a test suite. The automated coverage lives in
+test/unit/test_csrf_protection.py and runs in CI. Functions here are
+deliberately named check_* so pytest never collects them; they take plain
+arguments and return bool, which is why the old test_* names produced
+fixture errors when this file sat under test/.
 """
 
 import sys
@@ -15,19 +21,24 @@ import requests  # type: ignore
 
 # Configuration
 BASE_URL = "http://localhost:8000"
+# Auth routes declaring Depends(validate_csrf_token) that reach CSRF while
+# unauthenticated. /logout also declares it but authenticates first, so an
+# unauthenticated request is refused at 401 before CSRF runs; including it here
+# would report a false failure.
 AUTH_ENDPOINTS = [
     "/api/v1/auth/login",
     "/api/v1/auth/register",
     "/api/v1/auth/password-reset/request",
     "/api/v1/auth/password-reset/confirm",
-    "/api/v1/auth/change_password",  # Fixed: underscore not hyphen
+    "/api/v1/auth/change_password",
     "/api/v1/auth/verify-email",
     "/api/v1/auth/resend-verification-email",
     "/api/v1/auth/reset_password",
+    "/api/v1/auth/new_access_token",
 ]
 
 
-def test_csrf_token_generation() -> Tuple[Optional[str], Optional[requests.Session]]:
+def check_csrf_token_generation() -> Tuple[Optional[str], Optional[requests.Session]]:
     """Test CSRF token generation endpoint."""
     print("🔐 Testing CSRF token generation...")
 
@@ -63,7 +74,7 @@ def test_csrf_token_generation() -> Tuple[Optional[str], Optional[requests.Sessi
         return None, None
 
 
-def test_endpoint_without_csrf(endpoint: str, test_data: Dict[str, Any]) -> bool:
+def check_endpoint_without_csrf(endpoint: str, test_data: Dict[str, Any]) -> bool:
     """Test endpoint without CSRF token (should fail)."""
     print(f"🚫 Testing {endpoint} without CSRF token...")
 
@@ -89,7 +100,7 @@ def test_endpoint_without_csrf(endpoint: str, test_data: Dict[str, Any]) -> bool
         return False
 
 
-def test_endpoint_with_invalid_csrf(endpoint: str, test_data: Dict[str, Any]) -> bool:
+def check_endpoint_with_invalid_csrf(endpoint: str, test_data: Dict[str, Any]) -> bool:
     """Test endpoint with invalid CSRF token (should fail)."""
     print(f"🔍 Testing {endpoint} with invalid CSRF token...")
 
@@ -122,7 +133,7 @@ def test_endpoint_with_invalid_csrf(endpoint: str, test_data: Dict[str, Any]) ->
         return False
 
 
-def test_endpoint_with_csrf(
+def check_endpoint_with_csrf(
     endpoint: str, test_data: Dict[str, Any], csrf_token: str, session: requests.Session
 ) -> bool:
     """Test endpoint with valid CSRF token and session with cookie."""
@@ -197,7 +208,7 @@ def main() -> None:
     print("=" * 60)
 
     # Test CSRF token generation
-    csrf_token, session = test_csrf_token_generation()
+    csrf_token, session = check_csrf_token_generation()
     if not csrf_token or not session:
         print("❌ Cannot proceed without CSRF token")
         sys.exit(1)
@@ -210,7 +221,7 @@ def main() -> None:
     # Test all endpoints without CSRF tokens
     for endpoint in AUTH_ENDPOINTS:
         test_data = get_test_data(endpoint)
-        if not test_endpoint_without_csrf(endpoint, test_data):
+        if not check_endpoint_without_csrf(endpoint, test_data):
             all_tests_passed = False
 
     print("\n" + "=" * 60)
@@ -219,7 +230,7 @@ def main() -> None:
     # Test all endpoints with invalid CSRF tokens
     for endpoint in AUTH_ENDPOINTS:
         test_data = get_test_data(endpoint)
-        if not test_endpoint_with_invalid_csrf(endpoint, test_data):
+        if not check_endpoint_with_invalid_csrf(endpoint, test_data):
             all_tests_passed = False
 
     print("\n" + "=" * 60)
@@ -228,7 +239,7 @@ def main() -> None:
     # Test all endpoints with valid CSRF tokens
     for endpoint in AUTH_ENDPOINTS:
         test_data = get_test_data(endpoint)
-        if not test_endpoint_with_csrf(endpoint, test_data, csrf_token, session):
+        if not check_endpoint_with_csrf(endpoint, test_data, csrf_token, session):
             all_tests_passed = False
 
     print("\n" + "=" * 60)
