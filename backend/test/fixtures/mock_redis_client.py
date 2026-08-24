@@ -19,6 +19,9 @@ class MockRedisClient:
         self.delete = AsyncMock(side_effect=self._delete)
         self.exists = AsyncMock(side_effect=self._exists)
         self.expire = AsyncMock(side_effect=self._expire)
+        self.setex = AsyncMock(side_effect=self._setex)
+        self.incr = AsyncMock(side_effect=self._incr)
+        self.decr = AsyncMock(side_effect=self._decr)
 
         self.sadd = AsyncMock(side_effect=self._sadd)
         self.srem = AsyncMock(side_effect=self._srem)
@@ -45,6 +48,29 @@ class MockRedisClient:
         if ex is not None:
             self._expirations[key] = ex
         return True
+
+    async def _setex(self, key: str, seconds: int, value: Any) -> bool:
+        """SETEX takes (key, ttl, value); note the argument order differs from SET."""
+        self._storage[key] = value
+        self._expirations[key] = seconds
+        return True
+
+    async def _incr(self, key: str) -> int:
+        """Increment a counter, treating a missing key as 0.
+
+        Redis stores counters as strings, so the stored value is kept as a
+        string. Reading it back with int() is what the application does.
+        """
+        current = int(self._storage.get(key, 0))
+        current += 1
+        self._storage[key] = str(current)
+        return current
+
+    async def _decr(self, key: str) -> int:
+        current = int(self._storage.get(key, 0))
+        current -= 1
+        self._storage[key] = str(current)
+        return current
 
     async def _delete(self, key: str) -> int:
         """Delete a key from string, set, or hash storage."""
