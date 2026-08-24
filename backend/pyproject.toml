@@ -19,10 +19,22 @@ exclude = '''
 '''
 
 [tool.pytest.ini_options]
-asyncio_mode = "strict"
+# Single source of truth for pytest config; backend/pytest.ini was removed.
+# asyncio_mode is "auto" because that is what pytest.ini enforced while it
+# took precedence over this block. Do not change it here without checking
+# that every async test still runs.
+asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-asyncio_default_test_loop_scope = "function"
-addopts = ["--import-mode=importlib"]
+testpaths = ["test"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+log_cli = true
+log_cli_level = "INFO"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "e2e: marks tests as end-to-end tests",
+]
 
 [tool.isort]
 profile = 'black'
