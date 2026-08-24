@@ -25,6 +25,9 @@ exclude = '''
 # that every async test still runs.
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+# Already the pytest-asyncio default; pinned so a future default change
+# cannot silently alter which loop tests run on.
+asyncio_default_test_loop_scope = "function"
 testpaths = ["test"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
