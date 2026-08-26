@@ -20,6 +20,7 @@ from fastapi import HTTPException, status
 from httpx import AsyncClient
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app import crud
 from app.core.config import settings
 
 
@@ -62,12 +63,13 @@ class TestComprehensiveAuth:
         print(f"Registration response: {status_code}, {response_data}")
         print("After registration call - test is still running")
 
-        # Accept only success (201) for registration
-        assert status_code == 201
+        # Registration answers 200 uniformly for every account state (#113). The
+        # payload no longer carries the user object, so the id comes from the DB.
+        assert status_code == 200
 
-        # Get user ID from registration response (avoid DB query race)
-        user_id = response_data["data"].get("id")
-        assert user_id is not None, "User ID should be present in registration response."
+        created = await crud.user.get_by_email(db_session=db, email=email)
+        assert created is not None, "Registration should have created the user."
+        user_id = created.id
 
         # Step 2: Try to login before verification (should fail)
         # Use OAuth2PasswordRequestForm fields if required by backend
@@ -102,8 +104,6 @@ class TestComprehensiveAuth:
         with patch("app.core.security.decode_token") as mock_decode:
             mock_decode.return_value = {"email": email, "type": "email_verification"}
 
-            # Use user ID from registration response instead of querying DB
-            user_id = response_data["data"]["id"]
             await redis_mock.set(f"verification_token:{user_id}", "mock_verification_token")
 
             response = await client.post(
@@ -431,16 +431,17 @@ class TestAuthenticationEdgeCases:
         # Attempt to register with an existing email
         status_code, response_data = await register_user_with_csrf(client, register_data)
 
-        # Should only allow 400, 403, or 429 for registration with existing email
-        assert status_code in [400, 403, 429]
-        if status_code == 400:
-            # Check both 'message' and 'detail' fields for error text
-            msg = response_data.get("message", "") or response_data.get("detail", "")
-            msg = msg.lower()
-            assert "already registered" in msg or "unable to process" in msg
-        elif status_code == 429:
-            # Rate limiting is working - this is expected with many tests
-            pass
+        # Registering an existing address is answered exactly as registering a
+        # new one (#113). It used to return 400 "Unable to process registration
+        # request.", which confirmed the address existed. 429 is still possible
+        # because the per-address mail budget is shared and other tests may have
+        # spent it, but it must not depend on the account state.
+        assert status_code in [200, 429]
+        if status_code == 200:
+            msg = (response_data.get("message", "") or response_data.get("detail", "")).lower()
+            assert "already" not in msg
+            assert "exists" not in msg
+            assert "unable to process" not in msg
 
     @pytest.mark.asyncio
     async def test_login_with_nonexistent_user(self, client: AsyncClient) -> None:

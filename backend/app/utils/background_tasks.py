@@ -136,6 +136,48 @@ async def send_verification_email(
         )
 
 
+async def send_registration_notice_email(
+    background_tasks: BackgroundTasks,
+    user_email: str,
+) -> None:
+    """Tell an existing account holder that someone tried to register with their address.
+
+    Sent instead of a verification email when the address already belongs to an
+    established or disabled account (#113). Registration and resend-verification
+    return the same response in every case, so this email is the only signal
+    that anything happened — and it goes to the address owner, not the caller.
+
+    Args:
+        background_tasks: The FastAPI BackgroundTasks instance
+        user_email: The recipient's email address
+    """
+    project_name = settings.PROJECT_NAME
+    subject = f"{project_name} - An account already exists for this email"
+    template_context = {
+        "project_name": project_name,
+        "username": user_email,
+        "email": user_email,
+        "login_url": f"{settings.FRONTEND_URL}/login",
+        "password_reset_url": settings.PASSWORD_RESET_URL,
+    }
+
+    if CELERY_AVAILABLE and settings.MODE == "production":
+        send_email_task.delay(
+            email_to=user_email,
+            subject=subject,
+            template_name="registration-notice.html",
+            context=template_context,
+        )
+    else:
+        background_tasks.add_task(
+            send_email_with_template,
+            email_to=user_email,
+            subject=subject,
+            template_name="registration-notice.html",
+            context=template_context,
+        )
+
+
 async def cleanup_expired_tokens(
     background_tasks: BackgroundTasks,
     redis_client: Redis,

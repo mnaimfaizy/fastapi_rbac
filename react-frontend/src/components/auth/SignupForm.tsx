@@ -206,12 +206,25 @@ export function SignupForm({
           {isLoading ? 'Creating account...' : 'Create account'}
         </Button>
       </div>
+      {/*
+        Both links are unconditional and must stay that way (#113). Anything
+        rendered only after a duplicate submission -- a hint, a highlight, an
+        extra link -- is the same account-enumeration oracle as the old
+        "Unable to process registration request." error, just in the UI.
+      */}
       <div className="text-center text-sm">
         Already have an account?{' '}
         <Link to="/login" className="underline underline-offset-4">
-          {' '}
-          {/* Link to login page */}
           Login
+        </Link>
+      </div>
+      <div className="text-center text-sm">
+        Need a new verification email?{' '}
+        <Link
+          to="/resend-verification-email"
+          className="underline underline-offset-4"
+        >
+          Resend it
         </Link>
       </div>
     </form>

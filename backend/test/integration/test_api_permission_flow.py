@@ -501,7 +501,7 @@ class TestPermissionManagementFlow:
             json=user_data,
             headers=headers,
         )
-        if response.status_code != 201:
+        if response.status_code != 200:
             try:
                 print("Registration failed:", response.status_code, response.json())
             except Exception:
@@ -511,7 +511,7 @@ class TestPermissionManagementFlow:
                 print("Registration succeeded. Response:", response.json())
             except Exception:
                 print("Registration succeeded. Response (raw):", response.text)
-        assert response.status_code == 201
+        assert response.status_code == 200
         # After registration, extract user id and verification code, and verify the user before login
         registration_json = response.json()
         verification_code = registration_json["data"].get("verification_code")

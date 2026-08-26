@@ -196,7 +196,20 @@ describe('AuthService', () => {
   });
 
   describe('register', () => {
-    it('successfully registers a new user', async () => {
+    const uniformResponse: AxiosResponse<SuccessResponse<null>> = {
+      data: {
+        status: 'success',
+        message:
+          'If this email address can be registered or verified, we have sent it a message.',
+        data: null,
+      },
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config: {} as any,
+    };
+
+    it('posts the registration and resolves with no payload', async () => {
       const mockUserData: UserRegister = {
         email: 'newuser@example.com',
         password: 'securePassword123',
@@ -204,37 +217,7 @@ describe('AuthService', () => {
         last_name: 'User',
       };
 
-      const mockToken: Token = {
-        access_token: 'new-user-token',
-        token_type: 'Bearer',
-        refresh_token: 'new-user-refresh-token',
-        user: {
-          id: '456',
-          email: 'newuser@example.com',
-          first_name: 'New',
-          last_name: 'User',
-          is_active: true,
-          is_superuser: false,
-          roles: [],
-          permissions: [],
-          created_at: '2023-01-01T00:00:00Z',
-          updated_at: '2023-01-01T00:00:00Z',
-        },
-      };
-
-      const mockResponse: AxiosResponse<SuccessResponse<Token>> = {
-        data: {
-          status: 'success',
-          message: 'Registration successful',
-          data: mockToken,
-        },
-        status: 201,
-        statusText: 'Created',
-        headers: {},
-        config: {} as any,
-      };
-
-      mockedApi.post.mockResolvedValue(mockResponse);
+      mockedApi.post.mockResolvedValue(uniformResponse);
 
       const result = await authService.register(mockUserData);
 
@@ -242,23 +225,34 @@ describe('AuthService', () => {
         '/auth/register',
         mockUserData
       );
-      expect(result).toEqual(mockToken);
+      // The server returns a null payload for every account state (#113). This
+      // used to be typed Promise<Token>, which the server never returned.
+      expect(result).toBeUndefined();
     });
 
-    it('handles registration with duplicate email', async () => {
-      const mockUserData: UserRegister = {
+    it('resolves identically for an address that is already registered', async () => {
+      // The duplicate case used to reject with "Email already registered",
+      // which confirmed the address existed. Registration now answers the same
+      // way for every state, so the client cannot tell them apart (#113).
+      const newAddress: UserRegister = {
+        email: 'brand-new@example.com',
+        password: 'securePassword123',
+        first_name: 'Test',
+        last_name: 'User',
+      };
+      const existingAddress: UserRegister = {
         email: 'existing@example.com',
-        password: 'password123',
+        password: 'securePassword123',
         first_name: 'Test',
         last_name: 'User',
       };
 
-      const mockError = new Error('Email already registered');
-      mockedApi.post.mockRejectedValue(mockError);
+      mockedApi.post.mockResolvedValue(uniformResponse);
 
-      await expect(authService.register(mockUserData)).rejects.toThrow(
-        'Email already registered'
-      );
+      await expect(authService.register(newAddress)).resolves.toBeUndefined();
+      await expect(
+        authService.register(existingAddress)
+      ).resolves.toBeUndefined();
     });
 
     it('validates password strength requirements', () => {
