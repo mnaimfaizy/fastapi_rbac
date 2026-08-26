@@ -17,7 +17,7 @@ This report documents the current state of the `backend/scripts` directory, iden
   - `entrypoint.ps1`, `entrypoint.sh`
   - `fix-imports.ps1`, `format-imports.ps1`, `format-imports.sh`, `format.ps1`, `format.sh`
   - `lint.ps1`, `lint.sh`, `run.ps1`, `run.sh`
-  - `test_csrf_implementation.py`
+  - `csrf_live_check.py`
   - `worker-start.ps1`, `worker-start.sh`
   - `flower-start.ps1`, `flower-start.sh`
 - **Subdirectories:**
@@ -46,7 +46,7 @@ This report documents the current state of the `backend/scripts` directory, iden
 
 ### E. Miscellaneous
 - **run.sh / run.ps1**: Start FastAPI app, run pre-start and initial data scripts. Both are up-to-date and similar.
-- **test_csrf_implementation.py**: Standalone Python script for CSRF testing. Not referenced by any other script; may be for manual/diagnostic use.
+- **csrf_live_check.py**: Standalone CSRF smoke check against a running server. Manual diagnostic only; automated coverage lives in `test/unit/test_csrf_protection.py`.
 - **database/create-dbs.sql.removed**: Placeholder, can be deleted.
 
 ### F. Docker Subdirectory
@@ -60,7 +60,7 @@ This report documents the current state of the `backend/scripts` directory, iden
 - **Duplicated logic:**
   - Many scripts (worker/beat/entrypoint) have similar logic in both top-level and `docker/` subdir. Consider consolidating or clearly documenting which are for Docker vs. local/dev.
 - **Legacy or unused scripts:**
-  - `test_csrf_implementation.py` is not referenced elsewhere. If not used in CI or docs, consider moving to a `diagnostics/` or `manual/` folder or removing.
+  - `csrf_live_check.py` is not referenced elsewhere and is a manual diagnostic. It briefly lived under `test/` as `test_csrf_implementation.py`, where pytest collected its `test_*` helpers and errored on them (#164); its functions are now named `check_*` so that cannot recur.
 
 ## 5. Recommendations
 1. **Remove redundant scripts:**
