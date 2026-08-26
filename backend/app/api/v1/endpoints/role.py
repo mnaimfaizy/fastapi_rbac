@@ -52,12 +52,16 @@ async def get_roles(
         pattern = name_pattern.replace("*", "%")
         query = select(Role).where(getattr(Role, "name").like(pattern)).order_by(Role.name)
     response_page = await crud.role.get_multi_paginated(params=params, db_session=db_session, query=query)
+    # paginate() builds the page class from this route's return annotation, so
+    # it returns an IGetResponsePaginated, not a Page: the rows live at
+    # .data.items, never .items. The declared Page[ModelType] on
+    # get_multi_paginated describes the CRUD layer, not what arrives here.
     response_data = {
-        "items": [serialize_role(role) for role in response_page.items],
-        "total": response_page.total,
-        "page": response_page.page,
-        "size": response_page.size,
-        "pages": response_page.pages,
+        "items": [serialize_role(role) for role in response_page.data.items],
+        "total": response_page.data.total,
+        "page": response_page.data.page,
+        "size": response_page.data.size,
+        "pages": response_page.data.pages,
     }
     return create_response(data=response_data)
 
