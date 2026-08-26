@@ -29,7 +29,7 @@ async def register_and_verify_user(client: AsyncClient, user_data: Dict[str, Any
     # Register user
     csrf_token, headers = await get_csrf_token(client)
     response = await client.post(f"{settings.API_V1_STR}/auth/register", json=user_data, headers=headers)
-    assert response.status_code == 201
+    assert response.status_code == 200
     verification_code = response.json()["data"].get("verification_code")
     # Verify user
     verify_payload = {"token": verification_code}

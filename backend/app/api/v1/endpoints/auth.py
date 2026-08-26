@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import traceback
 from datetime import datetime, timedelta, timezone
@@ -16,7 +15,7 @@ from app import crud
 from app.api import deps
 from app.api.deps import get_redis_client, get_strict_sanitizer
 from app.core import security  # security module contains token functions
-from app.core.config import ModeEnum, settings
+from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.core.security import (  # For password complexity / JWT audit mapping
     PasswordValidator,
@@ -29,11 +28,15 @@ from app.schemas.response_schema import IPostResponseBase, create_response
 from app.schemas.token_schema import PasswordResetConfirm, RefreshToken, Token, TokenRead
 from app.schemas.user_schema import PasswordResetRequest  # Used for resend-verification
 from app.schemas.user_schema import (  # PasswordResetConfirm, # Not used in this snippet
-    IUserCreate,
     IUserRead,
     IUserUpdate,
     UserRegister,
     VerifyEmail,
+)
+from app.utils.account_email_dispatch import (
+    ACCOUNT_EMAIL_UNIFORM_MESSAGE,
+    AccountState,
+    dispatch_account_email,
 )
 from app.utils.auth_cookies import clear_refresh_token_cookie, set_refresh_token_cookie
 from app.utils.background_tasks import (
@@ -42,8 +45,8 @@ from app.utils.background_tasks import (
     log_security_event,
     process_account_lockout,
     send_password_reset_email,
-    send_verification_email,
 )
+from app.utils.response_timing import response_time_floor
 from app.utils.token import add_token_to_redis, get_valid_tokens, token_is_allowlisted
 from app.utils.user_utils import serialize_user
 
@@ -361,7 +364,7 @@ async def login(
         )
 
 
-@router.post("/register", status_code=status.HTTP_201_CREATED)
+@router.post("/register")
 @limiter.limit("3/hour")
 async def register(
     request: Request,
@@ -371,273 +374,166 @@ async def register(
     sanitizer: deps.InputSanitizer = Depends(get_strict_sanitizer),
     db_session: AsyncSession = Depends(deps.get_db),
     _: None = Depends(deps.validate_csrf_token),
-) -> IPostResponseBase[IUserRead]:
+) -> IPostResponseBase:
     """
-    Register a new user with security measures.
-    """
-    ip_address = (
-        request.client.host if request.client else "Unknown"
-    )  # Input sanitization for registration data
-    try:
-        # Sanitize email
-        sanitized_email = sanitizer.sanitize(str(user_in.email), "email")
-        # Validate password length to prevent DoS attacks
-        if len(user_in.password) > 1000:
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="registration_password_too_long",
-                details={
-                    "ip_address": ip_address,
-                    "password_length": len(user_in.password),
-                },
-            )
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password too long")
-        # Sanitize name fields
-        sanitized_first_name = sanitizer.sanitize(user_in.first_name, "text")
-        sanitized_last_name = sanitizer.sanitize(user_in.last_name, "text")
-        # Update user_in with sanitized data - assign directly as string
-        user_in.email = sanitized_email  # EmailStr validation handled by Pydantic
-        user_in.first_name = sanitized_first_name
-        user_in.last_name = sanitized_last_name
-    except Exception as e:
-        background_tasks.add_task(
-            log_security_event,
-            background_tasks=background_tasks,
-            event_type="registration_input_sanitization_failed",
-            details={"error": str(e), "ip_address": ip_address},
-        )
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid input data")
-    try:
-        # Use specific settings for registration rate limits if they exist
-        max_ip_attempts = (
-            settings.MAX_REGISTRATION_ATTEMPTS_PER_HOUR  # Corrected attribute
-            if hasattr(settings, "MAX_REGISTRATION_ATTEMPTS_PER_HOUR")
-            else 5
-        )
-        max_email_attempts = (
-            settings.MAX_REGISTRATION_ATTEMPTS_PER_EMAIL  # Corrected attribute
-            if hasattr(settings, "MAX_REGISTRATION_ATTEMPTS_PER_EMAIL")
-            else 3
-        )
-        rate_limit_period = (
-            settings.RATE_LIMIT_PERIOD_SECONDS  # Corrected attribute
-            if hasattr(settings, "RATE_LIMIT_PERIOD_SECONDS")
-            else 3600
-        )
-        ip_rate_limit_key = f"registration_rate_limit:ip:{ip_address}"
-        email_rate_limit_key = f"registration_rate_limit:email:{user_in.email}"
-        ip_attempts_raw = await redis_client.get(ip_rate_limit_key)
-        email_attempts_raw = await redis_client.get(email_rate_limit_key)
-        ip_attempts = int(ip_attempts_raw) if ip_attempts_raw else 0
-        email_attempts = int(email_attempts_raw) if email_attempts_raw else 0
-        # Bypass registration rate limiting in test mode
-        if getattr(settings, "MODE", None) == "testing":
-            ip_attempts = 0
-            email_attempts = 0
-        if ip_attempts >= max_ip_attempts or email_attempts >= max_email_attempts:
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="registration_rate_limit_exceeded",
-                details={"email": user_in.email, "ip_address": ip_address},
-            )
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Too many registration attempts. Please try again later.",
-            )
-        email_domain = user_in.email.split("@")[1].lower()
-        if settings.EMAIL_DOMAIN_BLACKLIST and email_domain in settings.EMAIL_DOMAIN_BLACKLIST:
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="registration_blocked_domain",
-                details={
-                    "email": user_in.email,
-                    "domain": email_domain,
-                    "ip_address": ip_address,
-                },
-            )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="This email domain is not allowed for registration.",
-            )
-        if settings.EMAIL_DOMAIN_ALLOWLIST and email_domain not in settings.EMAIL_DOMAIN_ALLOWLIST:
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="registration_domain_not_allowed",
-                details={
-                    "email": user_in.email,
-                    "domain": email_domain,
-                    "ip_address": ip_address,
-                },
-            )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="This email domain is not allowed for registration.",
-            )
-        if not PasswordValidator.validate_complexity(user_in.password):
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="registration_password_complexity_failed",
-                details={"email": user_in.email, "ip_address": ip_address},
-            )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Password does not meet complexity requirements.",
-            )
-        # Check if the user already exists
-        user = await crud.user.get_by_email(db_session=db_session, email=user_in.email)
-        if user:
-            await asyncio.sleep(0.2)
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="registration_duplicate_email",
-                details={"email": user_in.email, "ip_address": ip_address},
-            )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Unable to process registration request.",
-            )
-        verification_token = security.create_verification_token(user_in.email)
-        user_create = IUserCreate(
-            **user_in.model_dump(),
-            verified=False,
-            verification_code=verification_token,  # For sending email
-            roles=[],  # Default roles can be assigned here or later
-            last_changed_password_date=datetime.now(timezone.utc).replace(tzinfo=None),
-        )
-        # Create user with retry on conflict
-        try:
-            new_user = await crud.user.create(
-                db_session=db_session, obj_in=user_create
-            )  # Renamed to new_user for clarity
-        except Exception as e:
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="registration_creation_error",
-                details={"error": str(e), "email": user_in.email},
-            )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="An error occurred during registration.",
-            )
-        # Add check for user object and user.id
-        if not new_user or not hasattr(new_user, "id") or not new_user.id:
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="registration_creation_failed_post_create",
-                details={
-                    "email": user_in.email,
-                    "reason": "User object or user.id is None/missing after creation",
-                },
-            )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="An error occurred during registration (user finalization step).",
-            )
-        # Assign the 'User' role by default to every new user
-        user_role = await crud.role.get_role_by_name(name="User", db_session=db_session)
-        if user_role:
-            await crud.user.add_roles_by_ids(
-                user_id=new_user.id,
-                role_ids=[user_role.id],
-                db_session=db_session,
-            )
-            # Refresh user to include roles
-            await db_session.refresh(new_user, attribute_names=["roles"])
-        redis_token_key = f"verification_token:{new_user.id}"
-        await redis_client.setex(
-            redis_token_key,
-            settings.VERIFICATION_TOKEN_EXPIRE_MINUTES * 60,
-            verification_token,
-        )
-        # Send verification email
-        try:
-            await send_verification_email(
-                background_tasks=background_tasks,
-                user_email=new_user.email,
-                verification_token=verification_token,
-                verification_url=settings.EMAIL_VERIFICATION_URL,
-            )
-        except Exception as e:
-            # Cleanup on email failure
-            await crud.user.remove(db_session=db_session, id=new_user.id)
-            await redis_client.delete(redis_token_key)
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="registration_email_failed",
-                details={"error": str(e), "email": user_in.email},
-            )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Unable to complete registration. Please try again later.",
-            )
-        # Implement rate limiting
-        await redis_client.incr(ip_rate_limit_key)
-        await redis_client.expire(ip_rate_limit_key, rate_limit_period)  # Use the defined variable
-        await redis_client.incr(email_rate_limit_key)
-        await redis_client.expire(email_rate_limit_key, rate_limit_period)  # Use the defined variable
-        # Schedule cleanup of unverified accounts
-        background_tasks.add_task(
-            cleanup_unverified_account,
-            background_tasks=background_tasks,
-            user_id=new_user.id,
-            redis_client=redis_client,
-            delay_hours=settings.UNVERIFIED_ACCOUNT_CLEANUP_HOURS,
-        )
-        # Log successful registration
-        background_tasks.add_task(
-            log_security_event,
-            background_tasks=background_tasks,
-            event_type="user_registered",
-            user_id=new_user.id,
-            details={"email": new_user.email},
-        )
-        user_data = serialize_user(new_user)
-        user_read = IUserRead(**user_data)
-        # Expose verification_code in test mode for integration tests
-        response_data = user_read.model_dump()
-        if getattr(settings, "MODE", None) == "testing":
-            response_data["verification_code"] = verification_token
-        return create_response(
-            data=response_data,  # Return IUserRead object or dict with code
-            message="Registration successful. Please check your email to verify your account.",
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        background_tasks.add_task(
-            log_security_event,
-            background_tasks=background_tasks,
-            event_type="registration_unexpected_error",
-            details={
-                "error": str(e),
-                "ip_address": ip_address,
-            },
-        )
-        # Surface real error in testing mode for debugging
-        if getattr(settings, "MODE", None) == getattr(ModeEnum, "testing", "testing"):
-            import traceback
+    Register a new user.
 
-            tb = traceback.format_exc()
+    Returns an identical status, body and message for every address, whether it
+    is new, awaiting verification, already established, or disabled (#113). What
+    differs is only which email the address owner receives, which is decided by
+    :func:`dispatch_account_email`. Rejections that describe the *submission*
+    rather than the account -- malformed input, a weak password, a blocked
+    domain, too many requests from this IP -- are still reported, since they
+    reveal nothing about whether an account exists.
+    """
+    ip_address = request.client.host if request.client else "Unknown"
+
+    async with response_time_floor():
+        try:
+            sanitized_email = sanitizer.sanitize(str(user_in.email), "email")
+            if len(user_in.password) > 1000:
+                background_tasks.add_task(
+                    log_security_event,
+                    background_tasks=background_tasks,
+                    event_type="registration_password_too_long",
+                    details={"ip_address": ip_address, "password_length": len(user_in.password)},
+                )
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password too long")
+            user_in.email = sanitized_email
+            user_in.first_name = sanitizer.sanitize(user_in.first_name, "text")
+            user_in.last_name = sanitizer.sanitize(user_in.last_name, "text")
+        except HTTPException:
+            raise
+        except Exception as e:
+            background_tasks.add_task(
+                log_security_event,
+                background_tasks=background_tasks,
+                event_type="registration_input_sanitization_failed",
+                details={"error": str(e), "ip_address": ip_address},
+            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid input data")
+
+        try:
+            # The IP-scoped budget stays separate from the per-address budget the
+            # dispatcher charges: this one tracks the requester rather than the
+            # target, so it cannot be used to probe whether an address exists.
+            max_ip_attempts = settings.MAX_REGISTRATION_ATTEMPTS_PER_HOUR
+            rate_limit_period = settings.RATE_LIMIT_PERIOD_SECONDS
+            ip_rate_limit_key = f"registration_rate_limit:ip:{ip_address}"
+            ip_attempts_raw = await redis_client.get(ip_rate_limit_key)
+            ip_attempts = int(ip_attempts_raw) if ip_attempts_raw else 0
+            if getattr(settings, "MODE", None) == "testing":
+                ip_attempts = 0
+            if ip_attempts >= max_ip_attempts:
+                background_tasks.add_task(
+                    log_security_event,
+                    background_tasks=background_tasks,
+                    event_type="registration_rate_limit_exceeded",
+                    details={"email": user_in.email, "ip_address": ip_address},
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Too many registration attempts. Please try again later.",
+                )
+
+            email_domain = user_in.email.split("@")[1].lower()
+            if settings.EMAIL_DOMAIN_BLACKLIST and email_domain in settings.EMAIL_DOMAIN_BLACKLIST:
+                background_tasks.add_task(
+                    log_security_event,
+                    background_tasks=background_tasks,
+                    event_type="registration_blocked_domain",
+                    details={
+                        "email": user_in.email,
+                        "domain": email_domain,
+                        "ip_address": ip_address,
+                    },
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="This email domain is not allowed for registration.",
+                )
+            if settings.EMAIL_DOMAIN_ALLOWLIST and email_domain not in settings.EMAIL_DOMAIN_ALLOWLIST:
+                background_tasks.add_task(
+                    log_security_event,
+                    background_tasks=background_tasks,
+                    event_type="registration_domain_not_allowed",
+                    details={
+                        "email": user_in.email,
+                        "domain": email_domain,
+                        "ip_address": ip_address,
+                    },
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="This email domain is not allowed for registration.",
+                )
+            if not PasswordValidator.validate_complexity(user_in.password):
+                background_tasks.add_task(
+                    log_security_event,
+                    background_tasks=background_tasks,
+                    event_type="registration_password_complexity_failed",
+                    details={"email": user_in.email, "ip_address": ip_address},
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Password does not meet complexity requirements.",
+                )
+
+            result = await dispatch_account_email(
+                email=user_in.email,
+                db_session=db_session,
+                redis_client=redis_client,
+                background_tasks=background_tasks,
+                ip_address=ip_address,
+                may_create=True,
+                registration=user_in,
+            )
+
+            await redis_client.incr(ip_rate_limit_key)
+            await redis_client.expire(ip_rate_limit_key, rate_limit_period)
+
+            # cleanup_unverified_account sleeps in-process for delay_hours before
+            # doing anything, so scheduling it under test would block the ASGI
+            # transport, which runs background tasks inline, for 72 hours. That
+            # this never surfaced before is an accident: registration used to
+            # fail earlier, on a Redis call the test mock did not implement, so
+            # the task was never reached. Its unreliability is #136's to fix;
+            # #113 must not depend on cleanup running either way.
+            schedule_cleanup = (
+                result.state is AccountState.ABSENT
+                and result.user_id is not None
+                and getattr(settings, "MODE", None) != "testing"
+            )
+            if schedule_cleanup:
+                background_tasks.add_task(
+                    cleanup_unverified_account,
+                    background_tasks=background_tasks,
+                    user_id=result.user_id,
+                    redis_client=redis_client,
+                    delay_hours=settings.UNVERIFIED_ACCOUNT_CLEANUP_HOURS,
+                )
+
+            # Test mode only: integration tests drive the verification flow from
+            # this value rather than reading mail. It is absent in every other
+            # mode, so the payload is null for all four states in production.
+            response_data = None
+            if getattr(settings, "MODE", None) == "testing" and result.verification_token:
+                response_data = {"verification_code": result.verification_token}
+
+            return create_response(data=response_data, message=ACCOUNT_EMAIL_UNIFORM_MESSAGE)
+        except HTTPException:
+            raise
+        except Exception as e:
+            background_tasks.add_task(
+                log_security_event,
+                background_tasks=background_tasks,
+                event_type="registration_unexpected_error",
+                details={"error": str(e), "ip_address": ip_address},
+            )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail={
-                    "error": str(e),
-                    "traceback": tb,
-                },
+                detail="An unexpected error occurred during registration.",
             )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An unexpected error occurred during registration.",
-        )
 
 
 @router.post("/verify-email")
@@ -843,140 +739,48 @@ async def resend_verification_email(
     redis_client: AsyncRedis = Depends(get_redis_client),
     db_session: AsyncSession = Depends(deps.get_db),
     _: None = Depends(deps.validate_csrf_token),
-) -> IPostResponseBase:  # No data returned, just a message
+) -> IPostResponseBase:
     """
-    Resend verification email if the user exists, is not verified, and is active.
-    Includes rate limiting.
+    Resend a verification email.
+
+    Returns an identical response for all four account states (#113). It
+    previously answered "This email is already verified." for established users
+    and "Account is inactive." for disabled ones, either of which confirmed an
+    address in a single request -- which is what made registration's vague 400
+    pointless. Both endpoints now share :func:`dispatch_account_email`, so the
+    policy cannot drift between them again.
+
+    An address with no account is sent nothing. Mailing it would turn this into
+    an open mailer for unsolicited signup mail; the response-time floor covers
+    that branch instead.
     """
     ip_address = request.client.host if request.client else "Unknown"
-    email_to_verify = body.email
-    try:
-        # Use specific settings for resend rate limits if they exist
-        max_attempts = (
-            settings.MAX_RESEND_VERIFICATION_ATTEMPTS_PER_HOUR
-            if hasattr(settings, "MAX_RESEND_VERIFICATION_ATTEMPTS_PER_HOUR")
-            else 3
-        )
-        rate_limit_period = (
-            settings.RATE_LIMIT_PERIOD_RESEND_VERIFICATION_SECONDS
-            if hasattr(settings, "RATE_LIMIT_PERIOD_RESEND_VERIFICATION_SECONDS")
-            else 3600
-        )
-        rate_limit_key = f"resend_verification_rate_limit:{email_to_verify}:{ip_address}"
-        attempts_raw = await redis_client.get(rate_limit_key)
-        attempts = int(attempts_raw) if attempts_raw else 0
-        if attempts >= max_attempts:
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="resend_verification_rate_limit_exceeded",
-                details={"email": email_to_verify, "ip_address": ip_address},
-            )
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Too many attempts to resend verification email. Try again later.",
-            )
-        user = await crud.user.get_by_email(email=email_to_verify, db_session=db_session)
-        if not user:
-            await asyncio.sleep(0.2)  # Mitigate timing attacks
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="resend_verification_user_not_found_pretended_success",
-                details={"email": email_to_verify, "ip_address": ip_address},
-            )
-            await redis_client.incr(rate_limit_key)  # Still count attempt
-            await redis_client.expire(rate_limit_key, rate_limit_period)
-            return create_response(
-                data=None,  # No data for this response
-                message=(
-                    "If an account with this email exists and is not verified, "
-                    "a new verification email has been sent."
-                ),
-            )
-        user = cast(User, user)
-        if not user.is_active:
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="resend_verification_inactive_account",
-                user_id=user.id,
-                details={"email": email_to_verify, "ip_address": ip_address},
-            )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Account is inactive. Cannot resend verification email.",
-            )
-        if user.verified:
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="resend_verification_already_verified",
-                user_id=user.id,
-                details={"email": email_to_verify, "ip_address": ip_address},
-            )
-            return create_response(data=None, message="This email is already verified.")
-        new_verification_token = security.create_verification_token(user.email)
-        redis_token_key = f"verification_token:{user.id}"
-        await redis_client.setex(
-            redis_token_key,
-            settings.VERIFICATION_TOKEN_EXPIRE_MINUTES * 60,
-            new_verification_token,
-        )
+
+    async with response_time_floor():
         try:
-            await send_verification_email(
+            await dispatch_account_email(
+                email=body.email,
+                db_session=db_session,
+                redis_client=redis_client,
                 background_tasks=background_tasks,
-                user_email=user.email,
-                verification_token=new_verification_token,
-                verification_url=settings.EMAIL_VERIFICATION_URL,
+                ip_address=ip_address,
+                may_create=False,
             )
+            return create_response(data=None, message=ACCOUNT_EMAIL_UNIFORM_MESSAGE)
+        except HTTPException:
+            raise
         except Exception as e:
+            error_type = type(e).__name__
             background_tasks.add_task(
                 log_security_event,
                 background_tasks=background_tasks,
-                event_type="resend_verification_email_send_failed",
-                user_id=user.id,
-                details={
-                    "error": str(e),
-                    "email": user.email,
-                    "ip_address": ip_address,
-                },
+                event_type=f"resend_verification_unexpected_error_{error_type.lower()}",
+                details={"error": str(e), "email": body.email, "ip_address": ip_address},
             )
-            # Fall through to generic success to prevent info leak
-        await redis_client.incr(rate_limit_key)
-        await redis_client.expire(rate_limit_key, rate_limit_period)
-        background_tasks.add_task(
-            log_security_event,
-            background_tasks=background_tasks,
-            event_type="resend_verification_email_sent",
-            user_id=user.id,
-            details={"email": user.email, "ip_address": ip_address},
-        )
-        return create_response(
-            data=None,
-            message=(
-                "If an account with this email exists and is not verified, "
-                "a new verification email has been sent."
-            ),
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        error_type = type(e).__name__
-        background_tasks.add_task(
-            log_security_event,
-            background_tasks=background_tasks,
-            event_type=f"resend_verification_unexpected_error_{error_type.lower()}",
-            details={
-                "error": str(e),
-                "email": email_to_verify,
-                "ip_address": ip_address,
-            },
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An unexpected error occurred. Please try again later.",
-        )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="An unexpected error occurred. Please try again later.",
+            )
 
 
 @router.post("/change_password")

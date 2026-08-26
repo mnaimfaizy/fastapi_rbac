@@ -291,6 +291,17 @@ class Settings(BaseSettings):
     MAX_RESEND_VERIFICATION_ATTEMPTS_PER_HOUR: int = 3
     RATE_LIMIT_PERIOD_RESEND_VERIFICATION_SECONDS: int = 3600
 
+    # Single per-address budget for verification-bearing mail (#113). Registration
+    # and resend-verification previously kept separate buckets, so alternating
+    # between them allowed 3 + 3 emails per hour at one address. Both endpoints
+    # now share this one.
+    MAX_ACCOUNT_EMAILS_PER_ADDRESS_PER_HOUR: int = 3
+    ACCOUNT_EMAIL_RATE_LIMIT_PERIOD_SECONDS: int = 3600
+    # Minimum response time for registration and resend-verification. A floor
+    # rather than a sleep on selected branches: a hand-placed pad goes stale as
+    # soon as a branch is added, which is how the old one stopped covering.
+    UNIFORM_ACCOUNT_RESPONSE_FLOOR_SECONDS: float = 0.5
+
     # Token Security
     ACCESS_TOKEN_ENTROPY_BITS: int = 256  # Entropy for token generation
     VERIFY_TOKEN_ON_EVERY_REQUEST: bool = True

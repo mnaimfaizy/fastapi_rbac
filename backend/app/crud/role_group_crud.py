@@ -296,14 +296,14 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
             # Apply pagination using the paginate function from fastapi_pagination
             paginated_result = await paginate(db_session, query, params)
 
-            if not paginated_result.items:
+            if not paginated_result.data.items:
                 return paginated_result
 
             # Build the hierarchy structure
-            all_groups = {group.id: group for group in paginated_result.items}
+            all_groups = {group.id: group for group in paginated_result.data.items}
 
             # Initialize children lists for all groups
-            for group in paginated_result.items:
+            for group in paginated_result.data.items:
                 if not hasattr(group, "children") or group.children is None:
                     group.children = []
                 else:
@@ -332,10 +332,10 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
                     # that doesn't have circular references
 
             # Filter items to only include root-level groups (those without parents)
-            root_groups = [group for group in paginated_result.items if group.parent_id is None]
+            root_groups = [group for group in paginated_result.data.items if group.parent_id is None]
 
             # Update the paginated result to include only root groups
-            paginated_result.items = root_groups
+            paginated_result.data.items = root_groups
 
             return paginated_result
 

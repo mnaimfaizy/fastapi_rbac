@@ -44,13 +44,17 @@ async def read_users_list(
     """
     users = await crud.user.get_multi_paginated(params=params, db_session=db_session)
 
+    # paginate() builds the page class from this route's return annotation, so
+    # it returns an IGetResponsePaginated, not a Page: the rows live at
+    # .data.items, never .items. The declared Page[ModelType] on
+    # get_multi_paginated describes the CRUD layer, not what arrives here.
     # Convert to a response format that includes roles
     response_data = {
-        "items": [serialize_user(user) for user in users.items],
-        "total": users.total,
-        "page": users.page,
-        "size": users.size,
-        "pages": users.pages,
+        "items": [serialize_user(user) for user in users.data.items],
+        "total": users.data.total,
+        "page": users.data.page,
+        "size": users.data.size,
+        "pages": users.data.pages,
     }
     return create_response(data=response_data)
 
@@ -72,13 +76,17 @@ async def get_user_list_order_by_created_at(
         params=params, order_by="created_at", db_session=db_session
     )
 
+    # paginate() builds the page class from this route's return annotation, so
+    # it returns an IGetResponsePaginated, not a Page: the rows live at
+    # .data.items, never .items. The declared Page[ModelType] on
+    # get_multi_paginated describes the CRUD layer, not what arrives here.
     # Convert to a response format that includes roles
     response_data = {
-        "items": [serialize_user(user) for user in users.items],
-        "total": users.total,
-        "page": users.page,
-        "size": users.size,
-        "pages": users.pages,
+        "items": [serialize_user(user) for user in users.data.items],
+        "total": users.data.total,
+        "page": users.data.page,
+        "size": users.data.size,
+        "pages": users.data.pages,
     }
     return create_response(data=response_data)
 
@@ -333,10 +341,10 @@ async def read_users(
             params = Params()  # Use default pagination if not provided
         users = await crud.user.get_multi_paginated(params=params, db_session=db_session)
         response_data = {
-            "items": [serialize_user(user) for user in users.items],
-            "total": users.total,
-            "page": users.page,
-            "size": users.size,
-            "pages": users.pages,
+            "items": [serialize_user(user) for user in users.data.items],
+            "total": users.data.total,
+            "page": users.data.page,
+            "size": users.data.size,
+            "pages": users.data.pages,
         }
         return create_response(data=response_data)

@@ -8,7 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { CheckCircle } from 'lucide-react'; // Example icon
+import { MailCheck } from 'lucide-react';
 
 export function RegistrationSuccessPage() {
   return (
@@ -16,18 +16,25 @@ export function RegistrationSuccessPage() {
       <Card className="w-full max-w-md text-center mx-auto mt-10">
         <CardHeader>
           <div className="flex justify-center mb-4">
-            <CheckCircle className="w-16 h-16 text-green-500" />
+            <MailCheck className="w-16 h-16 text-blue-500" />
           </div>
-          <CardTitle>Registration Successful!</CardTitle>
+          {/*
+            This copy must hold for all four outcomes of a registration -- new
+            address, one awaiting verification, one already registered, and a
+            disabled account -- without revealing which occurred (#113). It
+            previously asserted "Your account has been created", which is false
+            for three of them and told the submitter the address was new.
+          */}
+          <CardTitle>Check your email</CardTitle>
           <CardDescription>
-            Your account has been created. Please check your email to verify
-            your account before logging in.
+            If this address can be registered or verified, we have sent it a
+            message. Follow the link inside to continue.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-gray-600">
-            If you haven&apos;t received the verification email within a few
-            minutes, please check your spam folder.
+            If nothing arrives within a few minutes, please check your spam
+            folder.
           </p>
         </CardContent>
         <CardFooter className="flex flex-col items-center space-y-2">
