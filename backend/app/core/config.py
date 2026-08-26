@@ -72,9 +72,13 @@ class Settings(BaseSettings):
         "http://localhost:80",
     ]
 
-    # Frontend URL
+    # Frontend URL. The links that go out in email are derived from this after
+    # the environment loads, by derive_frontend_urls below. They are empty here
+    # rather than f-strings over FRONTEND_URL: a default assigned in the class
+    # body captures the default FRONTEND_URL as the class body executes, so an
+    # environment override never reached it.
     FRONTEND_URL: str = "http://localhost:5173"
-    PASSWORD_RESET_URL: str = f"{FRONTEND_URL}/reset-password"
+    PASSWORD_RESET_URL: str = ""
 
     # Database Type Setting
     DATABASE_TYPE: DatabaseTypeEnum = DatabaseTypeEnum.postgresql
@@ -143,7 +147,8 @@ class Settings(BaseSettings):
 
     # Email Verification Settings
     EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
-    EMAIL_VERIFICATION_URL: str = FRONTEND_URL + "/verify-email"
+    # Derived from FRONTEND_URL; see derive_frontend_urls.
+    EMAIL_VERIFICATION_URL: str = ""
 
     # Admin User Creation Settings
     ADMIN_CREATED_USERS_AUTO_VERIFIED: bool = True  # Auto-verify admin-created users
@@ -481,6 +486,30 @@ class Settings(BaseSettings):
         return v
 
     @model_validator(mode="after")
+    def derive_frontend_urls(self) -> "Settings":
+        """Point the emailed links at wherever the frontend actually is.
+
+        PASSWORD_RESET_URL and EMAIL_VERIFICATION_URL used to be assigned in the
+        class body as f-strings over FRONTEND_URL. That binds the *default*
+        FRONTEND_URL at class-definition time, so overriding FRONTEND_URL in the
+        environment left them pointing at localhost:5173 -- and .env.production
+        does not set PASSWORD_RESET_URL at all, so production password-reset
+        emails carried a localhost link nobody could follow.
+
+        Deriving here instead means one setting decides where mail points.
+
+        An explicit value still wins: model_fields_set holds only the fields a
+        source actually supplied, so a deployment needing a link on a different
+        host than FRONTEND_URL can still set one.
+        """
+        base = self.FRONTEND_URL.rstrip("/")
+        if "PASSWORD_RESET_URL" not in self.model_fields_set or not self.PASSWORD_RESET_URL:
+            self.PASSWORD_RESET_URL = f"{base}/reset-password"
+        if "EMAIL_VERIFICATION_URL" not in self.model_fields_set or not self.EMAIL_VERIFICATION_URL:
+            self.EMAIL_VERIFICATION_URL = f"{base}/verify-email"
+        return self
+
+    @model_validator(mode="after")
     def validate_production_settings(self) -> "Settings":
         """Validate that critical settings are properly set in production mode"""
         if self.MODE == ModeEnum.production:
@@ -542,50 +571,6 @@ class Settings(BaseSettings):
                 "Please ensure they are set in your .env file or environment variables."
             )
         return self
-
-    def get_environment_specific_settings(self) -> Dict[str, Any]:
-        """Return a dictionary of settings that vary by environment"""
-        mode = self.MODE  # Different settings based on environment
-        base_settings = {}
-        if mode == ModeEnum.development:
-            base_settings = {
-                "DEBUG": True,
-                "LOG_LEVEL": "DEBUG",
-                "PASSWORD_RESET_URL": "http://localhost:3000/reset-password",
-                "DATABASE_TYPE": DatabaseTypeEnum.sqlite,
-                # Development Celery settings
-                "CELERY_TASK_ALWAYS_EAGER": True,  # Run tasks synchronously
-                "CELERY_TASK_EAGER_PROPAGATES": True,
-                "CELERY_WORKER_PREFETCH_MULTIPLIER": 1,
-            }
-        elif mode == ModeEnum.testing:
-            base_settings = {
-                "DEBUG": True,
-                "LOG_LEVEL": "DEBUG",
-                "TESTING": True,
-                "PASSWORD_RESET_URL": "http://localhost:3000/reset-password",
-                "USERS_OPEN_REGISTRATION": True,
-                "DB_POOL_SIZE": 5,
-                "WEB_CONCURRENCY": 1,
-                # Testing Celery settings
-                "CELERY_TASK_ALWAYS_EAGER": True,
-                "CELERY_TASK_EAGER_PROPAGATES": True,
-            }
-        elif mode == ModeEnum.production:
-            base_settings = {
-                "DEBUG": False,
-                "LOG_LEVEL": "INFO",
-                "PASSWORD_RESET_URL": f"https://{self.TOKEN_AUDIENCE}/reset-password",
-                "USERS_OPEN_REGISTRATION": False,
-                "DATABASE_TYPE": DatabaseTypeEnum.postgresql,
-                # Production Celery settings
-                "CELERY_TASK_ALWAYS_EAGER": False,
-                "CELERY_WORKER_PREFETCH_MULTIPLIER": 4,
-                "CELERY_TASK_TIME_LIMIT": 30 * 60,  # 30 minutes
-                "CELERY_TASK_SOFT_TIME_LIMIT": 15 * 60,  # 15 minutes
-            }
-
-        return base_settings
 
     # This configuration uses the new SettingsConfigDict style in Pydantic v2
     model_config = SettingsConfigDict(
