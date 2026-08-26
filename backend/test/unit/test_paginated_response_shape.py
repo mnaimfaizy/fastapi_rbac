@@ -25,7 +25,7 @@ from pydantic import BaseModel
 
 from app.schemas.response_schema import IGetResponsePaginated
 
-ENDPOINTS_DIR = Path(__file__).resolve().parents[2] / "app" / "api" / "v1" / "endpoints"
+APP_DIR = Path(__file__).resolve().parents[2] / "app"
 
 
 def make_page(total: int = 3) -> IGetResponsePaginated:
@@ -61,7 +61,12 @@ def test_paginated_response_has_no_top_level_items() -> None:
 
 
 def paginated_result_names(tree: ast.AST) -> set[str]:
-    """Names assigned directly from a get_multi_paginated* call."""
+    """Names bound to a paginated result.
+
+    Tracks both ``paginate(...)`` itself and the ``get_multi_paginated*``
+    wrappers around it. Tracking only the wrappers is what let the CRUD layer
+    slip through: role_group_crud calls ``paginate`` directly.
+    """
     names: set[str] = set()
     for node in ast.walk(tree):
         if not isinstance(node, ast.Assign):
@@ -72,33 +77,41 @@ def paginated_result_names(tree: ast.AST) -> set[str]:
         if not isinstance(value, ast.Call):
             continue
         func = value.func
-        attr = func.attr if isinstance(func, ast.Attribute) else None
-        if attr and attr.startswith("get_multi_paginated"):
+        called = (
+            func.attr if isinstance(func, ast.Attribute) else func.id if isinstance(func, ast.Name) else None
+        )
+        if called and (called.startswith("get_multi_paginated") or called == "paginate"):
             for target in node.targets:
                 if isinstance(target, ast.Name):
                     names.add(target.id)
     return names
 
 
-def test_no_endpoint_reads_items_off_a_paginated_result() -> None:
-    """Guard the whole endpoint package, not just the routes that were fixed.
+def test_nothing_touches_items_on_a_paginated_result() -> None:
+    """Guard the whole app package, not just the sites that were fixed.
+
+    Scoped to app/ rather than the endpoints package because the same defect
+    turned up in app/crud/role_group_crud.py, which the endpoint-only scan
+    could not see. Catches writes as well as reads: that file also assigned
+    ``paginated_result.items = root_groups``.
 
     A source scan rather than a request test: reproducing this through HTTP
     needs an authenticated admin and a populated table for every list route,
-    and the defect is a static one -- reading an attribute that does not exist.
+    and the defect is a static one -- touching an attribute that does not
+    exist.
 
     One test over all files rather than one per file: a package-wide autouse
     fixture builds a database for every test, and this needs none of it.
     """
     offenders: list[str] = []
 
-    for path in sorted(ENDPOINTS_DIR.glob("*.py")):
+    for path in sorted(APP_DIR.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         tracked = paginated_result_names(tree)
         if not tracked:
             continue
         offenders.extend(
-            f"{path.name}:{node.lineno} reads {node.value.id}.{node.attr}"
+            f"{path.relative_to(APP_DIR)}:{node.lineno} touches {node.value.id}.{node.attr}"
             for node in ast.walk(tree)
             if isinstance(node, ast.Attribute)
             and isinstance(node.value, ast.Name)
@@ -107,7 +120,7 @@ def test_no_endpoint_reads_items_off_a_paginated_result() -> None:
         )
 
     assert not offenders, (
-        "paginated results expose these under .data, so reading them directly "
+        "paginated results expose these under .data, so touching them directly "
         f"raises AttributeError at runtime: {sorted(offenders)}"
     )
 
