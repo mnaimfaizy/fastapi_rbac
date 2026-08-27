@@ -34,6 +34,22 @@ def test_beat_schedules_the_unverified_cleanup_sweep() -> None:
     assert entry["options"]["queue"] == "periodic_tasks"
 
 
+def test_beat_schedule_only_names_registered_tasks() -> None:
+    """Every scheduled name must resolve to a task some worker can run.
+
+    Beat does not validate task names: it dispatches whatever the schedule says
+    and the message dies as NotRegistered in the worker. Four entries pointed at
+    app.scheduled_tasks for months after that module was truncated to zero bytes
+    and nothing caught it, so this walks the live schedule rather than asserting
+    a fixed list of names.
+    """
+    registered = set(celery_app.tasks.keys())
+    scheduled = {name: entry["task"] for name, entry in celery_app.conf.beat_schedule.items()}
+
+    unregistered = {name: task for name, task in scheduled.items() if task not in registered}
+    assert not unregistered, f"beat entries naming tasks no worker can execute: {unregistered}"
+
+
 def test_beat_entrypoint_alone_carries_the_schedule() -> None:
     """`celery -A app.celery_app beat` must see the schedule on a cold import.
 

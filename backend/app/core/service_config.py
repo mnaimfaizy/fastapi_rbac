@@ -75,18 +75,6 @@ class ServiceSettings:
         return self.mode in [ModeEnum.development, ModeEnum.production]
 
     @property
-    def celery_task_routes(self) -> Dict[str, Any]:
-        """
-        Get task routing configuration for Celery
-        """
-        return {
-            "app.worker.send_email": {"queue": "email"},
-            "app.worker.send_reset_password_email": {"queue": "email"},
-            "app.worker.send_verification_email": {"queue": "email"},
-            "app.worker.cleanup_unverified_users_task": {"queue": "periodic_tasks"},
-        }
-
-    @property
     def email_settings(self) -> Dict[str, Any]:
         """
         Get email configuration based on environment
