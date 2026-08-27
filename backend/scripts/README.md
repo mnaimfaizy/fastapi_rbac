@@ -33,6 +33,16 @@ This folder contains operational scripts used by Docker Compose and for local de
 - `local/lint.(sh|ps1)`: Run lint checks.
 - `local/setup-dev.(sh|ps1)`: Developer setup helpers.
 
+## Diagnostics
+
+Manual checks against a running system. They are not tests and nothing collects
+them; the automated coverage for both lives under `test/unit/` and runs in CI.
+
+- `csrf_live_check.py`: CSRF protection over the real HTTP stack.
+- `email_live_check.py`: sends one password-reset mail so a human can read what
+  arrived (MailHog in development). Rendering and readability are things the
+  suite can assert about the bytes but cannot judge for you.
+
 ## Notes
 
 - If you change script names/locations, update the references in `backend/docker-compose.*.yml` and Dockerfiles.

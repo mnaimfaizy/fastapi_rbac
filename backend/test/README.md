@@ -72,7 +72,7 @@ backend/test/
 │   ├── test_crud_*.py          # CRUD operation tests
 │   ├── test_security.py        # Security utility tests
 │   ├── test_config.py          # Configuration tests
-│   └── test_email.py           # Email utility tests
+│   └── test_email_send.py      # send_email against the real emails API
 └── integration/                # Integration tests
     ├── test_api_auth_comprehensive.py     # Auth flow tests
     ├── test_api_user_flow.py              # User management tests
@@ -332,7 +332,7 @@ backend/test/
 │   ├── test_crud_*.py          # CRUD operation tests
 │   ├── test_security.py        # Security utility tests
 │   ├── test_config.py          # Configuration tests
-│   └── test_email.py           # Email utility tests
+│   └── test_email_send.py      # send_email against the real emails API
 └── integration/                # Integration tests
     ├── test_api_auth_comprehensive.py     # Auth flow tests
     ├── test_api_user_flow.py              # User management tests
@@ -592,7 +592,7 @@ backend/test/
 │   ├── test_crud_*.py          # CRUD operation tests
 │   ├── test_security.py        # Security utility tests
 │   ├── test_config.py          # Configuration tests
-│   └── test_email.py           # Email utility tests
+│   └── test_email_send.py      # send_email against the real emails API
 └── integration/                # Integration tests
     ├── test_api_auth_comprehensive.py     # Auth flow tests
     ├── test_api_user_flow.py              # User management tests
@@ -852,7 +852,7 @@ backend/test/
 │   ├── test_crud_*.py          # CRUD operation tests
 │   ├── test_security.py        # Security utility tests
 │   ├── test_config.py          # Configuration tests
-│   └── test_email.py           # Email utility tests
+│   └── test_email_send.py      # send_email against the real emails API
 └── integration/                # Integration tests
     ├── test_api_auth_comprehensive.py     # Auth flow tests
     ├── test_api_user_flow.py              # User management tests
