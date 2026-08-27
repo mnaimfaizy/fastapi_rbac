@@ -1,5 +1,7 @@
 # slowapi as the sole HTTP rate limit library; keep Redis abuse counters
 
+_Renumbered from 0002, which collided with [0002-docker-publish-job-dag](./0002-docker-publish-job-dag.md); that one was added first and kept the number._
+
 Auth carried two overlapping stacks: scaffold `fastapi-limiter` (Redis `FastAPILimiter` init in lifespan, never applied to routes) and `slowapi` (live `@limiter.limit` on auth endpoints, default in-memory storage). We consolidated on **slowapi only**, removed `fastapi-limiter`, unified on one shared `Limiter` in `app/core/rate_limit.py`, and use Redis `storage_uri` from `service_settings.redis_url` outside testing so HTTP rate limits are shared across workers. Hand-rolled Redis **abuse counters** for registration/resend-verification stay as a separate control. Dual libraries and a phantom Redis limiter path were higher risk than keeping the already-enforcing slowapi stack; folding abuse counters into slowapi remains a follow-up, not part of this change.
 
 ## Smoke (manual)

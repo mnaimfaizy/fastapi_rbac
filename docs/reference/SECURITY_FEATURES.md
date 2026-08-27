@@ -47,7 +47,7 @@ const csrfToken = await csrfService.getCsrfToken();
 
 ### 3. HTTP Rate Limiting
 
-**Implementation**: `slowapi` (sole HTTP rate limit library; see [ADR 0002](../adr/0002-slowapi-sole-http-rate-limit.md))
+**Implementation**: `slowapi` (sole HTTP rate limit library; see [ADR 0008](../adr/0008-slowapi-sole-http-rate-limit.md))
 
 **Protected Endpoints** (HTTP rate limits, IP key):
 

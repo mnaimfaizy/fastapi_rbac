@@ -3,7 +3,7 @@
 **Date:** 2026-07-24
 **Scope:** Issue [#64](https://github.com/mnaimfaizy/fastapi_rbac/issues/64) — consolidate `fastapi-limiter` vs `slowapi` in `mnaimfaizy/fastapi_rbac`
 **Sources:** Primary only — upstream READMEs, PyPI metadata, GitHub compare/API, `limits` / PyrateLimiter docs, and this repo’s git history + internal docs.
-**Status (post-#64):** Decision implemented — **slowapi only**; `fastapi-limiter` removed. See [ADR 0002](../../adr/0002-slowapi-sole-http-rate-limit.md). Sections below describe the pre-change investigation unless marked otherwise.
+**Status (post-#64):** Decision implemented — **slowapi only**; `fastapi-limiter` removed. See [ADR 0008](../../adr/0008-slowapi-sole-http-rate-limit.md). Sections below describe the pre-change investigation unless marked otherwise.
 
 ---
 

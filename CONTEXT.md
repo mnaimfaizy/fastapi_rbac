@@ -20,6 +20,10 @@ _Avoid_: Account (when meaning the auth principal), client
 A user that exists but has not completed email verification.
 _Avoid_: Unverified account, pending account, unconfirmed user
 
+**Verification window**:
+The bounded period after registration in which a pending user may verify. Once it lapses the user ceases to exist and the address is free to register again.
+_Avoid_: Cleanup window, grace period, unverified account cleanup, expiry
+
 **Established user**:
 A verified, active user.
 _Avoid_: Verified account, confirmed user

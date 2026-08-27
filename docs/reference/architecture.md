@@ -11,6 +11,7 @@ Related:
 - [Domain docs](../agents/domain.md) — vocabulary and ADR conflict handling
 - [ADR 0001](../adr/0001-pyjwt-sole-jwt-library.md) — PyJWT + Redis allowlist decision
 - [ADR 0006](../adr/0006-httponly-refresh-token-cookies.md) — HttpOnly refresh-token cookies for the SPA
+- [ADR 0009](../adr/0009-celery-registration-single-entrypoint.md) — single Celery entrypoint; beat entries must name registered tasks
 
 ## High-level architecture
 
@@ -136,7 +137,7 @@ Session invalidation uses a Redis **allowlist** (`user:{id}:{token_type}` in `ap
 3. **Refresh** — on 401, frontend calls `POST /api/v1/auth/new_access_token` with CSRF; backend reads the HttpOnly refresh cookie (optional JSON body fallback for non-browser clients), validates the allowlist, and returns a new access token. Failed refresh → logout. (Refresh rotation is not implemented; see session-security follow-ups.)
 4. **Logout** — `POST /api/v1/auth/logout` removes allowlist entries and clears the refresh cookie; frontend clears in-memory access token and session hint.
 
-**Pending accounts** — a registration whose email is never verified leaves a pending user row. Celery Beat sweeps those hourly (`app.worker.cleanup_unverified_users_task` → `app/utils/unverified_cleanup.py`), deleting active, non-superuser, unverified rows created longer ago than `UNVERIFIED_ACCOUNT_CLEANUP_HOURS` (default 72). The delete repeats the predicate, so a user who verifies while the sweep runs is kept. The sweep reads its work from the database rather than holding a timer, so a worker restart costs one tick rather than every pending row.
+**Pending accounts** — a registration whose email is never verified leaves a pending user row. Celery Beat sweeps those hourly (`app.worker.cleanup_unverified_users_task` → `app/utils/unverified_cleanup.py`), deleting active, non-superuser, unverified rows created longer ago than `UNVERIFIED_ACCOUNT_CLEANUP_HOURS` (default 72). The delete repeats the predicate, so a user who verifies while the sweep runs is kept. The sweep reads its work from the database rather than holding a timer, so a worker restart costs one tick rather than every pending row. Beat and the workers both boot from `app.celery_app`, which imports the task and schedule modules; see [ADR 0009](../adr/0009-celery-registration-single-entrypoint.md).
 
 Frontend storage strategy:
 
