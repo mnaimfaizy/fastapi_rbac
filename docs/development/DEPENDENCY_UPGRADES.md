@@ -90,7 +90,7 @@ About **76** advisory hits across pinned packages (many packages have multiple a
 | `ecdsa` | **Removed** with `python-jose` (HS256-only app; no direct imports) — see #63 | Lane 2 follow-up |
 | `python-jose` | **Removed** — consolidated JWT onto PyJWT only (#63 / [ADR 0001](../adr/0001-pyjwt-sole-jwt-library.md)) | Lane 2 follow-up |
 | `redis` | Patched in Lane 2 → `5.3.1` (no OSV hits on 5.2.1; **major 6+/8 deferred** — hard-stop) | Lane 2 / later |
-| `fastapi-limiter` | **Removed** — unused scaffold init only; HTTP rate limits consolidated onto `slowapi` (#64 / [ADR 0002](../adr/0002-slowapi-sole-http-rate-limit.md)) | Lane 2 follow-up |
+| `fastapi-limiter` | **Removed** — unused scaffold init only; HTTP rate limits consolidated onto `slowapi` (#64 / [ADR 0008](../adr/0008-slowapi-sole-http-rate-limit.md)) | Lane 2 follow-up |
 | `bcrypt` | No OSV hits; left on `5.0.0` | Lane 2 |
 | `passlib` | **Removed** — unused; hashing already uses `bcrypt` directly (#65) | Lane 2 follow-up |
 | `gunicorn` | **Fixed in Lane 4** → `26.0.0` (request-smuggling advisories needed ≥22) | Lane 4 |
@@ -115,7 +115,7 @@ About **76** advisory hits across pinned packages (many packages have multiple a
 
 ### Lane 2 hard-stop follow-up — HTTP rate limit consolidation (#64, 2026-07-24)
 
-- **Decision:** `slowapi` is the only HTTP rate limit library; unused `fastapi-limiter` removed. See [ADR 0002](../adr/0002-slowapi-sole-http-rate-limit.md) and [research note](../internal/research/rate-limiting-library-consolidation.md).
+- **Decision:** `slowapi` is the only HTTP rate limit library; unused `fastapi-limiter` removed. See [ADR 0008](../adr/0008-slowapi-sole-http-rate-limit.md) and [research note](../internal/research/rate-limiting-library-consolidation.md).
 - **Runtime:** shared `Limiter` in `app/core/rate_limit.py` (Redis `storage_uri` outside testing; memory + disabled in testing); auth routes keep existing `@limiter.limit` thresholds.
 - **Kept separate:** Redis **abuse counters** for registration / resend-verification in `auth.py` (not folded into slowapi in this change).
 

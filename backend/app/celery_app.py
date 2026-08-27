@@ -17,8 +17,17 @@ celery_config = get_cached_celery_config()
 # Update the Celery configuration
 celery_app.conf.update(celery_config)
 
-# Eagerly import task modules so `celery -A app.celery_app` registers them even
-# when conf.imports is not applied yet (e.g. inspect / early worker boot).
+# Both modules attach themselves to this app instance, and everything Celery runs
+# starts from `celery -A app.celery_app` — the worker and beat containers import
+# nothing else.
+#
+# worker: registers the tasks even when conf.imports has not been applied yet
+# (e.g. inspect / early worker boot).
+#
+# celery_beat_schedule: fills conf.beat_schedule. app.main used to be its only
+# importer, and the beat process never loads app.main, so beat booted with an
+# empty schedule and no periodic task fired at all (#136).
+from app import celery_beat_schedule as _beat_schedule  # noqa: E402, F401
 from app import worker as _worker_tasks  # noqa: E402, F401
 
 # Conditional configuration for development mode
