@@ -36,6 +36,10 @@ _Avoid_: Inactive account, banned user, locked user (locking is the separate, te
 The invariant that registration and resend-verification return one fixed response for every email address, so neither confirms nor denies that a user exists.
 _Avoid_: Generic error, anti-enumeration
 
+**Uniform token-flow rejection**:
+The same invariant for verify-email and the password-reset endpoints: every failure that required looking an account up returns one fixed message per flow, so a disabled user is indistinguishable from an unknown address or a bad token. Which failure occurred is recorded as a security event instead.
+_Avoid_: Generic error, invalid token message
+
 **Role**:
 A named set of permissions assignable to users.
 _Avoid_: Group (when meaning a role)

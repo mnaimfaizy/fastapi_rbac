@@ -37,6 +37,11 @@ from app.utils.account_email_dispatch import (
     ACCOUNT_EMAIL_UNIFORM_MESSAGE,
     dispatch_account_email,
 )
+from app.utils.account_token_responses import (
+    PASSWORD_RESET_REQUEST_UNIFORM_MESSAGE,
+    reject_password_reset,
+    reject_verification,
+)
 from app.utils.auth_cookies import clear_refresh_token_cookie, set_refresh_token_cookie
 from app.utils.background_tasks import (
     cleanup_expired_tokens,
@@ -531,187 +536,188 @@ async def verify_email(
 ) -> IPostResponseBase[IUserRead]:
     """
     Verify user's email address using the provided token.
+
+    Every failure that required looking an account up -- unknown address,
+    disabled account, wrong or expired or already-used token -- leaves through
+    :func:`~app.utils.account_token_responses.reject_verification` with one
+    message (#137). It previously answered "Account is inactive. Cannot verify
+    email." for a disabled user, which
+    confirmed an address in a single request.
+
+    The floor covers the branches the uniform message alone does not: an
+    unknown address returns before the Redis lookup a disabled account pays
+    for, and a rejection returns before the write a success pays for.
     """
     ip_address = request.client.host if request.client else "Unknown"
     email_from_token_str: str | None = None
-    # Input sanitization for email verification data
-    try:
-        # Sanitize token (it should contain only alphanumeric and safe chars)
-        sanitized_token = sanitizer.sanitize(body.token, "text")
-        body.token = sanitized_token
-    except Exception as e:
-        background_tasks.add_task(
-            log_security_event,
-            background_tasks=background_tasks,
-            event_type="verify_email_input_sanitization_failed",
-            details={"error": str(e), "ip_address": ip_address},
-        )
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid input data")
-    try:
+    async with response_time_floor():
+        # Input sanitization for email verification data
         try:
-            payload = security.decode_token(body.token, token_type="verification")
-        except HTTPException as exc:
+            # Sanitize token (it should contain only alphanumeric and safe chars)
+            sanitized_token = sanitizer.sanitize(body.token, "text")
+            body.token = sanitized_token
+        except Exception as e:
             background_tasks.add_task(
                 log_security_event,
                 background_tasks=background_tasks,
-                event_type=map_jwt_http_error_to_event(exc, flow="verify_email"),
-                details={
-                    "error": (exc.detail if isinstance(exc.detail, str) else str(exc.detail)),
-                    "ip_address": ip_address,
-                },
+                event_type="verify_email_input_sanitization_failed",
+                details={"error": str(e), "ip_address": ip_address},
             )
-            raise
-        email_from_token_str = payload.get("sub")
-        if not email_from_token_str:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid input data")
+        try:
+            try:
+                payload = security.decode_token(body.token, token_type="verification")
+            except HTTPException as exc:
+                background_tasks.add_task(
+                    log_security_event,
+                    background_tasks=background_tasks,
+                    event_type=map_jwt_http_error_to_event(exc, flow="verify_email"),
+                    details={
+                        "error": (exc.detail if isinstance(exc.detail, str) else str(exc.detail)),
+                        "ip_address": ip_address,
+                    },
+                )
+                raise
+            email_from_token_str = payload.get("sub")
+            if not email_from_token_str:
+                await reject_verification(
+                    background_tasks=background_tasks,
+                    event_type="verify_email_token_missing_sub",
+                    details={"token_used": body.token, "ip_address": ip_address},
+                )
+            user = await crud.user.get_by_email(db_session=db_session, email=str(email_from_token_str))
+            if not user:
+                await reject_verification(
+                    background_tasks=background_tasks,
+                    event_type="verify_email_user_not_found",
+                    details={
+                        "email_from_token": email_from_token_str,
+                        "token_used": body.token,
+                        "ip_address": ip_address,
+                    },
+                )
+            user = cast(User, user)
+            redis_token_key = f"verification_token:{user.id}"
+            stored_token_value = await redis_client.get(redis_token_key)
+            stored_token_str: str | None = None
+            if isinstance(stored_token_value, bytes):
+                stored_token_str = stored_token_value.decode("utf-8")
+            elif isinstance(stored_token_value, str):
+                stored_token_str = stored_token_value
+            if not stored_token_str or stored_token_str != body.token:
+                await reject_verification(
+                    background_tasks=background_tasks,
+                    event_type="verify_email_token_mismatch_or_expired_redis",
+                    user_id=user.id,
+                    details={
+                        "email": user.email,
+                        "token_used": body.token,
+                        "ip_address": ip_address,
+                    },
+                )
+            if not user.is_active:
+                # Answers exactly as a bad token does (#137). A disabled account is
+                # still an account, and saying so here confirmed an address.
+                await reject_verification(
+                    background_tasks=background_tasks,
+                    event_type="verify_email_inactive_account",
+                    user_id=user.id,
+                    details={"email": user.email, "ip_address": ip_address},
+                )
+            if user.verified:
+                background_tasks.add_task(
+                    log_security_event,
+                    background_tasks=background_tasks,
+                    event_type="verify_email_already_verified",
+                    user_id=user.id,
+                    details={"email": user.email, "ip_address": ip_address},
+                )
+                user_data = serialize_user(user)  # Return current user state
+                user_read = IUserRead(**user_data)
+                response_data = user_read.model_dump()
+                if getattr(settings, "MODE", None) == "testing":
+                    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+                    refresh_token_expires = timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES)
+                    access_token = security.create_access_token(
+                        user.id,
+                        user.email,
+                        expires_delta=access_token_expires,
+                    )
+                    refresh_token = security.create_refresh_token(
+                        user.id, expires_delta=refresh_token_expires
+                    )
+                    response_data["access_token"] = access_token
+                    response_data["refresh_token"] = refresh_token
+                return create_response(data=response_data, message="Email is already verified.")
+            user_update = {"verified": True, "verification_code": None}
+            updated_user = await crud.user.update(
+                db_session=db_session, obj_current=user, obj_new=user_update
+            )
+            if not updated_user:  # Should not happen if user existed and update is valid
+                background_tasks.add_task(
+                    log_security_event,
+                    background_tasks=background_tasks,
+                    event_type="verify_email_update_failed",
+                    user_id=user.id,
+                    details={"email": user.email, "ip_address": ip_address},
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to update user verification status.",
+                )
+            await redis_client.delete(redis_token_key)  # Token successfully used
             background_tasks.add_task(
                 log_security_event,
                 background_tasks=background_tasks,
-                event_type="verify_email_token_missing_sub",
-                details={"token_used": body.token, "ip_address": ip_address},
+                event_type="email_verified_successfully",
+                user_id=updated_user.id,
+                details={"email": updated_user.email, "ip_address": ip_address},
             )
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token payload.")
-        user = await crud.user.get_by_email(db_session=db_session, email=str(email_from_token_str))
-        if not user:
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="verify_email_user_not_found",
-                details={
-                    "email_from_token": email_from_token_str,
-                    "token_used": body.token,
-                    "ip_address": ip_address,
-                },
-            )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid verification token or user not found.",
-            )
-        user = cast(User, user)
-        redis_token_key = f"verification_token:{user.id}"
-        stored_token_value = await redis_client.get(redis_token_key)
-        stored_token_str: str | None = None
-        if isinstance(stored_token_value, bytes):
-            stored_token_str = stored_token_value.decode("utf-8")
-        elif isinstance(stored_token_value, str):
-            stored_token_str = stored_token_value
-        if not stored_token_str or stored_token_str != body.token:
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="verify_email_token_mismatch_or_expired_redis",
-                user_id=user.id,
-                details={
-                    "email": user.email,
-                    "token_used": body.token,
-                    "ip_address": ip_address,
-                },
-            )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Verification token is invalid, expired, or has already been used.",
-            )
-        if not user.is_active:
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="verify_email_inactive_account",
-                user_id=user.id,
-                details={"email": user.email, "ip_address": ip_address},
-            )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Account is inactive. Cannot verify email.",
-            )
-        if user.verified:
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="verify_email_already_verified",
-                user_id=user.id,
-                details={"email": user.email, "ip_address": ip_address},
-            )
-            user_data = serialize_user(user)  # Return current user state
+            user_data = serialize_user(updated_user)
             user_read = IUserRead(**user_data)
             response_data = user_read.model_dump()
             if getattr(settings, "MODE", None) == "testing":
                 access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
                 refresh_token_expires = timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES)
                 access_token = security.create_access_token(
-                    user.id,
-                    user.email,
+                    updated_user.id,
+                    updated_user.email,
                     expires_delta=access_token_expires,
                 )
-                refresh_token = security.create_refresh_token(user.id, expires_delta=refresh_token_expires)
+                refresh_token = security.create_refresh_token(
+                    updated_user.id, expires_delta=refresh_token_expires
+                )
                 response_data["access_token"] = access_token
                 response_data["refresh_token"] = refresh_token
-            return create_response(data=response_data, message="Email is already verified.")
-        user_update = {"verified": True, "verification_code": None}
-        updated_user = await crud.user.update(db_session=db_session, obj_current=user, obj_new=user_update)
-        if not updated_user:  # Should not happen if user existed and update is valid
+            return create_response(data=response_data, message="Email verified successfully.")
+        except HTTPException:
+            raise
+        except Exception as e:
+            error_type = type(e).__name__
+            logger.error(
+                (
+                    "Unexpected error in verify_email for IP %s, Token Sub: %s"
+                    % (
+                        ip_address,
+                        (email_from_token_str if "email_from_token_str" in locals() else "N/A"),
+                    )
+                ),
+                exc_info=True,
+            )
             background_tasks.add_task(
                 log_security_event,
                 background_tasks=background_tasks,
-                event_type="verify_email_update_failed",
-                user_id=user.id,
-                details={"email": user.email, "ip_address": ip_address},
+                event_type=f"verify_email_unexpected_error_{error_type.lower()}",
+                details={
+                    "error": str(e),
+                    "ip_address": ip_address,
+                    "token_subject": (email_from_token_str if "email_from_token_str" in locals() else "N/A"),
+                },  # Log token if available
             )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to update user verification status.",
+                detail="An unexpected error occurred during email verification.",
             )
-        await redis_client.delete(redis_token_key)  # Token successfully used
-        background_tasks.add_task(
-            log_security_event,
-            background_tasks=background_tasks,
-            event_type="email_verified_successfully",
-            user_id=updated_user.id,
-            details={"email": updated_user.email, "ip_address": ip_address},
-        )
-        user_data = serialize_user(updated_user)
-        user_read = IUserRead(**user_data)
-        response_data = user_read.model_dump()
-        if getattr(settings, "MODE", None) == "testing":
-            access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-            refresh_token_expires = timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES)
-            access_token = security.create_access_token(
-                updated_user.id,
-                updated_user.email,
-                expires_delta=access_token_expires,
-            )
-            refresh_token = security.create_refresh_token(
-                updated_user.id, expires_delta=refresh_token_expires
-            )
-            response_data["access_token"] = access_token
-            response_data["refresh_token"] = refresh_token
-        return create_response(data=response_data, message="Email verified successfully.")
-    except HTTPException:
-        raise
-    except Exception as e:
-        error_type = type(e).__name__
-        logger.error(
-            (
-                "Unexpected error in verify_email for IP %s, Token Sub: %s"
-                % (
-                    ip_address,
-                    (email_from_token_str if "email_from_token_str" in locals() else "N/A"),
-                )
-            ),
-            exc_info=True,
-        )
-        background_tasks.add_task(
-            log_security_event,
-            background_tasks=background_tasks,
-            event_type=f"verify_email_unexpected_error_{error_type.lower()}",
-            details={
-                "error": str(e),
-                "ip_address": ip_address,
-                "token_subject": (email_from_token_str if "email_from_token_str" in locals() else "N/A"),
-            },  # Log token if available
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An unexpected error occurred during email verification.",
-        )
 
 
 @router.post("/resend-verification-email")
@@ -1396,107 +1402,107 @@ async def request_password_reset(
     """
     Request a password reset for a given email address.
     Sends a token that can be used to reset the password.
+
+    Absent, disabled and active addresses all get
+    :data:`~app.utils.account_token_responses.PASSWORD_RESET_REQUEST_UNIFORM_MESSAGE`.
+    The three branches already intended to say the same thing, but the active
+    one dropped the closing full
+    stop the other two carried, so a single request still separated an active
+    account from every other state (#137). Only the development-mode branch
+    differs, and it hands back the token itself for MailHog.
     """
     ip_address = request.client.host if request.client else "Unknown"
     user: User | None = None  # Define user here for broader scope
 
-    try:
-        # Sanitize email input
+    async with response_time_floor():
         try:
-            email_for_reset = sanitizer.sanitize(str(reset_request.email), "email")
-        except Exception as e:
+            # Sanitize email input
+            try:
+                email_for_reset = sanitizer.sanitize(str(reset_request.email), "email")
+            except Exception as e:
+                background_tasks.add_task(
+                    log_security_event,
+                    background_tasks=background_tasks,
+                    event_type="password_reset_request_sanitization_failed",
+                    details={"error": str(e), "ip_address": ip_address},
+                )
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email format")
+            user = await crud.user.get_by_email(email=email_for_reset, db_session=db_session)
+            if not user:
+                background_tasks.add_task(
+                    log_security_event,
+                    background_tasks=background_tasks,
+                    event_type="password_reset_request_invalid_email",
+                    details={"email": email_for_reset, "ip_address": ip_address},
+                )
+                return create_response(data={}, message=PASSWORD_RESET_REQUEST_UNIFORM_MESSAGE)
+            if not user.is_active:
+                background_tasks.add_task(
+                    log_security_event,
+                    background_tasks=background_tasks,
+                    event_type="password_reset_request_inactive_user",
+                    user_id=user.id,
+                    details={"email": email_for_reset, "ip_address": ip_address},
+                )
+                return create_response(data={}, message=PASSWORD_RESET_REQUEST_UNIFORM_MESSAGE)
+            reset_token_expires = timedelta(minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
+            reset_token = security.create_reset_token(user.email, expires_delta=reset_token_expires)
+            await add_token_to_redis(
+                redis_client,
+                user,
+                reset_token,
+                TokenType.RESET,
+                settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES,
+            )
+            reset_url = settings.PASSWORD_RESET_URL
+            await send_password_reset_email(
+                background_tasks=background_tasks,
+                user_email=user.email,
+                reset_token=reset_token,
+                reset_url=reset_url,
+            )
             background_tasks.add_task(
                 log_security_event,
                 background_tasks=background_tasks,
-                event_type="password_reset_request_sanitization_failed",
-                details={"error": str(e), "ip_address": ip_address},
-            )
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email format")
-        user = await crud.user.get_by_email(email=email_for_reset, db_session=db_session)
-        if not user:
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="password_reset_request_invalid_email",
-                details={"email": email_for_reset, "ip_address": ip_address},
-            )
-            return create_response(
-                data={},
-                message="If the email exists and the account is active, a password reset link has been sent.",
-            )
-        if not user.is_active:
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="password_reset_request_inactive_user",
+                event_type="password_reset_requested",
                 user_id=user.id,
-                details={"email": email_for_reset, "ip_address": ip_address},
+                details={"email": user.email, "ip_address": ip_address},
             )
-            return create_response(
-                data={},
-                message="If the email exists and the account is active, a password reset link has been sent.",
+            if settings.MODE == "development":
+                return create_response(
+                    data={
+                        "reset_url": f"{reset_url}?token={reset_token}",
+                        "reset_token": reset_token,
+                    },
+                    message="Password reset email sent. Check the MailHog interface at http://localhost:8025",
+                )
+            else:
+                return create_response(data={}, message=PASSWORD_RESET_REQUEST_UNIFORM_MESSAGE)
+        except HTTPException:
+            raise
+        except Exception as e:
+            error_type = type(e).__name__
+            user_id_for_log = user.id if user else None
+            logger.error(
+                f"Unexpected error in request_password_reset for email {email_for_reset} "
+                f"from IP {ip_address}: {str(e)}",
+                exc_info=True,
             )
-        reset_token_expires = timedelta(minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
-        reset_token = security.create_reset_token(user.email, expires_delta=reset_token_expires)
-        await add_token_to_redis(
-            redis_client,
-            user,
-            reset_token,
-            TokenType.RESET,
-            settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES,
-        )
-        reset_url = settings.PASSWORD_RESET_URL
-        await send_password_reset_email(
-            background_tasks=background_tasks,
-            user_email=user.email,
-            reset_token=reset_token,
-            reset_url=reset_url,
-        )
-        background_tasks.add_task(
-            log_security_event,
-            background_tasks=background_tasks,
-            event_type="password_reset_requested",
-            user_id=user.id,
-            details={"email": user.email, "ip_address": ip_address},
-        )
-        if settings.MODE == "development":
-            return create_response(
-                data={
-                    "reset_url": f"{reset_url}?token={reset_token}",
-                    "reset_token": reset_token,
+            background_tasks.add_task(
+                log_security_event,
+                background_tasks=background_tasks,
+                event_type=f"password_reset_request_unexpected_error_{error_type.lower()}",
+                user_id=user_id_for_log,
+                details={
+                    "email": email_for_reset,
+                    "error": str(e),
+                    "ip_address": ip_address,
                 },
-                message="Password reset email sent. Check the MailHog interface at http://localhost:8025",
             )
-        else:
-            return create_response(
-                data={},
-                message="If the email exists and the account is active, a password reset link has been sent",
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="An unexpected error occurred. Please try again later.",
             )
-    except HTTPException:
-        raise
-    except Exception as e:
-        error_type = type(e).__name__
-        user_id_for_log = user.id if user else None
-        logger.error(
-            f"Unexpected error in request_password_reset for email {email_for_reset} "
-            f"from IP {ip_address}: {str(e)}",
-            exc_info=True,
-        )
-        background_tasks.add_task(
-            log_security_event,
-            background_tasks=background_tasks,
-            event_type=f"password_reset_request_unexpected_error_{error_type.lower()}",
-            user_id=user_id_for_log,
-            details={
-                "email": email_for_reset,
-                "error": str(e),
-                "ip_address": ip_address,
-            },
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An unexpected error occurred. Please try again later.",
-        )
 
 
 @router.post("/password-reset/confirm")
@@ -1509,164 +1515,161 @@ async def confirm_password_reset(
     _: None = Depends(deps.validate_csrf_token),
 ) -> IPostResponseBase:  # No data returned, just a message
     """
-    Reset password.
+    Reset a password against a token mailed to the address.
+
+    Every failure that required looking an account up answers with
+    :data:`~app.utils.account_token_responses.INVALID_PASSWORD_RESET_TOKEN_MESSAGE`
+    (#137). It previously answered "Account is inactive. Cannot reset
+    password." for a disabled user, which
+    confirmed an address in a single request. The is_active check also moved
+    behind the allow-list check, so the disabled branch is now reachable only
+    by a caller already holding a live token.
+
+    Password complexity and history failures stay distinct: they describe the
+    submitted password, not the account.
     """
     ip_address = request.client.host if request.client else "Unknown"
     email_from_token_str: str | None = None
 
-    try:
-        # Validate new password complexity before anything else
-        is_valid, errors = PasswordValidator.validate_complexity(reset_confirm.new_password)
-        if not is_valid:
+    async with response_time_floor():
+        try:
+            # Validate new password complexity before anything else
+            is_valid, errors = PasswordValidator.validate_complexity(reset_confirm.new_password)
+            if not is_valid:
+                background_tasks.add_task(
+                    log_security_event,
+                    background_tasks=background_tasks,
+                    event_type="password_reset_complexity_failed",
+                    details={
+                        "errors": errors,
+                        "ip_address": ip_address,
+                        "token_used": reset_confirm.token,
+                    },
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={
+                        "message": "New password does not meet complexity requirements.",
+                        "errors": errors,
+                    },
+                )
+            payload = security.decode_token(reset_confirm.token, token_type="reset")
+            email_from_token_str = payload.get("sub")
+            if not email_from_token_str:
+                await reject_password_reset(
+                    background_tasks=background_tasks,
+                    event_type="password_reset_token_missing_sub",
+                    details={"token_used": reset_confirm.token, "ip_address": ip_address},
+                )
+            user = await crud.user.get_by_email(db_session=db_session, email=str(email_from_token_str))
+            if not user:
+                await reject_password_reset(
+                    background_tasks=background_tasks,
+                    event_type="password_reset_user_not_found",
+                    details={
+                        "email_from_token": email_from_token_str,
+                        "token_used": reset_confirm.token,
+                        "ip_address": ip_address,
+                    },
+                )
+            user = cast(User, user)
+            # Verify token in Redis. This runs before the is_active check so
+            # that the disabled branch is reachable only by a caller who already
+            # holds a live reset token -- the mailbox owner, to whom the account
+            # is no secret. Everyone else is turned away here instead (#137).
+            valid_reset_tokens = await get_valid_tokens(redis_client, user.id, TokenType.RESET)
+            if not token_is_allowlisted(valid_reset_tokens, reset_confirm.token):
+                await reject_password_reset(
+                    background_tasks=background_tasks,
+                    event_type="password_reset_token_not_in_redis",
+                    user_id=user.id,  # user is guaranteed to be not None here
+                    details={
+                        "token_in_redis": bool(valid_reset_tokens),
+                        "ip_address": ip_address,
+                    },
+                )
+            if not user.is_active:
+                await reject_password_reset(
+                    background_tasks=background_tasks,
+                    event_type="password_reset_inactive_account",
+                    user_id=user.id,
+                    details={"email": user.email, "ip_address": ip_address},
+                )
+            try:
+                # This will check history, update password,
+                # and update last_changed_password_date
+                await crud.user.update_password(
+                    user=user, new_password=reset_confirm.new_password, db_session=db_session
+                )
+            except ValueError as e:
+                # Log password history violation as a background task
+                background_tasks.add_task(
+                    log_security_event,
+                    background_tasks=background_tasks,
+                    event_type="password_reset_history_violation",
+                    user_id=user.id,
+                    details={"error": str(e), "ip_address": ip_address},
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Unable to set new password. Please ensure it meets all security requirements.",
+                )
+            # Clean up tokens in Redis as background tasks
+            await cleanup_expired_tokens(
+                background_tasks=background_tasks,
+                redis_client=redis_client,
+                user_id=user.id,
+                token_type=TokenType.RESET,
+            )
+            # Invalidate all existing tokens for security
+            await cleanup_expired_tokens(
+                background_tasks=background_tasks,
+                redis_client=redis_client,
+                user_id=user.id,
+                token_type=TokenType.ACCESS,
+            )
+            await cleanup_expired_tokens(
+                background_tasks=background_tasks,
+                redis_client=redis_client,
+                user_id=user.id,
+                token_type=TokenType.REFRESH,
+            )
+            # Log successful password reset as a background task
             background_tasks.add_task(
                 log_security_event,
                 background_tasks=background_tasks,
-                event_type="password_reset_complexity_failed",
-                details={
-                    "errors": errors,
-                    "ip_address": ip_address,
-                    "token_used": reset_confirm.token,
-                },
-            )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={
-                    "message": "New password does not meet complexity requirements.",
-                    "errors": errors,
-                },
-            )
-        payload = security.decode_token(reset_confirm.token, token_type="reset")
-        email_from_token_str = payload.get("sub")
-        if not email_from_token_str:
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="password_reset_token_missing_sub",
-                details={"token_used": reset_confirm.token, "ip_address": ip_address},
-            )
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token payload.")
-        user = await crud.user.get_by_email(db_session=db_session, email=str(email_from_token_str))
-        if not user:
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="password_reset_user_not_found",
-                details={
-                    "email_from_token": email_from_token_str,
-                    "token_used": reset_confirm.token,
-                    "ip_address": ip_address,
-                },
-            )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid token or user not found.",
-            )
-        user = cast(User, user)
-        if not user.is_active:
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="password_reset_inactive_account",
+                event_type="password_reset_successful",
                 user_id=user.id,
                 details={"email": user.email, "ip_address": ip_address},
             )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Account is inactive. Cannot reset password.",
+            return create_response(data={}, message="Password has been reset successfully")
+        except HTTPException:
+            raise  # Re-raise HTTPException directly
+        except Exception as e:
+            error_type = type(e).__name__
+            user_id_for_log = user.id if user else (payload["sub"] if payload else None)
+            email_for_log = user.email if user else "N/A"
+            logger.error(
+                f"Unexpected error in confirm_password_reset for user {email_for_log} "
+                f"(ID: {user_id_for_log}) from IP {ip_address}: {str(e)}",
+                exc_info=True,
             )
-        # Verify token in Redis
-        valid_reset_tokens = await get_valid_tokens(redis_client, user.id, TokenType.RESET)
-        if not token_is_allowlisted(valid_reset_tokens, reset_confirm.token):
-            # Log invalid token in Redis as a background task
             background_tasks.add_task(
                 log_security_event,
                 background_tasks=background_tasks,
-                event_type="password_reset_token_not_in_redis",
-                user_id=user.id,  # user is guaranteed to be not None here
+                event_type=f"password_reset_confirm_unexpected_error_{error_type.lower()}",
+                user_id=user_id_for_log,
                 details={
-                    "token_in_redis": bool(valid_reset_tokens),
+                    "email": email_for_log,
+                    "error": str(e),
                     "ip_address": ip_address,
+                    "token_subject": payload["sub"] if payload else "N/A",
                 },
             )
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid token",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="An unexpected error occurred. Please try again later.",
             )
-        try:
-            # This will check history, update password,
-            # and update last_changed_password_date
-            await crud.user.update_password(
-                user=user, new_password=reset_confirm.new_password, db_session=db_session
-            )
-        except ValueError as e:
-            # Log password history violation as a background task
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="password_reset_history_violation",
-                user_id=user.id,
-                details={"error": str(e), "ip_address": ip_address},
-            )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Unable to set new password. Please ensure it meets all security requirements.",
-            )
-        # Clean up tokens in Redis as background tasks
-        await cleanup_expired_tokens(
-            background_tasks=background_tasks,
-            redis_client=redis_client,
-            user_id=user.id,
-            token_type=TokenType.RESET,
-        )
-        # Invalidate all existing tokens for security
-        await cleanup_expired_tokens(
-            background_tasks=background_tasks,
-            redis_client=redis_client,
-            user_id=user.id,
-            token_type=TokenType.ACCESS,
-        )
-        await cleanup_expired_tokens(
-            background_tasks=background_tasks,
-            redis_client=redis_client,
-            user_id=user.id,
-            token_type=TokenType.REFRESH,
-        )
-        # Log successful password reset as a background task
-        background_tasks.add_task(
-            log_security_event,
-            background_tasks=background_tasks,
-            event_type="password_reset_successful",
-            user_id=user.id,
-            details={"email": user.email, "ip_address": ip_address},
-        )
-        return create_response(data={}, message="Password has been reset successfully")
-    except HTTPException:
-        raise  # Re-raise HTTPException directly
-    except Exception as e:
-        error_type = type(e).__name__
-        user_id_for_log = user.id if user else (payload["sub"] if payload else None)
-        email_for_log = user.email if user else "N/A"
-        logger.error(
-            f"Unexpected error in confirm_password_reset for user {email_for_log} (ID: {user_id_for_log}) "
-            f"from IP {ip_address}: {str(e)}",
-            exc_info=True,
-        )
-        background_tasks.add_task(
-            log_security_event,
-            background_tasks=background_tasks,
-            event_type=f"password_reset_confirm_unexpected_error_{error_type.lower()}",
-            user_id=user_id_for_log,
-            details={
-                "email": email_for_log,
-                "error": str(e),
-                "ip_address": ip_address,
-                "token_subject": payload["sub"] if payload else "N/A",
-            },
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An unexpected error occurred. Please try again later.",
-        )
 
 
 @router.post("/reset_password")
@@ -1680,188 +1683,178 @@ async def reset_password(
     _: None = Depends(deps.validate_csrf_token),
 ) -> IPostResponseBase:  # No data returned, just a message
     """
-    Reset password.
+    Reset a password against a token mailed to the address.
+
+    A near-duplicate of :func:`confirm_password_reset`, differing only in route
+    and input sanitisation; see it for why every account-dependent failure here
+    answers with one message. ADR 0010 records why the two were not merged.
     """
     ip_address = request.client.host if request.client else "Unknown"
     email_from_token_str: str | None = None
-    # Input sanitization for password reset data
-    try:
-        # Sanitize token (it should contain only alphanumeric and safe chars)
-        sanitized_token = sanitizer.sanitize(body_in.token, "text")
-        body_in.token = sanitized_token
-        # Validate password length to prevent DoS attacks
-        if len(body_in.new_password) > 1000:
+    async with response_time_floor():
+        # Input sanitization for password reset data
+        try:
+            # Sanitize token (it should contain only alphanumeric and safe chars)
+            sanitized_token = sanitizer.sanitize(body_in.token, "text")
+            body_in.token = sanitized_token
+            # Validate password length to prevent DoS attacks
+            if len(body_in.new_password) > 1000:
+                background_tasks.add_task(
+                    log_security_event,
+                    background_tasks=background_tasks,
+                    event_type="password_reset_password_too_long",
+                    details={
+                        "ip_address": ip_address,
+                        "password_length": len(body_in.new_password),
+                    },
+                )
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password too long")
+        except Exception as e:
             background_tasks.add_task(
                 log_security_event,
                 background_tasks=background_tasks,
-                event_type="password_reset_password_too_long",
-                details={
-                    "ip_address": ip_address,
-                    "password_length": len(body_in.new_password),
-                },
+                event_type="password_reset_input_sanitization_failed",
+                details={"error": str(e), "ip_address": ip_address},
             )
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password too long")
-    except Exception as e:
-        background_tasks.add_task(
-            log_security_event,
-            background_tasks=background_tasks,
-            event_type="password_reset_input_sanitization_failed",
-            details={"error": str(e), "ip_address": ip_address},
-        )
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid input data")
-    try:
-        # Validate new password complexity before anything else
-        is_valid, errors = PasswordValidator.validate_complexity(body_in.new_password)
-        if not is_valid:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid input data")
+        try:
+            # Validate new password complexity before anything else
+            is_valid, errors = PasswordValidator.validate_complexity(body_in.new_password)
+            if not is_valid:
+                background_tasks.add_task(
+                    log_security_event,
+                    background_tasks=background_tasks,
+                    event_type="password_reset_complexity_failed",
+                    details={
+                        "errors": errors,
+                        "ip_address": ip_address,
+                        "token_used": body_in.token,
+                    },
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={
+                        "message": "New password does not meet complexity requirements.",
+                        "errors": errors,
+                    },
+                )
+            payload = security.decode_token(body_in.token, token_type="reset")
+            email_from_token_str = payload.get("sub")
+            if not email_from_token_str:
+                await reject_password_reset(
+                    background_tasks=background_tasks,
+                    event_type="password_reset_token_missing_sub",
+                    details={"token_used": body_in.token, "ip_address": ip_address},
+                )
+            user = await crud.user.get_by_email(db_session=db_session, email=str(email_from_token_str))
+            if not user:
+                await reject_password_reset(
+                    background_tasks=background_tasks,
+                    event_type="password_reset_user_not_found",
+                    details={
+                        "email_from_token": email_from_token_str,
+                        "token_used": body_in.token,
+                        "ip_address": ip_address,
+                    },
+                )
+            user = cast(User, user)
+            # Verify token in Redis. This runs before the is_active check so
+            # that the disabled branch is reachable only by a caller who already
+            # holds a live reset token -- the mailbox owner, to whom the account
+            # is no secret. Everyone else is turned away here instead (#137).
+            valid_reset_tokens = await get_valid_tokens(redis_client, user.id, TokenType.RESET)
+            if not token_is_allowlisted(valid_reset_tokens, body_in.token):
+                await reject_password_reset(
+                    background_tasks=background_tasks,
+                    event_type="password_reset_token_not_in_redis",
+                    user_id=user.id,  # user is guaranteed to be not None here
+                    details={
+                        "token_in_redis": bool(valid_reset_tokens),
+                        "ip_address": ip_address,
+                    },
+                )
+            if not user.is_active:
+                await reject_password_reset(
+                    background_tasks=background_tasks,
+                    event_type="password_reset_inactive_account",
+                    user_id=user.id,
+                    details={"email": user.email, "ip_address": ip_address},
+                )
+            try:
+                # This will check history, update password,
+                # and update last_changed_password_date
+                await crud.user.update_password(
+                    user=user, new_password=body_in.new_password, db_session=db_session
+                )
+            except ValueError as e:
+                # Log password history violation as a background task
+                background_tasks.add_task(
+                    log_security_event,
+                    background_tasks=background_tasks,
+                    event_type="password_reset_history_violation",
+                    user_id=user.id,
+                    details={"error": str(e), "ip_address": ip_address},
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Unable to set new password. Please ensure it meets all security requirements.",
+                )
+            # Clean up tokens in Redis as background tasks
+            await cleanup_expired_tokens(
+                background_tasks=background_tasks,
+                redis_client=redis_client,
+                user_id=user.id,
+                token_type=TokenType.RESET,
+            )
+            # Invalidate all existing tokens for security
+            await cleanup_expired_tokens(
+                background_tasks=background_tasks,
+                redis_client=redis_client,
+                user_id=user.id,
+                token_type=TokenType.ACCESS,
+            )
+            await cleanup_expired_tokens(
+                background_tasks=background_tasks,
+                redis_client=redis_client,
+                user_id=user.id,
+                token_type=TokenType.REFRESH,
+            )
+            # Log successful password reset as a background task
             background_tasks.add_task(
                 log_security_event,
                 background_tasks=background_tasks,
-                event_type="password_reset_complexity_failed",
-                details={
-                    "errors": errors,
-                    "ip_address": ip_address,
-                    "token_used": body_in.token,
-                },
-            )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={
-                    "message": "New password does not meet complexity requirements.",
-                    "errors": errors,
-                },
-            )
-        payload = security.decode_token(body_in.token, token_type="reset")
-        email_from_token_str = payload.get("sub")
-        if not email_from_token_str:
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="password_reset_token_missing_sub",
-                details={"token_used": body_in.token, "ip_address": ip_address},
-            )
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token payload.")
-        user = await crud.user.get_by_email(db_session=db_session, email=str(email_from_token_str))
-        if not user:
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="password_reset_user_not_found",
-                details={
-                    "email_from_token": email_from_token_str,
-                    "token_used": body_in.token,
-                    "ip_address": ip_address,
-                },
-            )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid token or user not found.",
-            )
-        user = cast(User, user)
-        if not user.is_active:
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="password_reset_inactive_account",
+                event_type="password_reset_successful",
                 user_id=user.id,
                 details={"email": user.email, "ip_address": ip_address},
             )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Account is inactive. Cannot reset password.",
+            return create_response(data={}, message="Password has been reset successfully")
+        except HTTPException:
+            raise  # Re-raise HTTPException directly
+        except Exception as e:
+            error_type = type(e).__name__
+            user_id_for_log = user.id if user else (payload["sub"] if payload else None)
+            email_for_log = user.email if user else "N/A"
+            logger.error(
+                f"Unexpected error in reset_password for user {email_for_log} "
+                f"(ID: {user_id_for_log}) from IP {ip_address}: {str(e)}",
+                exc_info=True,
             )
-        # Verify token in Redis
-        valid_reset_tokens = await get_valid_tokens(redis_client, user.id, TokenType.RESET)
-        if not token_is_allowlisted(valid_reset_tokens, body_in.token):
-            # Log invalid token in Redis as a background task
             background_tasks.add_task(
                 log_security_event,
                 background_tasks=background_tasks,
-                event_type="password_reset_token_not_in_redis",
-                user_id=user.id,  # user is guaranteed to be not None here
+                event_type=f"password_reset_confirm_unexpected_error_{error_type.lower()}",
+                user_id=user_id_for_log,
                 details={
-                    "token_in_redis": bool(valid_reset_tokens),
+                    "email": email_for_log,
+                    "error": str(e),
                     "ip_address": ip_address,
+                    "token_subject": payload["sub"] if payload else "N/A",
                 },
             )
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid token",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="An unexpected error occurred. Please try again later.",
             )
-        try:
-            # This will check history, update password,
-            # and update last_changed_password_date
-            await crud.user.update_password(
-                user=user, new_password=body_in.new_password, db_session=db_session
-            )
-        except ValueError as e:
-            # Log password history violation as a background task
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="password_reset_history_violation",
-                user_id=user.id,
-                details={"error": str(e), "ip_address": ip_address},
-            )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Unable to set new password. Please ensure it meets all security requirements.",
-            )
-        # Clean up tokens in Redis as background tasks
-        await cleanup_expired_tokens(
-            background_tasks=background_tasks,
-            redis_client=redis_client,
-            user_id=user.id,
-            token_type=TokenType.RESET,
-        )
-        # Invalidate all existing tokens for security
-        await cleanup_expired_tokens(
-            background_tasks=background_tasks,
-            redis_client=redis_client,
-            user_id=user.id,
-            token_type=TokenType.ACCESS,
-        )
-        await cleanup_expired_tokens(
-            background_tasks=background_tasks,
-            redis_client=redis_client,
-            user_id=user.id,
-            token_type=TokenType.REFRESH,
-        )
-        # Log successful password reset as a background task
-        background_tasks.add_task(
-            log_security_event,
-            background_tasks=background_tasks,
-            event_type="password_reset_successful",
-            user_id=user.id,
-            details={"email": user.email, "ip_address": ip_address},
-        )
-        return create_response(data={}, message="Password has been reset successfully")
-    except HTTPException:
-        raise  # Re-raise HTTPException directly
-    except Exception as e:
-        error_type = type(e).__name__
-        user_id_for_log = user.id if user else (payload["sub"] if payload else None)
-        email_for_log = user.email if user else "N/A"
-        logger.error(
-            f"Unexpected error in confirm_password_reset for user {email_for_log} (ID: {user_id_for_log}) "
-            f"from IP {ip_address}: {str(e)}",
-            exc_info=True,
-        )
-        background_tasks.add_task(
-            log_security_event,
-            background_tasks=background_tasks,
-            event_type=f"password_reset_confirm_unexpected_error_{error_type.lower()}",
-            user_id=user_id_for_log,
-            details={
-                "email": email_for_log,
-                "error": str(e),
-                "ip_address": ip_address,
-                "token_subject": payload["sub"] if payload else "N/A",
-            },
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An unexpected error occurred. Please try again later.",
-        )
 
 
 @router.get("/csrf-token")
