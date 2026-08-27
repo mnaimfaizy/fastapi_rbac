@@ -36,6 +36,13 @@ from app.utils.email import email as email_module
 
 VERIFY_LINK = "https://rbac.example.com/verify-email?token=abc.def-ghi_jkl"
 
+# Not a credential. These tests assert that SMTP_USER and SMTP_PASSWORD reach
+# the backend, so the values only have to be distinguishable and obviously
+# inert -- anything resembling a real password trips the repository's secret
+# scanner, and an exclusion for this file would weaken scanning to no purpose.
+SMTP_USER_PLACEHOLDER = "smtp-user-placeholder"
+SMTP_PASSWORD_PLACEHOLDER = "not-a-real-password-placeholder"  # noqa: S105
+
 
 @pytest.fixture(autouse=True)
 def mock_send_email() -> None:  # noqa: PT004 - the name must match what it overrides
@@ -327,14 +334,14 @@ def test_tls_on_without_credentials(smtp: SMTPRecorder, monkeypatch: pytest.Monk
 
 def test_tls_on_with_credentials(smtp: SMTPRecorder, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "SMTP_TLS", True)
-    monkeypatch.setattr(settings, "SMTP_USER", "mailer")
-    monkeypatch.setattr(settings, "SMTP_PASSWORD", "s3cret")
+    monkeypatch.setattr(settings, "SMTP_USER", SMTP_USER_PLACEHOLDER)
+    monkeypatch.setattr(settings, "SMTP_PASSWORD", SMTP_PASSWORD_PLACEHOLDER)
 
     send()
 
     assert smtp.backend.tls is True
-    assert smtp.backend.smtp_cls_kwargs["user"] == "mailer"
-    assert smtp.backend.smtp_cls_kwargs["password"] == "s3cret"
+    assert smtp.backend.smtp_cls_kwargs["user"] == SMTP_USER_PLACEHOLDER
+    assert smtp.backend.smtp_cls_kwargs["password"] == SMTP_PASSWORD_PLACEHOLDER
 
 
 def test_credentials_are_withheld_when_tls_is_off(
@@ -348,8 +355,8 @@ def test_credentials_are_withheld_when_tls_is_off(
     is not. This test is what fails if the nesting is ever changed by accident
     rather than on purpose.
     """
-    monkeypatch.setattr(settings, "SMTP_USER", "mailer")
-    monkeypatch.setattr(settings, "SMTP_PASSWORD", "s3cret")
+    monkeypatch.setattr(settings, "SMTP_USER", SMTP_USER_PLACEHOLDER)
+    monkeypatch.setattr(settings, "SMTP_PASSWORD", SMTP_PASSWORD_PLACEHOLDER)
 
     send()
 
