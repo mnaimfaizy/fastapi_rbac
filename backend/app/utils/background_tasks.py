@@ -11,7 +11,6 @@ This module supports both FastAPI BackgroundTasks for simple operations
 and Celery for more complex, long-running, or scheduled tasks.
 """
 
-import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
@@ -315,48 +314,3 @@ async def _process_account_lockout_task(
             break
 
     await crud.user.update(db_obj=user, db_session=db_session)
-
-
-async def cleanup_unverified_account(
-    background_tasks: BackgroundTasks,
-    user_id: UUID,
-    redis_client: Redis,
-    delay_hours: int = 24,
-) -> None:
-    """
-    Cleanup task for unverified accounts.
-    Deletes the account and associated data if not verified within the specified time.
-
-    Args:
-        background_tasks: BackgroundTasks instance
-        user_id: User ID of the account to clean up
-        redis_client: Redis client instance
-        delay_hours: Number of hours to wait before cleanup
-    """
-    try:
-        await asyncio.sleep(delay_hours * 3600)  # Convert hours to seconds
-
-        # Check if user still exists and is still unverified
-        user = await crud.user.get(id=user_id)
-        if user and not user.verified:
-            # Delete verification token from Redis
-            await redis_client.delete(f"verification_token:{user_id}")
-
-            # Delete user
-            await crud.user.delete(id=user_id)
-
-            # Log cleanup
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="unverified_account_cleaned_up",
-                details={"user_id": str(user_id)},
-            )
-    except Exception as e:
-        # Log cleanup failure
-        background_tasks.add_task(
-            log_security_event,
-            background_tasks=background_tasks,
-            event_type="unverified_account_cleanup_failed",
-            details={"error": str(e), "user_id": str(user_id)},
-        )

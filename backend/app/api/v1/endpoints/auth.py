@@ -35,13 +35,11 @@ from app.schemas.user_schema import (  # PasswordResetConfirm, # Not used in thi
 )
 from app.utils.account_email_dispatch import (
     ACCOUNT_EMAIL_UNIFORM_MESSAGE,
-    AccountState,
     dispatch_account_email,
 )
 from app.utils.auth_cookies import clear_refresh_token_cookie, set_refresh_token_cookie
 from app.utils.background_tasks import (
     cleanup_expired_tokens,
-    cleanup_unverified_account,
     log_security_event,
     process_account_lockout,
     send_password_reset_email,
@@ -492,26 +490,11 @@ async def register(
             await redis_client.incr(ip_rate_limit_key)
             await redis_client.expire(ip_rate_limit_key, rate_limit_period)
 
-            # cleanup_unverified_account sleeps in-process for delay_hours before
-            # doing anything, so scheduling it under test would block the ASGI
-            # transport, which runs background tasks inline, for 72 hours. That
-            # this never surfaced before is an accident: registration used to
-            # fail earlier, on a Redis call the test mock did not implement, so
-            # the task was never reached. Its unreliability is #136's to fix;
-            # #113 must not depend on cleanup running either way.
-            schedule_cleanup = (
-                result.state is AccountState.ABSENT
-                and result.user_id is not None
-                and getattr(settings, "MODE", None) != "testing"
-            )
-            if schedule_cleanup:
-                background_tasks.add_task(
-                    cleanup_unverified_account,
-                    background_tasks=background_tasks,
-                    user_id=result.user_id,
-                    redis_client=redis_client,
-                    delay_hours=settings.UNVERIFIED_ACCOUNT_CLEANUP_HOURS,
-                )
+            # Registration schedules no cleanup of its own. It used to hand the
+            # new user to a background task that slept for
+            # UNVERIFIED_ACCOUNT_CLEANUP_HOURS, which lost every pending row on
+            # the next restart (#136). Celery Beat now sweeps them from the
+            # database instead: app.worker.cleanup_unverified_users_task.
 
             # Test mode only: integration tests drive the verification flow from
             # this value rather than reading mail. It is absent in every other

@@ -31,6 +31,14 @@ celery_app.conf.beat_schedule = {
         "schedule": timedelta(hours=1),
         "options": {"queue": "periodic_tasks"},
     },
+    # Run every hour to delete pending users whose verification window expired.
+    # Hourly rather than once a day so the window is honoured to within an hour,
+    # and so a restart costs at most one tick (#136).
+    "cleanup-unverified-users": {
+        "task": "app.worker.cleanup_unverified_users_task",
+        "schedule": timedelta(hours=1),
+        "options": {"queue": "periodic_tasks"},
+    },
     # Run health check every 5 minutes to ensure system is operating properly
     "system-health-check": {
         "task": "app.scheduled_tasks.system_health_check",
