@@ -19,11 +19,14 @@ because losing one locks everybody out of administration. Note that an
 admin-created account left unverified is swept too when
 ``ADMIN_CREATED_USERS_AUTO_VERIFIED`` is off: nothing distinguishes it from a
 self-registration in the schema.
+
+A row that cannot be deleted — a foreign key this module does not clear, say —
+is logged and left for the next tick rather than failing the batch.
 """
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
 from redis.asyncio import Redis
@@ -41,6 +44,21 @@ logger = logging.getLogger(__name__)
 # Bounds one tick's work so a long-neglected table cannot produce a single
 # enormous transaction. Beat runs hourly; the backlog drains over a few ticks.
 DEFAULT_SWEEP_LIMIT = 500
+
+
+def _pending_past_window(cutoff: datetime) -> list[Any]:
+    """The one definition of "pending, and past the verification window".
+
+    Both the select and the delete filter on it. Keeping it in one place is what
+    makes the delete's re-check a genuine guard rather than a second predicate
+    that can drift away from the first.
+    """
+    return [
+        User.verified.is_(False),  # type: ignore[attr-defined]
+        User.is_active.is_(True),  # type: ignore[attr-defined]
+        User.is_superuser.is_(False),  # type: ignore[attr-defined]
+        User.created_at < cutoff,  # type: ignore[operator]
+    ]
 
 
 def unverified_cutoff(*, hours: Optional[int] = None, now: Optional[datetime] = None) -> datetime:
@@ -64,10 +82,7 @@ async def select_pending_user_ids(
     """Ids of pending users whose verification window has run out."""
     statement = (
         select(User.id)  # type: ignore[call-overload]
-        .where(User.verified.is_(False))  # type: ignore[attr-defined]
-        .where(User.is_active.is_(True))  # type: ignore[attr-defined]
-        .where(User.is_superuser.is_(False))  # type: ignore[attr-defined]
-        .where(User.created_at < cutoff)  # type: ignore[operator]
+        .where(*_pending_past_window(cutoff))
         .order_by(User.created_at)  # type: ignore[arg-type]
         .limit(limit)
     )
@@ -101,12 +116,7 @@ async def delete_if_still_pending(
             sa_delete(UserRole).where(UserRole.user_id == user_id)
         )
         result = await db_session.exec(  # type: ignore[call-overload]
-            sa_delete(User)
-            .where(User.id == user_id)
-            .where(User.verified.is_(False))  # type: ignore[attr-defined]
-            .where(User.is_active.is_(True))  # type: ignore[attr-defined]
-            .where(User.is_superuser.is_(False))  # type: ignore[attr-defined]
-            .where(User.created_at < cutoff)  # type: ignore[operator]
+            sa_delete(User).where(User.id == user_id).where(*_pending_past_window(cutoff))
         )
         if result.rowcount == 0:
             await db_session.rollback()
@@ -159,12 +169,18 @@ async def sweep_unverified_users(
         if not removed:
             continue
         deleted.append(user_id)
+        # Per user, not just per batch: the deletion of an account is the kind of
+        # thing an operator needs to be able to trace back to one id afterwards.
+        logger.info("Deleted pending user %s, unverified since before %s", user_id, cutoff.isoformat())
         if redis_client is not None:
             try:
                 await redis_client.delete(f"verification_token:{user_id}")
             except Exception:
                 logger.warning("Could not discard verification token for %s", user_id, exc_info=True)
 
-    if deleted:
-        logger.info("Deleted %d pending user(s) older than %s", len(deleted), cutoff.isoformat())
+    if len(candidates) == limit:
+        # A full batch means the backlog is at least one tick deep. Say so, or a
+        # table growing faster than the sweep drains it looks exactly like a
+        # healthy sweep from the logs.
+        logger.warning("Pending-user sweep filled its batch of %d; more rows are likely still due", limit)
     return deleted

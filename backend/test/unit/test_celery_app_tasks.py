@@ -1,5 +1,9 @@
 """Ensure Celery workers register task modules from app.worker."""
 
+import subprocess
+import sys
+from pathlib import Path
+
 from app.celery_app import celery_app
 
 
@@ -25,15 +29,29 @@ def test_celery_app_registers_unverified_cleanup_task() -> None:
 
 def test_beat_schedules_the_unverified_cleanup_sweep() -> None:
     """Beat drives the sweep; without an entry, pending users accumulate forever."""
-    import app.celery_beat_schedule  # noqa: F401  (registers the schedule)
-
     entry = celery_app.conf.beat_schedule["cleanup-unverified-users"]
     assert entry["task"] == "app.worker.cleanup_unverified_users_task"
     assert entry["options"]["queue"] == "periodic_tasks"
 
 
-def test_registration_no_longer_sleeps_in_process() -> None:
-    """The 72-hour asyncio.sleep is gone from the request path (#136)."""
-    import app.utils.background_tasks as background_tasks
+def test_beat_entrypoint_alone_carries_the_schedule() -> None:
+    """`celery -A app.celery_app beat` must see the schedule on a cold import.
 
-    assert not hasattr(background_tasks, "cleanup_unverified_account")
+    Asserted in a subprocess because this one is only true of a process that
+    imports nothing else: the schedule module used to be imported by app.main
+    alone, which the beat container never loads, so conf.beat_schedule was empty
+    wherever it actually mattered (#136).
+    """
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from app.celery_app import celery_app;"
+            "print('cleanup-unverified-users' in celery_app.conf.beat_schedule)",
+        ],
+        cwd=Path(__file__).resolve().parents[2],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().endswith("True"), result.stdout

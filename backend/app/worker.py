@@ -108,7 +108,7 @@ def process_account_lockout_task(user_id: str, lock_duration_hours: int = 24) ->
 
 
 @celery_app.task
-def cleanup_unverified_users_task(limit: int | None = None) -> int:
+def cleanup_unverified_users_task() -> int:
     """Sweep pending users past the verification window (#136).
 
     Beat runs this hourly, in place of the in-process sleep registration used to
@@ -121,9 +121,9 @@ def cleanup_unverified_users_task(limit: int | None = None) -> int:
     """
     import asyncio
 
-    async def async_cleanup_unverified_users(batch_limit: int | None) -> int:
+    async def async_cleanup_unverified_users() -> int:
         from app.db.session import get_async_session, get_redis_client
-        from app.utils.unverified_cleanup import DEFAULT_SWEEP_LIMIT, sweep_unverified_users
+        from app.utils.unverified_cleanup import sweep_unverified_users
 
         deleted_count = 0
         async for redis_client in get_redis_client():
@@ -131,11 +131,10 @@ def cleanup_unverified_users_task(limit: int | None = None) -> int:
                 deleted = await sweep_unverified_users(
                     db_session=db_session,
                     redis_client=redis_client,
-                    limit=batch_limit or DEFAULT_SWEEP_LIMIT,
                 )
                 deleted_count = len(deleted)
                 break
             break
         return deleted_count
 
-    return asyncio.run(async_cleanup_unverified_users(limit))
+    return asyncio.run(async_cleanup_unverified_users())
