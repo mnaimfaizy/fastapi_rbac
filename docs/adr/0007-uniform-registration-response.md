@@ -35,5 +35,5 @@ Two failure modes hid behind the same message. A verification email that fails t
 - A future reader will find registration returning `200` for a duplicate and may try to "fix" it. That reversal is the specific thing this ADR exists to prevent.
 - Registration's response body no longer carries the created user. The client already discarded it.
 - Reissuing replaces the previous verification token, so older links stop working; they land on the verify page, which offers resend.
-- The narrow `"Account is inactive"` oracle in verify-email and password reset remains open, tracked in [#137](https://github.com/mnaimfaizy/fastapi_rbac/issues/137). Until it lands, disabled users are still enumerable — the every-verified-user oracle is what this closes.
+- The narrow `"Account is inactive"` oracle in verify-email and password reset was left open here and closed by [#137](https://github.com/mnaimfaizy/fastapi_rbac/issues/137), which extends this decision to the token-bearing flows — see [ADR 0010](0010-uniform-token-flow-rejection.md). The every-verified-user oracle is what this ADR closes.
 - Vocabulary for the three user states is recorded in `CONTEXT.md`; the code previously tested `verified` and `is_active` inline at each site with no shared name, which enabled the drift.
