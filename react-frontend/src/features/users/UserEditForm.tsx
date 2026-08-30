@@ -10,6 +10,9 @@ import { fetchAllRoles } from '../../store/slices/roleSlice';
 import { updateUser, createUser } from '../../store/slices/userSlice';
 import { toast } from 'sonner';
 
+import { PasswordRequirements } from '@/components/auth/PasswordRequirements';
+import { optionalPasswordPolicySchema } from '@/lib/passwordPolicySchema';
+
 // Import ShadCN UI Components
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -54,11 +57,7 @@ const userEditSchema = z.object({
   is_active: z.boolean().optional(),
   is_superuser: z.boolean().optional(),
   contact_phone: z.string().optional(), // Changed from nullable to optional
-  password: z
-    .string()
-    .min(8, 'Password must be at least 8 characters')
-    .optional()
-    .or(z.literal('')),
+  password: optionalPasswordPolicySchema,
   role_id: z.array(z.string()).optional(), // Add role_id field
 });
 
@@ -439,6 +438,16 @@ const UserEditForm = ({ userId, onSuccess }: UserEditFormProps) => {
                       disabled={isLoading}
                     />
                   </FormControl>
+                  {/*
+                    On a new user the password is required, so the rules are
+                    shown from the start. On an existing user the field is
+                    normally left blank to keep the current password, so a
+                    standing nine-item checklist would be noise — it appears
+                    once there is something to check.
+                  */}
+                  {(!userId || (field.value ?? '') !== '') && (
+                    <PasswordRequirements value={field.value ?? ''} />
+                  )}
                   <FormMessage />
                 </FormItem>
               )}
