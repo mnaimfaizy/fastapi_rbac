@@ -25,7 +25,7 @@ from app.utils.account_email_dispatch import (
     classify,
 )
 
-PASSWORD = "TestPassword123!"
+PASSWORD = "TestPassw0rd!47"
 
 ABSENT_EMAIL = "nobody-at-all@example.com"
 PENDING_EMAIL = "pending-user@example.com"
@@ -243,7 +243,7 @@ async def test_reregistration_cannot_change_a_pending_users_password(
         auth_url("/register"),
         json={
             "email": PENDING_EMAIL,
-            "password": "AttackerPassword456!",
+            "password": "AttackerPassw0rd!x9",
             "first_name": "Attacker",
             "last_name": "Person",
         },

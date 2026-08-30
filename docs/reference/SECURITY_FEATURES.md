@@ -119,10 +119,17 @@ if not await redis_client.get(f"user:{user_id}:{token_type}"):
 
 **Password Policy**:
 
-- Minimum 8 characters
+- Minimum 12 characters (`PASSWORD_MIN_LENGTH`), maximum 128
+- Upper case, lower case, digit and special character required
+- Rejects common passwords, sequential runs (`abc`, `123`) and repeated runs
 - Strength score validation
 - History tracking for compliance
 - Automatic lockout protection
+
+The thresholds above are settings, not constants in code. Every path that sets
+a password -- registration, password reset, reset confirm and change password --
+applies them through a single `enforce_password_complexity` call, so none of
+them can drift into a looser rule of its own.
 
 ### 7. Audit Logging
 

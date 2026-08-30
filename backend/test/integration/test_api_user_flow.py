@@ -34,7 +34,7 @@ async def register_and_verify_user(
     if not email:
         email = random_email()
     if not password:
-        password = "SecurePassword123!"
+        password = "SecurePassw0rd!47"
     user_data = {
         "email": email,
         "first_name": first_name,
@@ -215,7 +215,7 @@ class TestUserManagementFlow:
             "email": random_email(),
             "first_name": "John",
             "last_name": "Doe",
-            "password": "SecurePassword123!",
+            "password": "SecurePassw0rd!47",
             "contact_phone": "+1234567890",
             "is_active": True,
         }

@@ -60,11 +60,15 @@ Register a new user (self-service, public).
 ```json
 {
   "email": "newuser@example.com",
-  "password": "SecurePassword123!",
+  "password": "SecurePassw0rd!47",
   "first_name": "Jane",
   "last_name": "Smith"
 }
 ```
+
+The password must satisfy the complexity policy in settings -- the same policy
+the password-reset and change-password endpoints apply. `SecurePassword123!`
+would be rejected for the sequential run `123`.
 
 **Response:**
 
@@ -85,8 +89,18 @@ Register a new user (self-service, public).
 
 **Error Responses:**
 
-- 400 Bad Request: Invalid input, password too long, rate limit exceeded
-- 409 Conflict: Email already registered
+- 400 Bad Request: Invalid input, password too long, rate limit exceeded, or a
+  password that fails the complexity policy. A complexity failure answers with
+  an object rather than a string:
+
+  ```json
+  {
+    "detail": {
+      "message": "Password does not meet complexity requirements.",
+      "errors": ["Password must be at least 12 characters long"]
+    }
+  }
+  ```
 
 ---
 

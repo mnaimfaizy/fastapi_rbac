@@ -82,3 +82,49 @@ describe('api 401 interceptor', () => {
     expect(refreshAccessToken).toHaveBeenCalled();
   });
 });
+
+describe('api password-complexity error normalisation', () => {
+  const complexityRejection = (errors: string[]) => ({
+    response: {
+      status: 400,
+      data: {
+        detail: {
+          message: 'Password does not meet complexity requirements.',
+          errors,
+        },
+      },
+    },
+    config: { url: '/auth/register', headers: {} },
+  });
+
+  it('surfaces the policy rules that failed instead of a generic message', async () => {
+    const error = complexityRejection([
+      'Password must be at least 12 characters long',
+      'Password must contain at least one digit',
+    ]);
+
+    await expect(responseErrorHandler(error)).rejects.toBeDefined();
+
+    expect(error.response.data).toEqual({
+      status: 'error',
+      message: 'Password does not meet complexity requirements.',
+      errors: [
+        { message: 'Password must be at least 12 characters long' },
+        { message: 'Password must contain at least one digit' },
+      ],
+    });
+  });
+
+  it('leaves an unrecognised object detail on the generic path', async () => {
+    const error = {
+      response: { status: 400, data: { detail: { something: 'else' } } },
+      config: { url: '/auth/register', headers: {} },
+    };
+
+    await expect(responseErrorHandler(error)).rejects.toBeDefined();
+
+    expect((error.response.data as any).message).toBe(
+      'An unexpected error occurred'
+    );
+  });
+});

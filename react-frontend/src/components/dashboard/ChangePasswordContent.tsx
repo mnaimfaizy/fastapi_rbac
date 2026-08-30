@@ -10,14 +10,16 @@ import {
 } from '../../store/slices/authSlice';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, AlertCircle } from 'lucide-react';
-import { ErrorResponse, ErrorResponseWithErrors } from '@/models/auth';
+import { CheckCircle } from 'lucide-react';
+import { ApiErrorAlert } from '@/components/auth/ApiErrorAlert';
+import { PasswordRequirements } from '@/components/auth/PasswordRequirements';
+import { passwordPolicySchema } from '@/lib/passwordPolicySchema';
 
 // Define validation schema with Zod
 const passwordChangeSchema = z
   .object({
     currentPassword: z.string().min(1, 'Current password is required'),
-    newPassword: z.string(),
+    newPassword: passwordPolicySchema,
     confirmPassword: z.string().min(1, 'Confirm password is required'),
   })
   .refine((data) => data.newPassword === data.confirmPassword, {
@@ -37,6 +39,7 @@ const ChangePasswordContent = () => {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
     reset,
   } = useForm<PasswordChangeFormData>({
@@ -97,35 +100,11 @@ const ChangePasswordContent = () => {
         )}
 
         {error && (
-          <Alert className="mb-6 bg-red-50 border-red-200 text-red-800">
-            <AlertCircle className="h-4 w-4 text-red-500 mr-2" />
-            <AlertDescription>
-              {typeof error === 'object' &&
-              Object.keys(error).includes('detail') ? (
-                <>
-                  <span>
-                    {(error as ErrorResponseWithErrors)?.detail?.message}
-                  </span>
-                  <ul>
-                    {(
-                      (error as ErrorResponseWithErrors)?.detail?.errors ?? []
-                    ).map((err: string, index) => (
-                      <li
-                        key={err + index}
-                        className="text-xs text-red-600 pl-2"
-                      >
-                        {`-> ${err}`}
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              ) : typeof error === 'object' ? (
-                <span>{(error as ErrorResponse)?.message}</span>
-              ) : (
-                <span>{error as string}</span>
-              )}
-            </AlertDescription>
-          </Alert>
+          <ApiErrorAlert
+            error={error}
+            className="mb-6"
+            fallbackMessage="Failed to change password. Please try again."
+          />
         )}
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -161,6 +140,10 @@ const ChangePasswordContent = () => {
               type="password"
               {...register('newPassword')}
               className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+            />
+            <PasswordRequirements
+              value={watch('newPassword') ?? ''}
+              className="mt-2"
             />
             {errors.newPassword && (
               <p className="mt-1 text-sm text-red-600">

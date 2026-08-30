@@ -55,7 +55,7 @@ class TestComprehensiveAuth:
 
         # Step 1: Register a new user
         email = random_email()
-        password = "TestPassword123!"
+        password = "TestPassw0rd!47"
 
         register_data = {"email": email, "password": password, "first_name": "Test", "last_name": "User"}
 
@@ -218,7 +218,7 @@ class TestComprehensiveAuth:
             mock_send_password_reset_email.assert_called_once()
 
             # Step 2: Confirm password reset with new password
-            new_password = "NewTestPassword123!"
+            new_password = "NewTestPassw0rd!47"
 
             with patch("app.core.security.decode_token") as mock_decode:
                 mock_decode.return_value = {
@@ -424,7 +424,7 @@ class TestAuthenticationEdgeCases:
         seeded_email = "user@example.com"
         register_data = {
             "email": seeded_email,
-            "password": "TestPassword123!",
+            "password": "TestPassw0rd!47",
             "first_name": "Test",
             "last_name": "User",
         }
@@ -723,7 +723,7 @@ class TestAuthenticationValidation:
             f"{settings.API_V1_STR}/auth/register",
             json={
                 "email": "invalid_email",
-                "password": "TestPassword123!",
+                "password": "TestPassw0rd!47",
                 "first_name": "Test",
                 "last_name": "User",
             },
@@ -731,13 +731,16 @@ class TestAuthenticationValidation:
         )
         assert response.status_code == 422
 
-        # Password too short
+        # Password too short. 400, not 422: the length threshold lives in
+        # settings alongside the rest of the complexity policy, and the
+        # registration schema no longer carries a second, looser min_length
+        # of its own (#192).
         response = await client.post(
             f"{settings.API_V1_STR}/auth/register",
             json={"email": random_email(), "password": "short", "first_name": "Test", "last_name": "User"},
             headers=headers,
         )
-        assert response.status_code == 422
+        assert response.status_code == 400
 
     @pytest.mark.asyncio
     async def test_login_validation_errors(self, client: AsyncClient) -> None:
