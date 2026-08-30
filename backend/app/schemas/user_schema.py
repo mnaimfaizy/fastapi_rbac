@@ -128,17 +128,6 @@ class IUserLoginSchema(BaseModel):
     permissions: list[str] | None = None
 
 
-class IUserPasswordReset(BaseModel):
-    is_active: bool | None = None
-    needs_to_change_password: bool | None = None
-    expiry_date: datetime | None = None
-
-
-class INewPassword(BaseModel):
-    password: str = Field(..., min_length=8, description="New password to set")
-    token: str = Field(..., description="Reset token received via email")
-
-
 class IUserStatus(str, Enum):
     active = "active"
     inactive = "inactive"
@@ -154,13 +143,6 @@ class PasswordResetRequest(BaseModel):
     """Schema for requesting a password reset"""
 
     email: EmailStr = Field(..., description="Email address of the user requesting password reset")
-
-
-class PasswordResetConfirm(BaseModel):
-    """Schema for confirming a password reset with token"""
-
-    token: str = Field(..., description="Reset token received via email")
-    new_password: str = Field(..., min_length=8, description="New password to set")
 
 
 class IUserRoleAssign(BaseModel):
