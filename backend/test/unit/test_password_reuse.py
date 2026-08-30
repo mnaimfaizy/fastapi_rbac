@@ -319,8 +319,9 @@ def test_password_version_is_incremented_in_exactly_one_place() -> None:
 def test_no_reuse_check_compares_bcrypt_digests() -> None:
     """`is_password_reused` was structurally incapable of returning True.
 
-    It is gone; nothing may reintroduce a comparison between a value named like
-    a hash and a collection of stored hashes.
+    It is gone. This is a tripwire, not a proof: it catches the shape the bug
+    took -- a hash-named expression tested for membership in stored hashes --
+    so the same mistake cannot come back unremarked.
     """
     assert not hasattr(user_crud, "is_password_reused")
 
@@ -329,7 +330,6 @@ def test_no_reuse_check_compares_bcrypt_digests() -> None:
             return False
         if not any(isinstance(op, (ast.In, ast.NotIn)) for op in node.ops):
             return False
-        left = node.left
-        return isinstance(left, ast.Name) and "password_hash" in left.id
+        return "hash" in ast.unparse(node.left)
 
     assert _modules_matching(compares_a_hash_for_membership) == set()

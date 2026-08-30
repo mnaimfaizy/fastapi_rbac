@@ -22,6 +22,7 @@ from app.core.security import (  # For password complexity / JWT audit mapping
     decode_token,
     map_jwt_http_error_to_event,
 )
+from app.crud.user_crud import PasswordReuseError
 from app.models.user_model import User
 from app.schemas.common_schema import TokenType
 from app.schemas.response_schema import IPostResponseBase, create_response
@@ -833,7 +834,7 @@ async def change_password(
                 db_session=db_session,
                 created_by_ip=ip_address,
             )
-        except ValueError as e:
+        except PasswordReuseError as e:
             background_tasks.add_task(
                 log_security_event,
                 background_tasks=background_tasks,

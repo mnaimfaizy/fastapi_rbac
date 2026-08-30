@@ -10,6 +10,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app import crud
 from app.api import deps
 from app.core.config import settings
+from app.crud.user_crud import PasswordReuseError
 from app.deps import user_deps
 from app.models import User
 from app.schemas.response_schema import (
@@ -213,7 +214,7 @@ async def bulk_update_users(
         update_obj = IUserUpdate(**updates)
         try:
             updated_user = await crud.user.update(obj_current=user, obj_new=update_obj, db_session=db_session)
-        except ValueError as e:
+        except PasswordReuseError as e:
             # A password in the payload now goes through the reuse policy (#193).
             raise HTTPException(status_code=400, detail=str(e))
         updated_users.append(serialize_user(updated_user))

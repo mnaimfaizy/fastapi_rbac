@@ -20,6 +20,15 @@ from app.models.user_model import User
 from app.schemas.user_schema import IUserCreate, IUserUpdate
 
 
+class PasswordReuseError(ValueError):
+    """The submitted password is one the reuse policy refuses.
+
+    Typed so an endpoint can answer 400 with this message without also
+    forwarding an unrelated ``ValueError`` -- a misuse of the CRUD contract is
+    a server fault, not a password the caller can fix.
+    """
+
+
 def password_reuse_window() -> int:
     """How many stored passwords the reuse policy refuses.
 
@@ -445,12 +454,12 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         if db_session is None:
             raise ValueError("db_session must be provided")
         if self.matches_current_password(user=user, new_password=new_password):
-            raise ValueError("New password must be different from your current password.")
+            raise PasswordReuseError("New password must be different from your current password.")
         window = password_reuse_window()
         if window > 0 and await self.is_password_in_history(
             user_id=user.id, new_password=new_password, db_session=db_session
         ):
-            raise ValueError(f"Cannot reuse any of your last {window} passwords.")
+            raise PasswordReuseError(f"Cannot reuse any of your last {window} passwords.")
         new_password_hash = PasswordValidator.get_password_hash(new_password)
         if user.password:
             await self.add_password_to_history(
