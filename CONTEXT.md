@@ -40,6 +40,18 @@ _Avoid_: Generic error, anti-enumeration
 The same invariant for verify-email and the password-reset endpoints: every failure that required looking an account up returns one fixed message per flow, so a disabled user is indistinguishable from an unknown address or a bad token. Which failure occurred is recorded as a security event instead.
 _Avoid_: Generic error, invalid token message
 
+**Session**:
+One refresh token and the access tokens derived from it. A user may hold several concurrent sessions, bounded by the concurrent session limit; revoking one leaves the others intact.
+_Avoid_: Login, token pair, connection
+
+**Allowlist**:
+The Redis record of tokens currently accepted, checked on every authenticated request. Removing an entry revokes it immediately, and this is the sole session revocation mechanism.
+_Avoid_: Blacklist, denylist, token blacklist, session store
+
+**Origin network**:
+The network a session was established from (IPv4 /24 or IPv6 /64), recorded alongside the session. A refresh presented from a different origin network is an anomaly that revokes that one session; it is not a hard block on the request.
+_Avoid_: Token IP, IP binding, IP validation
+
 **Role**:
 A named set of permissions assignable to users.
 _Avoid_: Group (when meaning a role)
