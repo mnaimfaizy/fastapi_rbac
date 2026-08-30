@@ -12,15 +12,16 @@ import { ErrorDetail } from '../../services/api'; // Import ErrorDetail
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Alert, AlertDescription } from '../ui/alert';
-import { AlertTriangle } from 'lucide-react'; // Assuming lucide-react is installed
+import { ApiErrorAlert } from './ApiErrorAlert';
+import { PasswordRequirements } from './PasswordRequirements';
+import { passwordPolicySchema } from '../../lib/passwordPolicySchema';
 
 // Define validation schema with Zod for Signup
 const signupSchema = z
   .object({
     fullName: z.string().min(1, 'Full name is required'), // Example field
     email: z.string().email('Please enter a valid email address'),
-    password: z.string().min(8, 'Password must be at least 8 characters'),
+    password: passwordPolicySchema,
     confirmPassword: z.string(),
   })
   .refine((data) => data.password === data.confirmPassword, {
@@ -36,12 +37,13 @@ export function SignupForm({
 }: React.ComponentPropsWithoutRef<'form'>) {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [apiError, setApiError] = useState<unknown>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({}); // Add fieldErrors state
 
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
@@ -56,7 +58,7 @@ export function SignupForm({
   const onSubmit = async (data: SignupFormData) => {
     if (isLoading) return;
     setIsLoading(true);
-    setError(null);
+    setApiError(null);
     setFieldErrors({}); // Clear previous field errors
 
     try {
@@ -81,10 +83,7 @@ export function SignupForm({
         message?: string;
         errors?: ErrorDetail[];
       }>;
-      const errorMessage =
-        axiosError.response?.data?.message ||
-        'Registration failed. Please try again.';
-      setError(errorMessage);
+      setApiError(err);
 
       // Handle field-specific errors from backend
       if (axiosError.response?.data?.errors) {
@@ -118,12 +117,12 @@ export function SignupForm({
         </p>
       </div>
 
-      {error &&
+      {apiError !== null &&
         !Object.keys(fieldErrors).length && ( // Only show general error if no field errors
-          <Alert variant="destructive">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
+          <ApiErrorAlert
+            error={apiError}
+            fallbackMessage="Registration failed. Please try again."
+          />
         )}
 
       <div className="grid gap-4">
@@ -177,6 +176,7 @@ export function SignupForm({
               errors.password || fieldErrors.password ? 'true' : 'false'
             }
           />
+          <PasswordRequirements value={watch('password') ?? ''} />
           {errors.password && (
             <p className="text-sm text-red-600">{errors.password.message}</p>
           )}

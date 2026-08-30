@@ -13,6 +13,11 @@ services:
     container_name: react_frontend_dev
     environment:
       - NODE_ENV=development
+      # Vite's file watcher gets no filesystem events through the bind mount
+      # below, so without polling it serves the transform it cached at startup
+      # and edits to existing files never reach the browser -- the "hot-reload"
+      # this file promises silently does not happen.
+      - VITE_USE_POLLING=true
     env_file:
       - .env.development
     ports:

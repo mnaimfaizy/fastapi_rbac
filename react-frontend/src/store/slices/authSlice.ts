@@ -7,6 +7,7 @@ import {
   setAuthSessionHint,
   clearAuthTokens,
 } from '../../lib/tokenStorage';
+import { normalizeApiError } from '../../lib/apiError';
 
 // Initial state
 const initialState: AuthState = {
@@ -125,41 +126,13 @@ export const changePassword = createAsyncThunk(
       );
       return response;
     } catch (error) {
-      if (error && typeof error === 'object' && 'response' in error) {
-        const err = error as {
-          response?: {
-            data?: {
-              detail?: string | { message?: string; errors?: string[] };
-              errors?: Array<{ message: string }>;
-              message?: string;
-            };
-          };
-        };
-        // Handle the new structured error response
-        if (
-          err.response?.data?.detail &&
-          typeof err.response.data.detail === 'object'
-        ) {
-          return rejectWithValue(err.response.data.detail);
-        }
-        // Handle if detail is a simple string
-        if (
-          err.response?.data?.detail &&
-          typeof err.response.data.detail === 'string'
-        ) {
-          return rejectWithValue({ message: err.response.data.detail });
-        }
-        // Fallback to existing error handling
-        if (err.response?.data?.errors?.[0]) {
-          return rejectWithValue({
-            message: err.response.data.errors[0].message,
-          });
-        }
-        return rejectWithValue({
-          message: err.response?.data?.message || 'Failed to change password',
-        });
-      }
-      return rejectWithValue({ message: 'Failed to change password' });
+      // normalizeApiError keeps every failed policy rule; the previous unpack
+      // collapsed them to errors[0] and the UI showed one rule out of five.
+      const { message, details } = normalizeApiError(
+        error,
+        'Failed to change password'
+      );
+      return rejectWithValue({ message, errors: details });
     }
   }
 );
@@ -200,42 +173,11 @@ export const confirmPasswordReset = createAsyncThunk(
       await authService.confirmPasswordReset(token, newPassword);
       return true;
     } catch (error) {
-      if (error && typeof error === 'object' && 'response' in error) {
-        const err = error as {
-          response?: {
-            data?: {
-              detail?: string | { message?: string; errors?: string[] };
-              // Keep existing error structures for broader compatibility
-              errors?: Array<{ message: string }>;
-              message?: string;
-            };
-          };
-        };
-        // Handle the new structured error response
-        if (
-          err.response?.data?.detail &&
-          typeof err.response.data.detail === 'object'
-        ) {
-          return rejectWithValue(err.response.data.detail);
-        }
-        // Handle if detail is a simple string
-        if (
-          err.response?.data?.detail &&
-          typeof err.response.data.detail === 'string'
-        ) {
-          return rejectWithValue({ message: err.response.data.detail });
-        }
-        // Fallback to existing error handling
-        if (err.response?.data?.errors?.[0]) {
-          return rejectWithValue({
-            message: err.response.data.errors[0].message,
-          });
-        }
-        return rejectWithValue({
-          message: err.response?.data?.message || 'Failed to reset password',
-        });
-      }
-      return rejectWithValue({ message: 'Failed to reset password' });
+      const { message, details } = normalizeApiError(
+        error,
+        'Failed to reset password'
+      );
+      return rejectWithValue({ message, errors: details });
     }
   }
 );
