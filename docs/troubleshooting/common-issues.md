@@ -39,11 +39,16 @@ pip install --user mkdocs mkdocs-material
 
 **Solution:** Ensure passwords meet the following requirements:
 
-- At least 8 characters long
+- At least 12 characters long
 - Contains at least one uppercase letter
 - Contains at least one lowercase letter
 - Contains at least one number
 - Contains at least one special character
+- Is not a common password
+- Contains no sequential run such as `abc` or `123`
+- Contains no character repeated more than three times in a row
+
+The same rules apply at sign-up as on password reset and change password.
 
 ## Database Issues
 

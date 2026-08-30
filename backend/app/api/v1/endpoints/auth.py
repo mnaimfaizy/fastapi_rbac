@@ -49,6 +49,7 @@ from app.utils.background_tasks import (
     process_account_lockout,
     send_password_reset_email,
 )
+from app.utils.password_policy import enforce_password_complexity
 from app.utils.response_timing import response_time_floor
 from app.utils.token import add_token_to_redis, get_valid_tokens, token_is_allowlisted
 from app.utils.user_utils import serialize_user
@@ -470,17 +471,12 @@ async def register(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="This email domain is not allowed for registration.",
                 )
-            if not PasswordValidator.validate_complexity(user_in.password):
-                background_tasks.add_task(
-                    log_security_event,
-                    background_tasks=background_tasks,
-                    event_type="registration_password_complexity_failed",
-                    details={"email": user_in.email, "ip_address": ip_address},
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Password does not meet complexity requirements.",
-                )
+            await enforce_password_complexity(
+                user_in.password,
+                background_tasks=background_tasks,
+                event_type="registration_password_complexity_failed",
+                details={"email": user_in.email, "ip_address": ip_address},
+            )
 
             result = await dispatch_account_email(
                 email=user_in.email,
@@ -819,26 +815,13 @@ async def change_password(
                 detail="Invalid Current Password",
             )
         # Validate new password complexity
-        is_valid, errors = PasswordValidator.validate_complexity(new_password)
-        if not is_valid:
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="password_change_complexity_failed",
-                user_id=current_user.id,
-                details={
-                    "email": current_user.email,
-                    "errors": errors,
-                    "ip_address": ip_address,
-                },
-            )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={
-                    "message": "New password does not meet complexity requirements.",
-                    "errors": errors,
-                },
-            )
+        await enforce_password_complexity(
+            new_password,
+            background_tasks=background_tasks,
+            event_type="password_change_complexity_failed",
+            user_id=current_user.id,
+            details={"email": current_user.email, "ip_address": ip_address},
+        )
         if settings.PREVENT_PASSWORD_REUSE > 0:
             is_reused = await crud.user.is_password_reused(
                 db_session=db_session,
@@ -1534,25 +1517,12 @@ async def confirm_password_reset(
     async with response_time_floor():
         try:
             # Validate new password complexity before anything else
-            is_valid, errors = PasswordValidator.validate_complexity(reset_confirm.new_password)
-            if not is_valid:
-                background_tasks.add_task(
-                    log_security_event,
-                    background_tasks=background_tasks,
-                    event_type="password_reset_complexity_failed",
-                    details={
-                        "errors": errors,
-                        "ip_address": ip_address,
-                        "token_used": reset_confirm.token,
-                    },
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail={
-                        "message": "New password does not meet complexity requirements.",
-                        "errors": errors,
-                    },
-                )
+            await enforce_password_complexity(
+                reset_confirm.new_password,
+                background_tasks=background_tasks,
+                event_type="password_reset_complexity_failed",
+                details={"ip_address": ip_address, "token_used": reset_confirm.token},
+            )
             payload = security.decode_token(reset_confirm.token, token_type="reset")
             email_from_token_str = payload.get("sub")
             if not email_from_token_str:
@@ -1719,25 +1689,12 @@ async def reset_password(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid input data")
         try:
             # Validate new password complexity before anything else
-            is_valid, errors = PasswordValidator.validate_complexity(body_in.new_password)
-            if not is_valid:
-                background_tasks.add_task(
-                    log_security_event,
-                    background_tasks=background_tasks,
-                    event_type="password_reset_complexity_failed",
-                    details={
-                        "errors": errors,
-                        "ip_address": ip_address,
-                        "token_used": body_in.token,
-                    },
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail={
-                        "message": "New password does not meet complexity requirements.",
-                        "errors": errors,
-                    },
-                )
+            await enforce_password_complexity(
+                body_in.new_password,
+                background_tasks=background_tasks,
+                event_type="password_reset_complexity_failed",
+                details={"ip_address": ip_address, "token_used": body_in.token},
+            )
             payload = security.decode_token(body_in.token, token_type="reset")
             email_from_token_str = payload.get("sub")
             if not email_from_token_str:

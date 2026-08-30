@@ -35,7 +35,7 @@ from app.utils.account_token_responses import (
 )
 from app.utils.token import add_token_to_redis
 
-PASSWORD = "TestPassword123!"
+PASSWORD = "TestPassw0rd!47"
 NEW_PASSWORD = "ReplacementPassword!42"
 
 ABSENT_EMAIL = "no-such-account@example.com"

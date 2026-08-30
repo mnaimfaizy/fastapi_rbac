@@ -121,7 +121,7 @@ class TestRoleManagementFlow:
     @pytest.mark.asyncio
     async def test_admin_role_crud_flow(self, client: AsyncClient) -> None:
         admin_email = unique_email("admin_role_crud")
-        admin_password = "AdminTest123!"
+        admin_password = "AdminTest!47xY"
         admin_data = {
             "email": admin_email,
             "password": admin_password,
@@ -197,7 +197,7 @@ class TestRoleManagementFlow:
     @pytest.mark.asyncio
     async def test_role_permission_assignment_flow(self, client: AsyncClient) -> None:
         admin_email = unique_email("admin_role_perm")
-        admin_password = "AdminTest123!"
+        admin_password = "AdminTest!47xY"
         admin_data = {
             "email": admin_email,
             "password": admin_password,
@@ -304,7 +304,7 @@ class TestRoleManagementFlow:
     @pytest.mark.asyncio
     async def test_role_list_and_pagination(self, client: AsyncClient) -> None:
         admin_email = unique_email("admin_role_list")
-        admin_password = "AdminTest123!"
+        admin_password = "AdminTest!47xY"
         admin_data = {
             "email": admin_email,
             "password": admin_password,
@@ -351,7 +351,7 @@ class TestRoleManagementFlow:
     @pytest.mark.asyncio
     async def test_role_duplicate_name_handling(self, client: AsyncClient) -> None:
         admin_email = unique_email("admin_role_dup")
-        admin_password = "AdminTest123!"
+        admin_password = "AdminTest!47xY"
         admin_data = {
             "email": admin_email,
             "password": admin_password,
@@ -390,7 +390,7 @@ class TestRoleManagementFlow:
     @pytest.mark.asyncio
     async def test_role_with_users_deletion_handling(self, client: AsyncClient) -> None:
         admin_email = unique_email("admin_role_userdel")
-        admin_password = "AdminTest123!"
+        admin_password = "AdminTest!47xY"
         admin_data = {
             "email": admin_email,
             "password": admin_password,
@@ -417,7 +417,7 @@ class TestRoleManagementFlow:
 
         # Register and verify a regular user
         user_email = unique_email("roleuserdel_regular")
-        user_password = "UserTest123!"
+        user_password = "UserTest!47xY"
         user_data = {
             "email": user_email,
             "password": user_password,
@@ -457,7 +457,7 @@ class TestRoleManagementFlow:
     @pytest.mark.asyncio
     async def test_permission_based_role_access(self, client: AsyncClient) -> None:
         admin_email = unique_email("admin_role_access")
-        admin_password = "AdminTest123!"
+        admin_password = "AdminTest!47xY"
         admin_data = {
             "email": admin_email,
             "password": admin_password,
@@ -471,7 +471,7 @@ class TestRoleManagementFlow:
 
         # Register and verify regular user
         user_email = unique_email("roleaccess_regular")
-        user_password = "UserTest123!"
+        user_password = "UserTest!47xY"
         user_data = {
             "email": user_email,
             "password": user_password,
@@ -498,7 +498,7 @@ class TestRoleManagementFlow:
     @pytest.mark.asyncio
     async def test_role_search_and_filtering(self, client: AsyncClient) -> None:
         admin_email = unique_email("admin_role_search")
-        admin_password = "AdminTest123!"
+        admin_password = "AdminTest!47xY"
         admin_data = {
             "email": admin_email,
             "password": admin_password,

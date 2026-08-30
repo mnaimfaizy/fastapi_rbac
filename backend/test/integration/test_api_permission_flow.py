@@ -491,7 +491,7 @@ class TestPermissionManagementFlow:
         unique_email = f"regularuser_{uuid.uuid4().hex[:8]}@example.com"
         user_data = {
             "email": unique_email,
-            "password": "TestPassword123!",
+            "password": "TestPassw0rd!47",
             "first_name": "Regular",
             "last_name": "User",
         }

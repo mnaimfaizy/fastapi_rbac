@@ -28,6 +28,24 @@ interface ErrorResponseData {
   [key: string]: unknown;
 }
 
+/** A 400 from any password-setting path: the summary plus the policy rules that failed. */
+interface PasswordComplexityDetail {
+  message: string;
+  errors: string[];
+}
+
+const isPasswordComplexityDetail = (
+  detail: unknown
+): detail is PasswordComplexityDetail => {
+  if (typeof detail !== 'object' || detail === null) return false;
+  const candidate = detail as { message?: unknown; errors?: unknown };
+  return (
+    typeof candidate.message === 'string' &&
+    Array.isArray(candidate.errors) &&
+    candidate.errors.every((entry) => typeof entry === 'string')
+  );
+};
+
 export interface SuccessResponse<T> {
   status: string;
   message: string;
@@ -110,6 +128,16 @@ api.interceptors.response.use(
                 message: errorMessage,
               },
             ],
+          };
+        } else if (isPasswordComplexityDetail(responseData.detail)) {
+          // Password-complexity rejections: {message, errors[]}. Without this
+          // branch they fell through to the generic handler and the user was
+          // told "An unexpected error occurred" instead of which rule failed.
+          errorMessage = responseData.detail.message;
+          error.response.data = {
+            status: 'error',
+            message: errorMessage,
+            errors: responseData.detail.errors.map((message) => ({ message })),
           };
         } else if (typeof responseData.detail === 'string') {
           // Handle string error messages

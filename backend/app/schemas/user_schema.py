@@ -26,7 +26,11 @@ class IUserCreate(UserBase):
 # Properties for user registration
 class UserRegister(BaseModel):
     email: EmailStr
-    password: str = Field(..., min_length=8)
+    # No min_length here: the policy lives in settings (PASSWORD_MIN_LENGTH is
+    # 12) and is applied by enforce_password_complexity in the endpoint. A
+    # schema-level 8 was a second, looser rule that contradicted it and
+    # answered 422 with no indication of which policy rule failed (#192).
+    password: str
     first_name: str | None = None
     last_name: str | None = None
 
