@@ -28,7 +28,7 @@ from app.schemas.common_schema import TokenType
 from app.schemas.response_schema import IPostResponseBase, create_response
 from app.schemas.token_schema import PasswordResetConfirm, RefreshToken, Token, TokenRead
 from app.schemas.user_schema import PasswordResetRequest  # Used for resend-verification
-from app.schemas.user_schema import (  # PasswordResetConfirm, # Not used in this snippet
+from app.schemas.user_schema import (
     IUserRead,
     IUserUpdate,
     UserRegister,
