@@ -211,7 +211,11 @@ async def bulk_update_users(
             continue
         # Only allow fields that IUserUpdate allows
         update_obj = IUserUpdate(**updates)
-        updated_user = await crud.user.update(obj_current=user, obj_new=update_obj, db_session=db_session)
+        try:
+            updated_user = await crud.user.update(obj_current=user, obj_new=update_obj, db_session=db_session)
+        except ValueError as e:
+            # A password in the payload now goes through the reuse policy (#193).
+            raise HTTPException(status_code=400, detail=str(e))
         updated_users.append(serialize_user(updated_user))
     return create_response(data=updated_users, message="Bulk update successful")
 

@@ -822,36 +822,36 @@ async def change_password(
             user_id=current_user.id,
             details={"email": current_user.email, "ip_address": ip_address},
         )
-        if settings.PREVENT_PASSWORD_REUSE > 0:
-            is_reused = await crud.user.is_password_reused(
+        # The reuse policy, the history append and the password_version bump all
+        # live in update_password. This path used to reimplement them and got the
+        # reuse check wrong -- it compared a freshly salted bcrypt digest against
+        # stored digests, which can never match (#193).
+        try:
+            await crud.user.update_password(
+                user=current_user,
+                new_password=new_password,
                 db_session=db_session,
-                user_id=current_user.id,
-                new_password_hash=PasswordValidator.get_password_hash(new_password),
+                created_by_ip=ip_address,
             )
-            if is_reused:
-                background_tasks.add_task(
-                    log_security_event,
-                    background_tasks=background_tasks,
-                    event_type="password_change_reused_password",
-                    user_id=current_user.id,
-                    details={"email": current_user.email, "ip_address": ip_address},
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="New password cannot be the same as recent previous passwords.",
-                )
-        # Hashed password generation and adding current password to history
-        PasswordValidator.get_password_hash(new_password)
-        if settings.PASSWORD_HISTORY_SIZE > 0 and current_user.password is not None:
-            await crud.user.add_password_to_history(
-                db_session=db_session,  # Ensure db_session is passed if required by the CRUD method
+        except ValueError as e:
+            background_tasks.add_task(
+                log_security_event,
+                background_tasks=background_tasks,
+                event_type="password_change_reused_password",
                 user_id=current_user.id,
-                hashed_password=current_user.password,
+                details={
+                    "email": current_user.email,
+                    "ip_address": ip_address,
+                    "error": str(e),
+                },
             )
-        # Do NOT hash the password here; pass the plain new_password to the CRUD method
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e),
+            )
+        # Clearing the lockout state is this endpoint's own concern, not the
+        # password policy's, so it stays here.
         user_update_data = IUserUpdate(  # type: ignore
-            password=new_password,
-            last_changed_password_date=datetime.now(timezone.utc).replace(tzinfo=None),
             number_of_failed_attempts=0,
             is_locked=False,
             locked_until=None,
