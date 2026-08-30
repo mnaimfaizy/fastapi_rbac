@@ -5,7 +5,10 @@ import {
   isPasswordPolicyCompliant,
   passwordPolicyIssues,
 } from '../../lib/passwordPolicy';
-import { passwordPolicySchema } from '../../lib/passwordPolicySchema';
+import {
+  optionalPasswordPolicySchema,
+  passwordPolicySchema,
+} from '../../lib/passwordPolicySchema';
 
 /**
  * The client policy must agree with the server policy (#194).
@@ -139,5 +142,48 @@ describe('passwordPolicySchema', () => {
     for (const issue of result.error.issues) {
       expect(shown).toContain(issue.message);
     }
+  });
+});
+
+describe('optionalPasswordPolicySchema', () => {
+  /**
+   * The admin user-edit form leaves the password field blank to mean "keep the
+   * current one" (`UserEditForm` deletes an empty password from the payload
+   * before it is sent). Blank must therefore pass, without the policy being
+   * weakened for a password someone actually typed.
+   */
+  it('accepts a blank field, which means "leave the password alone"', () => {
+    expect(optionalPasswordPolicySchema.safeParse('').success).toBe(true);
+    expect(optionalPasswordPolicySchema.safeParse(undefined).success).toBe(
+      true
+    );
+  });
+
+  it('applies the full policy to a password that was typed', () => {
+    expect(optionalPasswordPolicySchema.safeParse('Qa!7bXmKpLwZ').success).toBe(
+      true
+    );
+    expect(optionalPasswordPolicySchema.safeParse('Password1').success).toBe(
+      false
+    );
+  });
+
+  it('rejects the 8-character password the form used to accept', () => {
+    // The rule this form spelled out before #194 was `min(8)`, so a password
+    // of exactly eight characters is the regression worth pinning.
+    expect(optionalPasswordPolicySchema.safeParse('Abcd123!').success).toBe(
+      false
+    );
+  });
+
+  it('reports the same rules as the required schema, not a union error', () => {
+    // Composed with a `''` branch, so a failing value must not collapse into
+    // zod's generic "invalid union" message — the person needs the real rules.
+    const result = optionalPasswordPolicySchema.safeParse('short');
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error.issues.map((issue) => issue.message)).toEqual(
+      passwordPolicyIssues('short')
+    );
   });
 });
