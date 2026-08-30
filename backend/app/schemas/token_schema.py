@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 
 from .user_schema import IUserRead
 
@@ -20,10 +20,6 @@ class TokenRead(BaseModel):
 class RefreshToken(BaseModel):
     # Prefer HttpOnly cookie; body is a documented fallback for non-browser clients.
     refresh_token: str | None = None
-
-
-class PasswordResetRequest(BaseModel):
-    email: EmailStr
 
 
 class PasswordResetConfirm(BaseModel):
