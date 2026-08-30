@@ -106,7 +106,9 @@ async def test_update_user(db: AsyncSession) -> None:  # Added return type
     new_last_name = "UserName"
     user_update = IUserUpdate(
         email=email,  # use existing email
-        password=password,  # use existing password
+        # A password in the payload goes through the reuse policy, which refuses
+        # the one the account already has (#193), so this is a fresh one.
+        password=random_lower_string(),
         first_name=new_first_name,
         last_name=new_last_name,
     )

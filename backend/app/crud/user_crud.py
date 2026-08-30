@@ -20,6 +20,26 @@ from app.models.user_model import User
 from app.schemas.user_schema import IUserCreate, IUserUpdate
 
 
+class PasswordReuseError(ValueError):
+    """The submitted password is one the reuse policy refuses.
+
+    Typed so an endpoint can answer 400 with this message without also
+    forwarding an unrelated ``ValueError`` -- a misuse of the CRUD contract is
+    a server fault, not a password the caller can fix.
+    """
+
+
+def password_reuse_window() -> int:
+    """How many stored passwords the reuse policy refuses.
+
+    ``PASSWORD_HISTORY_SIZE`` is how many old passwords are kept;
+    ``PREVENT_PASSWORD_REUSE`` is how many of them may not be set again. Refusing
+    more than are retained is not possible, so the effective window is the
+    smaller of the two, and setting either to 0 disables the history check.
+    """
+    return min(settings.PASSWORD_HISTORY_SIZE, settings.PREVENT_PASSWORD_REUSE)
+
+
 class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
     async def get_by_email(self, *, email: str, db_session: AsyncSession | None = None) -> User | None:
         """
@@ -206,9 +226,15 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         else:
             update_data = obj_new.model_dump(exclude_unset=True)
         if "password" in update_data and update_data["password"]:
-            hashed_password = PasswordValidator.get_password_hash(update_data["password"])
-            obj_current.password = hashed_password
-            obj_current.last_changed_password_date = datetime.now(timezone.utc).replace(tzinfo=None)
+            # Routed through update_password rather than hashed here, so a
+            # caller cannot set a password without the reuse policy, the history
+            # append and the password_version bump (#193). Raises ValueError on
+            # a refused password.
+            await self.update_password(
+                user=obj_current,
+                new_password=update_data["password"],
+                db_session=db_session,
+            )
             del update_data["password"]
         elif "password" in update_data:
             del update_data["password"]
@@ -361,29 +387,17 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         await db_session.refresh(user, attribute_names=["roles"])
         return user
 
-    async def is_password_reused(
-        self,
-        *,
-        user_id: UUID,
-        new_password_hash: str,
-        db_session: AsyncSession | None = None,
-    ) -> bool:
+    @staticmethod
+    def matches_current_password(*, user: User, new_password: str) -> bool:
+        """Whether ``new_password`` is the password the account already has.
+
+        History rows alone cannot answer this: registration writes none, so a
+        brand new account could "reset" straight back to its sign-up password
+        (#193).
         """
-        Check if a password hash has been reused. Requires db_session to be provided explicitly.
-        """
-        if db_session is None:
-            raise ValueError("db_session must be provided")
-        limit = settings.PREVENT_PASSWORD_REUSE
-        if limit <= 0:
+        if not user.password:
             return False
-        result = await db_session.exec(
-            select(UserPasswordHistory.password_hash)
-            .where(UserPasswordHistory.user_id == user_id)
-            .order_by(desc(UserPasswordHistory.created_at))
-            .limit(limit)
-        )
-        history_hashes = list(result.all())
-        return new_password_hash in history_hashes
+        return PasswordValidator.verify_password(new_password, user.password)
 
     async def is_password_in_history(
         self,
@@ -393,11 +407,16 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         db_session: AsyncSession | None = None,
     ) -> bool:
         """
-        Check if a password is in the user's history. Requires db_session to be provided explicitly.
+        Check if a password is inside the user's reuse window. Requires db_session
+        to be provided explicitly.
+
+        Comparison goes through ``verify_password``. bcrypt salts every hash
+        independently, so hashing the candidate and testing the digest against
+        stored digests can never match -- a check written that way is dead code.
         """
         if db_session is None:
             raise ValueError("db_session must be provided")
-        limit = settings.PASSWORD_HISTORY_SIZE
+        limit = password_reuse_window()
         if limit <= 0:
             return False
         result = await db_session.exec(
@@ -426,29 +445,30 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
     ) -> User:
         """
         Update a user's password. Requires db_session to be provided explicitly.
+
+        This is the single place the reuse policy is applied and the single place
+        the password side effects happen (history append, ``last_changed_password_date``,
+        ``password_version``). Every path that sets a password goes through here so
+        none of them can drift (#193).
         """
         if db_session is None:
             raise ValueError("db_session must be provided")
-        if settings.PASSWORD_HISTORY_SIZE > 0 and await self.is_password_in_history(
+        if self.matches_current_password(user=user, new_password=new_password):
+            raise PasswordReuseError("New password must be different from your current password.")
+        window = password_reuse_window()
+        if window > 0 and await self.is_password_in_history(
             user_id=user.id, new_password=new_password, db_session=db_session
         ):
-            raise ValueError(f"Cannot reuse any of your last {settings.PASSWORD_HISTORY_SIZE} passwords.")
+            raise PasswordReuseError(f"Cannot reuse any of your last {window} passwords.")
         new_password_hash = PasswordValidator.get_password_hash(new_password)
-        if settings.PREVENT_PASSWORD_REUSE > 0 and await self.is_password_reused(
-            user_id=user.id,
-            new_password_hash=new_password_hash,
-            db_session=db_session,
-        ):
-            raise ValueError("This password has been used too recently. Please choose a different one.")
-        if user.password is None:
-            raise ValueError("Current user password is not set. Cannot add to history.")
-        await self.add_password_to_history(
-            user_id=user.id,
-            hashed_password=user.password,
-            created_by_ip=created_by_ip,
-            reset_token_id=reset_token_id,
-            db_session=db_session,
-        )
+        if user.password:
+            await self.add_password_to_history(
+                user_id=user.id,
+                hashed_password=user.password,
+                created_by_ip=created_by_ip,
+                reset_token_id=reset_token_id,
+                db_session=db_session,
+            )
         user.password = new_password_hash
         user.last_changed_password_date = datetime.now(timezone.utc).replace(tzinfo=None)
         user.password_version += 1
