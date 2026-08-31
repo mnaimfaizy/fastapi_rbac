@@ -30,7 +30,7 @@ def verification_html() -> str:
             "email": "qa@example.com",
             "verification_url": VERIFICATION_URL,
             "token": "abc.def.ghi",
-            "valid_hours": 168,
+            "valid_for": "24 hours",
         },
     )
 
@@ -109,6 +109,7 @@ def test_every_template_yields_text_containing_its_links(template: str) -> None:
         "username": "qa@example.com",
         "email": "qa@example.com",
         "valid_hours": 24,
+        "valid_for": "24 hours",
         "token": "tok",
         "verification_url": "https://example.com/verify?token=tok",
         "reset_url": "https://example.com/reset?token=tok",
