@@ -140,8 +140,11 @@ jobs:
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
         with:
-          directory: ./backend/
-          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+          # Explicit path, not a directory search: under fail_ci_if_error
+          # an ambiguous discovery would fail the job.
+          files: ./backend/coverage.xml
+          fail_ci_if_error: true
           verbose: true
 
   integration-test:
