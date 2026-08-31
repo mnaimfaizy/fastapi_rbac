@@ -107,26 +107,73 @@ All backend test running is now managed through a single script: `test_runner.py
 
 > **Note:** All previous test scripts (`run_tests.py`, `run_comprehensive_tests.py`, `test_all_units.py`, `run_final_tests.py`) have been removed. Use only `test_runner.py` for all test operations.
 
-## Running Integration Tests (Docker Compose Only)
+## Running Integration Tests (Docker/Postgres stack only)
 
-> **IMPORTANT:** Integration tests must be run inside Docker Compose for correct environment isolation and service dependencies. Do NOT run integration tests locally. Only unit tests are supported for local runs.
+> **IMPORTANT:** The integration suite drives a live server over HTTP against Postgres.
+> It has **no supported in-process mode**. Run outside the stack, every test in
+> `test/integration/` is skipped at collection with a reason pointing back here — it
+> will not fail and will not error, so **a skipped run is not a passing run**. Only the
+> unit suite is meant to run locally.
 
-### Run all integration tests in Docker Compose
+The run mode is selected by the `USE_HTTP_TEST_CLIENT` / `TEST_API_BASE_URL` contract,
+which the test compose files set on their test-runner service. `integration_stack.py`
+holds the single definition of "inside the stack"; `integration/conftest.py` applies the
+skip, and `fixtures/fixtures_app.py` picks its HTTP client from the same predicate.
+
+### One-time setup
+
+`.env.test` is git-ignored. Create it from the tracked template, whose values are
+throwaways for the disposable test containers:
 
 ```bash
-docker-compose -f docker-compose.test.yml up --build --abort-on-container-exit
+cd backend && cp .env.test.example .env.test
 ```
 
-- This will run the integration test suite in the correct environment with all dependencies (Postgres, Redis, etc.) available.
-
-### Run a specific integration test file
+### Run the whole suite
 
 ```bash
-# Use the path relative to /app inside the container
-# Example: test/integration/test_api_auth_comprehensive.py
-
-docker-compose -f docker-compose.test.yml run --rm test_runner python backend/run_tests.py --env docker --test-path test/integration/test_api_auth_comprehensive.py
+cd backend && docker compose -f docker-compose.test.minimal.yml down -v && docker compose -f docker-compose.test.minimal.yml up --build --exit-code-from fastapi_rbac_test_runner fastapi_rbac_test_runner
 ```
+
+The leading `down -v` is not optional. `up` reuses an exited runner container from
+a previous run and reports its stale exit code without running anything, and the
+suite assumes an empty database — rows left behind by an earlier run push a later
+one's own rows off the first page of paginated list endpoints. `-v` only removes
+the volumes this compose file declares, not the dev stack's.
+
+`--exit-code-from` makes the command exit with pytest's status, which is what the
+`integration-test` job in `.github/workflows/backend-ci.yml` relies on to fail CI.
+
+### Run a single file or test
+
+`TEST_PATH` defaults to `test/integration`. Override it to narrow the run — set it in
+the environment first, since `docker compose` reads it from there:
+
+```bash
+cd backend && docker compose -f docker-compose.test.minimal.yml down -v && TEST_PATH=test/integration/test_api_auth_comprehensive.py docker compose -f docker-compose.test.minimal.yml up --build --exit-code-from fastapi_rbac_test_runner fastapi_rbac_test_runner
+```
+
+On PowerShell, set `$env:TEST_PATH` on its own line before the `docker compose` call.
+
+### Tear the stack down
+
+```bash
+cd backend && docker compose -f docker-compose.test.minimal.yml down
+```
+
+> Every compose file in `backend/` shares the Compose project name `backend`, so
+> `--remove-orphans` on one of them removes the *other* stacks' containers — running
+> it against the test stack will stop your dev stack. Omit the flag unless that is
+> what you want.
+
+`docker-compose.test.yml` runs the same suite with the full set of services (Celery
+worker and beat, Flower, pgAdmin) when you need them.
+
+### Known-broken tests
+
+`integration/conftest.py` carries a `QUARANTINE` set of tests marked `xfail` because they
+assert on in-process state the server under test never writes to. They are tracked in #214;
+run with `--runxfail` to see them fail for real.
 
 ### Run unit tests locally
 
