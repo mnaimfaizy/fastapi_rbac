@@ -212,11 +212,18 @@ services:
       - REDIS_PORT=6379
       - CELERY_BROKER_URL=redis://fastapi_rbac_redis_test:6379/0
       - CELERY_RESULT_BACKEND=redis://fastapi_rbac_redis_test:6379/0
-      - TEST_PATH=${TEST_PATH}
+      - TEST_PATH=${TEST_PATH:-test/integration}
+      # Run-mode contract for the integration suite: drive the live server over
+      # HTTP against Postgres. Without it the suite skips (see
+      # test/integration_stack.py).
+      - USE_HTTP_TEST_CLIENT=1
+      - TEST_API_BASE_URL=http://fastapi_rbac_test:8000
     volumes:
       - ${BACKEND_SRC:-.}:/app
       - ./logs:/app/logs
     depends_on:
+      fastapi_rbac_test:
+        condition: service_healthy
       fastapi_rbac_db_test:
         condition: service_healthy
       fastapi_rbac_redis_test:

@@ -115,6 +115,10 @@ if [ -n "$TEST_PATH" ]; then
     echo "Running targeted tests: pytest $TEST_PATH $PYTEST_ARGS"
     pytest $TEST_PATH $PYTEST_ARGS
   fi
+  # Capture pytest's status now. Everything below is diagnostics and chmod, and
+  # each one overwrites $? -- exiting on it after the fact reported success for
+  # a failing suite, which let the runner container exit 0 with tests red.
+  PYTEST_STATUS=$?
   # Diagnostics: List coverage files and htmlcov directory
   echo "\n=== Coverage Diagnostics ==="
   ls -l /app/.coverage || echo ".coverage file not found"
@@ -141,7 +145,8 @@ if [ -n "$TEST_PATH" ]; then
     echo "htmlcov directory not found for chmod"
   fi
   echo "Permission fix complete."
-  exit $?
+  echo "pytest exit status: $PYTEST_STATUS"
+  exit "$PYTEST_STATUS"
 fi
 
 # Default: Start the FastAPI application in testing mode
