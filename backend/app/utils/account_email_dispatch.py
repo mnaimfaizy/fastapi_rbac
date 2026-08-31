@@ -133,7 +133,7 @@ async def consume_account_email_budget(
     await redis_client.expire(key, settings.ACCOUNT_EMAIL_RATE_LIMIT_PERIOD_SECONDS)
 
 
-async def _issue_verification(
+async def issue_verification(
     *,
     user: User,
     redis_client: Redis,
@@ -141,6 +141,11 @@ async def _issue_verification(
     token: Optional[str] = None,
 ) -> str:
     """Store a verification token in Redis and send the verification mail.
+
+    Public because every path that mails a verification link must come through
+    here. Admin user creation minted its own token and mailed it without the
+    Redis write, so the link failed on first click -- the three parts of an
+    issued verification are inseparable, and this is where they are issued.
 
     Reissuing replaces the previous token, so an older link stops working and
     lands on the verify-email page, which already offers resend.
@@ -262,7 +267,7 @@ async def dispatch_account_email(
             db_session=db_session,
             verification_code=token,
         )
-        await _issue_verification(
+        await issue_verification(
             user=new_user,
             redis_client=redis_client,
             background_tasks=background_tasks,
@@ -284,7 +289,7 @@ async def dispatch_account_email(
         # would let an attacker re-register against a victim's unverified
         # address and have the victim activate an attacker-controlled account
         # by clicking the link in their own inbox.
-        token = await _issue_verification(
+        token = await issue_verification(
             user=user,
             redis_client=redis_client,
             background_tasks=background_tasks,
