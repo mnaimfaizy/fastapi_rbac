@@ -25,7 +25,7 @@ from fastapi import BackgroundTasks
 from app.core import security
 from app.core.config import settings
 from app.models.user_model import User
-from app.utils.account_email_dispatch import _issue_verification
+from app.utils.account_email_dispatch import issue_verification
 from app.utils.email.email import html_to_plain_text, render_template
 
 # Values a deployment might plausibly choose, including ones that are not a whole
@@ -58,13 +58,13 @@ def stated_lifetime(email_body: str) -> timedelta:
     return int(match.group(1)) * UNITS[match.group(2)]
 
 
-async def issue_verification(redis: MockRedisClient, minutes: int) -> Issued:
+async def issue_and_observe(redis: MockRedisClient, minutes: int) -> Issued:
     """Run the real dispatch path and collect everything it committed to."""
     settings.VERIFICATION_TOKEN_EXPIRE_MINUTES = minutes
     tasks = BackgroundTasks()
     user = User(id=uuid4(), email="pending@example.com", first_name="Pending", last_name="User")
 
-    await _issue_verification(user=user, redis_client=redis, background_tasks=tasks)
+    await issue_verification(user=user, redis_client=redis, background_tasks=tasks)
 
     _key, ttl_seconds, token = redis.setex.await_args.args
     context: Dict[str, Any] = tasks.tasks[0].kwargs["context"]
@@ -77,7 +77,7 @@ async def issue_verification(redis: MockRedisClient, minutes: int) -> Issued:
 
 @pytest.fixture(autouse=True)
 def restore_configured_lifetime() -> Iterator[None]:
-    """``issue_verification`` rewrites the lifetime; none of it may leak out of a test."""
+    """``issue_and_observe`` rewrites the lifetime; none of it may leak out of a test."""
     original = settings.VERIFICATION_TOKEN_EXPIRE_MINUTES
     yield
     settings.VERIFICATION_TOKEN_EXPIRE_MINUTES = original
@@ -87,7 +87,7 @@ def restore_configured_lifetime() -> Iterator[None]:
 @pytest.mark.parametrize("minutes", LIFETIME_MINUTES)
 async def test_email_promises_exactly_the_redis_ttl(redis_mock: MockRedisClient, minutes: int) -> None:
     """The stated validity equals the TTL on the key ``/verify-email`` checks."""
-    issued = await issue_verification(redis_mock, minutes)
+    issued = await issue_and_observe(redis_mock, minutes)
 
     assert stated_lifetime(issued.email_body) == timedelta(seconds=issued.ttl_seconds)
 
@@ -96,7 +96,7 @@ async def test_email_promises_exactly_the_redis_ttl(redis_mock: MockRedisClient,
 @pytest.mark.parametrize("minutes", LIFETIME_MINUTES)
 async def test_jwt_expiry_matches_the_redis_ttl(redis_mock: MockRedisClient, minutes: int) -> None:
     """The signed token dies with its Redis entry, so neither can outlive the promise."""
-    issued = await issue_verification(redis_mock, minutes)
+    issued = await issue_and_observe(redis_mock, minutes)
 
     payload = security.decode_token(issued.token, token_type="verification")
     assert payload["exp"] - payload["iat"] == issued.ttl_seconds
