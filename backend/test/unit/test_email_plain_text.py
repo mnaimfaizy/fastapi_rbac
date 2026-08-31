@@ -108,7 +108,6 @@ def test_every_template_yields_text_containing_its_links(template: str) -> None:
         "project_name": "FastAPI RBAC",
         "username": "qa@example.com",
         "email": "qa@example.com",
-        "valid_hours": 24,
         "valid_for": "24 hours",
         "token": "tok",
         "verification_url": "https://example.com/verify?token=tok",
