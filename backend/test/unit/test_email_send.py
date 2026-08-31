@@ -424,7 +424,7 @@ def test_a_refused_connection_is_logged_not_raised(
                 "project_name": "FastAPI RBAC",
                 "username": "recipient@example.com",
                 "verification_url": VERIFY_LINK,
-                "valid_hours": 24,
+                "valid_for": "24 hours",
             },
             "verification_url",
         ),

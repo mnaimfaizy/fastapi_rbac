@@ -20,6 +20,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app import crud
 from app.core.config import settings
 from app.models.user_model import User
+from app.utils.duration import humanize_minutes
 from app.utils.email import send_email_with_template
 
 # Import Celery tasks if available
@@ -107,7 +108,7 @@ async def send_verification_email(
         "email": user_email,
         "verification_url": verification_link,
         "token": verification_token,
-        "valid_hours": settings.EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES // 60,
+        "valid_for": humanize_minutes(settings.VERIFICATION_TOKEN_EXPIRE_MINUTES),
     }
 
     # Use Celery for email sending if available and in production, otherwise use BackgroundTasks
