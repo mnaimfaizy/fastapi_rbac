@@ -1,0 +1,21 @@
+# Codecov configuration.
+#
+# Both statuses are informational on purpose. Backend coverage is measured from
+# unit tests only (backend-ci.yml runs `pytest test/unit/ --cov=app`); the
+# integration suite runs in its own Docker job and contributes no coverage data.
+# The reported percentage is therefore a floor, not a measurement, and must not
+# gate merges until integration coverage is collected too. See issue #168.
+
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
+
+comment:
+  layout: "reach, diff, flags, files"
+  behavior: default
+  require_changes: true
