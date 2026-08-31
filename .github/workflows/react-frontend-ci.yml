@@ -95,8 +95,21 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
-      - name: Run unit tests
-        run: npm run test:run
+      - name: Run unit tests with coverage
+        run: npm run test:coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          # Explicit path, not a directory search: under fail_ci_if_error
+          # an ambiguous discovery would fail the job.
+          files: ./react-frontend/coverage/lcov.info
+          # Flagged so frontend and backend stay separate numbers. A single
+          # percentage blended across TypeScript and Python means nothing.
+          flags: frontend
+          fail_ci_if_error: true
+          verbose: true
 
   # Playwright E2E requires a live FastAPI backend (Postgres, Redis, seeded admin,
   # CSRF-aware login). Image tags are aligned with compose/CI services (#37), but this

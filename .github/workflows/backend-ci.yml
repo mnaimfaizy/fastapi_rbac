@@ -144,6 +144,9 @@ jobs:
           # Explicit path, not a directory search: under fail_ci_if_error
           # an ambiguous discovery would fail the job.
           files: ./backend/coverage.xml
+          # Flagged so frontend and backend stay separate numbers. A single
+          # percentage blended across TypeScript and Python means nothing.
+          flags: backend
           fail_ci_if_error: true
           verbose: true
 
