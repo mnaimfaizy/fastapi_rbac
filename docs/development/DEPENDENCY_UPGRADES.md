@@ -36,6 +36,22 @@ A follow-up may align Poetry with `requirements.txt`; until then, always pin and
 | 6 | Frontend majors / framework | React, Vite, Tailwind, react-router majors | Spike branch + changelog review before bulk bump |
 | 7 | Base images / Docker | Python/Node/Postgres/Redis image tags | Compose bring-up smoke; align CI service images with compose when changing |
 
+## Testing against an unpinned set
+
+Backend test sessions abort when the local virtualenv does not match the `==` pins in
+`backend/requirements.txt`; a drifted venv makes environment artifacts look like
+application defects (see [#200](https://github.com/mnaimfaizy/fastapi_rbac/issues/200)
+and [Testing → Dependency drift guard](TESTING.md#dependency-drift-guard)).
+
+While trialling an upgrade before you edit `requirements.txt`, opt out for that session:
+
+```bash
+SKIP_DEPENDENCY_DRIFT_CHECK=1 python -m pytest test/
+```
+
+Once the lane's bump is written into `requirements.txt`, drop the variable — the guard
+should be green again, and it is a cheap confirmation that the venv matches the PR.
+
 ## Hard stops
 
 Upgrade carefully (changelog review; prefer split PRs if needed):
