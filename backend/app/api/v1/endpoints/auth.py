@@ -45,14 +45,19 @@ from app.utils.account_token_responses import (
 )
 from app.utils.auth_cookies import clear_refresh_token_cookie, set_refresh_token_cookie
 from app.utils.background_tasks import (
-    cleanup_expired_tokens,
     log_security_event,
     process_account_lockout,
     send_password_reset_email,
 )
 from app.utils.password_policy import enforce_password_complexity
 from app.utils.response_timing import response_time_floor
-from app.utils.token import add_token_to_redis, get_valid_tokens, token_is_allowlisted
+from app.utils.token import (
+    add_token_to_redis,
+    get_valid_tokens,
+    revoke_all_user_tokens,
+    revoke_user_tokens,
+    token_is_allowlisted,
+)
 from app.utils.user_utils import serialize_user
 
 logger = logging.getLogger("fastapi_rbac")
@@ -892,20 +897,12 @@ async def change_password(
             refresh_token=None,  # HttpOnly cookie; not exposed to JS
             user=user_read_for_token,  # Pass the IUserRead instance
         )
-        # Clean up old tokens and add new ones to Redis
-        # (Ensuring current_user is the updated User model instance for add_token_to_redis)
-        await cleanup_expired_tokens(
-            background_tasks=background_tasks,
-            redis_client=redis_client,
-            user_id=current_user.id,
-            token_type=TokenType.ACCESS,
-        )
-        await cleanup_expired_tokens(
-            background_tasks=background_tasks,
-            redis_client=redis_client,
-            user_id=current_user.id,
-            token_type=TokenType.REFRESH,
-        )
+        # Revoke everything first, then allowlist the new tokens. The order is
+        # the fix for #206: revocation used to be queued and ran after the
+        # response, deleting the very tokens this response hands back. Any
+        # pending reset link goes too -- knowing the current password
+        # supersedes it.
+        await revoke_all_user_tokens(redis_client, current_user.id)
         await add_token_to_redis(
             redis_client,
             current_user,  # Pass the User model instance
@@ -1324,15 +1321,13 @@ async def logout(
     """
     ip_address = request.client.host if request.client else "Unknown"
     try:
-        # Invalidate tokens as background tasks instead of waiting for completion
-        await cleanup_expired_tokens(
-            background_tasks=background_tasks,
+        # Revoke every token for this user before the response is written.
+        await revoke_user_tokens(
             redis_client=redis_client,
             user_id=current_user.id,
             token_type=TokenType.ACCESS,
         )
-        await cleanup_expired_tokens(
-            background_tasks=background_tasks,
+        await revoke_user_tokens(
             redis_client=redis_client,
             user_id=current_user.id,
             token_type=TokenType.REFRESH,
@@ -1585,26 +1580,9 @@ async def confirm_password_reset(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Unable to set new password. Please ensure it meets all security requirements.",
                 )
-            # Clean up tokens in Redis as background tasks
-            await cleanup_expired_tokens(
-                background_tasks=background_tasks,
-                redis_client=redis_client,
-                user_id=user.id,
-                token_type=TokenType.RESET,
-            )
-            # Invalidate all existing tokens for security
-            await cleanup_expired_tokens(
-                background_tasks=background_tasks,
-                redis_client=redis_client,
-                user_id=user.id,
-                token_type=TokenType.ACCESS,
-            )
-            await cleanup_expired_tokens(
-                background_tasks=background_tasks,
-                redis_client=redis_client,
-                user_id=user.id,
-                token_type=TokenType.REFRESH,
-            )
+            # Revoke the reset link so it cannot be replayed, and every
+            # session with it: the password just changed hands.
+            await revoke_all_user_tokens(redis_client, user.id)
             # Log successful password reset as a background task
             background_tasks.add_task(
                 log_security_event,
@@ -1757,26 +1735,9 @@ async def reset_password(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Unable to set new password. Please ensure it meets all security requirements.",
                 )
-            # Clean up tokens in Redis as background tasks
-            await cleanup_expired_tokens(
-                background_tasks=background_tasks,
-                redis_client=redis_client,
-                user_id=user.id,
-                token_type=TokenType.RESET,
-            )
-            # Invalidate all existing tokens for security
-            await cleanup_expired_tokens(
-                background_tasks=background_tasks,
-                redis_client=redis_client,
-                user_id=user.id,
-                token_type=TokenType.ACCESS,
-            )
-            await cleanup_expired_tokens(
-                background_tasks=background_tasks,
-                redis_client=redis_client,
-                user_id=user.id,
-                token_type=TokenType.REFRESH,
-            )
+            # Revoke the reset link so it cannot be replayed, and every
+            # session with it: the password just changed hands.
+            await revoke_all_user_tokens(redis_client, user.id)
             # Log successful password reset as a background task
             background_tasks.add_task(
                 log_security_event,

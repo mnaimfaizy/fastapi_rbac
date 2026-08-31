@@ -2,7 +2,8 @@
 
 Seams under test:
 - token_is_allowlisted (membership / empty-set reject)
-- add_token_to_redis / get_valid_tokens / delete_tokens (allowlist write & clear)
+- add_token_to_redis / get_valid_tokens / revoke_user_tokens (allowlist write & clear)
+- revoke_all_user_tokens (clears every type the allowlist holds)
 """
 
 from test.fixtures.mock_redis_client import MockRedisClient
@@ -13,9 +14,11 @@ import pytest
 
 from app.schemas.common_schema import TokenType
 from app.utils.token import (
+    ALLOWLIST_TOKEN_TYPES,
     add_token_to_redis,
-    delete_tokens,
     get_valid_tokens,
+    revoke_all_user_tokens,
+    revoke_user_tokens,
     token_is_allowlisted,
 )
 
@@ -61,7 +64,7 @@ async def test_add_token_to_redis_writes_on_first_login() -> None:
 
 
 @pytest.mark.asyncio
-async def test_delete_tokens_clears_allowlist_so_membership_fails() -> None:
+async def test_revoke_user_tokens_clears_allowlist_so_membership_fails() -> None:
     redis = MockRedisClient()
     user = MagicMock()
     user.id = uuid4()
@@ -83,8 +86,8 @@ async def test_delete_tokens_clears_allowlist_so_membership_fails() -> None:
         expire_time=60,
     )
 
-    await delete_tokens(redis, user, TokenType.ACCESS)  # type: ignore[arg-type]
-    await delete_tokens(redis, user, TokenType.REFRESH)  # type: ignore[arg-type]
+    await revoke_user_tokens(redis, user.id, TokenType.ACCESS)  # type: ignore[arg-type]
+    await revoke_user_tokens(redis, user.id, TokenType.REFRESH)  # type: ignore[arg-type]
 
     access_members = await get_valid_tokens(redis, user.id, TokenType.ACCESS)  # type: ignore[arg-type]
     refresh_members = await get_valid_tokens(redis, user.id, TokenType.REFRESH)  # type: ignore[arg-type]
@@ -93,14 +96,26 @@ async def test_delete_tokens_clears_allowlist_so_membership_fails() -> None:
 
 
 @pytest.mark.asyncio
-async def test_cleanup_tokens_task_deletes_allowlist_key() -> None:
-    from app.utils.background_tasks import _cleanup_tokens_task
+async def test_revoke_all_user_tokens_leaves_no_type_behind() -> None:
+    """A type added to the allowlist later must not survive a full revocation.
 
+    This drives every type through the same write path the endpoints use, so a
+    new `TokenType` that starts being allowlisted without being added to
+    `ALLOWLIST_TOKEN_TYPES` fails here rather than in production (#206).
+    """
     redis = MockRedisClient()
-    user_id = uuid4()
-    key = f"user:{user_id}:{TokenType.ACCESS}"
-    await redis.sadd(key, "stale.token")
+    user = MagicMock()
+    user.id = uuid4()
+    for token_type in ALLOWLIST_TOKEN_TYPES:
+        await add_token_to_redis(
+            redis,  # type: ignore[arg-type]
+            user,
+            f"{token_type}.jwt",
+            token_type,
+            expire_time=15,
+        )
 
-    await _cleanup_tokens_task(redis, user_id, TokenType.ACCESS)  # type: ignore[arg-type]
+    await revoke_all_user_tokens(redis, user.id)  # type: ignore[arg-type]
 
-    assert await redis.smembers(key) == set()
+    for token_type in ALLOWLIST_TOKEN_TYPES:
+        assert await get_valid_tokens(redis, user.id, token_type) == set()  # type: ignore[arg-type]

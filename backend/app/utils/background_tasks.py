@@ -3,7 +3,6 @@ Background tasks module for FastAPI RBAC system.
 
 This module provides utility functions for common background tasks such as:
 - Sending email notifications
-- Cleaning up expired tokens
 - Logging security audit events
 - Managing user account states
 
@@ -16,19 +15,16 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import BackgroundTasks
-from redis.asyncio import Redis
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app import crud
 from app.core.config import settings
 from app.models.user_model import User
-from app.schemas.common_schema import TokenType
 from app.utils.email import send_email_with_template
 
 # Import Celery tasks if available
 try:
     from app.worker import (
-        cleanup_tokens_task,
         log_security_event_task,
         process_account_lockout_task,
         send_email_task,
@@ -38,7 +34,6 @@ try:
 except ImportError:
     CELERY_AVAILABLE = False
     send_email_task = None
-    cleanup_tokens_task = None
     log_security_event_task = None
     process_account_lockout_task = None
 
@@ -175,43 +170,6 @@ async def send_registration_notice_email(
             template_name="registration-notice.html",
             context=template_context,
         )
-
-
-async def cleanup_expired_tokens(
-    background_tasks: BackgroundTasks,
-    redis_client: Redis,
-    user_id: UUID,
-    token_type: TokenType,
-) -> None:
-    """
-    Add token cleanup task to background tasks.
-
-    Args:
-        background_tasks: BackgroundTasks instance
-        redis_client: Redis client instance
-        user_id: User ID to clean tokens for
-        token_type: Type of token to clean
-    """
-    # Use Celery for token cleanup if
-    # available and in production, otherwise use BackgroundTasks
-    if CELERY_AVAILABLE and settings.MODE == "production":
-        # Send via Celery task
-        cleanup_tokens_task.delay(str(user_id), token_type.value)
-    else:
-        # Use FastAPI background tasks
-        background_tasks.add_task(_cleanup_tokens_task, redis_client, user_id, token_type)
-
-
-async def _cleanup_tokens_task(redis_client: Redis, user_id: UUID, token_type: TokenType) -> None:
-    """
-    Clean up tokens for a user.
-
-    Must use the same Redis key as ``app.utils.token`` allowlist helpers:
-    ``user:{user_id}:{token_type}`` (a SET). The previous ``…:*`` pattern
-    did not match that key and left sessions valid after logout.
-    """
-    token_key = f"user:{user_id}:{token_type}"
-    await redis_client.delete(token_key)
 
 
 async def log_security_event(

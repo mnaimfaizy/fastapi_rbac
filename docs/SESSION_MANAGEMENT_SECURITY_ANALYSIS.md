@@ -158,7 +158,8 @@ The project implements a dual-token JWT authentication system:
 Canonical JWT create/decode lives in `app/core/security.py` (**PyJWT only**).
 Session tracking uses a Redis **allowlist** in `app/utils/token.py`
 (`user:{user_id}:{token_type}` sets via `add_token_to_redis` / `get_valid_tokens` /
-`delete_tokens`). Logout clears those keys via background/Celery cleanup.
+`revoke_user_tokens`). Logout and change-password clear those keys inline, before
+the response is written (#206).
 
 > **Note:** An unused `TokenManager` (jti blacklist, IP/UA binding, concurrent-session
 > checks, `password_version` claim) was removed in the PyJWT consolidation. Several

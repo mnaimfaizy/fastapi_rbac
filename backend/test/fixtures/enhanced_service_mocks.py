@@ -60,18 +60,17 @@ async def background_tasks_mock() -> AsyncGenerator[dict[str, AsyncMock], None]:
     with patch("app.utils.background_tasks.send_verification_email") as mock_verify:
         with patch("app.utils.background_tasks.send_password_reset_email") as mock_reset:
             with patch("app.utils.background_tasks.log_security_event") as mock_log:
-                with patch("app.utils.background_tasks.cleanup_expired_tokens") as mock_cleanup:
-                    mock_verify.return_value = True
-                    mock_reset.return_value = True
-                    mock_log.return_value = True
-                    mock_cleanup.return_value = True
+                mock_verify.return_value = True
+                mock_reset.return_value = True
+                mock_log.return_value = True
 
-                    yield {
-                        "send_verification_email": mock_verify,
-                        "send_password_reset_email": mock_reset,
-                        "log_security_event": mock_log,
-                        "cleanup_expired_tokens": mock_cleanup,
-                    }
+                # Token revocation is deliberately absent: it is awaited inline
+                # against Redis (#206), not queued here.
+                yield {
+                    "send_verification_email": mock_verify,
+                    "send_password_reset_email": mock_reset,
+                    "log_security_event": mock_log,
+                }
 
 
 @pytest.fixture

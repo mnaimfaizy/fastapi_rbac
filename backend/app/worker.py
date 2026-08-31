@@ -28,30 +28,6 @@ def send_email_task(
 
 
 @celery_app.task
-def cleanup_tokens_task(user_id: str, token_type: str) -> None:
-    """Celery task for cleaning up expired tokens"""
-    import asyncio
-    from uuid import UUID
-
-    from app.schemas.common_schema import TokenType
-
-    async def async_cleanup_tokens(user_id_str: str, token_type_str: str) -> None:
-        from app.db.session import get_redis_client
-
-        async for redis_client in get_redis_client():
-            user_id = UUID(user_id_str)
-            token_type_enum = TokenType(token_type_str)
-
-            # Same key as app.utils.token allowlist (SET), not a …:* pattern
-            token_key = f"user:{user_id}:{token_type_enum}"
-            await redis_client.delete(token_key)
-            # Redis client is closed automatically after exiting the async for loop
-            break  # Exit after first iteration
-
-    asyncio.run(async_cleanup_tokens(user_id, token_type))
-
-
-@celery_app.task
 def log_security_event_task(
     event_type: str, user_id: str | None = None, details: dict[Any, Any] | None = None
 ) -> None:
