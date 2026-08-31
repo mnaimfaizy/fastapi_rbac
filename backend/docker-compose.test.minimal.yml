@@ -65,7 +65,7 @@ services:
       - REDIS_PORT=6379
       - CELERY_BROKER_URL=redis://fastapi_rbac_redis_test:6379/0
       - CELERY_RESULT_BACKEND=redis://fastapi_rbac_redis_test:6379/0
-      - TEST_PATH=${TEST_PATH}
+      - TEST_PATH=${TEST_PATH:-test/integration}
       - COVERAGE=${COVERAGE}
       - VERBOSE=${VERBOSE}
       - PARALLEL=${PARALLEL}

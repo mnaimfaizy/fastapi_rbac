@@ -4,6 +4,7 @@ FastAPI app test fixtures.
 
 import os
 from test.fixtures.mock_redis_client import MockRedisClient
+from test.integration_stack import stack_is_active
 from typing import Any, AsyncGenerator, Callable
 
 import pytest_asyncio
@@ -13,6 +14,9 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.api.deps import get_db, get_redis_client
 from app.main import fastapi_app as main_app
+
+#: Per-request timeout for the HTTP client used against the Docker test stack.
+STACK_HTTP_TIMEOUT_SECONDS = 60.0
 
 
 @pytest_asyncio.fixture(scope="function")
@@ -54,10 +58,12 @@ async def client(app: FastAPI) -> AsyncGenerator[AsyncClient, None]:
     app.dependency_overrides[get_current_user] = mock_get_current_user
 
     # Use real HTTP client if running in Docker Compose integration mode
-    use_http = os.getenv("USE_HTTP_TEST_CLIENT", "0") == "1" or os.getenv("TEST_API_BASE_URL")
-    if use_http:
+    if stack_is_active():
         base_url = os.getenv("TEST_API_BASE_URL", "http://fastapi_rbac_test:8000")
-        async with AsyncClient(base_url=base_url) as test_client:
+        # httpx defaults to 5s, which a cold or reloading server plus a bcrypt
+        # login round-trip can exceed. A timeout there surfaces as a spurious
+        # ReadTimeout in an unrelated test, so give the stack real headroom.
+        async with AsyncClient(base_url=base_url, timeout=STACK_HTTP_TIMEOUT_SECONDS) as test_client:
             yield test_client
     else:
         # Use in-process ASGI client for local test runs
