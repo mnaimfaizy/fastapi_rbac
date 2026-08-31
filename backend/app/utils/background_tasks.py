@@ -60,7 +60,7 @@ async def send_password_reset_email(
         "email": user_email,
         "reset_password_url": reset_link,
         "token": reset_token,
-        "valid_hours": settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES // 60,
+        "valid_for": humanize_minutes(settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES),
     }
 
     # Use Celery for email sending if
