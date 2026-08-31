@@ -120,6 +120,40 @@ python -m pytest test/ -q
 - Dependencies installed (`pip install -r requirements.txt`)
 - Environment variables configured (test mode automatically set)
 
+### Dependency drift guard
+
+Every backend test session starts by comparing the installed packages against the
+`==` pins in [`backend/requirements.txt`](../../backend/requirements.txt). If the
+virtualenv has drifted, the session **aborts before any test runs** and prints the
+drift count, the worst offenders (pinned vs installed), and the command that fixes it.
+
+This exists because a stale venv produces failures that are indistinguishable from
+real application defects. [#190](https://github.com/mnaimfaizy/fastapi_rbac/issues/190)
+was filed against a 64-package-stale venv and diagnosed as a production bug that did
+not exist; the "fix" it asked for would have broken healthy pagination code.
+[#200](https://github.com/mnaimfaizy/fastapi_rbac/issues/200) added this guard in
+response.
+
+Fix drift from the `backend/` directory:
+
+```bash
+pip install -r requirements.txt
+```
+
+To run deliberately off-pin — for example while testing an upgrade — set the escape
+hatch:
+
+```bash
+SKIP_DEPENDENCY_DRIFT_CHECK=1 python -m pytest test/
+```
+
+```powershell
+$env:SKIP_DEPENDENCY_DRIFT_CHECK="1"; python -m pytest test/
+```
+
+Only pinned packages at the wrong version count. Extra packages in the venv that are
+absent from `requirements.txt` are not drift and never trigger the guard.
+
 ### Database
 
 - Uses SQLite in-memory database for testing
@@ -321,6 +355,18 @@ export MODE=testing
 # or in PowerShell
 $env:MODE="testing"
 ```
+
+#### "Backend virtualenv has drifted from requirements.txt"
+
+The session aborted before running because installed packages do not match the pins.
+Rebuild from `backend/`:
+
+```bash
+pip install -r requirements.txt
+```
+
+If you are deliberately off-pin, set `SKIP_DEPENDENCY_DRIFT_CHECK=1` for that session.
+See [Dependency drift guard](#dependency-drift-guard).
 
 #### Import Errors
 
