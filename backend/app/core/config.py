@@ -88,8 +88,10 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 100  # 100 days
     REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7)
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = Field(default=30)
-    # Single source of truth for how long a verification link works: Redis TTL,
-    # JWT exp, and the duration stated in the email all read this (#182).
+    # Single source of truth for how long a verification link works: the Redis
+    # TTL that /verify-email enforces, the JWT exp, and the duration stated in
+    # the email all read this. A second setting drove the last two and silently
+    # over-promised by 7x (#182).
     VERIFICATION_TOKEN_EXPIRE_MINUTES: int = Field(default=1440)  # 24 hours
     UNVERIFIED_ACCOUNT_CLEANUP_HOURS: int = Field(default=72)  # 3 days
     MAX_LOGIN_ATTEMPTS: int = Field(default=5)
@@ -148,10 +150,7 @@ class Settings(BaseSettings):
     USERS_OPEN_REGISTRATION: bool = False
 
     # Email Verification Settings
-    # The verification link's lifetime lives in VERIFICATION_TOKEN_EXPIRE_MINUTES
-    # above and nowhere else: it sets the Redis TTL that /verify-email enforces,
-    # the JWT exp, and the validity the email states. A second setting used to
-    # drive the last two and silently over-promised by 7x (#182).
+    # The link's lifetime is VERIFICATION_TOKEN_EXPIRE_MINUTES above, not here.
     # Derived from FRONTEND_URL; see derive_frontend_urls.
     EMAIL_VERIFICATION_URL: str = ""
 
