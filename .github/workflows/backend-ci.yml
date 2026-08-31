@@ -134,18 +134,8 @@ jobs:
           cd backend
           pytest test/unit/ --cov=app --cov-report=xml
 
-      # - name: Test with pytest and coverage (integration tests)
-      #   run: |
-      #     # To run integration tests, use Docker Compose to start all required services
-      #     # and then run the integration test suite. Example:
-      #     docker-compose -f backend/docker-compose.test.minimal.yml up -d
-      #     cd backend
-      #     # Uncomment the following line to run integration tests in CI
-      #     # pytest test/integration/ --cov=app --cov-report=xml
-      #     # Optionally, bring down the services after tests:
-      #     # cd .. && docker-compose -f backend/docker-compose.test.minimal.yml down
-      #   # Note: Integration tests require Docker Compose and full service dependencies.
-      #   # See backend/test/README.md for details.
+      # Integration tests need Postgres, Redis and a live server, so they run in
+      # the Docker test stack in the separate integration-test job below.
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
@@ -153,3 +143,41 @@ jobs:
           directory: ./backend/
           fail_ci_if_error: false
           verbose: true
+
+  integration-test:
+    name: Backend Integration Test
+    runs-on: ubuntu-latest
+    # The suite takes ~9 minutes against the stack, plus the image build.
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Provision the test environment file
+        run: |
+          cd backend
+          # .env.test is git-ignored; the tracked template holds throwaway values.
+          cp .env.test.example .env.test
+
+      - name: Run integration tests in the Docker test stack
+        run: |
+          cd backend
+          # --exit-code-from makes this step, and so the job, fail when pytest
+          # fails inside the runner container. It also implies
+          # --abort-on-container-exit, so the stack stops with the suite.
+          # Local runs need a `down` first, because `up` reuses an exited runner
+          # container and reports its stale exit code; here the runner is always
+          # fresh.
+          docker compose -f docker-compose.test.minimal.yml up --build --exit-code-from fastapi_rbac_test_runner fastapi_rbac_test_runner
+
+      - name: Dump stack logs on failure
+        if: failure()
+        run: |
+          cd backend
+          docker compose -f docker-compose.test.minimal.yml logs --no-color --tail=200
+
+      - name: Tear down the test stack
+        if: always()
+        run: |
+          cd backend
+          docker compose -f docker-compose.test.minimal.yml down --volumes
