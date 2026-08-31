@@ -5,10 +5,12 @@ from uuid import UUID
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 from fastapi_pagination import Params
+from redis.asyncio import Redis as AsyncRedis
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app import crud
 from app.api import deps
+from app.api.deps import get_redis_client
 from app.core.config import settings
 from app.crud.user_crud import PasswordReuseError
 from app.deps import user_deps
@@ -21,7 +23,7 @@ from app.schemas.response_schema import (
     create_response,
 )
 from app.schemas.user_schema import IUserCreate, IUserRead, IUserRoleAssign, IUserUpdate
-from app.utils.background_tasks import send_verification_email
+from app.utils.account_email_dispatch import issue_verification
 from app.utils.exceptions.user_exceptions import UserSelfDeleteException
 from app.utils.user_utils import serialize_user
 
@@ -122,6 +124,7 @@ async def create_user(
     background_tasks: BackgroundTasks,
     new_user: IUserCreate = Depends(user_deps.user_exists),
     db_session: AsyncSession = Depends(deps.get_db),
+    redis_client: AsyncRedis = Depends(get_redis_client),
     current_user: User = Depends(deps.get_current_user(required_permissions=["users.create"])),
 ) -> IPostResponseBase[IUserRead]:
     """
@@ -134,8 +137,6 @@ async def create_user(
     - ADMIN_CREATED_USERS_AUTO_VERIFIED: Auto-verify admin-created users
     - ADMIN_CREATED_USERS_SEND_EMAIL: Send verification email to admin-created users
     """
-    from app.core.security import create_verification_token
-
     # Configure user verification based on settings
     if settings.ADMIN_CREATED_USERS_AUTO_VERIFIED:
         new_user.verified = True
@@ -152,12 +153,13 @@ async def create_user(
     # Send verification email if configured and user is not auto-verified
     if settings.ADMIN_CREATED_USERS_SEND_EMAIL and not settings.ADMIN_CREATED_USERS_AUTO_VERIFIED:
         try:
-            verification_token = create_verification_token(user.email)
-            await send_verification_email(
+            # issue_verification, not a hand-rolled token plus mail: /verify-email
+            # checks Redis, so a link mailed without the Redis write can never
+            # succeed. Registration and resend come through here too.
+            await issue_verification(
+                user=user,
+                redis_client=redis_client,
                 background_tasks=background_tasks,
-                user_email=user.email,
-                verification_token=verification_token,
-                verification_url=settings.EMAIL_VERIFICATION_URL,
             )
             message += ". Verification email sent"
         except Exception as e:
