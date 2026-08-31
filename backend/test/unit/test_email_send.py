@@ -434,7 +434,7 @@ def test_a_refused_connection_is_logged_not_raised(
                 "project_name": "FastAPI RBAC",
                 "email": "recipient@example.com",
                 "reset_password_url": "https://rbac.example.com/reset-password?token=xyz",
-                "valid_hours": 24,
+                "valid_for": "24 hours",
             },
             "reset_password_url",
         ),

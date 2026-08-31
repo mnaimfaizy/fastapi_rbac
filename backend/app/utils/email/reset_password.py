@@ -1,4 +1,5 @@
 from app.core.config import settings
+from app.utils.duration import humanize_minutes
 from app.utils.email.email import send_email_with_template
 
 
@@ -28,7 +29,7 @@ async def send_reset_password_email(
         "email": email,
         "reset_password_url": reset_link,
         "token": token,
-        "valid_hours": settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES // 60,
+        "valid_for": humanize_minutes(settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES),
     }
 
     # Send the email using the password-reset.html template
