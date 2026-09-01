@@ -21,6 +21,10 @@ memory_test_db_*
 memory_test_db-journal
 coverage.xml
 htmlcov/
+# Coverage collected in the app container under SERVER_COVERAGE, written to
+# the bind mount as .coverage.integration and converted to XML beside it.
+.coverage.*
+coverage-integration.xml
 dev.db-wal
 dev.db-shm
 postgres_test_data/

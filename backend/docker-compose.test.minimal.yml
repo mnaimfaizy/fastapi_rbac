@@ -28,6 +28,12 @@ services:
       - CELERY_RESULT_BACKEND=redis://fastapi_rbac_redis_test:6379/0
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@fastapi_rbac_db_test:5432/fastapi_rbac_test
       - INIT_TEST_DATA=true
+      # Integration tests drive this container over HTTP, so app/ executes here
+      # and coverage for that suite can only be collected in this process.
+      - SERVER_COVERAGE=${SERVER_COVERAGE:-0}
+      # Distinct filename: the runner bind-mounts the same directory and
+      # manipulates /app/.coverage on startup, which would clobber this.
+      - COVERAGE_FILE=/app/.coverage.integration
     volumes:
       - .:/app
     healthcheck:
