@@ -127,9 +127,11 @@ if not await redis_client.get(f"user:{user_id}:{token_type}"):
 - Automatic lockout protection
 
 The thresholds above are settings, not constants in code. Every path that sets
-a password -- registration, password reset, reset confirm and change password --
-applies them through a single `enforce_password_complexity` call, so none of
-them can drift into a looser rule of its own.
+a password -- registration, password reset, reset confirm, change password,
+and admin create or update of a single user -- applies them through a single
+`enforce_password_complexity` call, so none of them can drift into a looser
+rule of its own. Bulk user update refuses a `password` key rather than
+applying one password to many accounts.
 
 ### 7. Audit Logging
 

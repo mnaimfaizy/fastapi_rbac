@@ -32,9 +32,10 @@ from fastapi import BackgroundTasks, HTTPException, status
 from app.core.security import PasswordValidator
 from app.utils.background_tasks import log_security_event
 
-# One wording for all four paths. Registration used to say "Password ..." while
-# the reset and change paths said "New password ...", which is the sort of
-# drift that follows from each call site owning its own message.
+# One wording for every path that sets a password. Registration used to say
+# "Password ..." while the reset and change paths said "New password ...",
+# which is the sort of drift that follows from each call site owning its own
+# message. Admin create and admin update use this same wording (#198).
 PASSWORD_COMPLEXITY_FAILURE_MESSAGE = "Password does not meet complexity requirements."
 
 
