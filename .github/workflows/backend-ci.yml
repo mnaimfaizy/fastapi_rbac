@@ -60,7 +60,16 @@ jobs:
   test:
     name: Backend Test
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Set from the observed distribution, not a small sample: successful runs
+    # range from 12 to 34 minutes. The first value here was 30, taken from six
+    # runs whose maximum was 21, and it killed a healthy run on main at 90%
+    # complete. 60 leaves real headroom over the worst observed run while still
+    # catching a genuine hang six times sooner than GitHub's 360-minute default.
+    #
+    # The underlying slowness is #212: API-driven tests accumulate in test/unit/
+    # because it is the only gated directory, so this suite does real database
+    # work per test. Fixing that is what would bring this number down.
+    timeout-minutes: 60
     services:
       postgres:
         # Keep in sync with backend docker-compose*.yml (postgres:15-alpine)
