@@ -25,6 +25,7 @@ from app.schemas.response_schema import (
 from app.schemas.user_schema import IUserCreate, IUserRead, IUserRoleAssign, IUserUpdate
 from app.utils.account_email_dispatch import issue_verification
 from app.utils.exceptions.user_exceptions import UserSelfDeleteException
+from app.utils.password_policy import enforce_password_complexity
 from app.utils.user_utils import serialize_user
 
 logger = logging.getLogger(__name__)
@@ -136,7 +137,18 @@ async def create_user(
     Note: Admin-created users behavior depends on configuration:
     - ADMIN_CREATED_USERS_AUTO_VERIFIED: Auto-verify admin-created users
     - ADMIN_CREATED_USERS_SEND_EMAIL: Send verification email to admin-created users
+
+    Admin-set passwords are subject to the same complexity policy as
+    self-service (#198). A weaker rule here would leave the new user unable
+    to change the password they were given.
     """
+    await enforce_password_complexity(
+        new_user.password,
+        background_tasks=background_tasks,
+        event_type="admin_user_create_password_complexity_failed",
+        details={"email": new_user.email},
+    )
+
     # Configure user verification based on settings
     if settings.ADMIN_CREATED_USERS_AUTO_VERIFIED:
         new_user.verified = True
@@ -202,11 +214,20 @@ async def bulk_update_users(
     """
     Bulk update users. Accepts a dict with 'user_ids': List[UUID], 'updates': IUserUpdate fields.
     Required roles: admin
+
+    A ``password`` key is refused (#198). Applying one password to many users
+    skips the per-account history/reuse path even when the value is strong;
+    set a password on each user individually instead.
     """
     user_ids = bulk_update.get("user_ids")
     updates = bulk_update.get("updates")
     if not user_ids or not isinstance(user_ids, list) or not updates:
         raise HTTPException(status_code=400, detail="user_ids and updates are required")
+    if isinstance(updates, dict) and "password" in updates:
+        raise HTTPException(
+            status_code=400,
+            detail="Password cannot be changed via bulk update. Update each user individually.",
+        )
     updated_users = []
     for user_id in user_ids:
         user = await crud.user.get(id=user_id, db_session=db_session)
@@ -217,7 +238,8 @@ async def bulk_update_users(
         try:
             updated_user = await crud.user.update(obj_current=user, obj_new=update_obj, db_session=db_session)
         except PasswordReuseError as e:
-            # A password in the payload now goes through the reuse policy (#193).
+            # Unreachable while a password key is refused above; kept so a
+            # later change that re-allows it cannot skip the reuse policy.
             raise HTTPException(status_code=400, detail=str(e))
         updated_users.append(serialize_user(updated_user))
     return create_response(data=updated_users, message="Bulk update successful")
@@ -225,6 +247,7 @@ async def bulk_update_users(
 
 @router.put("/{user_id}")
 async def update_user(
+    background_tasks: BackgroundTasks,
     user_update: IUserUpdate,
     user: User = Depends(user_deps.is_valid_user),
     db_session: AsyncSession = Depends(deps.get_db),
@@ -235,8 +258,19 @@ async def update_user(
 
     Required roles:
     - admin
-    """  # If password is being updated, use password history management
+
+    A new password is subject to the same complexity policy as self-service
+    (#198). ``background_tasks`` is required by that helper's audit path.
+    """
+    # If password is being updated, use password history management
     if user_update.password:
+        await enforce_password_complexity(
+            user_update.password,
+            background_tasks=background_tasks,
+            event_type="admin_user_update_password_complexity_failed",
+            user_id=user.id,
+            details={"email": user.email},
+        )
         try:
             await crud.user.update_password(
                 user=user, new_password=user_update.password, db_session=db_session

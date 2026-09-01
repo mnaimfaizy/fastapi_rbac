@@ -168,7 +168,9 @@ Authorization: Bearer <access_token>
 
 ### POST /api/v1/users
 
-Create a new user (admin only).
+Create a new user (admin only). The password is subject to the same complexity
+policy as registration; a rejected password answers `400` with
+`{ "message": "...", "errors": [...] }`.
 
 **Request Headers:**
 
@@ -215,7 +217,9 @@ Authorization: Bearer <access_token>
 
 ### PUT /api/v1/users/{user_id}
 
-Update an existing user (admin only).
+Update an existing user (admin only). A new password is optional; when
+supplied it is subject to the same complexity policy as registration and
+answers `400` with `{ "message": "...", "errors": [...] }` if it fails.
 
 **Request Headers:**
 
@@ -298,7 +302,8 @@ Authorization: Bearer <access_token>
 
 ### PUT /api/v1/users/bulk-update
 
-Bulk update users (admin only).
+Bulk update users (admin only). A `password` key in `updates` is refused with
+`400` -- set a password on each user individually.
 
 **Request Headers:**
 

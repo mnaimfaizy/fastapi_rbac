@@ -14,7 +14,8 @@ from app.utils.partial import optional
 # Properties to receive via API on creation
 class IUserCreate(UserBase):
     role_id: list[UUID] | None = None
-    # Password is required on creation as per UserBase
+    # No min_length here: the policy lives in settings and is applied by
+    # enforce_password_complexity in the admin create endpoint (#198).
     password: str
     last_changed_password_date: datetime | None = None
     expiry_date: datetime | None = None
@@ -52,7 +53,8 @@ class IUserUpdate(UserBase):
     role_id: list[UUID] | None = None
     contact_phone: str | None = None
     expiry_date: datetime | None = None
-    # Password update is optional - handled by @optional
+    # Optional: a supplied password is checked by enforce_password_complexity
+    # in the admin update endpoint (#198). Blank / omitted means leave as-is.
     password: str
 
 
