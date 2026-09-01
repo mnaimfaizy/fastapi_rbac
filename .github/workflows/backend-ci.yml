@@ -10,6 +10,7 @@ jobs:
   lint:
     name: Backend Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v7
@@ -59,6 +60,7 @@ jobs:
   test:
     name: Backend Test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       postgres:
         # Keep in sync with backend docker-compose*.yml (postgres:15-alpine)
