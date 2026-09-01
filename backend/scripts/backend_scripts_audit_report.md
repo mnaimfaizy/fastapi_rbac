@@ -46,7 +46,7 @@ This report documents the current state of the `backend/scripts` directory, iden
 
 ### E. Miscellaneous
 - **run.sh / run.ps1**: Start FastAPI app, run pre-start and initial data scripts. Both are up-to-date and similar.
-- **csrf_live_check.py**: Standalone CSRF smoke check against a running server. Manual diagnostic only; automated coverage lives in `test/unit/test_csrf_protection.py`.
+- **csrf_live_check.py**: Standalone CSRF smoke check against a running server. Manual diagnostic only; automated coverage lives in `test/api/test_csrf_protection.py`.
 - **database/create-dbs.sql.removed**: Placeholder, can be deleted.
 
 ### F. Docker Subdirectory

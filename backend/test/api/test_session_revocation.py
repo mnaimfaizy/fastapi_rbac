@@ -19,9 +19,8 @@ implementation of that deletion left in the tree. `cleanup_expired_tokens`
 described garbage collection and hid the revocation mechanism from the people
 who then built a second one.
 
-These are API-driven, which `test/README.md` assigns to `integration/`. They
-live here because backend CI runs only `test/unit/` (#190), and an ordering bug
-CI cannot see is the bug this file exists to prevent.
+In `test/api/` because these boot the app in-process: see
+[ADR 0012](../../../docs/adr/0012-test-suites-split-by-environment.md).
 """
 
 import inspect

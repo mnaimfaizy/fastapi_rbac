@@ -11,12 +11,13 @@ Dormant under the shipped defaults (``ADMIN_CREATED_USERS_AUTO_VERIFIED`` on,
 ``ADMIN_CREATED_USERS_SEND_EMAIL`` off) and live for any deployment that flips
 them, which is why nothing noticed.
 
-This is API-driven, which ``test/README.md`` assigns to ``integration/``. It
-lives here because backend CI runs only ``test/unit/`` (#190), beside the other
-account-flow tests kept here for the same reason. The creation half calls the
-endpoint function directly rather than through the router: the bug is in what
-that endpoint issues, not in who is allowed to call it, and the admin auth
-stack would only add setup that cannot fail differently.
+In ``test/api/`` because it boots the app in-process: see
+`ADR 0012 <../../../docs/adr/0012-test-suites-split-by-environment.md>`_.
+
+The creation half calls the endpoint function directly rather than through the
+router: the bug is in what that endpoint issues, not in who is allowed to call
+it, and the admin auth stack would only add setup that cannot fail
+differently.
 """
 
 from test.fixtures.mock_redis_client import MockRedisClient

@@ -181,7 +181,7 @@ The backend integration suite runs only in the Docker Compose test stack. Unit t
   command above. A skipped run is not a passing run. Run the unit suite locally
   instead:
   ```powershell
-  pytest backend/test/unit/
+  pytest backend/test/unit/ backend/test/api/
   ```
 
 **See comments in `backend/.env.example` for more details.**

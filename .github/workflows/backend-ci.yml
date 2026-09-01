@@ -66,9 +66,9 @@ jobs:
     # complete. 60 leaves real headroom over the worst observed run while still
     # catching a genuine hang six times sooner than GitHub's 360-minute default.
     #
-    # The underlying slowness is #212: API-driven tests accumulate in test/unit/
-    # because it is the only gated directory, so this suite does real database
-    # work per test. Fixing that is what would bring this number down.
+    # The suite is slow because the in-process API tests in test/api/ boot the
+    # app and do real database work per test. #212 gave them their own
+    # directory so that cost is visible; it did not make them faster.
     timeout-minutes: 60
     services:
       postgres:
@@ -143,7 +143,10 @@ jobs:
       - name: Test with pytest and coverage (unit tests only)
         run: |
           cd backend
-          pytest test/unit/ --cov=app --cov-report=xml
+          # test/api/ holds the in-process API tests. Same gate, same job: the
+          # split is about what a reader should expect from each directory, not
+          # about running them separately. See docs/adr/0012.
+          pytest test/unit/ test/api/ --cov=app --cov-report=xml
 
       # Integration tests need Postgres, Redis and a live server, so they run in
       # the Docker test stack in the separate integration-test job below.

@@ -251,8 +251,12 @@ npx eslint . --fix
 
 **Test Structure**:
 
-- **Unit tests**: `backend/test/unit/` - Test individual components
-- **Integration tests**: `backend/test/integration/` - Test complete workflows
+- **Unit tests**: `backend/test/unit/` - No app boot, no database
+- **API tests**: `backend/test/api/` - In-process app via ASGI transport
+- **Integration tests**: `backend/test/integration/` - Requires the Docker stack
+
+  Suites are split by the environment a test needs, not by what it calls. See
+  [ADR 0012](adr/0012-test-suites-split-by-environment.md).
 - **Test utilities**: `backend/test/factories/` and `backend/test/fixtures/`
 
 **Running Tests**:
