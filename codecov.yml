@@ -13,10 +13,19 @@
 
 coverage:
   status:
-    # Informational: reports, never blocks. See the note above, and #228 for the
-    # standing oddity that this status has never been observed posting at all --
-    # nothing depends on it, which is why that stayed a curiosity rather than a
-    # blocker. `target: auto` is set explicitly as the most likely explanation.
+    # Informational: reports, never blocks. See the note above.
+    #
+    # This status has never been observed posting at all, across #223, #225,
+    # #226, #227 and #229. Ruled out: invalid config (Codecov's validator echoes
+    # it back), a repo-level YAML override (there is none), the missing GitHub
+    # App (installed since #224), suppression when coverage is unchanged (#227
+    # had a real delta, 51.51 -> 54.70), and an implicit target (`target: auto`
+    # below was added to test exactly that, and it still did not post).
+    #
+    # The cause is unknown. Nothing depends on this status -- the gates are the
+    # patch entries below -- which is why it is a curiosity and not a blocker.
+    # Do not build a gate on it without first confirming it posts: that would be
+    # a gate that silently does not exist.
     project:
       default:
         target: auto
