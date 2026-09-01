@@ -178,13 +178,61 @@ jobs:
           # Local runs need a `down` first, because `up` reuses an exited runner
           # container and reports its stale exit code; here the runner is always
           # fresh.
-          docker compose -f docker-compose.test.minimal.yml up --build --exit-code-from fastapi_rbac_test_runner fastapi_rbac_test_runner
+          # SERVER_COVERAGE makes the app container run uvicorn under coverage.
+          # The suite drives that container over HTTP, so app/ executes there and
+          # not in the runner -- it is the only place integration coverage exists.
+          # The data file is written by the flush step below, not by this one.
+          SERVER_COVERAGE=1 docker compose -f docker-compose.test.minimal.yml up --build --exit-code-from fastapi_rbac_test_runner fastapi_rbac_test_runner
 
       - name: Dump stack logs on failure
         if: failure()
         run: |
           cd backend
           docker compose -f docker-compose.test.minimal.yml logs --no-color --tail=200
+
+      # coverage writes its data file on USR1. The app container is still up at
+      # this point: `up --exit-code-from` stops the runner but leaves this one
+      # running, which is the window this step uses. Do not switch to relying on
+      # shutdown -- uvicorn does not exit inside Docker's grace period, so the
+      # container is SIGKILLed and coverage writes nothing.
+      - name: Flush coverage from the app container
+        run: |
+          cd backend
+          docker kill --signal=USR1 fastapi_rbac_test
+          for i in $(seq 1 30); do
+            [ -f .coverage.integration ] && break
+            sleep 1
+          done
+          ls -l .coverage.integration
+
+      # Deliberately not `if: always()`. When the suite fails, the job has
+      # already reported the real problem; a missing coverage file on top of
+      # that would bury it under a second, misleading error.
+      - name: Convert integration coverage to XML
+        run: |
+          cd backend
+          # Converted inside the image so the paths in the XML are the same
+          # shape as the unit job's (app/...), which is what Codecov's path
+          # fixing already resolves to backend/app/... correctly.
+          docker compose -f docker-compose.test.minimal.yml run --rm --no-deps --entrypoint "" fastapi_rbac_test_runner coverage xml --data-file=/app/.coverage.integration -o /app/coverage-integration.xml
+          ls -l coverage-integration.xml
+
+      - name: Upload integration coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          # Report exactly one file. `files` alone only adds to the action's
+          # directory search, which otherwise also picks up other reporters'
+          # output and uploads the same coverage twice.
+          files: ./backend/coverage-integration.xml
+          # Same flag as the unit job on purpose: Codecov merges same-flag
+          # reports, so `backend` becomes the real combined number and the
+          # README badge stays meaningful. A separate flag could not be
+          # badged as a backend total.
+          flags: backend
+          disable_search: true
+          fail_ci_if_error: true
+          verbose: true
 
       - name: Tear down the test stack
         if: always()
