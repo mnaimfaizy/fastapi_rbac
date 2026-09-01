@@ -17,6 +17,7 @@ jobs:
   lint:
     name: Frontend Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -37,6 +38,7 @@ jobs:
   format_check:
     name: Frontend Format Check
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -57,6 +59,7 @@ jobs:
   build:
     name: Frontend Build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: [lint, format_check]
     steps:
       - name: Checkout repository
@@ -80,6 +83,7 @@ jobs:
   unit_tests:
     name: Frontend Unit Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: [lint, format_check]
     steps:
       - name: Checkout repository
@@ -121,6 +125,7 @@ jobs:
     name: Frontend E2E Tests
     if: ${{ false }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: [build]
     steps:
       - name: Checkout repository

@@ -23,6 +23,7 @@ jobs:
   refresh-report:
     name: Refresh GRAPH_REPORT.md
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout main
         uses: actions/checkout@v7
