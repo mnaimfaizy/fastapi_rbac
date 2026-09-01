@@ -286,7 +286,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         return obj_current
 
     def has_verified(self, user: User) -> bool:
-        return getattr(user, "is_verified", True)
+        return bool(user.verified)
 
     async def update_is_active(
         self, *, db_obj: list[User], obj_in: IUserUpdate, db_session: AsyncSession | None = None
