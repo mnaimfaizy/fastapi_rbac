@@ -454,7 +454,7 @@ class TestAuthenticationEdgeCases:
         assert "expired" in _response_message(response).lower()
 
     @pytest.mark.asyncio
-    async def test_verify_email_expired_emits_typed_security_event(self, client: AsyncClient) -> None:
+    async def test_verify_email_expired_jwt_is_401(self, client: AsyncClient) -> None:
         """Expired verification JWT must fail as expiry, not as invalid format.
 
         The typed event name ``verify_email_token_invalid_expired`` is mapped
@@ -486,7 +486,7 @@ class TestAuthenticationEdgeCases:
         assert response.status_code in [400, 401, 403, 422]
 
     @pytest.mark.asyncio
-    async def test_refresh_token_expired_emits_typed_security_event(self, client: AsyncClient) -> None:
+    async def test_refresh_token_expired_jwt_is_401(self, client: AsyncClient) -> None:
         """Expired refresh JWT must fail as expiry, not as invalid format.
 
         The typed event name ``refresh_token_expired`` is mapped from this 401
