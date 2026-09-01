@@ -36,7 +36,8 @@ This folder contains operational scripts used by Docker Compose and for local de
 ## Diagnostics
 
 Manual checks against a running system. They are not tests and nothing collects
-them; the automated coverage for both lives under `test/unit/` and runs in CI.
+them; the automated coverage for both lives under `test/unit/` and `test/api/`,
+and runs in CI.
 
 - `csrf_live_check.py`: CSRF protection over the real HTTP stack.
 - `email_live_check.py`: sends one password-reset mail so a human can read what

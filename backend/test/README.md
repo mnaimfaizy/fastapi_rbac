@@ -13,14 +13,18 @@ This document provides comprehensive information about the refactored test suite
 - **Key Features:**
   - Realistic service dependency handling (Redis, email, etc.)
   - Full async/await and SQLModel `.exec()` idioms for DB access
-  - API-driven flows for integration tests (no direct DB user creation in integration tests)
+  - API-driven flows for integration tests. Stack tests must not create rows
+    directly: the test runner and the application container hold **different
+    databases**, so a directly-inserted row is invisible to the code under test.
+    `api/` tests are exempt — they share one process and one database with the app.
+    See [ADR 0012](../../docs/adr/0012-test-suites-split-by-environment.md).
   - Pre-seeded users and robust error handling
   - Comprehensive fixture and factory infrastructure (see below)
 
 ## Current Test Infrastructure Overview
 
 - **Directory Structure:**
-  - `unit/` and `integration/` for clear test separation
+  - `unit/`, `api/` and `integration/` — separated by environment, see ADR 0012
   - `factories/` and `fixtures/` for reusable test data and setup
   - `mocks/` for service mocks (email, celery, external APIs)
 - **Fixtures:**
@@ -178,10 +182,28 @@ run with `--runxfail` to see them fail for real.
 ### Run unit tests locally
 
 ```bash
-pytest backend/test/unit/
+pytest backend/test/unit/ backend/test/api/
 ```
 
 ## Test Categories
+
+Suites are separated by **the environment a test needs**, not by whether it speaks
+HTTP. Transport is an implementation detail of a test; the environment is what CI
+has to provide in order to run it. The reasoning is recorded in
+[ADR 0012](../../docs/adr/0012-test-suites-split-by-environment.md).
+
+| Directory | Needs | Gated by |
+| --- | --- | --- |
+| `unit/` | nothing; no app boot, no database | `test` job |
+| `api/` | in-process app via ASGI transport, SQLite session fixtures | `test` job |
+| `integration/` | the Docker stack: Postgres, Redis, live server over HTTP | `integration-test` job |
+
+`unit/` and `api/` run in the same CI job (`pytest test/unit/ test/api/`). The split
+says what to expect from a directory; it is not a reason to run them separately.
+
+**Deciding where a new test goes:** ask what it needs to run, not what it calls. A
+test that boots the app belongs in `api/` even if it asserts on one function. A test
+that mocks everything belongs in `unit/` even if it exercises a whole workflow.
 
 ### Unit Tests
 
@@ -195,10 +217,28 @@ Unit tests focus on testing individual components in isolation:
 
 **Characteristics:**
 
-- Fast execution (< 1 second per test)
-- Isolated from external dependencies
+- Fast execution (< 1 second per test) — this budget applies to `unit/` and only to
+  `unit/`. A test that boots the app cannot meet it and belongs in `api/`.
+- No application boot and no database
 - Use mocks for database and external services
 - Focus on single responsibility testing
+
+### API Tests (in-process)
+
+`api/` holds tests that drive HTTP endpoints through an in-process ASGI transport.
+They boot the application and may use the SQLite-backed session fixtures, but need no
+external services, so CI runs them in the same job as `unit/`.
+
+- **Security-behaviour tests**: CSRF enforcement, account enumeration, rate limits
+- **Policy tests**: password policy and reuse rules applied across every path
+- **Session tests**: revocation, token flow rejection
+
+**Characteristics:**
+
+- Slower than `unit/`: each test pays application and fixture setup
+- Real request/response cycle, no live server
+- May seed through factories directly, because the test and the app share one process
+  and one database — which is exactly what stack tests cannot do
 
 ### Integration Tests
 

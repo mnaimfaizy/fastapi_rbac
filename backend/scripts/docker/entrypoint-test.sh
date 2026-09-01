@@ -109,8 +109,8 @@ if [ -n "$TEST_PATH" ]; then
   echo "TEST_PATH is set: $TEST_PATH"
   cd /app
   if [ "$COVERAGE" = "1" ]; then
-    # This measures the pytest process itself, so it is only meaningful for
-    # suites that import and call app/ in-process -- TEST_PATH=test/unit.
+    # This measures the pytest process itself, so it is only meaningful for the
+    # in-process suites -- TEST_PATH=test/unit or test/api (see ADR 0012).
     # For test/integration the app runs in the separate fastapi_rbac_test
     # container and is driven over HTTP, so this reports almost nothing;
     # set SERVER_COVERAGE=1 on that service instead.

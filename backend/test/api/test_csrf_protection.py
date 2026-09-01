@@ -1,4 +1,4 @@
-"""Unit tests for CSRF protection on state-changing auth endpoints (#164).
+"""CSRF protection on state-changing auth endpoints (#164).
 
 These replace ``test/test_csrf_implementation.py``, which was a manual script
 driving a live server on ``localhost:8000``. Its helpers were named ``test_*``,

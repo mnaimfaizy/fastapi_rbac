@@ -10,10 +10,10 @@ The property under test: for a caller who does not already hold a valid token,
 a disabled account is indistinguishable from a missing one and from a bad
 token. What still differs is the security event written to the audit log.
 
-These are API-driven, which `test/README.md` assigns to `integration/`. They
-live here deliberately, beside `test_account_enumeration.py`: the two files
-test one property across the same six endpoints, and splitting the pair across
-directories would hide that.
+In `test/api/` because these boot the app in-process: see
+[ADR 0012](../../../docs/adr/0012-test-suites-split-by-environment.md). They sit
+beside `test_account_enumeration.py`, which tests the same property across the
+same six endpoints.
 """
 
 import time
