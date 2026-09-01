@@ -10,8 +10,8 @@
 [![React Frontend CI](https://github.com/mnaimfaizy/fastapi_rbac/actions/workflows/react-frontend-ci.yml/badge.svg)](https://github.com/mnaimfaizy/fastapi_rbac/actions/workflows/react-frontend-ci.yml)
 [![Docker Publish](https://github.com/mnaimfaizy/fastapi_rbac/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/mnaimfaizy/fastapi_rbac/actions/workflows/docker-publish.yml)
 [![Documentation](https://github.com/mnaimfaizy/fastapi_rbac/actions/workflows/docs.yml/badge.svg)](https://github.com/mnaimfaizy/fastapi_rbac/actions/workflows/docs.yml)
-[![Backend Coverage](https://codecov.io/gh/mnaimfaizy/fastapi_rbac/branch/main/graph/badge.svg?flag=backend)](https://codecov.io/gh/mnaimfaizy/fastapi_rbac?flags%5B0%5D=backend)
-[![Frontend Coverage](https://codecov.io/gh/mnaimfaizy/fastapi_rbac/branch/main/graph/badge.svg?flag=frontend)](https://codecov.io/gh/mnaimfaizy/fastapi_rbac?flags%5B0%5D=frontend)
+[![Backend Coverage](https://img.shields.io/codecov/c/github/mnaimfaizy/fastapi_rbac?flag=backend&label=backend%20coverage&logo=codecov&logoColor=white)](https://codecov.io/gh/mnaimfaizy/fastapi_rbac?flags%5B0%5D=backend)
+[![Frontend Coverage](https://img.shields.io/codecov/c/github/mnaimfaizy/fastapi_rbac?flag=frontend&label=frontend%20coverage&logo=codecov&logoColor=white)](https://codecov.io/gh/mnaimfaizy/fastapi_rbac?flags%5B0%5D=frontend)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
