@@ -15,6 +15,17 @@ coverage:
       default:
         informational: true
 
+# Two independent suites, kept as separate numbers. Blending a TypeScript
+# frontend and a Python backend into one percentage produces a figure that
+# describes neither. Both workflows run on every PR, so no carryforward.
+flags:
+  backend:
+    paths:
+      - backend/app/
+  frontend:
+    paths:
+      - react-frontend/src/
+
 comment:
   layout: "reach, diff, flags, files"
   behavior: default

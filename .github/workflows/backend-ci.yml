@@ -141,9 +141,14 @@ jobs:
         uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          # Explicit path, not a directory search: under fail_ci_if_error
-          # an ambiguous discovery would fail the job.
+          # Report exactly one file. `files` alone only adds to the action's
+          # directory search, which otherwise also picks up other reporters'
+          # output and uploads the same coverage twice.
           files: ./backend/coverage.xml
+          disable_search: true
+          # Flagged so frontend and backend stay separate numbers. A single
+          # percentage blended across TypeScript and Python means nothing.
+          flags: backend
           fail_ci_if_error: true
           verbose: true
 
