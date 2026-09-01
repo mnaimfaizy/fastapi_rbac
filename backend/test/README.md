@@ -173,12 +173,6 @@ cd backend && docker compose -f docker-compose.test.minimal.yml down
 `docker-compose.test.yml` runs the same suite with the full set of services (Celery
 worker and beat, Flower, pgAdmin) when you need them.
 
-### Known-broken tests
-
-`integration/conftest.py` carries a `QUARANTINE` set of tests marked `xfail` because they
-assert on in-process state the server under test never writes to. They are tracked in #214;
-run with `--runxfail` to see them fail for real.
-
 ### Run unit tests locally
 
 ```bash

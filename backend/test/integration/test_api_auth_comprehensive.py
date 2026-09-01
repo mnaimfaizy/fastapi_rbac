@@ -13,15 +13,16 @@ This module tests all authentication endpoints including:
 from datetime import datetime, timedelta, timezone
 from test.factories.async_factories import AsyncUserFactory
 from test.utils import get_csrf_token, random_email
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi import HTTPException, status
-from httpx import AsyncClient
+from fastapi import status
+from httpx import AsyncClient, Response
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app import crud
 from app.core.config import settings
+from app.core.security import create_refresh_token, create_verification_token
 
 
 async def register_user_with_csrf(client: AsyncClient, user_data: dict) -> tuple[int, dict]:
@@ -35,138 +36,93 @@ async def register_user_with_csrf(client: AsyncClient, user_data: dict) -> tuple
     return response.status_code, response.json()
 
 
+def _response_message(response: Response) -> str:
+    """Flatten FastAPI ``detail`` / ``message`` so callers can search the text."""
+    body: Any = response.json()
+    detail = body.get("detail", body.get("message", ""))
+    if isinstance(detail, dict):
+        return str(detail.get("message", detail))
+    return str(detail)
+
+
 class TestComprehensiveAuth:
     """Comprehensive tests for authentication flows."""
 
     @pytest.mark.asyncio
-    @patch("app.utils.background_tasks.send_verification_email")
-    async def test_complete_registration_and_login_flow(
-        self,
-        mock_send_verification_email: MagicMock,
-        client: AsyncClient,
-        db: AsyncSession,
-        user_factory: AsyncUserFactory,
-        redis_mock: MagicMock,
-    ) -> None:
-        """
-        Test the full user journey: registration, email verification, login,
-        accessing a protected route, and then logging out.
-        """
+    async def test_complete_registration_and_login_flow(self, client: AsyncClient) -> None:
+        """Register, verify, login, refresh, and logout through the HTTP API.
 
-        # Step 1: Register a new user
+        Registration no longer returns a user object (#113). In MODE=testing the
+        payload carries ``verification_code`` so the stack can finish the flow
+        without reading mail or the runner's own database.
+        """
         email = random_email()
         password = "TestPassw0rd!47"
-
         register_data = {"email": email, "password": password, "first_name": "Test", "last_name": "User"}
 
         status_code, response_data = await register_user_with_csrf(client, register_data)
-        print(f"Registration response: {status_code}, {response_data}")
-        print("After registration call - test is still running")
+        assert status_code == 200, response_data
+        verification_token = (response_data.get("data") or {}).get("verification_code")
+        assert verification_token, "Testing-mode registration must return verification_code"
 
-        # Registration answers 200 uniformly for every account state (#113). The
-        # payload no longer carries the user object, so the id comes from the DB.
-        assert status_code == 200
-
-        created = await crud.user.get_by_email(db_session=db, email=email)
-        assert created is not None, "Registration should have created the user."
-        user_id = created.id
-
-        # Step 2: Try to login before verification (should fail)
-        # Use OAuth2PasswordRequestForm fields if required by backend
-        login_data = {"username": email, "password": password, "grant_type": "password"}
-
-        # Get CSRF token for login
-        csrf_token, csrf_headers = await get_csrf_token(client)
-        csrf_headers["Content-Type"] = "application/x-www-form-urlencoded"
-
-        response = await client.post(
+        _, csrf_headers = await get_csrf_token(client)
+        login_before = await client.post(
             f"{settings.API_V1_STR}/auth/login",
-            data=login_data,
+            json={"email": email, "password": password},
             headers=csrf_headers,
         )
+        assert login_before.status_code == 422, login_before.text
+        assert "not verified" in _response_message(login_before).lower()
 
-        # Should not return 404 or 403 (endpoint exists and CSRF is valid)
-        assert response.status_code in [400, 401, 422]
-        if response.status_code in [400, 401]:
-            # Check both 'message' and 'detail' fields for error text
-            resp_json = response.json()
-            msg = resp_json.get("message", "") or resp_json.get("detail", "")
-            msg = msg.lower()
-            assert "not verified" in msg or "invalid" in msg
+        _, verify_headers = await get_csrf_token(client)
+        verify_response = await client.post(
+            f"{settings.API_V1_STR}/auth/verify-email",
+            json={"token": verification_token},
+            headers=verify_headers,
+        )
+        assert verify_response.status_code == 200, verify_response.text
+        assert "verified successfully" in verify_response.json()["message"].lower()
 
-        # Step 3: Mock email verification
-        async def dummy_send_verification_email(*args: object, **kwargs: object) -> None:
-            print("Dummy send_verification_email called")
-            return None
+        _, login_headers = await get_csrf_token(client)
+        login_after = await client.post(
+            f"{settings.API_V1_STR}/auth/login",
+            json={"email": email, "password": password},
+            headers=login_headers,
+        )
+        assert login_after.status_code == 200, login_after.text
+        access_token = login_after.json()["data"]["access_token"]
+        assert login_after.json()["data"]["token_type"] == "bearer"
+        assert login_after.cookies.get(settings.REFRESH_TOKEN_COOKIE_NAME)
 
-        mock_send_verification_email.side_effect = dummy_send_verification_email
+        me = await client.get(
+            f"{settings.API_V1_STR}/users/me",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert me.status_code == 200, me.text
 
-        with patch("app.core.security.decode_token") as mock_decode:
-            mock_decode.return_value = {"email": email, "type": "email_verification"}
+        _, refresh_csrf = await get_csrf_token(client)
+        refresh = await client.post(
+            f"{settings.API_V1_STR}/auth/new_access_token",
+            json={},
+            headers=refresh_csrf,
+        )
+        assert refresh.status_code == 201, refresh.text
+        new_access_token = refresh.json()["data"]["access_token"]
+        assert new_access_token != access_token
 
-            await redis_mock.set(f"verification_token:{user_id}", "mock_verification_token")
+        _, logout_csrf = await get_csrf_token(client)
+        logout = await client.post(
+            f"{settings.API_V1_STR}/auth/logout",
+            headers={"Authorization": f"Bearer {new_access_token}", **logout_csrf},
+        )
+        assert logout.status_code == 200, logout.text
+        assert "successfully logged out" in logout.json()["message"].lower()
 
-            response = await client.post(
-                f"{settings.API_V1_STR}/auth/verify-email", json={"token": "mock_verification_token"}
-            )
-
-        # Should only allow 200 or 403 for email verification
-        assert response.status_code in [200, 403]
-
-        # If verification endpoint is working, continue with login test
-        if response.status_code == 200:
-            assert "successfully verified" in response.json()["message"].lower()
-
-            # Step 4: Login after verification (should succeed)
-            response = await client.post(
-                f"{settings.API_V1_STR}/auth/login",
-                data=login_data,
-                headers=csrf_headers,
-            )
-
-            if response.status_code == 200:
-                login_response = response.json()
-                assert "access_token" in login_response["data"]
-                assert login_response["data"]["token_type"] == "bearer"
-                # Refresh token is HttpOnly cookie (not JSON body)
-                assert response.cookies.get(settings.REFRESH_TOKEN_COOKIE_NAME)
-
-                access_token = login_response["data"]["access_token"]
-
-                # Step 5: Access protected endpoint with token
-                headers = {"Authorization": f"Bearer {access_token}"}
-                response = await client.get(f"{settings.API_V1_STR}/users/", headers=headers)
-
-                assert response.status_code == 200
-
-                # Step 6: Refresh via cookie + CSRF
-                _, refresh_csrf = await get_csrf_token(client)
-                response = await client.post(
-                    f"{settings.API_V1_STR}/auth/new_access_token",
-                    json={},
-                    headers=refresh_csrf,
-                )
-
-                if response.status_code == 201:
-                    refresh_response = response.json()
-                    assert "access_token" in refresh_response["data"]
-                    new_access_token = refresh_response["data"]["access_token"]
-                    assert new_access_token != access_token
-
-                    # Step 7: Logout
-                    _, logout_csrf = await get_csrf_token(client)
-                    headers = {"Authorization": f"Bearer {new_access_token}", **logout_csrf}
-                    response = await client.post(f"{settings.API_V1_STR}/auth/logout", headers=headers)
-
-                    if response.status_code == 200:
-                        assert "successfully logged out" in response.json()["message"].lower()
-
-                        # Step 8: Try to access protected endpoint after logout (should fail)
-                        response = await client.get(
-                            f"{settings.API_V1_STR}/users/",
-                            headers={"Authorization": f"Bearer {new_access_token}"},
-                        )
-                        assert response.status_code == 401
+        after_logout = await client.get(
+            f"{settings.API_V1_STR}/users/me",
+            headers={"Authorization": f"Bearer {new_access_token}"},
+        )
+        assert after_logout.status_code == 403
 
     async def _test_login_endpoint_structure(self, client: AsyncClient) -> None:
         """Test login endpoint structure when registration fails."""
@@ -479,47 +435,43 @@ class TestAuthenticationEdgeCases:
 
     @pytest.mark.asyncio
     async def test_verify_email_with_expired_token(self, client: AsyncClient) -> None:
-        """Test email verification with expired token."""
+        """An expired verification JWT is 401, not 400.
 
+        ``decode_token`` answers 400 only for strings that are not JWTs (no
+        ``.``). A signed token whose ``exp`` has lapsed raises 401
+        ``Token has expired``. The previous ``assert 400 == 401`` failure was
+        the harness sending the literal ``expired_token`` and patching
+        ``decode_token`` in the runner process.
+        """
+        token = create_verification_token("nobody@example.com", expires_delta=timedelta(seconds=-30))
         _, headers = await get_csrf_token(client)
-        with patch("app.core.security.decode_token") as mock_decode:
-            # decode_token maps expiry to HTTPException (not raw PyJWT errors)
-            mock_decode.side_effect = HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has expired"
-            )
-
-            response = await client.post(
-                f"{settings.API_V1_STR}/auth/verify-email",
-                json={"token": "expired_token"},
-                headers=headers,
-            )
-
+        response = await client.post(
+            f"{settings.API_V1_STR}/auth/verify-email",
+            json={"token": token},
+            headers=headers,
+        )
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert "expired" in _response_message(response).lower()
 
     @pytest.mark.asyncio
     async def test_verify_email_expired_emits_typed_security_event(self, client: AsyncClient) -> None:
-        """Expired verification JWT should emit verify_email_token_invalid_expired."""
-        from fastapi import BackgroundTasks
+        """Expired verification JWT must fail as expiry, not as invalid format.
 
+        The typed event name ``verify_email_token_invalid_expired`` is mapped
+        from this 401 in ``map_jwt_http_error_to_event`` and is covered by
+        ``test/unit/test_security.py``. The server does not persist those
+        events to a queryable store, and an in-process ``BackgroundTasks``
+        patch never reaches the application container.
+        """
+        token = create_verification_token("nobody@example.com", expires_delta=timedelta(seconds=-30))
         _, headers = await get_csrf_token(client)
-        with patch("app.core.security.decode_token") as mock_decode:
-            mock_decode.side_effect = HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has expired"
-            )
-            with patch.object(BackgroundTasks, "add_task") as mock_add_task:
-                response = await client.post(
-                    f"{settings.API_V1_STR}/auth/verify-email",
-                    json={"token": "expired.verification.token"},
-                    headers=headers,
-                )
-
+        response = await client.post(
+            f"{settings.API_V1_STR}/auth/verify-email",
+            json={"token": token},
+            headers=headers,
+        )
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
-        event_types = [
-            call.kwargs.get("event_type")
-            for call in mock_add_task.call_args_list
-            if call.kwargs.get("event_type")
-        ]
-        assert "verify_email_token_invalid_expired" in event_types
+        assert "token has expired" in _response_message(response).lower()
 
     @pytest.mark.asyncio
     async def test_refresh_token_with_invalid_token(self, client: AsyncClient) -> None:
@@ -535,28 +487,24 @@ class TestAuthenticationEdgeCases:
 
     @pytest.mark.asyncio
     async def test_refresh_token_expired_emits_typed_security_event(self, client: AsyncClient) -> None:
-        """Expired refresh JWT should emit refresh_token_expired audit event."""
-        from fastapi import BackgroundTasks
+        """Expired refresh JWT must fail as expiry, not as invalid format.
 
+        The typed event name ``refresh_token_expired`` is mapped from this 401
+        in ``map_jwt_http_error_to_event`` and is covered by
+        ``test/unit/test_security.py``. Persistence is not observable over HTTP.
+        """
+        token = create_refresh_token(
+            "00000000-0000-0000-0000-000000000001",
+            expires_delta=timedelta(seconds=-30),
+        )
         _, csrf_headers = await get_csrf_token(client)
-        with patch("app.api.v1.endpoints.auth.decode_token") as mock_decode:
-            mock_decode.side_effect = HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has expired"
-            )
-            with patch.object(BackgroundTasks, "add_task") as mock_add_task:
-                response = await client.post(
-                    f"{settings.API_V1_STR}/auth/new_access_token",
-                    json={"refresh_token": "expired.refresh.token"},
-                    headers=csrf_headers,
-                )
-
+        response = await client.post(
+            f"{settings.API_V1_STR}/auth/new_access_token",
+            json={"refresh_token": token},
+            headers=csrf_headers,
+        )
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
-        event_types = [
-            call.kwargs.get("event_type")
-            for call in mock_add_task.call_args_list
-            if call.kwargs.get("event_type")
-        ]
-        assert "refresh_token_expired" in event_types
+        assert "expired" in _response_message(response).lower()
 
     @pytest.mark.asyncio
     async def test_change_password_with_weak_password(

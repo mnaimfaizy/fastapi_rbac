@@ -535,12 +535,14 @@ class TestRoleManagementFlow:
             filtered_roles = response.json()["data"]["items"]
             admin_role_found = any("admin" in role["name"].lower() for role in filtered_roles)
             assert admin_role_found
-        # Test filtering by name pattern
-        # Use a pattern that matches the test-created roles with UUID suffixes
-        response = await client.get(f"{settings.API_V1_STR}/roles?name_pattern=*role_*", headers=auth_headers)
-        if response.status_code == 200:
-            filtered_roles = response.json()["data"]["items"]
-            filtered_names = [role["name"] for role in filtered_roles]
-            # Assert all test-created roles are present in the filtered results
-            for name in created_names:
-                assert name in filtered_names
+        # Filter to the names this test created rather than assuming they fit
+        # on page one of ``name_pattern=*role_*`` (#214). Earlier runs leave
+        # roles in a persistent volume and push new ones off the first page.
+        for name in created_names:
+            response = await client.get(
+                f"{settings.API_V1_STR}/roles?search={name}",
+                headers=auth_headers,
+            )
+            assert response.status_code == 200, response.text
+            found = [role["name"] for role in response.json()["data"]["items"]]
+            assert name in found
