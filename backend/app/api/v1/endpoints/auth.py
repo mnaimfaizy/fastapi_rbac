@@ -52,6 +52,8 @@ from app.utils.background_tasks import (
 from app.utils.password_policy import enforce_password_complexity
 from app.utils.response_timing import response_time_floor
 from app.utils.token import (
+    add_derived_access_token_to_redis,
+    add_session_tokens_to_redis,
     add_token_to_redis,
     get_valid_tokens,
     revoke_all_user_tokens,
@@ -312,19 +314,13 @@ async def login(
             refresh_token = security.create_refresh_token(
                 authenticated_user.id, expires_delta=refresh_token_expires
             )
-            await add_token_to_redis(
+            await add_session_tokens_to_redis(
                 redis_client,
                 authenticated_user,
-                access_token,
-                TokenType.ACCESS,
-                settings.ACCESS_TOKEN_EXPIRE_MINUTES,
-            )
-            await add_token_to_redis(
-                redis_client,
-                authenticated_user,
-                refresh_token,
-                TokenType.REFRESH,
-                settings.REFRESH_TOKEN_EXPIRE_MINUTES,
+                access_token=access_token,
+                refresh_token=refresh_token,
+                access_expire_minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+                refresh_expire_minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES,
             )
             set_refresh_token_cookie(response, refresh_token)
         except Exception as e:
@@ -903,19 +899,13 @@ async def change_password(
         # pending reset link goes too -- knowing the current password
         # supersedes it.
         await revoke_all_user_tokens(redis_client, current_user.id)
-        await add_token_to_redis(
+        await add_session_tokens_to_redis(
             redis_client,
-            current_user,  # Pass the User model instance
-            access_token,
-            TokenType.ACCESS,
-            settings.ACCESS_TOKEN_EXPIRE_MINUTES,
-        )
-        await add_token_to_redis(
-            redis_client,
-            current_user,  # Pass the User model instance
-            refresh_token,
-            TokenType.REFRESH,
-            int(refresh_token_expires.total_seconds() / 60),
+            current_user,
+            access_token=access_token,
+            refresh_token=refresh_token,
+            access_expire_minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+            refresh_expire_minutes=int(refresh_token_expires.total_seconds() / 60),
         )
         set_refresh_token_cookie(
             response,
@@ -1051,11 +1041,11 @@ async def get_new_access_token(
                 # The existing code had this logic, so keeping it.
                 valid_access_tokens = await get_valid_tokens(redis_client, user.id, TokenType.ACCESS)
                 if valid_access_tokens is not None:  # Check if Redis list exists (even if empty)
-                    await add_token_to_redis(
+                    await add_derived_access_token_to_redis(
                         redis_client,
                         user,
                         access_token,
-                        TokenType.ACCESS,
+                        refresh_token,
                         settings.ACCESS_TOKEN_EXPIRE_MINUTES,
                     )
                 background_tasks.add_task(

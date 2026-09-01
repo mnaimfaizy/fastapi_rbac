@@ -98,11 +98,15 @@ Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'
 **Security Measures**:
 
 ```python
-# Record token on allowlist at login/refresh (simplified)
-await redis_client.set(f"user:{user_id}:{token_type}", token, ex=token_exp_time)
+# Record tokens on the allowlist at login (simplified)
+await add_session_tokens_to_redis(
+    redis_client, user, access_token, refresh_token,
+    access_expire_minutes=..., refresh_expire_minutes=...,
+)
 
-# Reject tokens missing from the allowlist
-if not await redis_client.get(f"user:{user_id}:{token_type}"):
+# Reject tokens missing from the live allowlist
+valid = await get_valid_tokens(redis_client, user.id, TokenType.ACCESS)
+if not token_is_allowlisted(valid, access_token):
     raise HTTPException(status_code=401, detail="Token has been revoked")
 ```
 

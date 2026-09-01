@@ -11,6 +11,7 @@ class MockRedisClient:
         """Initialize with storage dictionaries to simulate Redis state."""
         self._storage: Dict[str, Any] = {}
         self._sets: Dict[str, Set[Any]] = {}
+        self._zsets: Dict[str, Dict[Any, float]] = {}
         self._hashes: Dict[str, Dict[str, Any]] = {}
         self._expirations: Dict[str, int] = {}
 
@@ -19,6 +20,7 @@ class MockRedisClient:
         self.delete = AsyncMock(side_effect=self._delete)
         self.exists = AsyncMock(side_effect=self._exists)
         self.expire = AsyncMock(side_effect=self._expire)
+        self.expireat = AsyncMock(side_effect=self._expireat)
         self.setex = AsyncMock(side_effect=self._setex)
         self.incr = AsyncMock(side_effect=self._incr)
         self.decr = AsyncMock(side_effect=self._decr)
@@ -27,6 +29,12 @@ class MockRedisClient:
         self.srem = AsyncMock(side_effect=self._srem)
         self.smembers = AsyncMock(side_effect=self._smembers)
         self.sismember = AsyncMock(side_effect=self._sismember)
+
+        self.zadd = AsyncMock(side_effect=self._zadd)
+        self.zrem = AsyncMock(side_effect=self._zrem)
+        self.zrange = AsyncMock(side_effect=self._zrange)
+        self.zrangebyscore = AsyncMock(side_effect=self._zrangebyscore)
+        self.zremrangebyscore = AsyncMock(side_effect=self._zremrangebyscore)
 
         self.hget = AsyncMock(side_effect=self._hget)
         self.hset = AsyncMock(side_effect=self._hset)
@@ -81,6 +89,9 @@ class MockRedisClient:
         if key in self._sets:
             del self._sets[key]
             deleted = 1
+        if key in self._zsets:
+            del self._zsets[key]
+            deleted = 1
         if key in self._hashes:
             del self._hashes[key]
             deleted = 1
@@ -89,7 +100,7 @@ class MockRedisClient:
         return deleted
 
     async def _exists(self, key: str) -> bool:
-        return key in self._storage or key in self._sets or key in self._hashes
+        return key in self._storage or key in self._sets or key in self._zsets or key in self._hashes
 
     async def _expire(self, key: str, seconds: int | object) -> bool:
         """Set expiration for a key (accepts seconds or timedelta-like values)."""
@@ -99,6 +110,12 @@ class MockRedisClient:
             self._expirations[key] = int(seconds.total_seconds())  # type: ignore[union-attr]
         else:
             self._expirations[key] = int(seconds)  # type: ignore[arg-type]
+        return True
+
+    async def _expireat(self, key: str, timestamp: int | float) -> bool:
+        if not await self._exists(key):
+            return False
+        self._expirations[key] = int(timestamp)
         return True
 
     async def _sadd(self, key: str, *values: Any) -> int:
@@ -127,6 +144,67 @@ class MockRedisClient:
 
     async def _smembers(self, key: str) -> Set[Any]:
         return self._sets.get(key, set()).copy()
+
+    @staticmethod
+    def _score_bound(value: Any) -> float:
+        if value in ("-inf", b"-inf"):
+            return float("-inf")
+        if value in ("+inf", b"+inf"):
+            return float("inf")
+        return float(value)
+
+    async def _zadd(self, key: str, mapping: Dict[Any, float]) -> int:
+        if key not in self._zsets:
+            self._zsets[key] = {}
+        added = 0
+        for member, score in mapping.items():
+            if member not in self._zsets[key]:
+                added += 1
+            self._zsets[key][member] = float(score)
+        return added
+
+    async def _zrem(self, key: str, *members: Any) -> int:
+        if key not in self._zsets:
+            return 0
+        removed = 0
+        for member in members:
+            if member in self._zsets[key]:
+                del self._zsets[key][member]
+                removed += 1
+        if not self._zsets[key]:
+            del self._zsets[key]
+        return removed
+
+    async def _zrange(
+        self,
+        key: str,
+        start: int,
+        end: int,
+        desc: bool = False,
+        withscores: bool = False,
+        **kwargs: Any,
+    ) -> List[Any]:
+        items = sorted(self._zsets.get(key, {}).items(), key=lambda item: (item[1], str(item[0])))
+        if desc:
+            items = list(reversed(items))
+        if not items:
+            return []
+        if end == -1:
+            end = len(items) - 1
+        sliced = items[start : end + 1]
+        if withscores:
+            return [(member, score) for member, score in sliced]
+        return [member for member, _score in sliced]
+
+    async def _zrangebyscore(self, key: str, min: Any, max: Any) -> List[Any]:
+        low = self._score_bound(min)
+        high = self._score_bound(max)
+        items = sorted(self._zsets.get(key, {}).items(), key=lambda item: (item[1], str(item[0])))
+        return [member for member, score in items if low <= score <= high]
+
+    async def _zremrangebyscore(self, key: str, min: Any, max: Any) -> int:
+        to_remove = await self._zrangebyscore(key, min, max)
+        return await self._zrem(key, *to_remove) if to_remove else 0
 
     async def _sismember(self, key: str, value: Any) -> bool:
         if key not in self._sets:
@@ -164,7 +242,12 @@ class MockRedisClient:
     async def _scan(
         self, cursor: int = 0, match: Optional[str] = None, count: int = 10
     ) -> Tuple[int, List[str]]:
-        all_keys = list(self._storage.keys()) + list(self._sets.keys()) + list(self._hashes.keys())
+        all_keys = (
+            list(self._storage.keys())
+            + list(self._sets.keys())
+            + list(self._zsets.keys())
+            + list(self._hashes.keys())
+        )
 
         if match and "*" in match:
             import fnmatch

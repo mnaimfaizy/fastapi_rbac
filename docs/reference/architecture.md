@@ -130,7 +130,7 @@ Frontend mirrors these in `react-frontend/src/models/` (`user.ts`, `role.ts`, `p
 
 ## Authentication flow
 
-Session invalidation uses a Redis **allowlist** (`user:{id}:{token_type}` in `app/utils/token.py`), not a JWT `jti` blacklist. See [ADR 0001](../adr/0001-pyjwt-sole-jwt-library.md) and [ADR 0006](../adr/0006-httponly-refresh-token-cookies.md).
+Session invalidation uses a Redis **allowlist** (`user:{id}:{token_type}` sorted sets in `app/utils/token.py`, scored by each member's expiry), not a JWT `jti` blacklist. Live membership ignores expired entries. A login that would exceed `CONCURRENT_SESSION_LIMIT` evicts the oldest session (refresh token plus access tokens derived from it); a limit of `0` or less disables that cap. See [ADR 0001](../adr/0001-pyjwt-sole-jwt-library.md), [ADR 0006](../adr/0006-httponly-refresh-token-cookies.md), and [ADR 0011](../adr/0011-session-security-model.md).
 
 1. **Login** — `POST /api/v1/auth/login` validates credentials, returns the access token in JSON, sets the refresh token as an HttpOnly cookie, and records both on the Redis allowlist.
 2. **Authenticated requests** — client sends `Authorization: Bearer <access_token>` (and cookies via credentials); backend verifies signature/expiry and that the token remains allowlisted.
