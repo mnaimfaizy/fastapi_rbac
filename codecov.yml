@@ -1,19 +1,55 @@
 # Codecov configuration.
 #
-# Both statuses are informational on purpose. Backend coverage is measured from
-# unit tests only (backend-ci.yml runs `pytest test/unit/ --cov=app`); the
-# integration suite runs in its own Docker job and contributes no coverage data.
-# The reported percentage is therefore a floor, not a measurement, and must not
-# gate merges until integration coverage is collected too. See issue #168.
+# `patch` gates, `project` does not. The question worth blocking a merge on is
+# "is the code in this diff tested?", which is answerable and is the author's to
+# fix. A project-level gate fails for reasons unrelated to the change: #223 moved
+# the combined figure from 63.82% to 51.51% purely by adding frontend files to
+# the report, and a gate would have blocked that for measuring more code.
+#
+# Backend coverage is a real measurement since #227 collected the integration
+# suite (69.09%). Frontend coverage is still a floor at ~32.55%, because the
+# Playwright E2E job is skipped pending #30. `patch` is fair to both: it holds
+# new code to a standard without punishing either backlog.
 
 coverage:
   status:
+    # Informational: reports, never blocks. See the note above.
+    #
+    # This status has never been observed posting at all, across #223, #225,
+    # #226, #227 and #229. Ruled out: invalid config (Codecov's validator echoes
+    # it back), a repo-level YAML override (there is none), the missing GitHub
+    # App (installed since #224), suppression when coverage is unchanged (#227
+    # had a real delta, 51.51 -> 54.70), and an implicit target (`target: auto`
+    # below was added to test exactly that, and it still did not post).
+    #
+    # The cause is unknown. Nothing depends on this status -- the gates are the
+    # patch entries below -- which is why it is a curiosity and not a blocker.
+    # Do not build a gate on it without first confirming it posts: that would be
+    # a gate that silently does not exist.
     project:
       default:
+        target: auto
         informational: true
+
+    # Blocking, per flag. `default` is disabled so the combined patch status does
+    # not duplicate the two flag statuses below.
     patch:
-      default:
-        informational: true
+      default: false
+      backend:
+        flags:
+          - backend
+        target: 80%
+        threshold: 5%
+      # Lower than the backend on purpose. Frontend coverage sits at ~32.55% and
+      # is still a floor: the Playwright E2E job is skipped pending #30, so what
+      # it covers is not counted. Holding new frontend code to 80% would partly
+      # penalise authors for a measurement gap that is not theirs. 60% is a real
+      # ratchet above the current baseline; raise it when #30 lands.
+      frontend:
+        flags:
+          - frontend
+        target: 60%
+        threshold: 5%
 
 # Two independent suites, kept as separate numbers. Blending a TypeScript
 # frontend and a Python backend into one percentage produces a figure that
