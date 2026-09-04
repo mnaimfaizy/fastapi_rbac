@@ -7,6 +7,7 @@ Seams under test:
 - per-member expiry on those helpers (an entry is invalid at its own expiry)
 - add_session_tokens_to_redis (session = refresh + derived access; limit eviction)
 - fallbacks when allowlist metadata is missing, corrupt or unparseable
+- add_derived_access_token_to_redis (a refreshed access token joins the same session)
 """
 
 import json
@@ -22,6 +23,7 @@ from app.schemas.common_schema import TokenType
 from app.utils.token import (
     ALLOWLIST_TOKEN_TYPES,
     _extend_key_ttl,
+    add_derived_access_token_to_redis,
     add_session_tokens_to_redis,
     add_token_to_redis,
     get_valid_tokens,
@@ -493,3 +495,53 @@ async def test_eviction_ranks_an_unparseable_issued_at_as_oldest(
     members = await get_valid_tokens(redis, user.id, TokenType.REFRESH)  # type: ignore[arg-type]
     assert token_is_allowlisted(members, "refresh.unparseable") is False
     assert token_is_allowlisted(members, "refresh.fresh") is True
+
+
+@pytest.mark.asyncio
+async def test_derived_access_token_is_evicted_with_the_session_it_belongs_to(
+    monkeypatch: pytest.MonkeyPatch, clock: Clock
+) -> None:
+    """A refreshed access token joins its refresh token's session, so it dies with it.
+
+    This is the whole point of the helper: it derives the session id from the
+    refresh token rather than minting a new one, which is what lets eviction
+    reach an access token issued long after the login. The unlinked token is the
+    control -- it is added the same way but without a session, and survives,
+    so the eviction above is attributable to the derivation and not to the
+    access allowlist simply being cleared.
+    """
+    monkeypatch.setattr(settings, "CONCURRENT_SESSION_LIMIT", 1)
+    redis = MockRedisClient()
+    user = _user()
+
+    await _login_once(redis, user, "first")
+    # A later /new_access_token for that same session.
+    await add_derived_access_token_to_redis(
+        redis,  # type: ignore[arg-type]
+        user,
+        access_token="access.refreshed",
+        refresh_token="refresh.first",
+        expire_time=15,
+    )
+    # Never associated with a session, so nothing should evict it.
+    await add_token_to_redis(
+        redis,  # type: ignore[arg-type]
+        user,
+        "access.unlinked",
+        TokenType.ACCESS,
+        expire_time=15,
+    )
+
+    access_members = await get_valid_tokens(redis, user.id, TokenType.ACCESS)  # type: ignore[arg-type]
+    assert token_is_allowlisted(access_members, "access.refreshed") is True
+
+    clock.advance(1)
+    await _login_once(redis, user, "second")
+
+    refresh_members = await get_valid_tokens(redis, user.id, TokenType.REFRESH)  # type: ignore[arg-type]
+    access_members = await get_valid_tokens(redis, user.id, TokenType.ACCESS)  # type: ignore[arg-type]
+    assert token_is_allowlisted(refresh_members, "refresh.first") is False
+    assert token_is_allowlisted(access_members, "access.first") is False
+    assert token_is_allowlisted(access_members, "access.refreshed") is False
+    assert token_is_allowlisted(access_members, "access.unlinked") is True
+    assert token_is_allowlisted(access_members, "access.second") is True
