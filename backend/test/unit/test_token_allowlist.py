@@ -6,8 +6,10 @@ Seams under test:
 - revoke_all_user_tokens (clears every type the allowlist holds)
 - per-member expiry on those helpers (an entry is invalid at its own expiry)
 - add_session_tokens_to_redis (session = refresh + derived access; limit eviction)
+- fallbacks when allowlist metadata is missing, corrupt or unparseable
 """
 
+import json
 from dataclasses import dataclass
 from test.fixtures.mock_redis_client import MockRedisClient
 from unittest.mock import MagicMock
@@ -19,6 +21,7 @@ from app.core.config import settings
 from app.schemas.common_schema import TokenType
 from app.utils.token import (
     ALLOWLIST_TOKEN_TYPES,
+    _extend_key_ttl,
     add_session_tokens_to_redis,
     add_token_to_redis,
     get_valid_tokens,
@@ -353,3 +356,140 @@ async def test_non_positive_session_limit_disables_enforcement(
     assert len(refresh_members) == 6
     for index in range(6):
         assert token_is_allowlisted(refresh_members, f"refresh.{index}") is True
+
+
+# --- Resilience to unreadable allowlist metadata -----------------------------
+#
+# Every helper that reads metadata falls back rather than raising, because the
+# metadata hash and the token zset are written as two operations and can be
+# observed apart: a crash between them, a partial restore, or an eviction of the
+# hash alone all leave a token whose metadata is missing or unusable. The
+# fallback is what keeps a login working in that state instead of returning 500.
+#
+# These seed the zset directly, because a token with broken metadata is exactly
+# what add_token_to_redis cannot produce.
+
+
+def _seed_refresh_token(
+    redis: MockRedisClient, user_id: object, token: str, expires_at: float, metadata: str | None
+) -> None:
+    """Put a refresh token in the allowlist with metadata a reader cannot use."""
+    redis._zsets.setdefault(f"user:{user_id}:{TokenType.REFRESH}", {})[token] = expires_at
+    if metadata is not None:
+        redis._hashes.setdefault(f"user:{user_id}:{TokenType.REFRESH}:meta", {})[token] = metadata
+
+
+async def _login_once(redis: MockRedisClient, user: MagicMock, tag: str) -> None:
+    await add_session_tokens_to_redis(
+        redis,  # type: ignore[arg-type]
+        user,
+        access_token=f"access.{tag}",
+        refresh_token=f"refresh.{tag}",
+        access_expire_minutes=15,
+        refresh_expire_minutes=60,
+    )
+
+
+@pytest.mark.asyncio
+async def test_extend_key_ttl_is_a_noop_for_an_empty_allowlist() -> None:
+    """No members means no deadline to extend to, so no expiry is written.
+
+    Called directly: add_token_to_redis always adds a member before extending,
+    so this guard is unreachable through the public helpers. Without it the
+    max() below it would raise on an empty sequence.
+    """
+    redis = MockRedisClient()
+    user_id = uuid4()
+
+    await _extend_key_ttl(redis, user_id, TokenType.REFRESH)  # type: ignore[arg-type]
+
+    redis.expireat.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_eviction_ranks_a_token_with_no_metadata_as_oldest(
+    monkeypatch: pytest.MonkeyPatch, clock: Clock
+) -> None:
+    """A token whose metadata row is gone is evicted first, not crashed on.
+
+    Missing metadata reads as issued_at 0.0, which sorts before any real login,
+    so the unreadable entry is the one dropped. Eviction then falls back to
+    deriving the session id from the token itself.
+    """
+    monkeypatch.setattr(settings, "CONCURRENT_SESSION_LIMIT", 1)
+    redis = MockRedisClient()
+    user = _user()
+    _seed_refresh_token(redis, user.id, "refresh.orphaned", clock.now + 3600, metadata=None)
+
+    await _login_once(redis, user, "fresh")
+
+    members = await get_valid_tokens(redis, user.id, TokenType.REFRESH)  # type: ignore[arg-type]
+    assert token_is_allowlisted(members, "refresh.orphaned") is False
+    assert token_is_allowlisted(members, "refresh.fresh") is True
+
+
+@pytest.mark.asyncio
+async def test_eviction_ranks_a_token_with_corrupt_metadata_as_oldest(
+    monkeypatch: pytest.MonkeyPatch, clock: Clock
+) -> None:
+    """Metadata that is not JSON is treated as absent rather than raising."""
+    monkeypatch.setattr(settings, "CONCURRENT_SESSION_LIMIT", 1)
+    redis = MockRedisClient()
+    user = _user()
+    _seed_refresh_token(redis, user.id, "refresh.corrupt", clock.now + 3600, metadata="{not valid json")
+
+    await _login_once(redis, user, "fresh")
+
+    members = await get_valid_tokens(redis, user.id, TokenType.REFRESH)  # type: ignore[arg-type]
+    assert token_is_allowlisted(members, "refresh.corrupt") is False
+    assert token_is_allowlisted(members, "refresh.fresh") is True
+
+
+@pytest.mark.asyncio
+async def test_eviction_ranks_a_token_with_a_json_scalar_as_oldest(
+    monkeypatch: pytest.MonkeyPatch, clock: Clock
+) -> None:
+    """Valid JSON that is not an object is treated as absent.
+
+    json.loads succeeds here, so this exercises the isinstance guard rather than
+    the decode error above.
+    """
+    monkeypatch.setattr(settings, "CONCURRENT_SESSION_LIMIT", 1)
+    redis = MockRedisClient()
+    user = _user()
+    _seed_refresh_token(redis, user.id, "refresh.scalar", clock.now + 3600, metadata='"a string"')
+
+    await _login_once(redis, user, "fresh")
+
+    members = await get_valid_tokens(redis, user.id, TokenType.REFRESH)  # type: ignore[arg-type]
+    assert token_is_allowlisted(members, "refresh.scalar") is False
+    assert token_is_allowlisted(members, "refresh.fresh") is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("issued_at", ["not-a-number", None, [1, 2]], ids=["text", "null", "list"])
+async def test_eviction_ranks_an_unparseable_issued_at_as_oldest(
+    monkeypatch: pytest.MonkeyPatch, clock: Clock, issued_at: object
+) -> None:
+    """issued_at that float() rejects falls back to 0.0 instead of raising.
+
+    Text and a list raise ValueError and TypeError respectively; null raises
+    TypeError. All three must rank the entry as oldest rather than fail the
+    login that triggered the check.
+    """
+    monkeypatch.setattr(settings, "CONCURRENT_SESSION_LIMIT", 1)
+    redis = MockRedisClient()
+    user = _user()
+    _seed_refresh_token(
+        redis,
+        user.id,
+        "refresh.unparseable",
+        clock.now + 3600,
+        metadata=json.dumps({"issued_at": issued_at, "session_id": "seeded-session"}),
+    )
+
+    await _login_once(redis, user, "fresh")
+
+    members = await get_valid_tokens(redis, user.id, TokenType.REFRESH)  # type: ignore[arg-type]
+    assert token_is_allowlisted(members, "refresh.unparseable") is False
+    assert token_is_allowlisted(members, "refresh.fresh") is True
