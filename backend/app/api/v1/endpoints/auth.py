@@ -824,10 +824,10 @@ async def change_password(
             user_id=current_user.id,
             details={"email": current_user.email, "ip_address": ip_address},
         )
-        # The reuse policy, the history append and the password_version bump all
-        # live in update_password. This path used to reimplement them and got the
-        # reuse check wrong -- it compared a freshly salted bcrypt digest against
-        # stored digests, which can never match (#193).
+        # The reuse policy and the history append both live in update_password.
+        # This path used to reimplement them and got the reuse check wrong -- it
+        # compared a freshly salted bcrypt digest against stored digests, which
+        # can never match (#193).
         try:
             await crud.user.update_password(
                 user=current_user,

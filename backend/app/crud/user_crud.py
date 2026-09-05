@@ -227,9 +227,8 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
             update_data = obj_new.model_dump(exclude_unset=True)
         if "password" in update_data and update_data["password"]:
             # Routed through update_password rather than hashed here, so a
-            # caller cannot set a password without the reuse policy, the history
-            # append and the password_version bump (#193). Raises ValueError on
-            # a refused password.
+            # caller cannot set a password without the reuse policy and the
+            # history append (#193). Raises ValueError on a refused password.
             await self.update_password(
                 user=obj_current,
                 new_password=update_data["password"],
@@ -447,9 +446,9 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         Update a user's password. Requires db_session to be provided explicitly.
 
         This is the single place the reuse policy is applied and the single place
-        the password side effects happen (history append, ``last_changed_password_date``,
-        ``password_version``). Every path that sets a password goes through here so
-        none of them can drift (#193).
+        the password side effects happen (history append,
+        ``last_changed_password_date``). Every path that sets a password goes through
+        here so none of them can drift (#193).
         """
         if db_session is None:
             raise ValueError("db_session must be provided")
@@ -471,7 +470,6 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
             )
         user.password = new_password_hash
         user.last_changed_password_date = datetime.now(timezone.utc).replace(tzinfo=None)
-        user.password_version += 1
         db_session.add(user)
         await db_session.commit()
         await db_session.refresh(user)
