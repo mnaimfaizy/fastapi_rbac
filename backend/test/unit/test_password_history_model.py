@@ -16,7 +16,6 @@ async def test_create_password_history(db: AsyncSession) -> None:
     user = User(
         email=f"{random_lower_string()}@example.com",
         password=random_lower_string(),
-        password_version=1,
         is_active=True,
     )
     db.add(user)
@@ -48,7 +47,6 @@ async def test_retrieve_user_password_history(db: AsyncSession) -> None:
     user = User(
         email=f"{random_lower_string()}@example.com",
         password=random_lower_string(),
-        password_version=1,
         is_active=True,
     )
     db.add(user)
@@ -83,7 +81,6 @@ async def test_check_password_reuse(db: AsyncSession) -> None:
     user = User(
         email=f"{random_lower_string()}@example.com",
         password=random_lower_string(),
-        password_version=1,
         is_active=True,
     )
     db.add(user)

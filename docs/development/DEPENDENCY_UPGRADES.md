@@ -127,7 +127,7 @@ About **76** advisory hits across pinned packages (many packages have multiple a
 - **Decision:** PyJWT is the only JWT implementation; `python-jose` and unused `ecdsa` removed. See [ADR 0001](../adr/0001-pyjwt-sole-jwt-library.md).
 - **Runtime:** `app/core/security.py` encode/decode; session invalidation remains Redis **allowlist** (`app/utils/token.py`), not jti blacklist.
 - **Removed:** unused `app/utils/token_manager.py` (never imported by live auth).
-- **Deferred (security debt, not part of #63 behavior change):** see umbrella [#67](https://github.com/mnaimfaizy/fastapi_rbac/issues/67) — enforce/retire `password_version`; `VALIDATE_TOKEN_IP` honesty/implement; concurrent session limit; orphan `TOKEN_BLACKLIST_*` settings.
+- **Deferred (security debt, not part of #63 behavior change):** see umbrella [#67](https://github.com/mnaimfaizy/fastapi_rbac/issues/67) — enforce/retire `password_version`; `VALIDATE_TOKEN_IP` honesty/implement; concurrent session limit; orphan `TOKEN_BLACKLIST_*` settings. `password_version` was settled by [ADR 0011](../adr/0011-session-security-model.md): retired and its column dropped ([#68](https://github.com/mnaimfaizy/fastapi_rbac/issues/68)).
 
 ### Lane 2 hard-stop follow-up — HTTP rate limit consolidation (#64, 2026-07-24)
 

@@ -11,13 +11,13 @@ entirely unenforced:
    comparison can never be true; the function was inert in both its callers.
 3. `/auth/change_password` bypassed `crud.user.update_password` entirely,
    reimplementing the sequence inline. It therefore ran no effective reuse
-   check and never incremented `password_version`.
+   check and skipped the history append.
 
 The property under test is the agreement, not one endpoint's spelling of it: a
 password the policy refuses must be refused on every path, and a password the
 policy accepts must produce the same side effects on every path. The structural
-test at the end guards the shape of the fix -- `password_version` is bumped in
-exactly one place, so a password path added later cannot quietly skip it.
+test at the end guards the shape of the fix -- the side effects are written in
+exactly one place, so a password path added later cannot quietly skip them.
 """
 
 import ast
@@ -157,12 +157,10 @@ async def test_update_password_refuses_a_password_inside_the_window(
 async def test_update_password_accepts_a_genuinely_new_password(db: AsyncSession, user_factory: Any) -> None:
     user = await user_factory.create(password=SIGNUP_PASSWORD)
     previous_hash = user.password
-    previous_version = user.password_version
 
     await user_crud.update_password(user=user, new_password=SECOND_PASSWORD, db_session=db)
 
     assert PasswordValidator.verify_password(SECOND_PASSWORD, user.password)
-    assert user.password_version == previous_version + 1
     assert await history_hashes(db, user) == [previous_hash]
 
 
@@ -177,7 +175,7 @@ async def test_reset_refuses_the_current_password_on_a_fresh_account(
 ) -> None:
     """The live repro from #193: register, then reset back to the sign-up password."""
     user = await user_factory.create(password=SIGNUP_PASSWORD, verified=True, is_active=True)
-    email, version = user.email, user.password_version
+    email = user.email
     assert await history_hashes(db, user) == []
     token = await issue_reset_token(redis_mock, user)
 
@@ -187,7 +185,8 @@ async def test_reset_refuses_the_current_password_on_a_fresh_account(
     db.expunge_all()
     reloaded = await user_crud.get_by_email(db_session=db, email=email)
     assert reloaded is not None
-    assert reloaded.password_version == version
+    assert PasswordValidator.verify_password(SIGNUP_PASSWORD, reloaded.password)
+    assert await history_hashes(db, reloaded) == []
 
 
 @pytest.mark.parametrize("path", CONFIRM_PATHS)
@@ -248,11 +247,10 @@ async def test_change_password_refuses_a_password_inside_the_window(
 async def test_change_password_accepts_a_new_password_with_the_same_side_effects(
     client: AsyncClient, db: AsyncSession, user_factory: Any
 ) -> None:
-    """Defect 3: this path skipped the history append and the version bump."""
+    """Defect 3: this path skipped the history append."""
     user = await user_factory.create(password=SIGNUP_PASSWORD, verified=True, is_active=True)
     email = user.email
     previous_hash = user.password
-    previous_version = user.password_version
     headers = await login_headers(client, email, SIGNUP_PASSWORD)
 
     response = await post_change_password(client, headers, SIGNUP_PASSWORD, SECOND_PASSWORD)
@@ -263,7 +261,6 @@ async def test_change_password_accepts_a_new_password_with_the_same_side_effects
     assert reloaded is not None
     assert reloaded.password is not None
     assert PasswordValidator.verify_password(SECOND_PASSWORD, reloaded.password)
-    assert reloaded.password_version == previous_version + 1
     assert await history_hashes(db, reloaded) == [previous_hash]
 
 
@@ -299,21 +296,26 @@ def _modules_matching(predicate: Any) -> set:
     return found
 
 
-def test_password_version_is_incremented_in_exactly_one_place() -> None:
+def test_password_side_effects_are_written_in_exactly_one_place() -> None:
     """Every password path must inherit the side effects, not restate them.
 
-    `change_password` reimplemented the sequence and silently dropped this
-    bump. Keeping the write in one module is what makes the reuse policy, the
-    history append and the version bump impossible to apply selectively.
+    `change_password` reimplemented the sequence and silently dropped them.
+    Keeping the writes in one module is what makes the reuse policy and the
+    history append impossible to apply selectively. This tracks
+    `last_changed_password_date` because it is the side effect written by
+    assignment; the version counter used to serve as the marker until #68
+    retired it.
     """
 
-    def writes_password_version(node: ast.AST) -> bool:
-        if not isinstance(node, ast.AugAssign):
+    def stamps_the_password_change(node: ast.AST) -> bool:
+        if not isinstance(node, ast.Assign):
             return False
-        target = node.target
-        return isinstance(target, ast.Attribute) and target.attr == "password_version"
+        return any(
+            isinstance(target, ast.Attribute) and target.attr == "last_changed_password_date"
+            for target in node.targets
+        )
 
-    assert _modules_matching(writes_password_version) == {"crud/user_crud.py"}
+    assert _modules_matching(stamps_the_password_change) == {"crud/user_crud.py"}
 
 
 def test_no_reuse_check_compares_bcrypt_digests() -> None:
