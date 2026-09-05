@@ -93,7 +93,7 @@ def redis_ops(redis_mock: Any) -> List[Tuple[str, str]]:
 
         return wrapper
 
-    for command in ("sadd", "delete"):
+    for command in ("sadd", "zadd", "delete"):
         setattr(redis_mock, command, recording(command, getattr(redis_mock, command)))
     return recorded
 
@@ -157,9 +157,9 @@ async def test_change_password_revokes_before_it_reissues(
     keys = {allowlist_key(user_id, t) for t in (TokenType.ACCESS, TokenType.REFRESH)}
     ordered = [command for command, key in redis_ops if key in keys]
     assert "delete" in ordered, "change-password revoked nothing"
-    assert "sadd" in ordered, "change-password allowlisted nothing"
+    assert "zadd" in ordered, "change-password allowlisted nothing"
 
-    first_add = ordered.index("sadd")
+    first_add = ordered.index("zadd")
     last_delete = len(ordered) - 1 - ordered[::-1].index("delete")
     assert last_delete < first_add, f"a revocation ran after the reissue: {ordered}"
 
