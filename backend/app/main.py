@@ -30,6 +30,7 @@ from app.core.config import ModeEnum, settings
 from app.core.rate_limit import limiter
 from app.core.service_config import service_settings
 from app.schemas.response_schema import ErrorDetail, create_error_response
+from app.utils.client_address import ProxyHeadersMiddleware
 from app.utils.exceptions.user_exceptions import UserSelfDeleteException
 from app.utils.fastapi_globals import GlobalsMiddleware, g
 
@@ -211,6 +212,12 @@ if settings.BACKEND_CORS_ORIGINS:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+# Added last, so it is the outermost middleware: everything below it -- slowapi's
+# rate-limit buckets, the security-event log, origin-network detection -- reads
+# request.client, and must read the client's address rather than the proxy's
+# (#203, ADR 0011 decision 8).
+fastapi_app.add_middleware(ProxyHeadersMiddleware, trusted_proxies=settings.TRUSTED_PROXIES)
 
 
 class CustomException(Exception):

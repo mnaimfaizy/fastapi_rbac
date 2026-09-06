@@ -49,6 +49,7 @@ from app.utils.background_tasks import (
     process_account_lockout,
     send_password_reset_email,
 )
+from app.utils.client_address import get_client_ip
 from app.utils.password_policy import enforce_password_complexity
 from app.utils.response_timing import response_time_floor
 from app.utils.token import (
@@ -82,7 +83,7 @@ async def login(
     db_session: AsyncSession = Depends(deps.get_db),
     _: None = Depends(deps.validate_csrf_token),
 ) -> IPostResponseBase[Token]:
-    ip_address = request.client.host if request.client else "Unknown"  # Sanitize inputs for security
+    ip_address = get_client_ip(request) or "Unknown"  # Sanitize inputs for security
     try:
         sanitized_email = sanitizer.sanitize(str(email), "email")
         # Password should not be sanitized as it needs to remain exactly as entered
@@ -323,7 +324,7 @@ async def login(
                 refresh_token=refresh_token,
                 access_expire_minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES,
                 refresh_expire_minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES,
-                origin_ip=request.client.host if request.client else None,
+                origin_ip=get_client_ip(request),
             )
             set_refresh_token_cookie(response, refresh_token)
         except Exception as e:
@@ -395,7 +396,7 @@ async def register(
     domain, too many requests from this IP -- are still reported, since they
     reveal nothing about whether an account exists.
     """
-    ip_address = request.client.host if request.client else "Unknown"
+    ip_address = get_client_ip(request) or "Unknown"
 
     async with response_time_floor():
         try:
@@ -549,7 +550,7 @@ async def verify_email(
     unknown address returns before the Redis lookup a disabled account pays
     for, and a rejection returns before the write a success pays for.
     """
-    ip_address = request.client.host if request.client else "Unknown"
+    ip_address = get_client_ip(request) or "Unknown"
     email_from_token_str: str | None = None
     async with response_time_floor():
         # Input sanitization for email verification data
@@ -744,7 +745,7 @@ async def resend_verification_email(
     an open mailer for unsolicited signup mail; the response-time floor covers
     that branch instead.
     """
-    ip_address = request.client.host if request.client else "Unknown"
+    ip_address = get_client_ip(request) or "Unknown"
 
     async with response_time_floor():
         try:
@@ -789,7 +790,7 @@ async def change_password(
     Change password
     """
     # Ensure ip_address is defined at the top of the function scope
-    ip_address = request.client.host if request.client else "Unknown"
+    ip_address = get_client_ip(request) or "Unknown"
     try:
         # Ensure current_user.password is not None before verification
         if current_user.password is None:
@@ -909,7 +910,7 @@ async def change_password(
             refresh_token=refresh_token,
             access_expire_minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES,
             refresh_expire_minutes=int(refresh_token_expires.total_seconds() / 60),
-            origin_ip=request.client.host if request.client else None,
+            origin_ip=get_client_ip(request),
         )
         set_refresh_token_cookie(
             response,
@@ -968,7 +969,7 @@ async def get_new_access_token(
     ``refresh_token`` remains as a documented fallback for non-browser API clients.
     Redis allowlist validation is unchanged (no rotation in this change).
     """
-    client_host = request.client.host if request.client else None
+    client_host = get_client_ip(request)
     ip_address = client_host or "Unknown"  # The audit-log rendering of the same address
     payload = None  # Initialize payload for broader scope in exception handling
     refresh_token = request.cookies.get(settings.REFRESH_TOKEN_COOKIE_NAME)
@@ -1343,7 +1344,7 @@ async def logout(
     """
     Logout endpoint that invalidates the current user's tokens and clears the refresh cookie.
     """
-    ip_address = request.client.host if request.client else "Unknown"
+    ip_address = get_client_ip(request) or "Unknown"
     try:
         # Revoke every token for this user before the response is written.
         await revoke_user_tokens(
@@ -1414,7 +1415,7 @@ async def request_password_reset(
     account from every other state (#137). Only the development-mode branch
     differs, and it hands back the token itself for MailHog.
     """
-    ip_address = request.client.host if request.client else "Unknown"
+    ip_address = get_client_ip(request) or "Unknown"
     user: User | None = None  # Define user here for broader scope
 
     async with response_time_floor():
@@ -1531,7 +1532,7 @@ async def confirm_password_reset(
     Password complexity and history failures stay distinct: they describe the
     submitted password, not the account.
     """
-    ip_address = request.client.host if request.client else "Unknown"
+    ip_address = get_client_ip(request) or "Unknown"
     email_from_token_str: str | None = None
 
     async with response_time_floor():
@@ -1662,7 +1663,7 @@ async def reset_password(
     and input sanitisation; see it for why every account-dependent failure here
     answers with one message. ADR 0010 records why the two were not merged.
     """
-    ip_address = request.client.host if request.client else "Unknown"
+    ip_address = get_client_ip(request) or "Unknown"
     email_from_token_str: str | None = None
     async with response_time_floor():
         # Input sanitization for password reset data

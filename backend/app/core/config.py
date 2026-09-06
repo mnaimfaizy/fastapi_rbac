@@ -1,8 +1,9 @@
+import json
 import os
 import secrets
 from enum import Enum
 from functools import lru_cache
-from typing import Any, Dict, List, Optional, Union
+from typing import Annotated, Any, Dict, List, Optional, Union
 
 from pydantic import (
     AnyHttpUrl,
@@ -13,7 +14,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 # Add these imports for settings sources
 from pydantic_settings.sources import DotEnvSettingsSource, PydanticBaseSettingsSource
@@ -322,6 +323,12 @@ class Settings(BaseSettings):
     # outright, and the user's other sessions survive. Behind a reverse proxy this
     # sees real client addresses only once forwarded headers are trusted (#203).
     VALIDATE_TOKEN_IP: bool = True
+    # Peers whose X-Forwarded-For / X-Real-IP headers are believed (ADR 0011
+    # decision 8, #203). Addresses or CIDR networks, JSON list or comma-separated.
+    # Defaults to loopback: a deployment that puts the app behind a proxy on
+    # another host or container must name that proxy or its network. A wildcard
+    # is rejected -- see app.utils.client_address.
+    TRUSTED_PROXIES: Annotated[List[str], NoDecode] = ["127.0.0.1", "::1"]
     TOKEN_BLACKLIST_ON_LOGOUT: bool = True  # Add tokens to blacklist on logout
     TOKEN_BLACKLIST_EXPIRY: int = 86400  # Keep blacklisted tokens for 24 hours
 
@@ -347,6 +354,34 @@ class Settings(BaseSettings):
         elif isinstance(v, str):
             return [v]
         raise ValueError(v)
+
+    @field_validator("TRUSTED_PROXIES", mode="before")
+    def split_trusted_proxies(cls, v: Any) -> Any:
+        """Accept both env forms: a JSON list, and a bare comma-separated list.
+
+        The field is ``NoDecode`` so this runs on the raw environment string.
+        Without it, ``TRUSTED_PROXIES=172.16.0.0/12`` -- the form an operator
+        reaches for first -- fails to boot with a JSON parse error naming
+        neither the value nor the fix.
+        """
+        if isinstance(v, str):
+            text = v.strip()
+            if text.startswith("["):
+                return json.loads(text)
+            return [entry.strip() for entry in text.split(",") if entry.strip()]
+        return v
+
+    @field_validator("TRUSTED_PROXIES", mode="after")
+    def validate_trusted_proxies(cls, v: List[str]) -> List[str]:
+        """Fail at startup on a wildcard or a typo rather than per request.
+
+        Parsing lives in ``app.utils.client_address`` so the middleware and this
+        check cannot disagree about what a trusted proxy is.
+        """
+        from app.utils.client_address import parse_trusted_proxies
+
+        parse_trusted_proxies(v)
+        return v
 
     @field_validator("SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD")
     def set_email_values_based_on_mode(cls, v: Any, info: ValidationInfo) -> Any:

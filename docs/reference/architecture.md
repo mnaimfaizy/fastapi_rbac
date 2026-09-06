@@ -150,6 +150,7 @@ Frontend storage strategy:
 - bcrypt passwords, history, lockout
 - RBAC via roles and permissions on protected routes
 - CSRF, rate limiting, input sanitization, security headers
+- Client address resolved once at the edge (`app/utils/client_address.py`), from forwarded headers only when the peer is a `TRUSTED_PROXIES` member — rate limiting, security events and origin-network detection all read that one answer ([ADR 0011](../adr/0011-session-security-model.md) decision 8)
 
 Details: [Security Features](./SECURITY_FEATURES.md). Deep session analysis lives under `docs/SESSION_SECURITY_*.md` (historical / design notes; prefer this page + ADR for current behavior).
 

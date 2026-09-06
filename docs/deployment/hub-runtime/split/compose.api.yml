@@ -33,6 +33,10 @@ services:
       - .env
     environment:
       MODE: production
+      # Caddy terminates TLS in its own container on this bridge network. The
+      # backend believes forwarded headers only from a named proxy (ADR 0011
+      # decision 8), so without this every request is attributed to Caddy.
+      TRUSTED_PROXIES: '["172.16.0.0/12"]'
     # Production Redis TLS expects /app/certs/ca.crt (self-hosted Redis).
     # Upstash uses public CAs — mount the host trust store as that path.
     volumes:
