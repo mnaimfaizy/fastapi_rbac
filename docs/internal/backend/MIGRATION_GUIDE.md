@@ -64,7 +64,7 @@ If you're running this in production:
 - `CELERY_WORKER_MAX_MEMORY_PER_CHILD` - Memory management
 - `CELERY_BROKER_POOL_LIMIT` - Connection pool optimization
 - `CELERY_TASK_COMPRESSION` - Task compression for production
-- `VALIDATE_TOKEN_IP` - Enhanced token security
+- `VALIDATE_TOKEN_IP` - Origin-network anomaly detection on refresh ([ADR 0011](../../adr/0011-session-security-model.md))
 - `TOKEN_BLACKLIST_ON_LOGOUT` - Session security
 - `TOKEN_BLACKLIST_EXPIRY` - Token management
 

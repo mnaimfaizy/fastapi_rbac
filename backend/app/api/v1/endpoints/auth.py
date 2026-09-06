@@ -56,7 +56,9 @@ from app.utils.token import (
     add_session_tokens_to_redis,
     add_token_to_redis,
     get_valid_tokens,
+    refresh_origin_is_anomalous,
     revoke_all_user_tokens,
+    revoke_session,
     revoke_user_tokens,
     token_is_allowlisted,
 )
@@ -321,6 +323,7 @@ async def login(
                 refresh_token=refresh_token,
                 access_expire_minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES,
                 refresh_expire_minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES,
+                origin_ip=request.client.host if request.client else None,
             )
             set_refresh_token_cookie(response, refresh_token)
         except Exception as e:
@@ -906,6 +909,7 @@ async def change_password(
             refresh_token=refresh_token,
             access_expire_minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES,
             refresh_expire_minutes=int(refresh_token_expires.total_seconds() / 60),
+            origin_ip=request.client.host if request.client else None,
         )
         set_refresh_token_cookie(
             response,
@@ -964,7 +968,8 @@ async def get_new_access_token(
     ``refresh_token`` remains as a documented fallback for non-browser API clients.
     Redis allowlist validation is unchanged (no rotation in this change).
     """
-    ip_address = request.client.host if request.client else "Unknown"  # Get IP address
+    client_host = request.client.host if request.client else None
+    ip_address = client_host or "Unknown"  # The audit-log rendering of the same address
     payload = None  # Initialize payload for broader scope in exception handling
     refresh_token = request.cookies.get(settings.REFRESH_TOKEN_COOKIE_NAME)
     if not refresh_token and body and body.refresh_token:
@@ -1005,6 +1010,35 @@ async def get_new_access_token(
                     log_security_event,
                     background_tasks=background_tasks,
                     event_type="refresh_token_invalid",
+                    details={"user_id": user_id_from_token, "ip_address": ip_address},
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={"status": False, "message": "Refresh token invalid"},
+                )
+            # Origin-network anomaly detection (#69, ADR 0011 decision 5). The
+            # session dies and the user re-authenticates on this device; their
+            # other sessions are untouched. The answer is the ordinary refresh
+            # failure above, deliberately not a distinct error -- a caller must
+            # not learn that the address is what gave it away.
+            if await refresh_origin_is_anomalous(
+                redis_client, user_id_from_token, refresh_token, client_host
+            ):
+                await revoke_session(redis_client, user_id_from_token, refresh_token)
+                # Logged inline as well as queued. A task on background_tasks runs
+                # only if the handler returns a response, and this one raises; the
+                # audit-log sink behind log_security_event is also still a stub.
+                # Until both are fixed this line is the only place the anomaly rate
+                # can be counted -- and ADR 0011 decision 5 defers notifying users
+                # precisely until that rate is known, so it has to be countable.
+                logger.warning(
+                    "refresh_origin_network_mismatch: revoked session for token subject "
+                    f"{user_id_from_token} presented from {ip_address}"
+                )
+                background_tasks.add_task(
+                    log_security_event,
+                    background_tasks=background_tasks,
+                    event_type="refresh_origin_network_mismatch",
                     details={"user_id": user_id_from_token, "ip_address": ip_address},
                 )
                 raise HTTPException(

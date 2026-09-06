@@ -94,6 +94,13 @@ Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'
 - **Token Allowlisting**: Only tokens recorded at login/refresh are accepted
 - **Automatic Refresh**: Transparent token renewal via cookie + CSRF
 - **Secure Logout**: Allowlist keys removed and refresh cookie cleared
+- **Origin-Network Anomaly Detection**: when `VALIDATE_TOKEN_IP` is on, the address a
+  session was established from is recorded with its refresh allowlist entry. A refresh
+  presented from a different IPv4 /24 or IPv6 /64 revokes that one session and answers
+  with the ordinary refresh failure. Access tokens are never checked this way, the
+  user's other sessions survive, and a session with no recorded origin refreshes
+  normally. This is detection, not IP binding -- see
+  [ADR 0011](../adr/0011-session-security-model.md) decision 5
 
 **Security Measures**:
 
