@@ -25,17 +25,16 @@ apart again.
 
 from __future__ import annotations
 
-from ipaddress import (
-    IPv4Address,
-    IPv4Network,
-    IPv6Address,
-    IPv6Network,
-    ip_address,
-    ip_network,
-)
+from ipaddress import IPv4Network, IPv6Network, ip_network
 from typing import Any, Iterable, Sequence
 
+from starlette.requests import Request
 from starlette.types import ASGIApp, Receive, Scope, Send
+
+# The same parse both modules need: an address, normalised, or None when the
+# text is not one. Origin-network detection compares what this returns, so a
+# second parser here would be a second answer to "which host is this".
+from app.utils.origin_network import parse_client_address
 
 TrustedProxies = tuple[IPv4Network | IPv6Network, ...]
 
@@ -55,7 +54,15 @@ class TrustedProxyError(ValueError):
     """
 
 
-def _split(values: str | Iterable[str] | None) -> list[str]:
+def split_entries(values: str | Iterable[str] | None) -> list[str]:
+    """The non-empty entries of a comma-separated string or a sequence.
+
+    Shared by the settings validator and the forwarded-header walk so that
+    "how a list of addresses is written" has one answer.
+
+    >>> split_entries("10.0.0.2, ::1")
+    ['10.0.0.2', '::1']
+    """
     if values is None:
         return []
     if isinstance(values, str):
@@ -76,7 +83,7 @@ def parse_trusted_proxies(values: str | Iterable[str] | None) -> TrustedProxies:
     ()
     """
     networks: list[IPv4Network | IPv6Network] = []
-    for entry in _split(values):
+    for entry in split_entries(values):
         if entry in WILDCARD_VALUES:
             raise TrustedProxyError(
                 f"{entry!r} would trust forwarded headers from every peer, which lets any "
@@ -95,26 +102,9 @@ def parse_trusted_proxies(values: str | Iterable[str] | None) -> TrustedProxies:
     return tuple(networks)
 
 
-def _parse(raw: str | None) -> IPv4Address | IPv6Address | None:
-    """An address, or None when ``raw`` is not one.
-
-    IPv4-mapped IPv6 is normalised to its dotted-quad form, so a client reaching
-    a dual-stack socket is the same address wherever it is compared.
-    """
-    if not raw:
-        return None
-    try:
-        parsed = ip_address(raw.strip())
-    except ValueError:
-        return None
-    if isinstance(parsed, IPv6Address) and parsed.ipv4_mapped is not None:
-        return parsed.ipv4_mapped
-    return parsed
-
-
 def is_trusted_proxy(address: str | None, trusted_proxies: TrustedProxies) -> bool:
     """Whether ``address`` is one of the configured reverse proxies."""
-    parsed = _parse(address)
+    parsed = parse_client_address(address)
     if parsed is None:
         return False
     return any(parsed in network for network in trusted_proxies)
@@ -149,8 +139,8 @@ def resolve_client_address(
     if not is_trusted_proxy(peer, trusted_proxies):
         return peer
 
-    for entry in reversed(_split(forwarded_for)):
-        parsed = _parse(entry)
+    for entry in reversed(split_entries(forwarded_for)):
+        parsed = parse_client_address(entry)
         if parsed is None:
             # A chain the proxy did not write, or one a client corrupted. Stop
             # here rather than reach further left into attacker-controlled text.
@@ -158,14 +148,14 @@ def resolve_client_address(
         if not is_trusted_proxy(str(parsed), trusted_proxies):
             return str(parsed)
 
-    forwarded_real_ip = _parse(real_ip)
+    forwarded_real_ip = parse_client_address(real_ip)
     if forwarded_real_ip is not None and not is_trusted_proxy(str(forwarded_real_ip), trusted_proxies):
         return str(forwarded_real_ip)
 
     return peer
 
 
-def get_client_ip(request: Any) -> str | None:
+def get_client_ip(request: Request) -> str | None:
     """The client address of a request, as corrected by ``ProxyHeadersMiddleware``.
 
     The one reader every consumer shares. It stays a function rather than an

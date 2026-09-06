@@ -364,11 +364,11 @@ class Settings(BaseSettings):
         reaches for first -- fails to boot with a JSON parse error naming
         neither the value nor the fix.
         """
+        from app.utils.client_address import split_entries
+
         if isinstance(v, str):
             text = v.strip()
-            if text.startswith("["):
-                return json.loads(text)
-            return [entry.strip() for entry in text.split(",") if entry.strip()]
+            return json.loads(text) if text.startswith("[") else split_entries(text)
         return v
 
     @field_validator("TRUSTED_PROXIES", mode="after")

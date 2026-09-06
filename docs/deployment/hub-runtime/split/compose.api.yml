@@ -46,7 +46,7 @@ services:
       [
         "/bin/bash",
         "-c",
-        "python ./app/backend_pre_start.py && alembic upgrade head && python ./app/initial_data.py && exec gunicorn app.main:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --log-level info --access-logfile - --error-logfile -",
+        "python ./app/backend_pre_start.py && alembic upgrade head && python ./app/initial_data.py && exec gunicorn app.main:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --forwarded-allow-ips= --log-level info --access-logfile - --error-logfile -",
       ]
     networks:
       - hub_api
