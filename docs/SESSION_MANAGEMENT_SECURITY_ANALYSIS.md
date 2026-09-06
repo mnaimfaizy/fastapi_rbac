@@ -187,10 +187,13 @@ the response is written (#206).
    - Enhancement: Enforce max sessions; allow users to view and revoke active sessions
 
 3. **Deferred controls** (config exists; not wired)
-   - `VALIDATE_TOKEN_IP` / UA binding / jti `TOKEN_BLACKLIST_*` — aspirational leftovers
+   - UA binding / jti `TOKEN_BLACKLIST_*` — aspirational leftovers
    - `password_version` was one of these; [ADR 0011](adr/0011-session-security-model.md)
      retired it and dropped the column, since the allowlist already revokes sessions on
      every password change (#68)
+   - `VALIDATE_TOKEN_IP` was one of these; ADR 0011 decision 5 implemented it as
+     origin-network anomaly detection on refresh rather than IP binding (#69). UA
+     binding was rejected outright in decision 6
 
 ### Authentication Endpoints (`app/api/v1/endpoints/auth.py`)
 

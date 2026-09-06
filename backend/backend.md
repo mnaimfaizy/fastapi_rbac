@@ -181,7 +181,7 @@ The project now uses a single consolidated `.env.example` file for all environme
 
 - `PASSWORD_PEPPER` (password hashing security)
 - `CELERY_WORKER_CONCURRENCY`, `CELERY_WORKER_MAX_MEMORY_PER_CHILD`, `CELERY_BROKER_POOL_LIMIT`, `CELERY_TASK_COMPRESSION` (Celery production tuning)
-- `VALIDATE_TOKEN_IP`, `TOKEN_BLACKLIST_ON_LOGOUT`, `TOKEN_BLACKLIST_EXPIRY` (token/session security)
+- `VALIDATE_TOKEN_IP` (origin-network anomaly detection on refresh -- see [ADR 0011](../docs/adr/0011-session-security-model.md)), `TOKEN_BLACKLIST_ON_LOGOUT`, `TOKEN_BLACKLIST_EXPIRY` (token/session security)
 - Updated Redis SSL and email settings
 
 **Quick Reference:**

@@ -310,6 +310,7 @@ Refresh an access token. Prefer the HttpOnly `refresh_token` cookie (first-party
 
 - 401 Unauthorized: Missing, invalid, or expired refresh token
 - 403 Forbidden: CSRF failure or refresh token not on Redis allowlist
+- 403 Forbidden: the session was revoked because this refresh came from a different origin network than the one it was established from (`VALIDATE_TOKEN_IP`, [ADR 0011](../../adr/0011-session-security-model.md) decision 5). The body is identical to the allowlist rejection above, deliberately: the response does not tell a caller that the address is what gave it away
 
 ---
 

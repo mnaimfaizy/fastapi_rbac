@@ -9,6 +9,7 @@ from redis.asyncio import Redis
 from app.core.config import settings
 from app.models.user_model import User
 from app.schemas.common_schema import TokenType
+from app.utils.origin_network import is_different_network
 
 # The types the allowlist actually holds under ``user:{id}:{token_type}``.
 # TokenType.VERIFICATION is deliberately absent: email verification stores a
@@ -34,12 +35,15 @@ def _as_text(value: bytes | str) -> str:
     return value.decode("utf-8") if isinstance(value, bytes) else value
 
 
-def _metadata_payload(*, issued_at: float, expires_at: float, session_id: str | None) -> str:
+def _metadata_payload(
+    *, issued_at: float, expires_at: float, session_id: str | None, origin_ip: str | None = None
+) -> str:
     return json.dumps(
         {
             "issued_at": issued_at,
             "exp": expires_at,
             "session_id": session_id or "",
+            "origin_ip": origin_ip or "",
         }
     )
 
@@ -101,7 +105,41 @@ async def _session_id_of(redis_client: Redis, user_id: UUID | str, token_type: T
     return str((await _read_metadata(redis_client, user_id, token_type, token)).get("session_id") or "")
 
 
-async def _evict_session(redis_client: Redis, user_id: UUID | str, refresh_token: str) -> None:
+async def session_origin_ip(redis_client: Redis, user_id: UUID | str, refresh_token: str) -> str | None:
+    """The client address a session was established from, or None if unrecorded.
+
+    Unrecorded covers a session predating #69, a login whose client address the
+    request did not carry, and metadata that cannot be read back. All three are
+    absent rather than mismatched -- see ``origin_network``.
+    """
+    recorded = (await _read_metadata(redis_client, user_id, TokenType.REFRESH, refresh_token)).get(
+        "origin_ip"
+    )
+    return str(recorded) if recorded else None
+
+
+async def refresh_origin_is_anomalous(
+    redis_client: Redis, user_id: UUID | str, refresh_token: str, client_ip: str | None
+) -> bool:
+    """Whether this refresh comes from a different network than the session's.
+
+    Gated on ``VALIDATE_TOKEN_IP``, which is origin-network anomaly detection
+    rather than IP binding (ADR 0011 decision 5). Asked at refresh only:
+    access tokens are never checked against the origin.
+    """
+    if not settings.VALIDATE_TOKEN_IP:
+        return False
+    recorded = await session_origin_ip(redis_client, user_id, refresh_token)
+    return is_different_network(recorded, client_ip)
+
+
+async def revoke_session(redis_client: Redis, user_id: UUID | str, refresh_token: str) -> None:
+    """Revoke one session: its refresh token and the access tokens derived from it.
+
+    The user's other sessions are untouched, which is what makes this usable as
+    the answer to an origin anomaly -- revoking all of them would mean a phone
+    changing networks logs out the desktop.
+    """
     session_id = await _session_id_of(redis_client, user_id, TokenType.REFRESH, refresh_token)
     if not session_id:
         session_id = session_id_for(refresh_token)
@@ -129,7 +167,7 @@ async def _enforce_concurrent_session_limit(redis_client: Redis, user_id: UUID |
         ranked.append((issued_at, token))
     ranked.sort(key=lambda item: (item[0], item[1]))
     for _issued_at, token in ranked[:overflow]:
-        await _evict_session(redis_client, user_id, token)
+        await revoke_session(redis_client, user_id, token)
 
 
 async def add_token_to_redis(
@@ -139,6 +177,7 @@ async def add_token_to_redis(
     token_type: TokenType,
     expire_time: int,
     session_id: str | None = None,
+    origin_ip: str | None = None,
 ) -> None:
     issued_at = time.time()
     expires_at = issued_at + timedelta(minutes=expire_time).total_seconds()
@@ -155,6 +194,7 @@ async def add_token_to_redis(
             issued_at=issued_at,
             expires_at=expires_at,
             session_id=session_id,
+            origin_ip=origin_ip,
         ),
     )
     await _extend_key_ttl(redis_client, user.id, token_type)
@@ -169,12 +209,19 @@ async def add_session_tokens_to_redis(
     refresh_token: str,
     access_expire_minutes: int,
     refresh_expire_minutes: int,
+    origin_ip: str | None = None,
 ) -> None:
     """Record one session: a refresh token and the access token derived from it.
 
     Adding the refresh token enforces ``CONCURRENT_SESSION_LIMIT`` (ADR 0011
     decision 7): a login at the limit evicts the oldest session rather than
     rejecting the new one. A limit of 0 or less disables enforcement.
+
+    ``origin_ip`` is the client address the session was established from, kept
+    on the refresh entry alone because that is the only place it is read
+    (ADR 0011 decision 5). Copying it onto the access entry would be a second
+    place to keep correct with no reader. Passing None records no origin, and a
+    session with no origin is never treated as an anomaly.
     """
     session_id = session_id_for(refresh_token)
     await add_token_to_redis(
@@ -184,6 +231,7 @@ async def add_session_tokens_to_redis(
         TokenType.REFRESH,
         refresh_expire_minutes,
         session_id=session_id,
+        origin_ip=origin_ip,
     )
     await add_token_to_redis(
         redis_client,

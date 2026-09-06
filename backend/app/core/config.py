@@ -315,7 +315,13 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_ENTROPY_BITS: int = 256  # Entropy for token generation
     VERIFY_TOKEN_ON_EVERY_REQUEST: bool = True
     TOKEN_VERSION_ON_PASSWORD_CHANGE: bool = True  # Invalidate tokens on password change
-    VALIDATE_TOKEN_IP: bool = True  # Validate token against original IP
+    # Origin-network anomaly detection, not IP binding (ADR 0011 decision 5, #69).
+    # The address a session was established from is recorded with its allowlist
+    # entry; a refresh presented from a different /24 (IPv4) or /64 (IPv6) revokes
+    # that one session. Access tokens are never checked, no request is blocked
+    # outright, and the user's other sessions survive. Behind a reverse proxy this
+    # sees real client addresses only once forwarded headers are trusted (#203).
+    VALIDATE_TOKEN_IP: bool = True
     TOKEN_BLACKLIST_ON_LOGOUT: bool = True  # Add tokens to blacklist on logout
     TOKEN_BLACKLIST_EXPIRY: int = 86400  # Keep blacklisted tokens for 24 hours
 
