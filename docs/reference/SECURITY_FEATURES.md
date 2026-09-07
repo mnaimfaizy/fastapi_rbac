@@ -56,7 +56,9 @@ const csrfToken = await csrfService.getCsrfToken();
 - **Password Reset request**: 3 attempts per hour
 - **Access token**: 5 attempts per minute
 
-**Configuration**: shared `Limiter` in `app/core/rate_limit.py` (`get_remote_address`; Redis `storage_uri` outside testing).
+**Configuration**: shared `Limiter` in `app/core/rate_limit.py` (`client_address_key`; Redis `storage_uri` outside testing).
+
+The IP key is the *real* client address: `ProxyHeadersMiddleware` corrects `request.client` from `X-Forwarded-For` / `X-Real-IP` when the peer is a `TRUSTED_PROXIES` member, and ignores those headers otherwise ([ADR 0011](../adr/0011-session-security-model.md) decision 8). Behind a proxy that is not configured as trusted, every client shares one bucket.
 
 Registration / resend-verification also use separate Redis **abuse counters** (not slowapi).
 

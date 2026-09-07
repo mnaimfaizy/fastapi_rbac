@@ -52,6 +52,14 @@ _Avoid_: Blacklist, denylist, token blacklist, session store
 The network a session was established from (IPv4 /24 or IPv6 /64), recorded alongside the session. A refresh presented from a different origin network is an anomaly that revokes that one session; it is not a hard block on the request.
 _Avoid_: Token IP, IP binding, IP validation
 
+**Client address**:
+The address a request is attributed to. Resolved once at the edge from the socket peer, or from that peer's forwarded headers when it is a trusted proxy. Rate limiting, security events, and origin network all read this one answer.
+_Avoid_: Remote address, IP, request IP (when they mean separate readings)
+
+**Trusted proxy**:
+A peer whose `X-Forwarded-For` and `X-Real-IP` headers the backend believes, named by address or network in configuration. Headers from any other peer are ignored; a wildcard cannot be configured, because trusting every peer lets a client forge its own client address.
+_Avoid_: Proxy allowlist, forwarded-for whitelist
+
 **Role**:
 A named set of permissions assignable to users.
 _Avoid_: Group (when meaning a role)
