@@ -30,6 +30,10 @@ If `graphify-out/graph.json` exists, **query it first** for architecture and mod
 
 Commit messages must follow [`docs/agents/commit-messages.md`](docs/agents/commit-messages.md). This is not optional: plain conventional commits, no emoji, component/domain scopes. Release-note generation depends on consistent history.
 
+### Branch names (mandatory)
+
+Branch names must follow [`docs/agents/branch-names.md`](docs/agents/branch-names.md). This is not optional: allowed prefixes only; include the issue number and a short slug when the work is for a numbered issue; no harness or vendor prefixes.
+
 ### Release
 
 User-invoked [`release`](.claude/skills/release/SKILL.md) skill: propose version → release-notes sub-agent → Release PR → return PR URL. Notes agent SSOT: [`docs/agents/release-notes-agent.md`](docs/agents/release-notes-agent.md).
