@@ -119,6 +119,13 @@ def test_cli_rejects_when_the_file_is_missing_from_one_report(tmp_path: Path) ->
     assert main([str(unit), str(integration), "--file", AUTH]) == 1
 
 
+def test_cli_exits_2_when_an_input_path_does_not_exist(tmp_path: Path) -> None:
+    unit = tmp_path / "unit.xml"
+    unit.write_text(_report(AUTH, {325: 1}), encoding="utf-8")
+
+    assert main([str(unit), str(tmp_path / "missing.xml"), "--file", AUTH]) == 2
+
+
 def test_cli_defaults_to_auth_py(tmp_path: Path) -> None:
     unit = tmp_path / "unit.xml"
     integration = tmp_path / "integration.xml"

@@ -146,6 +146,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     args = parser.parse_args(list(argv) if argv is not None else None)
     files = args.files or ["app/api/v1/endpoints/auth.py"]
+    missing = [path for path in (args.first, args.second) if not path.is_file()]
+    if missing:
+        for path in missing:
+            sys.stderr.write(f"missing coverage report: {path}\n")
+        return 2
     left = parse_cobertura(args.first.read_text(encoding="utf-8"))
     right = parse_cobertura(args.second.read_text(encoding="utf-8"))
     return compare_files(left, right, files, sys.stdout)

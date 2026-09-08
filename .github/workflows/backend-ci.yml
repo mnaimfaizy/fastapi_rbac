@@ -272,31 +272,41 @@ jobs:
         run: |
           cd backend
           python -m pip install --upgrade pip
-          coverage_pin=$(grep -E '^coverage==' requirements.txt)
+          # Python 3.10 has no tomllib; coverage reads pyproject.toml via tomli.
+          coverage_pin=$(grep -E '^coverage==' requirements.txt | sed 's/coverage==/coverage[toml]==/')
           pip install "$coverage_pin"
 
       - name: Download unit coverage data
         uses: actions/download-artifact@v8
         with:
           name: backend-coverage-unit
-          # Artifact keeps the `backend/` prefix from the upload paths.
-          path: .
+          # upload-artifact strips the shared `backend/` prefix, so these
+          # files are flat (coverage.xml, coverage.unit.data). Put them
+          # back under backend/ where combine and the comparer run.
+          path: backend
 
       - name: Download integration coverage data
         uses: actions/download-artifact@v8
         with:
           name: backend-coverage-integration
-          path: .
+          path: backend
 
       - name: Compare executable line sets then combine
         run: |
           cd backend
+          ls -l coverage.xml coverage-integration.xml coverage.unit.data coverage.integration.data
           # Diagnostic for #236: log whether the two original XMLs agree about
-          # which lines exist. Hits may differ; that is why we combine. A
-          # mismatch here is a warning, not a failed upload -- coverage.py
-          # combine against the checkout is the merge we trust.
-          if ! python test/cobertura_compare.py coverage.xml coverage-integration.xml --file app/api/v1/endpoints/auth.py; then
+          # which lines exist. Hits may differ; that is why we combine. Exit 1
+          # is a line-set mismatch (warn, still upload). Any other non-zero
+          # is a missing file or a crash and must fail the job.
+          set +e
+          python test/cobertura_compare.py coverage.xml coverage-integration.xml --file app/api/v1/endpoints/auth.py
+          compare_rc=$?
+          set -e
+          if [ "$compare_rc" -eq 1 ]; then
             echo "::warning::Original unit and integration XMLs disagree about executable lines in auth.py. Uploading the coverage.py combine anyway."
+          elif [ "$compare_rc" -ne 0 ]; then
+            exit "$compare_rc"
           fi
           coverage combine coverage.unit.data coverage.integration.data
           coverage xml -o coverage-combined.xml
