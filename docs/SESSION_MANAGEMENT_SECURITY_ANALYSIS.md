@@ -17,7 +17,7 @@ This document provides a comprehensive security analysis of the current session 
 
 The current implementation demonstrates strong security foundations with:
 - ✅ JWT-based authentication with separate access and refresh tokens
-- ✅ Redis-backed token management and blacklisting
+- ✅ Redis-backed token allowlist (revocation by deleting membership)
 - ✅ Comprehensive token validation with standard claims
 - ✅ Secure frontend token storage (memory for access, localStorage for refresh)
 - ✅ Automatic token refresh mechanism
@@ -59,8 +59,8 @@ The project implements a dual-token JWT authentication system:
 └─────────────────┘          └──────────────────┘          └─────────────┘
      │                              │                             │
      │ Access Token (Memory)        │ Token Generation           │ Token Storage
-     │ Refresh Token (localStorage) │ Token Validation           │ Blacklisting
-     │ Auto-refresh on 401         │ Token Blacklisting         │ Session Tracking
+     │ Refresh Token (localStorage) │ Token Validation           │ Allowlist
+     │ Auto-refresh on 401         │ Allowlist revocation       │ Session Tracking
 ```
 
 ### Token Types
@@ -186,9 +186,11 @@ the response is written (#206).
    - Current: `CONCURRENT_SESSION_LIMIT` is configured but not enforced on the allowlist
    - Enhancement: Enforce max sessions; allow users to view and revoke active sessions
 
-3. **Deferred controls** (config exists; not wired)
-   - UA binding / jti `TOKEN_BLACKLIST_*` — aspirational leftovers
-   - `password_version` was one of these; [ADR 0011](adr/0011-session-security-model.md)
+3. **Deleted unused settings** ([ADR 0011](adr/0011-session-security-model.md) decision 4, #204)
+   - A blacklist is the inverse of the allowlist and was never wired; session
+     lifetime is already access and refresh token expiry. The four settings that
+     advertised those controls were deleted rather than implemented.
+   - `password_version` was one of these leftovers; ADR 0011 decision 3
      retired it and dropped the column, since the allowlist already revokes sessions on
      every password change (#68)
    - `VALIDATE_TOKEN_IP` was one of these; ADR 0011 decision 5 implemented it as
@@ -522,7 +524,7 @@ None identified. The current implementation has no critical security vulnerabili
 | **Refresh token rotation** | ❌ Not implemented | 🟡 Recommended |
 | **Token binding (PKCE)** | ❌ Not applicable (not OAuth flow) | ⚪ N/A |
 | **HTTP-only cookies for refresh tokens** | ❌ Using localStorage | 🟡 Recommended |
-| **Token revocation** | ✅ Blacklisting implemented | ✅ Compliant |
+| **Token revocation** | ✅ Redis allowlist (delete membership) | ✅ Compliant |
 
 ### OWASP Authentication Cheat Sheet
 
@@ -659,13 +661,9 @@ Expose all session-related settings in configuration for easy tuning without cod
 
 Add to `app/core/config.py`:
 ```python
-# Session Security (already present, just document)
-SESSION_MAX_AGE: int = 3600  # 1 hour
-SESSION_EXTEND_ON_ACTIVITY: bool = True
+# Session Security (already present)
 CONCURRENT_SESSION_LIMIT: int = 5
 VALIDATE_TOKEN_IP: bool = True
-TOKEN_BLACKLIST_ON_LOGOUT: bool = True
-TOKEN_BLACKLIST_EXPIRY: int = 86400
 
 # NEW: Refresh token rotation
 ENABLE_REFRESH_TOKEN_ROTATION: bool = True
@@ -888,43 +886,13 @@ class AuthTokenManager {
 **Impact:** Low-Medium
 **Risk:** Low
 
-#### 6. Add Session Activity Extension
+#### 6. Idle session timeout
 
-**Description:**
-Optionally extend session expiry on user activity.
-
-**Benefits:**
-- Better UX for active users
-- Configurable per deployment
-- Standard feature in enterprise applications
-
-**Implementation (proposed):**
-```python
-# app/core/config.py
-SESSION_EXTEND_ON_ACTIVITY: bool = True
-SESSION_ACTIVITY_EXTENSION_MINUTES: int = 30
-
-# proposed helper alongside app/utils/token.py allowlist
-async def update_session_activity(redis_client, user_id: UUID, session_id: str):
-    """Update last activity time and optionally extend session metadata TTL."""
-    if not settings.SESSION_EXTEND_ON_ACTIVITY:
-        return
-
-    key = f"session_metadata:{user_id}:{session_id}"
-    metadata = await redis_client.get(key)
-    if metadata:
-        data = json.loads(metadata)
-        data["last_activity"] = datetime.now(timezone.utc).isoformat()
-        await redis_client.setex(
-            key,
-            timedelta(minutes=settings.SESSION_ACTIVITY_EXTENSION_MINUTES),
-            json.dumps(data),
-        )
-```
-
-**Effort:** Medium (4-6 hours)
-**Impact:** Medium
-**Risk:** Low
+Idle session timeout was never implemented. A setting that advertised it existed
+in configuration and was read by nothing; [ADR 0011](adr/0011-session-security-model.md)
+decision 4 deleted it rather than wiring it up. Session lifetime is already
+defined by access and refresh token expiry. If idle timeout is wanted, it
+deserves its own design rather than revival of that unused control.
 
 ### Priority 4: Future Enhancements
 

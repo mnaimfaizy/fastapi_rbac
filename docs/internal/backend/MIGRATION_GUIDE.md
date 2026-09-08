@@ -65,8 +65,6 @@ If you're running this in production:
 - `CELERY_BROKER_POOL_LIMIT` - Connection pool optimization
 - `CELERY_TASK_COMPRESSION` - Task compression for production
 - `VALIDATE_TOKEN_IP` - Origin-network anomaly detection on refresh ([ADR 0011](../../adr/0011-session-security-model.md))
-- `TOKEN_BLACKLIST_ON_LOGOUT` - Session security
-- `TOKEN_BLACKLIST_EXPIRY` - Token management
 
 ### Variables with Updated Comments
 

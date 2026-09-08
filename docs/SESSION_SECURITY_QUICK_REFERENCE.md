@@ -20,8 +20,8 @@ The FastAPI RBAC project has a robust, secure session management implementation 
 ```
 Frontend (React)          Backend (FastAPI)         Redis Cache
 ├─ Access Token (Memory)  ├─ JWT Generation        ├─ Token Storage
-├─ Refresh Token (Local)  ├─ Token Validation      ├─ Blacklisting
-└─ Auto-refresh (401)     └─ Token Blacklisting    └─ Session Tracking
+├─ Refresh Token (Local)  ├─ Token Validation      ├─ Allowlist
+└─ Auto-refresh (401)     └─ Allowlist revocation  └─ Session Tracking
 ```
 
 **Token Types:**
@@ -54,7 +54,7 @@ Frontend (React)          Backend (FastAPI)         Redis Cache
 
 4. **Session Management**
    - Redis-backed storage
-   - Token blacklisting on logout
+   - Redis allowlist revocation on logout
    - Token invalidation on password change
    - Concurrent session limits
    - Comprehensive audit logging
@@ -127,7 +127,7 @@ Frontend (React)          Backend (FastAPI)         Redis Cache
 - [x] JWT with all standard claims
 - [x] Token signature validation
 - [x] Token type validation
-- [x] Token blacklisting on logout
+- [x] Redis allowlist revocation on logout
 - [x] Separate secret keys per token type
 - [x] IP validation (optional)
 - [x] User agent tracking

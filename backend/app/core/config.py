@@ -235,8 +235,6 @@ class Settings(BaseSettings):
     LOGIN_HISTORY_DAYS: int = 90  # Keep login history for 90 days
 
     # Session Security
-    SESSION_MAX_AGE: int = 3600  # 1 hour
-    SESSION_EXTEND_ON_ACTIVITY: bool = True  # Reset timer on activity
     REQUIRE_MFA_AFTER_INACTIVITY: bool = True
     INACTIVITY_TIMEOUT: int = 1800  # 30 minutes of inactivity
     CONCURRENT_SESSION_LIMIT: int = 5  # Maximum concurrent sessions
@@ -329,8 +327,6 @@ class Settings(BaseSettings):
     # another host or container must name that proxy or its network. A wildcard
     # is rejected -- see app.utils.client_address.
     TRUSTED_PROXIES: Annotated[List[str], NoDecode] = ["127.0.0.1", "::1"]
-    TOKEN_BLACKLIST_ON_LOGOUT: bool = True  # Add tokens to blacklist on logout
-    TOKEN_BLACKLIST_EXPIRY: int = 86400  # Keep blacklisted tokens for 24 hours
 
     # Rate Limiting and Security Settings
     # MAX_VERIFICATION_ATTEMPTS_PER_HOUR: int = 5
