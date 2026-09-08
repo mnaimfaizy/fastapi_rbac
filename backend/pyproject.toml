@@ -18,6 +18,21 @@ exclude = '''
 )/
 '''
 
+[tool.coverage.run]
+# Store paths relative to the process cwd so the unit job (cwd=backend/) and
+# the integration server (Docker WORKDIR /app) record the same `app/...`
+# filenames. Codecov used to merge two Cobertura uploads that named the
+# same file two ways; #236 found that merge produced impossible line data.
+relative_files = true
+source = ["app"]
+
+[tool.coverage.paths]
+# Safety net if a data file still carries an absolute Docker path.
+source = [
+    "app",
+    "/app/app",
+]
+
 [tool.pytest.ini_options]
 # Single source of truth for pytest config; backend/pytest.ini was removed.
 # asyncio_mode is "auto" because that is what pytest.ini enforced while it
