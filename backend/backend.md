@@ -8,7 +8,7 @@ The backend API is developed using the FastAPI framework with comprehensive secu
 - **Input Sanitization**: XSS prevention with comprehensive HTML cleaning using `bleach`
 - **Rate Limiting**: DoS attack prevention using `slowapi` on all critical endpoints
 - **Security Headers**: Strict Content Security Policy and comprehensive browser protections
-- **JWT Authentication**: Secure token-based authentication with refresh tokens and blacklisting
+- **JWT Authentication**: Secure token-based authentication with refresh tokens and Redis allowlist revocation
 - **Password Security**: Advanced password validation, history tracking, and account locking
 
 ## 🧪 Testing Infrastructure
@@ -181,7 +181,7 @@ The project now uses a single consolidated `.env.example` file for all environme
 
 - `PASSWORD_PEPPER` (password hashing security)
 - `CELERY_WORKER_CONCURRENCY`, `CELERY_WORKER_MAX_MEMORY_PER_CHILD`, `CELERY_BROKER_POOL_LIMIT`, `CELERY_TASK_COMPRESSION` (Celery production tuning)
-- `VALIDATE_TOKEN_IP` (origin-network anomaly detection on refresh -- see [ADR 0011](../docs/adr/0011-session-security-model.md)), `TOKEN_BLACKLIST_ON_LOGOUT`, `TOKEN_BLACKLIST_EXPIRY` (token/session security)
+- `VALIDATE_TOKEN_IP` (origin-network anomaly detection on refresh -- see [ADR 0011](../docs/adr/0011-session-security-model.md))
 - Updated Redis SSL and email settings
 
 **Quick Reference:**

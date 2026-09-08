@@ -1,7 +1,7 @@
 # Session Security Implementation Guide
 
-**Last Updated:** 2025-12-21  
-**Version:** 1.0  
+**Last Updated:** 2025-12-21
+**Version:** 1.0
 **Related Document:** [Session Management Security Analysis](SESSION_MANAGEMENT_SECURITY_ANALYSIS.md)
 
 ---
@@ -54,7 +54,7 @@ class TokenRead(BaseModel):
     access_token: str
     token_type: str = "bearer"
     refresh_token: str | None = None  # ADD: Include refresh token in response
-    
+
     model_config = {"from_attributes": True}
 
 class Token(TokenRead):
@@ -79,7 +79,7 @@ async def get_new_access_token(
     """
     Gets a new access token AND refresh token using the refresh token.
     Implements refresh token rotation for enhanced security.
-    
+
     How it works:
     1. Validates the provided refresh token
     2. Checks if token is in the valid token set (not reused)
@@ -90,7 +90,7 @@ async def get_new_access_token(
     """
     ip_address = request.client.host if request.client else "Unknown"
     payload = None
-    
+
     try:
         # Decode and validate refresh token
         try:
@@ -123,7 +123,7 @@ async def get_new_access_token(
                     "message": "Error when decoding the token. Please check your request.",
                 },
             )
-        
+
         # Verify token type
         if payload["type"] != "refresh":
             background_tasks.add_task(
@@ -136,18 +136,18 @@ async def get_new_access_token(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={"status": False, "message": "Incorrect token type provided"},
             )
-        
+
         user_id_from_token = payload["sub"]
-        
+
         # SECURITY CHECK: Verify token is in valid set (not already used)
         valid_refresh_tokens = await get_valid_tokens(
             redis_client, user_id_from_token, TokenType.REFRESH
         )
-        
+
         # Convert bytes to strings for comparison
-        valid_tokens_str = {token.decode('utf-8') if isinstance(token, bytes) else token 
+        valid_tokens_str = {token.decode('utf-8') if isinstance(token, bytes) else token
                            for token in valid_refresh_tokens} if valid_refresh_tokens else set()
-        
+
         if valid_refresh_tokens and body.refresh_token not in valid_tokens_str:
             # SECURITY BREACH: Token reuse detected!
             # This could mean the token was stolen and already used
@@ -161,19 +161,19 @@ async def get_new_access_token(
                     "severity": "HIGH",
                 },
             )
-            
+
             # Invalidate ALL tokens for this user (compromise assumed)
             try:
                 user_uuid = UUID(user_id_from_token)
-                await delete_tokens(redis_client, 
-                                   User(id=user_uuid), 
+                await delete_tokens(redis_client,
+                                   User(id=user_uuid),
                                    TokenType.ACCESS)
-                await delete_tokens(redis_client, 
-                                   User(id=user_uuid), 
+                await delete_tokens(redis_client,
+                                   User(id=user_uuid),
                                    TokenType.REFRESH)
             except Exception as e:
                 logger.error(f"Error invalidating tokens on reuse: {e}")
-            
+
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={
@@ -181,7 +181,7 @@ async def get_new_access_token(
                     "message": "Token reuse detected. All sessions have been invalidated. Please log in again.",
                 },
             )
-        
+
         # Get user from database
         try:
             user_uuid = UUID(user_id_from_token)
@@ -197,7 +197,7 @@ async def get_new_access_token(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={"status": False, "message": "Invalid user identifier in token"},
             )
-        
+
         if not user or not user.is_active:
             event_user_id = user.id if user else user_id_from_token
             event_email = user.email if user else "N/A"
@@ -216,21 +216,21 @@ async def get_new_access_token(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail={"status": False, "message": "User not found or inactive"},
             )
-        
+
         # ROTATION: Generate NEW access and refresh tokens
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         refresh_token_expires = timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES)
-        
+
         new_access_token = security.create_access_token(
             str(user.id), user.email, expires_delta=access_token_expires
         )
         new_refresh_token = security.create_refresh_token(
             str(user.id), expires_delta=refresh_token_expires
         )
-        
+
         # ROTATION: Invalidate old refresh token
         await delete_tokens(redis_client, user, TokenType.REFRESH)
-        
+
         # Store new tokens in Redis
         await add_token_to_redis(
             redis_client,
@@ -246,7 +246,7 @@ async def get_new_access_token(
             TokenType.REFRESH,
             settings.REFRESH_TOKEN_EXPIRE_MINUTES,
         )
-        
+
         # Log successful token rotation
         background_tasks.add_task(
             log_security_event,
@@ -255,11 +255,11 @@ async def get_new_access_token(
             user_id=user.id,
             details={"email": user.email, "ip_address": ip_address},
         )
-        
+
         # Serialize user data
         user_data = serialize_user(user)
         user_read = IUserRead(**user_data)
-        
+
         # CHANGED: Return both access and refresh tokens
         return create_response(
             data=Token(
@@ -270,7 +270,7 @@ async def get_new_access_token(
             ),
             message="Tokens refreshed successfully",
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -331,16 +331,16 @@ api.interceptors.response.use(
           const response = await store
             .dispatch(refreshAccessToken(refreshToken))
             .unwrap();
-          
+
           if (response && response.access_token) {
             // Store new access token
             setStoredAccessToken(response.access_token);
-            
+
             // NEW: Store rotated refresh token
             if (response.refresh_token) {
               setStoredRefreshToken(response.refresh_token);
             }
-            
+
             if (originalRequest?.headers) {
               originalRequest.headers.Authorization = `Bearer ${response.access_token}`;
               return api(originalRequest);
@@ -374,7 +374,7 @@ Update the `refreshAccessToken` fulfilled case:
   state.isLoading = false;
   state.isAuthenticated = true;
   state.accessToken = action.payload.access_token;
-  
+
   // NEW: Update refresh token if rotated
   if (action.payload.refresh_token) {
     state.refreshToken = action.payload.refresh_token;
@@ -382,12 +382,12 @@ Update the `refreshAccessToken` fulfilled case:
 
   try {
     setStoredAccessToken(action.payload.access_token);
-    
+
     // NEW: Store rotated refresh token
     if (action.payload.refresh_token) {
       setStoredRefreshToken(action.payload.refresh_token);
     }
-    
+
     // Setup token expiry timer with new access token
     authTokenManager.setupTokenExpiryTimer(action.payload.access_token);
   } catch (error) {
@@ -406,10 +406,6 @@ Add the following settings:
 # Refresh Token Rotation Settings
 ENABLE_REFRESH_TOKEN_ROTATION: bool = True
 REFRESH_TOKEN_REUSE_GRACE_PERIOD: int = 5  # seconds - allows for network delays
-
-# Token Blacklist Settings
-TOKEN_BLACKLIST_ON_LOGOUT: bool = True
-TOKEN_BLACKLIST_EXPIRY: int = 86400  # 24 hours
 ```
 
 ### Testing
@@ -434,7 +430,7 @@ async def test_refresh_token_rotation_success(client, test_user, redis_client):
     )
     assert login_response.status_code == 200
     initial_refresh = login_response.json()["data"]["refresh_token"]
-    
+
     # Use refresh token
     refresh_response = await client.post(
         "/api/v1/auth/new_access_token",
@@ -442,11 +438,11 @@ async def test_refresh_token_rotation_success(client, test_user, redis_client):
     )
     assert refresh_response.status_code == 201
     data = refresh_response.json()["data"]
-    
+
     # Verify new tokens are different
     assert data["refresh_token"] != initial_refresh
     assert data["access_token"] is not None
-    
+
     # Verify old refresh token is invalidated
     old_token_response = await client.post(
         "/api/v1/auth/new_access_token",
@@ -464,21 +460,21 @@ async def test_refresh_token_reuse_detection(client, test_user, redis_client):
         json={"email": test_user.email, "password": "ValidPassword123!"}
     )
     initial_refresh = login_response.json()["data"]["refresh_token"]
-    
+
     # Use token once (succeeds)
     first_refresh = await client.post(
         "/api/v1/auth/new_access_token",
         json={"refresh_token": initial_refresh}
     )
     assert first_refresh.status_code == 201
-    
+
     # Try to use old token again (should fail and invalidate all)
     reuse_attempt = await client.post(
         "/api/v1/auth/new_access_token",
         json={"refresh_token": initial_refresh}
     )
     assert reuse_attempt.status_code == 403
-    
+
     # Verify even the new refresh token is now invalid (all tokens revoked)
     new_refresh = first_refresh.json()["data"]["refresh_token"]
     third_attempt = await client.post(
@@ -565,7 +561,7 @@ async def login(
     _: None = Depends(deps.validate_csrf_token),
 ) -> IPostResponseBase[Token]:
     # ... existing authentication logic ...
-    
+
     # After generating tokens:
     access_token = security.create_access_token(
         authenticated_user.id,
@@ -575,7 +571,7 @@ async def login(
     refresh_token = security.create_refresh_token(
         authenticated_user.id, expires_delta=refresh_token_expires
     )
-    
+
     # Store access token in Redis (as before)
     await add_token_to_redis(
         redis_client,
@@ -584,7 +580,7 @@ async def login(
         TokenType.ACCESS,
         settings.ACCESS_TOKEN_EXPIRE_MINUTES,
     )
-    
+
     # NEW: Set refresh token in HTTP-only cookie instead of Redis
     response.set_cookie(
         key="refresh_token",
@@ -596,11 +592,11 @@ async def login(
         path="/api/v1/auth",  # Restrict to auth endpoints only
         domain=settings.COOKIE_DOMAIN if hasattr(settings, 'COOKIE_DOMAIN') else None,
     )
-    
+
     # Prepare user data
     user_data = serialize_user(authenticated_user)
     user_read = IUserRead(**user_data)
-    
+
     # Return data WITHOUT refresh_token (it's in the cookie)
     data = Token(
         access_token=access_token,
@@ -608,7 +604,7 @@ async def login(
         refresh_token=None,  # CHANGED: Don't return in response body
         user=user_read,
     )
-    
+
     # ... rest of function ...
 ```
 
@@ -632,7 +628,7 @@ async def get_new_access_token(
     Also rotates the refresh token for enhanced security.
     """
     ip_address = request.client.host if request.client else "Unknown"
-    
+
     # NEW: Get refresh token from cookie instead of request body
     refresh_token = request.cookies.get("refresh_token")
     if not refresh_token:
@@ -649,9 +645,9 @@ async def get_new_access_token(
                 "message": "No refresh token provided. Please log in again.",
             },
         )
-    
+
     # ... existing validation logic ...
-    
+
     # Generate new tokens
     new_access_token = security.create_access_token(
         str(user.id), user.email, expires_delta=access_token_expires
@@ -659,7 +655,7 @@ async def get_new_access_token(
     new_refresh_token = security.create_refresh_token(
         str(user.id), expires_delta=refresh_token_expires
     )
-    
+
     # Store new access token
     await add_token_to_redis(
         redis_client,
@@ -668,7 +664,7 @@ async def get_new_access_token(
         TokenType.ACCESS,
         settings.ACCESS_TOKEN_EXPIRE_MINUTES,
     )
-    
+
     # NEW: Set new refresh token in cookie
     response.set_cookie(
         key="refresh_token",
@@ -679,11 +675,11 @@ async def get_new_access_token(
         max_age=settings.REFRESH_TOKEN_EXPIRE_MINUTES * 60,
         path="/api/v1/auth",
     )
-    
+
     # Return only access token (refresh token in cookie)
     user_data = serialize_user(user)
     user_read = IUserRead(**user_data)
-    
+
     return create_response(
         data=Token(
             access_token=new_access_token,
@@ -712,17 +708,17 @@ async def logout(
     Logout endpoint that invalidates tokens and clears cookie
     """
     ip_address = request.client.host if request.client else "Unknown"
-    
+
     try:
         # Invalidate tokens in Redis
         await cleanup_expired_tokens(...)
-        
+
         # NEW: Clear refresh token cookie
         response.delete_cookie(
             key="refresh_token",
             path="/api/v1/auth",
         )
-        
+
         # Log logout event
         background_tasks.add_task(
             log_security_event,
@@ -731,9 +727,9 @@ async def logout(
             user_id=current_user.id,
             details={"email": current_user.email, "ip_address": ip_address},
         )
-        
+
         return create_response(data={}, message="Successfully logged out")
-        
+
     except Exception as e:
         # ... error handling ...
 ```
@@ -805,10 +801,10 @@ api.interceptors.response.use(
           const response = await store
             .dispatch(refreshAccessToken())  // No refresh token parameter needed
             .unwrap();
-          
+
           if (response && response.access_token) {
             setStoredAccessToken(response.access_token);
-            
+
             if (originalRequest?.headers) {
               originalRequest.headers.Authorization = `Bearer ${response.access_token}`;
               return api(originalRequest);
@@ -824,7 +820,7 @@ api.interceptors.response.use(
         }
       }
     }
-    
+
     // ... rest of error handling ...
   }
 );
@@ -860,7 +856,7 @@ export const refreshAccessToken = createAsyncThunk(
     // Store only access token
     setStoredAccessToken(action.payload.access_token);
     // Refresh token stored in HTTP-only cookie by backend
-    
+
     authTokenManager.setupTokenExpiryTimer(action.payload.access_token);
   } catch (error) {
     console.error('Error storing auth tokens:', error);
@@ -920,7 +916,7 @@ class AuthTokenManager {
     }
 
     console.log('Starting new token refresh');
-    
+
     // Start new refresh
     this.refreshPromise = store
       .dispatch(refreshAccessToken())

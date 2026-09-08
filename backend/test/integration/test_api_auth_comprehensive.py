@@ -318,7 +318,7 @@ class TestAuthenticationSecurity:
         assert all(status in valid_responses for status in responses)
 
     @pytest.mark.asyncio
-    async def test_token_blacklisting_on_logout(
+    async def test_allowlist_revocation_on_logout(
         self,
         client: AsyncClient,
         db: AsyncSession,
@@ -326,8 +326,8 @@ class TestAuthenticationSecurity:
         redis_mock: MagicMock,  # Use the available redis_mock fixture
     ) -> None:
         """
-        Test that JWT tokens are properly blacklisted upon logout, preventing
-        their reuse for accessing protected endpoints.
+        Logout removes the tokens from the Redis allowlist, so they cannot
+        be reused on protected endpoints.
         """
 
         # Create and login a user
