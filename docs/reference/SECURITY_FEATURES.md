@@ -49,16 +49,18 @@ const csrfToken = await csrfService.getCsrfToken();
 
 **Implementation**: `slowapi` (sole HTTP rate limit library; see [ADR 0008](../adr/0008-slowapi-sole-http-rate-limit.md))
 
-**Protected Endpoints** (HTTP rate limits, IP key):
+**Protected Endpoints** (HTTP rate limits, all currently anonymous and therefore address-keyed):
 
 - **Login**: 5 attempts per minute
 - **Registration**: 3 attempts per hour
 - **Password Reset request**: 3 attempts per hour
 - **Access token**: 5 attempts per minute
 
-**Configuration**: shared `Limiter` in `app/core/rate_limit.py` (`client_address_key`; Redis `storage_uri` outside testing).
+**Configuration**: shared `Limiter` in `app/core/rate_limit.py` (`rate_limit_key`; Redis `storage_uri` outside testing).
 
-The IP key is the *real* client address: `ProxyHeadersMiddleware` corrects `request.client` from `X-Forwarded-For` / `X-Real-IP` when the peer is a `TRUSTED_PROXIES` member, and ignores those headers otherwise ([ADR 0011](../adr/0011-session-security-model.md) decision 8). Behind a proxy that is not configured as trusted, every client shares one bucket.
+The key is `user:{id}` when `get_current_user` has already established the caller, and `ip:{client address}` otherwise. Prefixes keep those two from colliding. The key function does not decode tokens. The four endpoints above never call `get_current_user`, so they stay address-keyed at the thresholds listed. A later authenticated route that takes `@limiter.limit` gets a per-user bucket instead of sharing one address quota.
+
+The address used for the IP key is the *real* client address: `ProxyHeadersMiddleware` corrects `request.client` from `X-Forwarded-For` / `X-Real-IP` when the peer is a `TRUSTED_PROXIES` member, and ignores those headers otherwise ([ADR 0011](../adr/0011-session-security-model.md) decision 8). Behind a proxy that is not configured as trusted, every anonymous client shares one bucket.
 
 Registration / resend-verification also use separate Redis **abuse counters** (not slowapi).
 

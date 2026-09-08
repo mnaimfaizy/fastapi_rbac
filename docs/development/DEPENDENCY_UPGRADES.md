@@ -132,7 +132,7 @@ About **76** advisory hits across pinned packages (many packages have multiple a
 ### Lane 2 hard-stop follow-up — HTTP rate limit consolidation (#64, 2026-07-24)
 
 - **Decision:** `slowapi` is the only HTTP rate limit library; unused `fastapi-limiter` removed. See [ADR 0008](../adr/0008-slowapi-sole-http-rate-limit.md) and [research note](../internal/research/rate-limiting-library-consolidation.md).
-- **Runtime:** shared `Limiter` in `app/core/rate_limit.py` (Redis `storage_uri` outside testing; memory + disabled in testing); auth routes keep existing `@limiter.limit` thresholds.
+- **Runtime:** shared `Limiter` in `app/core/rate_limit.py` (`rate_limit_key`: user when authenticated, client address otherwise; Redis `storage_uri` outside testing; memory + disabled in testing); auth routes keep existing `@limiter.limit` thresholds.
 - **Kept separate:** Redis **abuse counters** for registration / resend-verification in `auth.py` (not folded into slowapi in this change).
 
 ### Lane 2 hard-stop follow-up — remove unused passlib (#65, 2026-07-27)
