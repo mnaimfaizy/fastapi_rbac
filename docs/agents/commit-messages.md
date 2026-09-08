@@ -159,6 +159,7 @@ Format is mandatory for humans and agents. A commit-msg / commitlint hook is a d
 
 ## Related
 
+- [`docs/agents/branch-names.md`](branch-names.md) — git branch name SSOT
 - [`.changelogrc.md`](../../.changelogrc.md) — changelog section mapping, SemVer bump rules, tooling notes
 - [`docs/release-notes.md`](../release-notes.md) — committed release history (SSOT)
 - [`docs/agents/release-notes-agent.md`](release-notes-agent.md) — how to draft a release-notes section from commits

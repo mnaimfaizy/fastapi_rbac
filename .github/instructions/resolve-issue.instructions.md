@@ -13,7 +13,7 @@ When asked to resolve an issue, follow these steps:
 3. **Implement the Solution**: If a solution is available, implement it in the codebase. If not, create a new solution based on your understanding of the issue. But for that follow these steps:
    - Switch to main branch.
    - Pull the latest changes if any.
-   - Create a new branch clearly specifying what will be fixed or resolved.
+   - Create a new branch following [`docs/agents/branch-names.md`](../../docs/agents/branch-names.md) (mandatory SSOT).
    - Checkout/Switch to the new branch.
    - Make the necessary code changes to resolve the issue.
    - Commit the changes with a clear message describing what was done to resolve the issue.

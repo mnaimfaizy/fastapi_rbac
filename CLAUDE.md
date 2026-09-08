@@ -32,6 +32,10 @@ If `graphify-out/graph.json` exists, query it first for architecture questions. 
 
 Commit messages must follow [`docs/agents/commit-messages.md`](docs/agents/commit-messages.md). This is not optional: plain conventional commits, no emoji, component/domain scopes.
 
+### Branch names (mandatory)
+
+Branch names must follow [`docs/agents/branch-names.md`](docs/agents/branch-names.md). This is not optional: allowed prefixes only; include the issue number and a short slug when the work is for a numbered issue; no harness or vendor prefixes.
+
 ### Release
 
 User-invoked skill: `.claude/skills/release`. Opens a Release PR (notes via release-notes sub-agent). Canonical notes behavior: [`docs/agents/release-notes-agent.md`](docs/agents/release-notes-agent.md).
@@ -42,5 +46,6 @@ When working in this repository, follow conventions in:
 
 - `.github/copilot-instructions.md`
 - `docs/agents/commit-messages.md` (commit message SSOT)
+- `docs/agents/branch-names.md` (branch name SSOT)
 - `.github/instructions/pre-commit.instructions.md`
 - `.github/instructions/resolve-issue.instructions.md`
