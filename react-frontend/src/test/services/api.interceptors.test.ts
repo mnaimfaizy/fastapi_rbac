@@ -187,6 +187,70 @@ describe('api error body normalisation', () => {
     });
   });
 
+  it('leaves an already-normalised error body unchanged', async () => {
+    const error = {
+      response: {
+        status: 400,
+        data: {
+          status: 'error',
+          message: 'Invalid Current Password',
+          errors: [{ message: 'Invalid Current Password' }],
+        },
+      },
+      config: { url: '/auth/change-password', headers: {} },
+    };
+
+    await expect(responseErrorHandler(error)).rejects.toBeDefined();
+
+    expect(error.response.data).toEqual({
+      status: 'error',
+      message: 'Invalid Current Password',
+      errors: [{ message: 'Invalid Current Password' }],
+    });
+  });
+
+  it('uses the generic message when a complexity body has only whitespace as its summary', async () => {
+    const error = {
+      response: {
+        status: 400,
+        data: {
+          detail: {
+            message: '   ',
+            errors: ['Password must contain at least one digit'],
+          },
+        },
+      },
+      config: { url: '/auth/register', headers: {} },
+    };
+
+    await expect(responseErrorHandler(error)).rejects.toBeDefined();
+
+    expect(error.response.data).toEqual({
+      status: 'error',
+      message: 'An unexpected error occurred',
+      errors: [{ message: 'Password must contain at least one digit' }],
+    });
+  });
+
+  it('yields a visible generic message for an array detail without nesting it', async () => {
+    const error = {
+      response: {
+        status: 422,
+        data: {
+          detail: [{ loc: ['body', 'password'], msg: 'field required' }],
+        },
+      },
+      config: { url: '/auth/register', headers: {} },
+    };
+
+    await expect(responseErrorHandler(error)).rejects.toBeDefined();
+
+    expect(error.response.data).toEqual({
+      status: 'error',
+      message: 'An unexpected error occurred',
+    });
+  });
+
   it('rewrites a whitespace-only string detail to a visible generic message', async () => {
     const error = {
       response: { status: 400, data: { detail: '   ' } },
