@@ -66,4 +66,25 @@ describe('normalizeApiError', () => {
       details: [],
     });
   });
+
+  it('falls back when the only message is whitespace', () => {
+    expect(
+      normalizeApiError({ message: '   ' }, 'Registration failed.')
+    ).toEqual({
+      message: 'Registration failed.',
+      details: [],
+    });
+  });
+
+  it('drops whitespace-only detail entries so they cannot render as blank bullets', () => {
+    expect(
+      normalizeApiError({
+        message: COMPLEXITY_MESSAGE,
+        errors: ['Password must be at least 12 characters long', '   '],
+      })
+    ).toEqual({
+      message: COMPLEXITY_MESSAGE,
+      details: ['Password must be at least 12 characters long'],
+    });
+  });
 });

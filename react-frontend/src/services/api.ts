@@ -56,6 +56,11 @@ export interface SuccessResponse<T> {
 /** Cookie-based refresh endpoint; excluded from the 401 refresh retry flow. */
 const REFRESH_ENDPOINT = '/auth/new_access_token';
 
+const GENERIC_ERROR_MESSAGE = 'An unexpected error occurred';
+
+const visibleMessage = (value: unknown): string | null =>
+  typeof value === 'string' && value.trim() ? value.trim() : null;
+
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1',
   headers: {
@@ -106,19 +111,26 @@ api.interceptors.response.use(
       const responseData = error.response.data as ErrorResponseData;
 
       // If it's already in our format, keep it
-      if (responseData.status === 'error' && responseData.message) {
+      if (
+        responseData.status === 'error' &&
+        visibleMessage(responseData.message)
+      ) {
         // Keep as is
       }
       // Handle structured error format from backend
       else if (responseData.detail) {
         let errorMessage = '';
+        const fieldMessage =
+          typeof responseData.detail === 'object'
+            ? visibleMessage(responseData.detail.message)
+            : null;
         if (
           typeof responseData.detail === 'object' &&
           responseData.detail.field_name &&
-          responseData.detail.message
+          fieldMessage
         ) {
           // Handle field-specific errors
-          errorMessage = responseData.detail.message;
+          errorMessage = fieldMessage;
           error.response.data = {
             status: 'error',
             message: errorMessage,
@@ -133,7 +145,9 @@ api.interceptors.response.use(
           // Password-complexity rejections: {message, errors[]}. Without this
           // branch they fell through to the generic handler and the user was
           // told "An unexpected error occurred" instead of which rule failed.
-          errorMessage = responseData.detail.message;
+          errorMessage =
+            visibleMessage(responseData.detail.message) ||
+            GENERIC_ERROR_MESSAGE;
           error.response.data = {
             status: 'error',
             message: errorMessage,
@@ -141,7 +155,8 @@ api.interceptors.response.use(
           };
         } else if (typeof responseData.detail === 'string') {
           // Handle string error messages
-          errorMessage = responseData.detail;
+          errorMessage =
+            visibleMessage(responseData.detail) || GENERIC_ERROR_MESSAGE;
           error.response.data = {
             status: 'error',
             message: errorMessage,
@@ -152,12 +167,19 @@ api.interceptors.response.use(
             ],
           };
         } else {
-          // Generic error handling
-          errorMessage = 'An unexpected error occurred';
+          // Totality: keep a specific message when the unrecognised object
+          // still carries one. Never nest the original payload under `detail`.
+          const detailRecord =
+            typeof responseData.detail === 'object' &&
+            responseData.detail !== null &&
+            !Array.isArray(responseData.detail)
+              ? (responseData.detail as { message?: unknown })
+              : null;
+          errorMessage =
+            visibleMessage(detailRecord?.message) || GENERIC_ERROR_MESSAGE;
           error.response.data = {
             status: 'error',
             message: errorMessage,
-            detail: responseData,
           };
         }
       }

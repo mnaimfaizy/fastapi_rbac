@@ -26,14 +26,17 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
     ? (value as Record<string, unknown>)
     : null;
 
+const nonEmptyString = (value: unknown): string | null =>
+  typeof value === 'string' && value.trim() ? value.trim() : null;
+
 /** Accepts `string[]`, `{message}[]`, or anything else (→ []). */
 const readDetails = (value: unknown): string[] => {
   if (!Array.isArray(value)) return [];
   return value
     .map((entry) => {
-      if (typeof entry === 'string') return entry;
+      if (typeof entry === 'string') return nonEmptyString(entry);
       const record = asRecord(entry);
-      return typeof record?.message === 'string' ? record.message : null;
+      return nonEmptyString(record?.message);
     })
     .filter((entry): entry is string => Boolean(entry));
 };
@@ -42,8 +45,9 @@ export const normalizeApiError = (
   error: unknown,
   fallbackMessage = 'Something went wrong. Please try again.'
 ): NormalizedApiError => {
-  if (typeof error === 'string' && error.trim()) {
-    return { message: error, details: [] };
+  const fromString = nonEmptyString(error);
+  if (fromString) {
+    return { message: fromString, details: [] };
   }
 
   // An axios error still wrapped — unwrap to the response body.
@@ -58,9 +62,9 @@ export const normalizeApiError = (
   const detail = asRecord(body.detail);
 
   const message =
-    (typeof body.message === 'string' && body.message) ||
-    (typeof detail?.message === 'string' && detail.message) ||
-    (typeof body.detail === 'string' && body.detail) ||
+    nonEmptyString(body.message) ||
+    nonEmptyString(detail?.message) ||
+    nonEmptyString(body.detail) ||
     fallbackMessage;
 
   const details = [...readDetails(body.errors), ...readDetails(detail?.errors)];
