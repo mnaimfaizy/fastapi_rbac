@@ -5,7 +5,7 @@ Role-based access control API and admin UI: users, roles, permissions, and auth 
 ## Language
 
 **HTTP rate limit**:
-A coarse request quota enforced by the shared slowapi limiter on selected HTTP routes (keyed by client IP today).
+A coarse request quota enforced by the shared slowapi limiter on selected HTTP routes (keyed by authenticated user when the request has one, otherwise by client address).
 _Avoid_: Rate limiting (when referring only to this mechanism), fastapi-limiter, DoS middleware
 
 **Abuse counter**:

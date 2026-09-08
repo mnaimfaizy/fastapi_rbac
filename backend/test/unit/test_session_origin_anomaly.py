@@ -20,7 +20,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
 
 import pytest
-from fastapi import BackgroundTasks, HTTPException
+from fastapi import BackgroundTasks, HTTPException, Request
 
 from app.api.v1.endpoints.auth import get_new_access_token
 from app.core import security
@@ -441,7 +441,11 @@ async def test_access_token_is_never_rejected_on_origin_grounds(
         AsyncMock(return_value=_db_user(user.id)),
     )
 
+    request = Request(
+        {"type": "http", "method": "GET", "path": "/", "headers": [], "client": ("127.0.0.1", 1)}
+    )
     resolved = await get_current_user()(
+        request=request,
         access_token=access_token,
         redis_client=redis,  # type: ignore[arg-type]
         db_session=MagicMock(),

@@ -15,6 +15,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app import crud
 from app.core.config import Settings, settings
+from app.core.rate_limit import remember_authenticated_identity
 from app.core.security import decode_token
 from app.db.session import SessionLocal, get_redis_client
 from app.models.user_model import User
@@ -58,6 +59,7 @@ def get_current_user(
     required_permissions: Optional[list] = None,
 ) -> Callable[..., Coroutine[Any, Any, User]]:
     async def current_user(
+        request: Request,
         access_token: str = Depends(reusable_oauth2),
         redis_client: Redis = Depends(get_redis_client),
         db_session: AsyncSession = Depends(get_db),
@@ -93,6 +95,8 @@ def get_current_user(
 
         if not user_from_db.is_active:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user.")
+
+        remember_authenticated_identity(request, user_from_db.id)
 
         if hasattr(user_from_db, "is_superuser") and user_from_db.is_superuser:
             return user_from_db
