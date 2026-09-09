@@ -10,6 +10,20 @@
 # suite (69.09%). Frontend coverage is still a floor at ~32.55%, because the
 # Playwright E2E job is skipped pending #30. `patch` is fair to both: it holds
 # new code to a standard without punishing either backlog.
+#
+# #236: do not let Codecov merge two backend Cobertura uploads. The public
+# file_report for auth.py at ca6663c and at later main (b8249a6) is internally
+# impossible: login()'s try lists later straight-line statements as hit and
+# earlier ones as miss. Raw per-upload XML is not downloadable after Codecov's
+# 30s signed PUT; both backend uploads share the same file and line counts, so
+# the executable set matches in total even while the merged line map does not.
+# A union of hits can only add coverage, so that is line-identity disagreement,
+# not a missing test. The shared `backend` flag stays (#222, README badge).
+# The two data files are combined with coverage.py first and uploaded once;
+# see `.github/workflows/backend-ci.yml` job `coverage`, which also archives
+# both XMLs and compares auth.py's executable line set. `codecov/patch/backend`
+# stays blocking because it now reads that single combined report, not a
+# Codecov merge of two Cobertura files. `codecov/patch/frontend` is unchanged.
 
 coverage:
   status:
