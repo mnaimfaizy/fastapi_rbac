@@ -1425,8 +1425,6 @@ async def logout_all(
             details={"email": current_user.email, "ip_address": ip_address},
         )
         return create_response(data={}, message="Successfully logged out from all sessions")
-    except HTTPException:
-        raise
     except Exception as e:
         error_type = type(e).__name__
         logger.error(

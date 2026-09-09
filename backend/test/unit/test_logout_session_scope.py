@@ -8,7 +8,7 @@ Seams under test:
 """
 
 from test.fixtures.mock_redis_client import MockRedisClient
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
 
 import pytest
@@ -18,9 +18,11 @@ from app.api.v1.endpoints.auth import logout, logout_all
 from app.core.config import settings
 from app.schemas.common_schema import TokenType
 from app.utils.token import (
+    _revoke_members_with_session_id,
     add_derived_access_token_to_redis,
     add_session_tokens_to_redis,
     add_token_to_redis,
+    end_caller_session,
     get_valid_tokens,
     session_id_for,
     token_is_allowlisted,
@@ -265,3 +267,53 @@ async def test_logout_all_revokes_every_session() -> None:
         assert zcard == hlen
     set_cookie = response.headers.get("set-cookie", "")
     assert settings.REFRESH_TOKEN_COOKIE_NAME in set_cookie
+
+
+@pytest.mark.asyncio
+async def test_end_caller_session_returns_false_without_tokens() -> None:
+    redis = MockRedisClient()
+    user = _user()
+
+    assert (
+        await end_caller_session(
+            redis,  # type: ignore[arg-type]
+            user.id,
+            refresh_token=None,
+            access_token=None,
+        )
+        is False
+    )
+
+
+@pytest.mark.asyncio
+async def test_empty_session_id_revokes_nothing() -> None:
+    redis = MockRedisClient()
+    user = _user()
+    access, refresh = await _establish_session(redis, user, "keep")
+
+    await _revoke_members_with_session_id(redis, user.id, "")  # type: ignore[arg-type]
+
+    refresh_members = await get_valid_tokens(redis, user.id, TokenType.REFRESH)  # type: ignore[arg-type]
+    access_members = await get_valid_tokens(redis, user.id, TokenType.ACCESS)  # type: ignore[arg-type]
+    assert token_is_allowlisted(refresh_members, refresh) is True
+    assert token_is_allowlisted(access_members, access) is True
+
+
+@pytest.mark.asyncio
+async def test_logout_all_returns_500_when_revocation_fails() -> None:
+    redis = MockRedisClient()
+    user = _user()
+    redis.delete = AsyncMock(side_effect=RuntimeError("redis down"))
+
+    with pytest.raises(HTTPException) as raised:
+        await logout_all(
+            request=_request(),
+            response=Response(),
+            background_tasks=BackgroundTasks(),
+            current_user=user,
+            redis_client=redis,  # type: ignore[arg-type]
+            _=None,
+        )
+
+    assert raised.value.status_code == 500
+    assert raised.value.detail == "An unexpected error occurred during logout."
