@@ -20,8 +20,9 @@ CSRF_HEADER_NAME = "X-CSRF-Token"
 
 # Every auth route declaring Depends(deps.validate_csrf_token) that resolves CSRF
 # before authentication. Kept in sync with app/api/v1/endpoints/auth.py.
-# /logout is deliberately absent: it authenticates first, so an unauthenticated
-# request never reaches CSRF validation. See test_logout_authenticates_before_csrf.
+# /logout and /logout/all are deliberately absent: they authenticate first, so
+# an unauthenticated request never reaches CSRF validation. See
+# test_logout_authenticates_before_csrf.
 CSRF_PROTECTED_ENDPOINTS = [
     "/login",
     "/register",
@@ -158,6 +159,14 @@ async def test_logout_authenticates_before_csrf(client: AsyncClient) -> None:
     documented rather than asserted as 403 so a future reordering is visible.
     """
     response = await client.post(auth_url("/logout"), json={})
+
+    assert response.status_code == 401
+    assert not is_csrf_rejection(response.status_code, response.text)
+
+
+async def test_logout_all_authenticates_before_csrf(client: AsyncClient) -> None:
+    """/logout/all is CSRF-protected but authenticates first, like /logout."""
+    response = await client.post(auth_url("/logout/all"), json={})
 
     assert response.status_code == 401
     assert not is_csrf_rejection(response.status_code, response.text)

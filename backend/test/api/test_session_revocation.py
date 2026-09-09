@@ -268,22 +268,29 @@ async def test_change_password_revokes_a_pending_reset_link(
 
 
 # --------------------------------------------------------------------------
-# logout revokes the session, and only the session
+# logout ends one session; logout/all ends every session
 # --------------------------------------------------------------------------
 
 
-async def test_logout_revokes_every_token_for_the_user(
+async def test_logout_revokes_only_the_calling_session(
     client: AsyncClient, user_factory: Any, redis_mock: Any
 ) -> None:
     user = await user_factory.create(email="loggedout@example.com", password=PASSWORD, verified=True)
     user_id = user.id
-    _, headers = await login(client, "loggedout@example.com", PASSWORD)
+    access_a, _headers_a = await login(client, "loggedout@example.com", PASSWORD)
+    refresh_a = client.cookies.get(settings.REFRESH_TOKEN_COOKIE_NAME)
+    access_b, headers_b = await login(client, "loggedout@example.com", PASSWORD)
+    refresh_b = client.cookies.get(settings.REFRESH_TOKEN_COOKIE_NAME)
 
-    response = await client.post(auth_url("/logout"), headers=headers)
+    response = await client.post(auth_url("/logout"), headers=headers_b)
     assert response.status_code == 200, response.text
 
-    for token_type in (TokenType.ACCESS, TokenType.REFRESH):
-        assert await get_valid_tokens(redis_mock, user_id, token_type) == set()
+    refresh_members = await get_valid_tokens(redis_mock, user_id, TokenType.REFRESH)
+    access_members = await get_valid_tokens(redis_mock, user_id, TokenType.ACCESS)
+    assert token_is_allowlisted(refresh_members, str(refresh_b)) is False
+    assert token_is_allowlisted(access_members, access_b) is False
+    assert token_is_allowlisted(refresh_members, str(refresh_a)) is True
+    assert token_is_allowlisted(access_members, access_a) is True
 
 
 async def test_logout_leaves_a_pending_reset_link_alone(
@@ -313,3 +320,18 @@ async def test_logout_leaves_a_pending_reset_link_alone(
 
     members = await get_valid_tokens(redis_mock, user_id, TokenType.RESET)
     assert token_is_allowlisted(members, reset_token) is True
+
+
+async def test_logout_all_revokes_every_session(
+    client: AsyncClient, user_factory: Any, redis_mock: Any
+) -> None:
+    user = await user_factory.create(email="logoutall@example.com", password=PASSWORD, verified=True)
+    user_id = user.id
+    await login(client, "logoutall@example.com", PASSWORD)
+    _, headers = await login(client, "logoutall@example.com", PASSWORD)
+
+    response = await client.post(auth_url("/logout/all"), headers=headers)
+    assert response.status_code == 200, response.text
+
+    for token_type in (TokenType.ACCESS, TokenType.REFRESH):
+        assert await get_valid_tokens(redis_mock, user_id, token_type) == set()

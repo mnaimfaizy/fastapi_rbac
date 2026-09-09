@@ -34,6 +34,8 @@ The revocation primitive is also misnamed. `cleanup_expired_tokens` does not rem
 
 8. **Forwarded headers are trusted from the reverse proxy only, never by wildcard.** Trusting them from anywhere lets any client forge its own address for rate limiting, origin-network detection, and the audit log simultaneously. This is a prerequisite for decision 5 and has standalone value.
 
+9. **Logout ends the calling session only.** `POST /logout` revokes that session's refresh token and the access tokens that share its id; the user's other sessions stay usable. `POST /logout/all` revokes every allowlist token for the caller. Change-password keeps calling `revoke_all_user_tokens` directly rather than going through HTTP. This supersedes the #205 criterion that logout remove every entry for a user: that criterion was written before sessions had identities to scope to (#237).
+
 ## Considered options
 
 **Keep `password_version` as defence-in-depth**, on the argument that a version claim still works if Redis is unavailable. Rejected: when Redis is unreachable the allowlist check fails rather than silently admitting tokens, so the scenario the redundancy defends against does not end with tokens being accepted. The cost — a per-request comparison and a column that must be kept correct on every password path — buys nothing.
@@ -46,6 +48,8 @@ The revocation primitive is also misnamed. `cleanup_expired_tokens` does not rem
 
 **Split these decisions across five ADRs**, one per checklist item. Rejected: they justify each other — `password_version` is retired *because* the allowlist is canonical, and User-Agent binding is rejected by a weaker form of the reasoning that shapes decision 5. Read separately, each looks arbitrary.
 
+**Retain global logout as the default**, with per-session logout as an opt-in parameter. Rejected: once sessions have identities, signing out of one browser should not be a statement about every other device. A silent flip is a security-relevant default change, so it is recorded here rather than left as a client assumption. "Log out everywhere" is a separate named route (`POST /logout/all`), not a parameter on logout, so the two operations cannot be confused.
+
 ## Consequences
 
 - A user whose carrier rotates them outside their original /24 re-authenticates on that device at their next refresh. This is the accepted cost of decision 5, and the /24 and /64 units exist to make it uncommon rather than routine.
@@ -56,3 +60,4 @@ The revocation primitive is also misnamed. `cleanup_expired_tokens` does not rem
 - Decision 7 requires reshaping the allowlist from a set of raw tokens to a structure carrying per-member metadata. Decision 5's origin network is stored there, so both depend on that restructure, and it touches every site that adds or reads a token.
 - `cleanup_expired_tokens` is renamed to say that it revokes sessions. The old name describes garbage collection and hid an existing revocation mechanism from the people who then built a second one.
 - A future reader will find a security setting that detects rather than blocks, and may try to make it "actually enforce". That reversal is what the considered options above exist to prevent.
+- A client that assumed `POST /logout` signed the account out everywhere will keep other sessions alive after a single-device logout. `POST /logout/all` is the named replacement; the first-party SPA still calls `POST /logout` only.

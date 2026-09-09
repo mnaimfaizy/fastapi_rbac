@@ -151,6 +151,43 @@ async def revoke_session(redis_client: Redis, user_id: UUID | str, refresh_token
             await _remove_member(redis_client, user_id, TokenType.ACCESS, access_token)
 
 
+async def _revoke_members_with_session_id(redis_client: Redis, user_id: UUID | str, session_id: str) -> None:
+    """Remove every allowlist member whose metadata names ``session_id``."""
+    if not session_id:
+        return
+    for token_type in (TokenType.REFRESH, TokenType.ACCESS):
+        members = await get_valid_tokens(redis_client, user_id, token_type)
+        for member in list(members):
+            token = _as_text(member)
+            if await _session_id_of(redis_client, user_id, token_type, token) == session_id:
+                await _remove_member(redis_client, user_id, token_type, token)
+
+
+async def end_caller_session(
+    redis_client: Redis,
+    user_id: UUID | str,
+    *,
+    refresh_token: str | None,
+    access_token: str | None,
+) -> bool:
+    """Revoke the caller's session. False when the session cannot be identified.
+
+    Identity comes from the refresh token when one is presented (hashed if
+    metadata is missing), otherwise from the access token's allowlist
+    metadata. A missing identity must not revoke other sessions.
+    """
+    if refresh_token:
+        await revoke_session(redis_client, user_id, refresh_token)
+        return True
+    if access_token:
+        session_id = await _session_id_of(redis_client, user_id, TokenType.ACCESS, access_token)
+        if not session_id:
+            return False
+        await _revoke_members_with_session_id(redis_client, user_id, session_id)
+        return True
+    return False
+
+
 async def _enforce_concurrent_session_limit(redis_client: Redis, user_id: UUID | str) -> None:
     limit = settings.CONCURRENT_SESSION_LIMIT
     if limit <= 0:
@@ -291,9 +328,10 @@ async def revoke_all_user_tokens(redis_client: Redis, user_id: UUID | str) -> No
 
     Used where the account itself has changed hands -- a password change or a
     completed reset -- so an outstanding reset link cannot outlive the change
-    that should have invalidated it. Logout deliberately does not call this: it
+    that should have invalidated it. ``POST /logout`` does not call this: it
     ends one session and says nothing about a reset link the user may be part
-    way through redeeming.
+    way through redeeming. ``POST /logout/all`` does, because signing out
+    everywhere is a statement about every token the allowlist holds.
     """
     for token_type in ALLOWLIST_TOKEN_TYPES:
         await revoke_user_tokens(redis_client, user_id, token_type)

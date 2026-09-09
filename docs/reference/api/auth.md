@@ -161,7 +161,9 @@ Resend the verification email to a user (rate-limited).
 
 ### POST /api/v1/auth/logout
 
-Log out a user by clearing Redis allowlist entries for access/refresh tokens and deleting the HttpOnly `refresh_token` cookie. Requires CSRF (cookie-authenticated mutation).
+End the calling session: revoke that refresh token and every access token that shares its session id, then delete the HttpOnly `refresh_token` cookie. Other sessions on the account stay usable. Requires CSRF (cookie-authenticated mutation).
+
+Session identity comes from the refresh cookie when present; if the cookie is missing, from the access token's allowlist metadata. If neither yields a session id, the request fails and does not revoke other sessions.
 
 **Request Headers:**
 
@@ -175,6 +177,34 @@ X-CSRF-Token: <csrf_token>
 ```json
 {
   "message": "Successfully logged out"
+}
+```
+
+**Permissions:** Authenticated user
+
+**Error Responses:**
+
+- 400 Bad Request: Unable to identify the current session
+- 401 Unauthorized: Not authenticated
+
+---
+
+### POST /api/v1/auth/logout/all
+
+Revoke every session for the authenticated user (every allowlist token, of any type) and delete the HttpOnly `refresh_token` cookie. Same CSRF and authentication rules as logout. Change-password still calls the revocation primitive directly rather than this route. The first-party SPA does not call this endpoint.
+
+**Request Headers:**
+
+```
+Authorization: Bearer <access_token>
+X-CSRF-Token: <csrf_token>
+```
+
+**Response:**
+
+```json
+{
+  "message": "Successfully logged out from all sessions"
 }
 ```
 

@@ -92,7 +92,7 @@ class AuthService {
   }
 
   /**
-   * Logout user and invalidate tokens
+   * End the current session. Other sessions on the account stay usable.
    */
   async logout(): Promise<void> {
     await api.post<SuccessResponse<null>>('/auth/logout');
