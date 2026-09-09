@@ -22,6 +22,7 @@ from app.utils.token import (
     add_session_tokens_to_redis,
     add_token_to_redis,
     get_valid_tokens,
+    session_id_for,
     token_is_allowlisted,
 )
 
@@ -151,6 +152,30 @@ async def test_logout_without_refresh_cookie_uses_access_token_metadata() -> Non
     for token_type in (TokenType.ACCESS, TokenType.REFRESH):
         zcard, hlen = await _allowlist_counts(redis, user.id, token_type)
         assert zcard == hlen
+
+
+@pytest.mark.asyncio
+async def test_logout_without_cookie_ends_an_access_only_session() -> None:
+    """OAuth2 /access-token allowlists an access token and sets no refresh cookie."""
+    redis = MockRedisClient()
+    user = _user()
+    await add_token_to_redis(
+        redis,  # type: ignore[arg-type]
+        user,
+        "access.oauth2",
+        TokenType.ACCESS,
+        expire_time=15,
+        session_id=session_id_for("access.oauth2"),
+    )
+    access_b, refresh_b = await _establish_session(redis, user, "browser-b")
+
+    await _logout(redis, user, refresh_token=None, access_token="access.oauth2")
+
+    access_members = await get_valid_tokens(redis, user.id, TokenType.ACCESS)  # type: ignore[arg-type]
+    refresh_members = await get_valid_tokens(redis, user.id, TokenType.REFRESH)  # type: ignore[arg-type]
+    assert token_is_allowlisted(access_members, "access.oauth2") is False
+    assert token_is_allowlisted(refresh_members, refresh_b) is True
+    assert token_is_allowlisted(access_members, access_b) is True
 
 
 @pytest.mark.asyncio

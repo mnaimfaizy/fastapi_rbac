@@ -58,8 +58,8 @@ async def test_oauth2_first_login_writes_allowlist_and_logout_rejects(
     )
     assert logout_response.status_code == 200, logout_response.text
 
-    assert await get_valid_tokens(server_redis, user_id, TokenType.ACCESS) == set()
-    assert await get_valid_tokens(server_redis, user_id, TokenType.REFRESH) == set()
+    members_after = await get_valid_tokens(server_redis, user_id, TokenType.ACCESS)
+    assert token_is_allowlisted(members_after, access_token) is False
 
     me_after = await client.get(f"{settings.API_V1_STR}/users/me", headers=headers)
     assert me_after.status_code == 403

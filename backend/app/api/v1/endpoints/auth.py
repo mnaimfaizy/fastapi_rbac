@@ -61,6 +61,7 @@ from app.utils.token import (
     refresh_origin_is_anomalous,
     revoke_all_user_tokens,
     revoke_session,
+    session_id_for,
     token_is_allowlisted,
 )
 from app.utils.user_utils import serialize_user
@@ -1310,12 +1311,14 @@ async def login_access_token(
         )
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = security.create_access_token(user.id, user.email, expires_delta=access_token_expires)
+    # Form login issues no refresh cookie, so the access token is the session.
     await add_token_to_redis(
         redis_client,
         user,
         access_token,
         TokenType.ACCESS,
         settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+        session_id=session_id_for(access_token),
     )
     # Log successful OAuth2 login
     background_tasks.add_task(
