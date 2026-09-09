@@ -18,7 +18,7 @@ Refresh tokens were persisted in the SPA `localStorage` (`tokenStorage.ts`), whi
    - `Path` scoped to `{API_V1_STR}/auth` so the cookie is only sent to auth routes.
    - Optional `REFRESH_COOKIE_DOMAIN` for shared parent domains (e.g. `.example.com`).
 3. **Access token:** Remains in JSON responses and SPA memory (Redux + module variable). Never written to `localStorage`.
-4. **CSRF:** Required on cookie-authenticated state-changing auth routes: login (existing), `new_access_token`, `logout`, and `change_password` (existing).
+4. **CSRF:** Required on cookie-authenticated state-changing auth routes: login (existing), `new_access_token`, `logout`, `logout/all`, and `change_password` (existing).
 5. **Redis allowlist:** Unchanged. Refresh JWTs are still added to `user:{id}:refresh` and cleared on logout. **No refresh rotation** in this change — `/new_access_token` reuses the existing refresh cookie/JWT and does not re-set the cookie (rotation remains a follow-up).
 6. **Client model:** First-party SPA is **cookie-primary**. Optional JSON body `refresh_token` on `/auth/new_access_token` is retained as a documented fallback for non-browser API clients; the SPA does not send it.
 7. **Session restore:** SPA stores a non-secret `localStorage` hint (`auth_session_active`) after successful login/refresh so it can attempt cookie refresh without probing on every anonymous visit. `localStorage` (not `sessionStorage`) because the hint must outlive the tab — the refresh cookie is valid for `REFRESH_TOKEN_EXPIRE_MINUTES`, so a new tab or browser restart must still be able to restore. The hint is not a credential; possessing it grants nothing without the HttpOnly cookie. Legacy `localStorage` refresh keys are cleared on logout/migrate.

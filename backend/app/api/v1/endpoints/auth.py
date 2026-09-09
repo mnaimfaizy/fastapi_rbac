@@ -56,11 +56,12 @@ from app.utils.token import (
     add_derived_access_token_to_redis,
     add_session_tokens_to_redis,
     add_token_to_redis,
+    end_caller_session,
     get_valid_tokens,
     refresh_origin_is_anomalous,
     revoke_all_user_tokens,
     revoke_session,
-    revoke_user_tokens,
+    session_id_for,
     token_is_allowlisted,
 )
 from app.utils.user_utils import serialize_user
@@ -1310,12 +1311,14 @@ async def login_access_token(
         )
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = security.create_access_token(user.id, user.email, expires_delta=access_token_expires)
+    # Form login issues no refresh cookie, so the access token is the session.
     await add_token_to_redis(
         redis_client,
         user,
         access_token,
         TokenType.ACCESS,
         settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+        session_id=session_id_for(access_token),
     )
     # Log successful OAuth2 login
     background_tasks.add_task(
@@ -1339,26 +1342,30 @@ async def logout(
     background_tasks: BackgroundTasks = BackgroundTasks(),
     current_user: User = Depends(deps.get_current_user()),
     redis_client: AsyncRedis = Depends(get_redis_client),
+    access_token: str = Depends(deps.reusable_oauth2),
     _: None = Depends(deps.validate_csrf_token),
 ) -> IPostResponseBase:
-    """
-    Logout endpoint that invalidates the current user's tokens and clears the refresh cookie.
+    """End the calling session and clear the refresh cookie.
+
+    Other sessions on the account stay usable. To revoke every session, use
+    ``POST /logout/all``. Session identity comes from the refresh cookie when
+    present, otherwise from the access token's allowlist metadata.
     """
     ip_address = get_client_ip(request) or "Unknown"
     try:
-        # Revoke every token for this user before the response is written.
-        await revoke_user_tokens(
-            redis_client=redis_client,
-            user_id=current_user.id,
-            token_type=TokenType.ACCESS,
+        refresh_token = request.cookies.get(settings.REFRESH_TOKEN_COOKIE_NAME) or None
+        ended = await end_caller_session(
+            redis_client,
+            current_user.id,
+            refresh_token=refresh_token,
+            access_token=access_token,
         )
-        await revoke_user_tokens(
-            redis_client=redis_client,
-            user_id=current_user.id,
-            token_type=TokenType.REFRESH,
-        )
+        if not ended:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unable to identify the current session.",
+            )
         clear_refresh_token_cookie(response)
-        # Log the logout event as a background task
         background_tasks.add_task(
             log_security_event,
             background_tasks=background_tasks,
@@ -1379,6 +1386,56 @@ async def logout(
             log_security_event,
             background_tasks=background_tasks,
             event_type=f"logout_unexpected_error_{error_type.lower()}",
+            user_id=current_user.id,
+            details={
+                "email": current_user.email,
+                "error": str(e),
+                "ip_address": ip_address,
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred during logout.",
+        )
+
+
+@router.post("/logout/all")
+async def logout_all(
+    request: Request,
+    response: Response,
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    current_user: User = Depends(deps.get_current_user()),
+    redis_client: AsyncRedis = Depends(get_redis_client),
+    _: None = Depends(deps.validate_csrf_token),
+) -> IPostResponseBase:
+    """End every session for the authenticated user and clear the refresh cookie.
+
+    Change-password still calls ``revoke_all_user_tokens`` directly rather than
+    going through this route.
+    """
+    ip_address = get_client_ip(request) or "Unknown"
+    try:
+        await revoke_all_user_tokens(redis_client, current_user.id)
+        clear_refresh_token_cookie(response)
+        background_tasks.add_task(
+            log_security_event,
+            background_tasks=background_tasks,
+            event_type="user_logout_all",
+            user_id=current_user.id,
+            details={"email": current_user.email, "ip_address": ip_address},
+        )
+        return create_response(data={}, message="Successfully logged out from all sessions")
+    except Exception as e:
+        error_type = type(e).__name__
+        logger.error(
+            f"Unexpected error in logout/all for user {current_user.email} "
+            f"from IP {ip_address}: {str(e)}",
+            exc_info=True,
+        )
+        background_tasks.add_task(
+            log_security_event,
+            background_tasks=background_tasks,
+            event_type=f"logout_all_unexpected_error_{error_type.lower()}",
             user_id=current_user.id,
             details={
                 "email": current_user.email,

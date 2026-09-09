@@ -287,6 +287,7 @@ describe('AuthService', () => {
       await authService.logout();
 
       expect(mockedApi.post).toHaveBeenCalledWith('/auth/logout');
+      expect(mockedApi.post).not.toHaveBeenCalledWith('/auth/logout/all');
     });
 
     it('handles logout when already logged out', async () => {

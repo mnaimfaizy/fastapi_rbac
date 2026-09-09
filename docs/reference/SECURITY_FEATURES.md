@@ -97,7 +97,7 @@ Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'
 - **Refresh Tokens**: Long-lived, HttpOnly Secure cookies (see [ADR 0006](../adr/0006-httponly-refresh-token-cookies.md))
 - **Token Allowlisting**: Only tokens recorded at login/refresh are accepted
 - **Automatic Refresh**: Transparent token renewal via cookie + CSRF
-- **Secure Logout**: Allowlist keys removed and refresh cookie cleared
+- **Secure Logout**: `POST /logout` revokes the calling session only; `POST /logout/all` revokes every session. The refresh cookie is cleared on both. See [ADR 0011](../adr/0011-session-security-model.md) decision 9
 - **Origin-Network Anomaly Detection**: when `VALIDATE_TOKEN_IP` is on, the address a
   session was established from is recorded with its refresh allowlist entry. A refresh
   presented from a different IPv4 /24 or IPv6 /64 revokes that one session and answers
