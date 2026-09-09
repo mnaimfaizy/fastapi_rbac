@@ -35,7 +35,7 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import settings
-from app.models.password_history_model import UserPasswordHistory
+from app.crud.user_crud import clear_user_delete_references
 from app.models.user_model import User
 from app.models.user_role_model import UserRole
 
@@ -101,17 +101,17 @@ async def delete_if_still_pending(
     The predicate is repeated in the DELETE rather than trusted from the earlier
     SELECT: a user who clicks their verification link between the two must not be
     deleted, and two workers running the sweep at once must not both count the
-    same row. The dependent rows go first because their foreign keys are not
-    declared ``ON DELETE CASCADE``; if the guarded delete then matches nothing,
-    the whole unit of work is rolled back and the row is untouched.
+    same row.     Owned history and creator FKs are cleared first (see
+    :func:`app.crud.user_crud.clear_user_delete_references`); role assignments go next
+    because this sweep is allowed to remove a pending user who still has roles.
+    If the guarded delete then matches nothing, the whole unit of work is rolled
+    back and the row is untouched.
 
     Returns:
         True when this call deleted the user.
     """
     try:
-        await db_session.exec(  # type: ignore[call-overload]
-            sa_delete(UserPasswordHistory).where(UserPasswordHistory.user_id == user_id)
-        )
+        await clear_user_delete_references(db_session, user_id)
         await db_session.exec(  # type: ignore[call-overload]
             sa_delete(UserRole).where(UserRole.user_id == user_id)
         )

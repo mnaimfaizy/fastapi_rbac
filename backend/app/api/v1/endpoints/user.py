@@ -312,17 +312,6 @@ async def remove_user(
     if current_user.id == user_id:
         raise UserSelfDeleteException()
 
-    # Get the user to check their roles
-    user = await crud.user.get(id=user_id, db_session=db_session)
-    if user and user.roles and len(user.roles) > 0:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                f"User has {len(user.roles)} role(s) assigned and cannot be deleted. "
-                "Please remove all roles first."
-            ),
-        )
-
     deleted_user = await crud.user.remove(id=user_id, db_session=db_session)
     return create_response(data=serialize_user(deleted_user), message="User removed")
 

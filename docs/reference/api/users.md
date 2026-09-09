@@ -342,6 +342,8 @@ Authorization: Bearer <access_token>
 
 Delete a user by ID (admin only). Cannot delete self or users with roles assigned.
 
+Password history is deleted with the user. Roles, permissions, and groups they created remain, with `created_by_id` set to null. Audit log rows remain, including the original `actor_id`. See [ADR 0013](../../adr/0013-user-deletion-foreign-keys.md).
+
 **Request Headers:**
 
 ```
