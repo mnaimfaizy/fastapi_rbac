@@ -12,6 +12,8 @@ Related:
 - [ADR 0001](../adr/0001-pyjwt-sole-jwt-library.md) — PyJWT + Redis allowlist decision
 - [ADR 0006](../adr/0006-httponly-refresh-token-cookies.md) — HttpOnly refresh-token cookies for the SPA
 - [ADR 0009](../adr/0009-celery-registration-single-entrypoint.md) — single Celery entrypoint; beat entries must name registered tasks
+- [ADR 0011](../adr/0011-session-security-model.md) — session security model
+- [ADR 0013](../adr/0013-user-deletion-foreign-keys.md) — user deletion foreign-key policy
 
 ## High-level architecture
 
@@ -125,6 +127,8 @@ Core RBAC terms (see [domain docs](../agents/domain.md)): **user**, **role**, **
 | Audit log | `audit_log_model.py` | Security / activity events |
 
 Mapping tables: `UserRole`, `RolePermission`, `RoleGroupMap`.
+
+Deleting a user is decided per reference, not by a blanket cascade: password history goes with the user, assigned roles are refused with 409, audit `actor_id` is kept without a foreign key, and `created_by_id` on RBAC artifacts is set null. See [ADR 0013](../adr/0013-user-deletion-foreign-keys.md).
 
 Frontend mirrors these in `react-frontend/src/models/` (`user.ts`, `role.ts`, `permission.ts`, `roleGroup.ts`, `auth.ts`, …).
 

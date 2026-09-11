@@ -21,7 +21,7 @@ class RoleGroup(BaseUUIDModel, RoleGroupBase, table=True):
     __tablename__ = "RoleGroup"  # type: ignore[assignment]
 
     name: str | None = Field(String(250), nullable=True, index=True, unique=True)
-    created_by_id: UUID | None = Field(default=None, foreign_key="User.id")
+    created_by_id: UUID | None = Field(default=None, foreign_key="User.id", ondelete="SET NULL")
     parent_id: UUID | None = Field(default=None, foreign_key="RoleGroup.id", nullable=True)
 
     # Relationships with eager loading and proper backref configuration

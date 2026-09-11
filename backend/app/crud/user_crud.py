@@ -4,7 +4,9 @@ from uuid import UUID  # Removed Coroutine
 
 from fastapi import HTTPException
 from pydantic import EmailStr
+from sqlalchemy import delete as sa_delete
 from sqlalchemy import desc, exc  # Keep this import
+from sqlalchemy import update as sa_update
 from sqlalchemy.orm import selectinload
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession  # Keep this import
@@ -12,11 +14,14 @@ from sqlmodel.ext.asyncio.session import AsyncSession  # Keep this import
 from app.core.config import settings
 from app.core.security import PasswordValidator
 from app.crud.base_crud import CRUDBase
+from app.models.audit_log_model import AuditLog
 from app.models.password_history_model import UserPasswordHistory
-
-# Removed unused Permission import
+from app.models.permission_group_model import PermissionGroup
+from app.models.permission_model import Permission
+from app.models.role_group_model import RoleGroup
 from app.models.role_model import Role
 from app.models.user_model import User
+from app.models.user_role_model import UserRole
 from app.schemas.user_schema import IUserCreate, IUserUpdate
 
 
@@ -38,6 +43,22 @@ def password_reuse_window() -> int:
     smaller of the two, and setting either to 0 disables the history check.
     """
     return min(settings.PASSWORD_HISTORY_SIZE, settings.PREVENT_PASSWORD_REUSE)
+
+
+async def clear_user_delete_references(db_session: AsyncSession, user_id: UUID) -> None:
+    """Clear rows that must not block or outlive a user deletion as orphans (#238).
+
+    Password history is the user's own and is deleted. Creator attribution on
+    RBAC artifacts and audit rows is nulled so those rows survive without a
+    dangling FK. Assigned roles and audit ``actor_id`` are not touched here.
+    """
+    await db_session.exec(  # type: ignore[call-overload]
+        sa_delete(UserPasswordHistory).where(UserPasswordHistory.user_id == user_id)
+    )
+    for model in (Permission, PermissionGroup, Role, RoleGroup, AuditLog):
+        await db_session.exec(  # type: ignore[call-overload]
+            sa_update(model).where(model.created_by_id == user_id).values(created_by_id=None)
+        )
 
 
 class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
@@ -334,6 +355,11 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
     async def remove(self, *, id: UUID | str, db_session: AsyncSession | None = None) -> User:
         """
         Remove a user by ID. Requires db_session to be provided explicitly.
+
+        Owned rows (password history) are deleted and creator attribution on
+        surviving RBAC artifacts is nulled so a leftover FK cannot 500 the
+        caller. Assigned roles are refused with 409, matching the endpoint
+        contract (#238).
         """
         if db_session is None:
             raise ValueError("db_session must be provided")
@@ -344,8 +370,26 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         if obj is None:
             raise HTTPException(status_code=404, detail=f"User with id {id} not found")
         assert isinstance(obj, User), f"Expected User instance, got {type(obj)}"
-        await db_session.delete(obj)
-        await db_session.commit()
+        assigned = await db_session.exec(select(UserRole).where(UserRole.user_id == obj.id))
+        assigned_roles = assigned.all()
+        if assigned_roles:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"User has {len(assigned_roles)} role(s) assigned and cannot be deleted. "
+                    "Please remove all roles first."
+                ),
+            )
+        await clear_user_delete_references(db_session, obj.id)
+        try:
+            await db_session.delete(obj)
+            await db_session.commit()
+        except exc.IntegrityError:
+            await db_session.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail="User cannot be deleted because related records still reference them.",
+            )
         return obj
 
     async def add_roles_by_ids(

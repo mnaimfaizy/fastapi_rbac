@@ -6,7 +6,7 @@ from app.models.base_uuid_model import BaseUUIDModel
 
 
 class UserPasswordHistoryBase(SQLModel):
-    user_id: UUID = Field(default=None, foreign_key="User.id", index=True)
+    user_id: UUID = Field(default=None, foreign_key="User.id", index=True, ondelete="CASCADE")
     password_hash: str
     salt: str = Field(default="")  # For future use with per-password salts
     pepper_used: bool = Field(default=False)  # Track if pepper was used
