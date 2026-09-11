@@ -32,6 +32,7 @@ The neighbouring failure branches were no better. Verify-email answered `"Invali
 ## Consequences
 
 - A user who genuinely mistyped a verification link and a user whose account an administrator disabled see the same message and the same recovery route. The second user's real problem — a disabled account — is visible only to an operator reading the audit log. This is the intended trade, and the reason the security events stay distinct.
+- A repeat visit with a still-valid verification JWT for an **active, already-verified** user is a 200 (`"Email is already verified."`), not the uniform 400. The caller already held the mailbox link; confirming verification status to them is the #239 trade. A **disabled** account — including disabled-and-verified — stays on the uniform 400 so that 200 is not an oracle. `is_active` is evaluated before that success.
 - Verify-email and both reset-confirm endpoints now take at least `UNIFORM_ACCOUNT_RESPONSE_FLOOR_SECONDS`. These are once-per-account operations; the floor is not on any hot path.
 - Reordering the `is_active` check means a disabled account with a live token now consumes the allow-list lookup before being refused. The refusal itself is unchanged.
 - A future reader will find four endpoints returning the same string from unrelated branches and may try to make the errors "more helpful". That reversal is the specific thing this ADR and 0007 exist to prevent.

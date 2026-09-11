@@ -541,11 +541,18 @@ async def verify_email(
     Verify user's email address using the provided token.
 
     Every failure that required looking an account up -- unknown address,
-    disabled account, wrong or expired or already-used token -- leaves through
+    disabled account, wrong or expired token, or an unused token whose Redis
+    key is gone -- leaves through
     :func:`~app.utils.account_token_responses.reject_verification` with one
     message (#137). It previously answered "Account is inactive. Cannot verify
     email." for a disabled user, which
     confirmed an address in a single request.
+
+    A correctly signed, unexpired verification JWT for an *active*,
+    already-verified user returns 200 "Email is already verified." even when
+    the Redis key has been consumed (#239). ``is_active`` is evaluated before
+    that success, so a disabled account -- including disabled-and-verified --
+    still receives the uniform 400.
 
     The floor covers the branches the uniform message alone does not: an
     unknown address returns before the Redis lookup a disabled account pays
@@ -608,16 +615,22 @@ async def verify_email(
             elif isinstance(stored_token_value, str):
                 stored_token_str = stored_token_value
             if not stored_token_str or stored_token_str != body.token:
-                await reject_verification(
-                    background_tasks=background_tasks,
-                    event_type="verify_email_token_mismatch_or_expired_redis",
-                    user_id=user.id,
-                    details={
-                        "email": user.email,
-                        "token_used": body.token,
-                        "ip_address": ip_address,
-                    },
-                )
+                # A successful verification deletes the Redis key. The JWT can
+                # still decode until exp. An active already-verified user who
+                # still presents that token is told the account is verified
+                # rather than that the link is dead (#239). Disabled accounts
+                # stay on the uniform 400 so this is not an oracle (#137).
+                if not (user.is_active and user.verified):
+                    await reject_verification(
+                        background_tasks=background_tasks,
+                        event_type="verify_email_token_mismatch_or_expired_redis",
+                        user_id=user.id,
+                        details={
+                            "email": user.email,
+                            "token_used": body.token,
+                            "ip_address": ip_address,
+                        },
+                    )
             if not user.is_active:
                 # Answers exactly as a bad token does (#137). A disabled account is
                 # still an account, and saying so here confirmed an address.

@@ -113,15 +113,22 @@ def emitted_events(monkeypatch: Any) -> List[str]:
 async def test_verify_email_disabled_matches_a_bad_token(
     client: AsyncClient, user_factory: Any, redis_mock: Any
 ) -> None:
-    """A disabled account with a good token answers exactly as a bad token does."""
-    active, disabled = await seed_users(user_factory)
+    """A disabled account with a good token answers exactly as a bad token does.
+
+    The comparison is an *unverified* account whose token was never issued.
+    An active already-verified account with a missing Redis key is a repeat
+    visit and answers 200 (#239), so it is no longer a "bad token".
+    """
+    _, disabled = await seed_users(user_factory)
+    pending = await user_factory.create(
+        email="unverified-bad-token@example.com", password=PASSWORD, verified=False, is_active=True
+    )
 
     disabled_token = security.create_verification_token(disabled.email)
     await redis_mock.setex(f"verification_token:{disabled.id}", 3600, disabled_token)
     disabled_response = observable(await post_verify_email(client, disabled_token))
 
-    # An active account whose token was never issued -- "the token is simply invalid".
-    bad_token = security.create_verification_token(active.email)
+    bad_token = security.create_verification_token(pending.email)
     bad_response = observable(await post_verify_email(client, bad_token))
 
     assert disabled_response == bad_response
@@ -172,6 +179,84 @@ async def test_verify_email_still_verifies_an_active_user(
 
     assert response.status_code == 200
     assert "verified" in response.json()["message"].lower()
+
+
+async def test_verify_email_second_visit_says_already_verified(
+    client: AsyncClient, user_factory: Any, redis_mock: Any
+) -> None:
+    """A repeat click on a still-valid JWT must not look like a dead link (#239).
+
+    First success consumes the Redis key. The JWT can still decode until ``exp``.
+    An active account that is already verified answers 200 instead of the
+    uniform 400 the missing key would otherwise produce.
+    """
+    pending = await user_factory.create(
+        email="repeat-visit@example.com", password=PASSWORD, verified=False, is_active=True
+    )
+    token = security.create_verification_token(pending.email)
+    await redis_mock.setex(f"verification_token:{pending.id}", 3600, token)
+
+    first = await post_verify_email(client, token)
+    assert first.status_code == 200
+    assert first.json()["message"] == "Email verified successfully."
+    assert await redis_mock.get(f"verification_token:{pending.id}") is None
+
+    second = await post_verify_email(client, token)
+
+    assert second.status_code == 200
+    assert second.json()["message"] == "Email is already verified."
+
+
+async def test_verify_email_disabled_verified_matches_an_unknown_address(
+    client: AsyncClient, user_factory: Any, redis_mock: Any
+) -> None:
+    """A disabled-and-verified account still answers as an unknown address does (#137).
+
+    Confirming "already verified" here would re-open the disabled-account
+    oracle: the caller would learn that an account exists at that address.
+    """
+    disabled = await user_factory.create(
+        email="disabled-verified@example.com", password=PASSWORD, verified=True, is_active=False
+    )
+    token = security.create_verification_token(disabled.email)
+    # Redis gone — the same shape as a repeat visit after a consumed token.
+    disabled_response = observable(await post_verify_email(client, token))
+
+    absent_response = observable(
+        await post_verify_email(client, security.create_verification_token(ABSENT_EMAIL))
+    )
+
+    assert disabled_response == absent_response
+    assert disabled_response == (400, INVALID_VERIFICATION_TOKEN_MESSAGE)
+
+
+async def test_verify_email_unverified_missing_redis_token_stays_uniform(
+    client: AsyncClient, user_factory: Any, redis_mock: Any
+) -> None:
+    """An unverified user whose Redis token is gone still gets the uniform 400."""
+    pending = await user_factory.create(
+        email="unverified-no-redis@example.com", password=PASSWORD, verified=False, is_active=True
+    )
+    token = security.create_verification_token(pending.email)
+
+    response = observable(await post_verify_email(client, token))
+
+    assert response == (400, INVALID_VERIFICATION_TOKEN_MESSAGE)
+
+
+async def test_verify_email_unverified_mismatched_redis_token_stays_uniform(
+    client: AsyncClient, user_factory: Any, redis_mock: Any
+) -> None:
+    """An unverified user whose Redis token does not match still gets the uniform 400."""
+    pending = await user_factory.create(
+        email="unverified-mismatch@example.com", password=PASSWORD, verified=False, is_active=True
+    )
+    token = security.create_verification_token(pending.email)
+    await redis_mock.setex(f"verification_token:{pending.id}", 3600, "some-other-token")
+
+    response = observable(await post_verify_email(client, token))
+
+    assert response == (400, INVALID_VERIFICATION_TOKEN_MESSAGE)
 
 
 async def test_verify_email_rejects_an_undecodable_token_regardless_of_account(
