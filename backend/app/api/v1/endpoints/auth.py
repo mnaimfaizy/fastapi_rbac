@@ -1046,6 +1046,10 @@ async def get_new_access_token(
                 redis_client, user_id_from_token, refresh_token, client_host
             ):
                 await revoke_session(redis_client, user_id_from_token, refresh_token)
+                # Logged inline as well as persisted. The HTTP answer is the
+                # ordinary refresh failure, so this line is how the anomaly
+                # rate is counted in logs -- and ADR 0011 decision 5 defers
+                # notifying users precisely until that rate is known.
                 logger.warning(
                     "refresh_origin_network_mismatch: revoked session for token subject "
                     f"{user_id_from_token} presented from {ip_address}"
