@@ -153,3 +153,58 @@ async def test_log_security_event_does_not_dispatch_celery(
     rows = await _events(db, "failed_login")
     assert len(rows) == 1
     assert rows[0].actor_id is None
+
+
+@pytest.mark.asyncio
+async def test_log_security_event_opens_a_session_when_none_is_passed(
+    db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Callers that cannot thread the request session still persist a row."""
+
+    class SessionCM:
+        async def __aenter__(self) -> AsyncSession:
+            return db
+
+        async def __aexit__(self, *_args: object) -> bool:
+            return False
+
+    monkeypatch.setattr("app.db.session.SessionLocal", lambda: SessionCM())
+
+    await log_security_event(
+        BackgroundTasks(),
+        event_type="failed_login",
+        user_id=None,
+        details={"reason": "user_not_found"},
+        db_session=None,
+    )
+
+    rows = await _events(db, "failed_login")
+    assert len(rows) == 1
+    assert rows[0].actor_id is None
+
+
+@pytest.mark.asyncio
+async def test_failed_rollback_after_audit_write_is_logged(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A broken session must not turn the original request into a 500."""
+
+    class BoomSession:
+        def add(self, _obj: Any) -> None:
+            raise RuntimeError("audit log is down")
+
+        async def rollback(self) -> None:
+            raise RuntimeError("rollback failed")
+
+    with caplog.at_level("ERROR", logger="fastapi_rbac"):
+        await log_security_event(
+            BackgroundTasks(),
+            event_type="failed_login",
+            user_id=None,
+            details={"reason": "user_not_found"},
+            db_session=BoomSession(),  # type: ignore[arg-type]
+        )
+
+    messages = [rec.getMessage() for rec in caplog.records]
+    assert any("Failed to persist security event failed_login" in message for message in messages)
+    assert any("Failed to roll back session after audit write failure" in message for message in messages)
