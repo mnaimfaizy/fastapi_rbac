@@ -326,8 +326,9 @@ async def revoke_user_tokens(redis_client: Redis, user_id: UUID | str, token_typ
 async def revoke_all_user_tokens(redis_client: Redis, user_id: UUID | str) -> None:
     """Revoke every token the allowlist holds for a user, of any type.
 
-    Used where the account itself has changed hands -- a password change or a
-    completed reset -- so an outstanding reset link cannot outlive the change
+    Used where the account itself has changed hands -- a self-service
+    password change, a completed reset, or an administrator setting the
+    password -- so an outstanding reset link cannot outlive the change
     that should have invalidated it. ``POST /logout`` does not call this: it
     ends one session and says nothing about a reset link the user may be part
     way through redeeming. ``POST /logout/all`` does, because signing out
