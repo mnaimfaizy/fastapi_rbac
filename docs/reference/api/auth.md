@@ -125,9 +125,11 @@ Verify a user's email address using a verification token.
 }
 ```
 
+A second call with the same still-valid JWT, after the Redis key has been consumed, returns 200 with `"Email is already verified."` when the account is active and already verified (#239). The token remains single-use: the Redis key is deleted on first success.
+
 **Error Responses:**
 
-- 400 Bad Request: `"This verification link is invalid or has expired. Please request a new verification email and try again."` — returned identically for an unknown address, a disabled account, and a wrong, expired or already-used token, so the response never confirms that an account exists (#137). The audit log records which it was.
+- 400 Bad Request: `"This verification link is invalid or has expired. Please request a new verification email and try again."` — returned identically for an unknown address, a disabled account (including disabled-and-verified), a still-unverified user whose Redis token is missing or does not match, and a wrong or expired token, so the response never confirms that an account exists (#137). The audit log records which it was.
 - 401 Unauthorized: the token itself failed JWT validation
 
 ---

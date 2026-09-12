@@ -124,6 +124,60 @@ class TestComprehensiveAuth:
         )
         assert after_logout.status_code == 403
 
+    @pytest.mark.asyncio
+    async def test_verify_email_second_visit_says_already_verified(self, client: AsyncClient) -> None:
+        """A second POST with the same JWT answers 200 after Redis is consumed (#239)."""
+        email = random_email()
+        password = "TestPassw0rd!47"
+        status_code, response_data = await register_user_with_csrf(
+            client, {"email": email, "password": password, "first_name": "Repeat", "last_name": "Visit"}
+        )
+        assert status_code == 200, response_data
+        verification_token = (response_data.get("data") or {}).get("verification_code")
+        assert verification_token, "Testing-mode registration must return verification_code"
+
+        _, first_headers = await get_csrf_token(client)
+        first = await client.post(
+            f"{settings.API_V1_STR}/auth/verify-email",
+            json={"token": verification_token},
+            headers=first_headers,
+        )
+        assert first.status_code == 200, first.text
+        assert "verified successfully" in first.json()["message"].lower()
+
+        _, second_headers = await get_csrf_token(client)
+        second = await client.post(
+            f"{settings.API_V1_STR}/auth/verify-email",
+            json={"token": verification_token},
+            headers=second_headers,
+        )
+        assert second.status_code == 200, second.text
+        assert second.json()["message"] == "Email is already verified."
+
+    @pytest.mark.asyncio
+    async def test_verify_email_unverified_mismatched_token_stays_uniform(self, client: AsyncClient) -> None:
+        """A signed JWT that does not match Redis is the uniform 400 while unverified."""
+        email = random_email()
+        password = "TestPassw0rd!47"
+        status_code, response_data = await register_user_with_csrf(
+            client, {"email": email, "password": password, "first_name": "Mismatch", "last_name": "Token"}
+        )
+        assert status_code == 200, response_data
+        original_token = (response_data.get("data") or {}).get("verification_code")
+        assert original_token, "Testing-mode registration must return verification_code"
+
+        other_token = create_verification_token(email)
+        assert other_token != original_token
+
+        _, headers = await get_csrf_token(client)
+        response = await client.post(
+            f"{settings.API_V1_STR}/auth/verify-email",
+            json={"token": other_token},
+            headers=headers,
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "invalid or has expired" in _response_message(response).lower()
+
     async def _test_login_endpoint_structure(self, client: AsyncClient) -> None:
         """Test login endpoint structure when registration fails."""
         # Get CSRF token

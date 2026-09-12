@@ -34,7 +34,10 @@ from app.utils.background_tasks import log_security_event
 
 # The one answer verify-email gives to every failure that requires looking an
 # account up: unknown address, disabled account, wrong token, expired token,
-# already-used token. It must stay true of all of them without indicating which
+# or an unused token whose Redis key is gone. A repeat visit with a still-valid
+# JWT for an active already-verified user is a 200 instead (#239); disabled
+# accounts stay on this message so that success is not an oracle (#137).
+# It must stay true of all of those failures without indicating which
 # occurred, and it must point the caller at the one action that can help.
 INVALID_VERIFICATION_TOKEN_MESSAGE = (
     "This verification link is invalid or has expired. "
