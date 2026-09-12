@@ -99,8 +99,6 @@ def emitted_events(monkeypatch: Any) -> List[str]:
         recorded.append(str(kwargs.get("event_type")))
 
     monkeypatch.setattr(account_token_responses, "log_security_event", recorder)
-    # The request endpoint returns 200 and so still queues its event the
-    # ordinary way; patching both modules lets one fixture cover every site.
     monkeypatch.setattr(auth_endpoints, "log_security_event", recorder)
     return recorded
 
@@ -281,7 +279,12 @@ async def test_verify_email_rejects_an_undecodable_token_regardless_of_account(
 
     assert absent_response == disabled_response
     assert absent_response[0] == 401
-    assert emitted_events == []
+    # Same event on both accounts: decode fails before lookup, so the
+    # audit row cannot distinguish a disabled user from an unknown address.
+    assert emitted_events == [
+        "verify_email_token_invalid_decode",
+        "verify_email_token_invalid_decode",
+    ]
 
 
 # --------------------------------------------------------------------------

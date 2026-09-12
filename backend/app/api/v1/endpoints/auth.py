@@ -95,9 +95,9 @@ async def login(
                 detail="Password length exceeds maximum allowed size",
             )
     except ValueError as e:
-        background_tasks.add_task(
-            log_security_event,
+        await log_security_event(
             background_tasks=background_tasks,
+            db_session=db_session,
             event_type="login_input_sanitization_failed",
             details={
                 "error": str(e),
@@ -111,9 +111,9 @@ async def login(
         user_record = await crud.user.get_by_email(db_session=db_session, email=sanitized_email)
         if not user_record:
             # User doesn't exist, but don't reveal that information
-            background_tasks.add_task(
-                log_security_event,
+            await log_security_event(
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type="failed_login",
                 details={
                     "email": email,
@@ -139,9 +139,9 @@ async def login(
             remaining_time = locked_until_utc - datetime.now(timezone.utc)
             remaining_hours = remaining_time.total_seconds() // 3600
             remaining_minutes = (remaining_time.total_seconds() % 3600) // 60
-            background_tasks.add_task(
-                log_security_event,
+            await log_security_event(
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type="locked_account_attempt",
                 user_id=user_record.id,
                 details={
@@ -175,9 +175,9 @@ async def login(
                 db_session=db_session, email=email, password=password
             )
         except Exception as e:
-            background_tasks.add_task(
-                log_security_event,
+            await log_security_event(
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type="authentication_error",
                 user_id=user_record.id,
                 details={"error": str(e), "email": email, "ip_address": ip_address},
@@ -190,9 +190,9 @@ async def login(
             try:
                 updated_user = await crud.user.get_by_email(db_session=db_session, email=email)
                 if not updated_user:
-                    background_tasks.add_task(
-                        log_security_event,
+                    await log_security_event(
                         background_tasks=background_tasks,
+                        db_session=db_session,
                         event_type="failed_login_user_disappeared",
                         details={
                             "email": email,
@@ -205,9 +205,9 @@ async def login(
                         detail="An unexpected error occurred. Please try again.",
                     )
                 # Log failed login attempt as a background task
-                background_tasks.add_task(
-                    log_security_event,
+                await log_security_event(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type="oauth2_failed_login",
                     user_id=updated_user.id,
                     details={
@@ -271,9 +271,9 @@ async def login(
                 raise
             except Exception as e:
                 user_id_for_log = user_record.id if user_record else None
-                background_tasks.add_task(
-                    log_security_event,
+                await log_security_event(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type="failed_login_error",
                     user_id=user_id_for_log,
                     details={"error": str(e), "email": email, "ip_address": ip_address},
@@ -284,9 +284,9 @@ async def login(
                 )
         authenticated_user = cast(User, authenticated_user)
         if not crud.user.has_verified(authenticated_user):
-            background_tasks.add_task(
-                log_security_event,
+            await log_security_event(
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type="unverified_login_attempt",
                 user_id=authenticated_user.id,
                 details={"email": email, "ip_address": ip_address},
@@ -296,9 +296,9 @@ async def login(
                 detail={"field_name": "email", "message": "Email is not verified."},
             )
         if not authenticated_user.is_active:
-            background_tasks.add_task(
-                log_security_event,
+            await log_security_event(
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type="inactive_user_login_attempt",
                 user_id=authenticated_user.id,
                 details={"email": email, "ip_address": ip_address},
@@ -329,9 +329,9 @@ async def login(
             )
             set_refresh_token_cookie(response, refresh_token)
         except Exception as e:
-            background_tasks.add_task(
-                log_security_event,
+            await log_security_event(
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type="token_generation_error",
                 user_id=authenticated_user.id,
                 details={"error": str(e), "email": email, "ip_address": ip_address},
@@ -348,9 +348,9 @@ async def login(
             refresh_token=None,  # HttpOnly cookie; not exposed to JS
             user=user_read,
         )
-        background_tasks.add_task(
-            log_security_event,
+        await log_security_event(
             background_tasks=background_tasks,
+            db_session=db_session,
             event_type="successful_login",
             user_id=authenticated_user.id,
             details={"email": authenticated_user.email, "ip_address": ip_address},
@@ -363,9 +363,9 @@ async def login(
         raise
     except Exception as e:
         traceback.print_exc()
-        background_tasks.add_task(
-            log_security_event,
+        await log_security_event(
             background_tasks=background_tasks,
+            db_session=db_session,
             event_type="login_unexpected_error",
             details={"error": str(e), "ip_address": ip_address},
         )
@@ -403,9 +403,9 @@ async def register(
         try:
             sanitized_email = sanitizer.sanitize(str(user_in.email), "email")
             if len(user_in.password) > 1000:
-                background_tasks.add_task(
-                    log_security_event,
+                await log_security_event(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type="registration_password_too_long",
                     details={"ip_address": ip_address, "password_length": len(user_in.password)},
                 )
@@ -416,9 +416,9 @@ async def register(
         except HTTPException:
             raise
         except Exception as e:
-            background_tasks.add_task(
-                log_security_event,
+            await log_security_event(
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type="registration_input_sanitization_failed",
                 details={"error": str(e), "ip_address": ip_address},
             )
@@ -436,9 +436,9 @@ async def register(
             if getattr(settings, "MODE", None) == "testing":
                 ip_attempts = 0
             if ip_attempts >= max_ip_attempts:
-                background_tasks.add_task(
-                    log_security_event,
+                await log_security_event(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type="registration_rate_limit_exceeded",
                     details={"email": user_in.email, "ip_address": ip_address},
                 )
@@ -449,9 +449,9 @@ async def register(
 
             email_domain = user_in.email.split("@")[1].lower()
             if settings.EMAIL_DOMAIN_BLACKLIST and email_domain in settings.EMAIL_DOMAIN_BLACKLIST:
-                background_tasks.add_task(
-                    log_security_event,
+                await log_security_event(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type="registration_blocked_domain",
                     details={
                         "email": user_in.email,
@@ -464,9 +464,9 @@ async def register(
                     detail="This email domain is not allowed for registration.",
                 )
             if settings.EMAIL_DOMAIN_ALLOWLIST and email_domain not in settings.EMAIL_DOMAIN_ALLOWLIST:
-                background_tasks.add_task(
-                    log_security_event,
+                await log_security_event(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type="registration_domain_not_allowed",
                     details={
                         "email": user_in.email,
@@ -481,6 +481,7 @@ async def register(
             await enforce_password_complexity(
                 user_in.password,
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type="registration_password_complexity_failed",
                 details={"email": user_in.email, "ip_address": ip_address},
             )
@@ -515,9 +516,9 @@ async def register(
         except HTTPException:
             raise
         except Exception as e:
-            background_tasks.add_task(
-                log_security_event,
+            await log_security_event(
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type="registration_unexpected_error",
                 details={"error": str(e), "ip_address": ip_address},
             )
@@ -567,9 +568,9 @@ async def verify_email(
             sanitized_token = sanitizer.sanitize(body.token, "text")
             body.token = sanitized_token
         except Exception as e:
-            background_tasks.add_task(
-                log_security_event,
+            await log_security_event(
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type="verify_email_input_sanitization_failed",
                 details={"error": str(e), "ip_address": ip_address},
             )
@@ -578,9 +579,9 @@ async def verify_email(
             try:
                 payload = security.decode_token(body.token, token_type="verification")
             except HTTPException as exc:
-                background_tasks.add_task(
-                    log_security_event,
+                await log_security_event(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type=map_jwt_http_error_to_event(exc, flow="verify_email"),
                     details={
                         "error": (exc.detail if isinstance(exc.detail, str) else str(exc.detail)),
@@ -592,6 +593,7 @@ async def verify_email(
             if not email_from_token_str:
                 await reject_verification(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type="verify_email_token_missing_sub",
                     details={"token_used": body.token, "ip_address": ip_address},
                 )
@@ -599,6 +601,7 @@ async def verify_email(
             if not user:
                 await reject_verification(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type="verify_email_user_not_found",
                     details={
                         "email_from_token": email_from_token_str,
@@ -623,6 +626,7 @@ async def verify_email(
                 if not (user.is_active and user.verified):
                     await reject_verification(
                         background_tasks=background_tasks,
+                        db_session=db_session,
                         event_type="verify_email_token_mismatch_or_expired_redis",
                         user_id=user.id,
                         details={
@@ -636,14 +640,15 @@ async def verify_email(
                 # still an account, and saying so here confirmed an address.
                 await reject_verification(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type="verify_email_inactive_account",
                     user_id=user.id,
                     details={"email": user.email, "ip_address": ip_address},
                 )
             if user.verified:
-                background_tasks.add_task(
-                    log_security_event,
+                await log_security_event(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type="verify_email_already_verified",
                     user_id=user.id,
                     details={"email": user.email, "ip_address": ip_address},
@@ -670,9 +675,9 @@ async def verify_email(
                 db_session=db_session, obj_current=user, obj_new=user_update
             )
             if not updated_user:  # Should not happen if user existed and update is valid
-                background_tasks.add_task(
-                    log_security_event,
+                await log_security_event(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type="verify_email_update_failed",
                     user_id=user.id,
                     details={"email": user.email, "ip_address": ip_address},
@@ -682,9 +687,9 @@ async def verify_email(
                     detail="Failed to update user verification status.",
                 )
             await redis_client.delete(redis_token_key)  # Token successfully used
-            background_tasks.add_task(
-                log_security_event,
+            await log_security_event(
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type="email_verified_successfully",
                 user_id=updated_user.id,
                 details={"email": updated_user.email, "ip_address": ip_address},
@@ -720,9 +725,9 @@ async def verify_email(
                 ),
                 exc_info=True,
             )
-            background_tasks.add_task(
-                log_security_event,
+            await log_security_event(
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type=f"verify_email_unexpected_error_{error_type.lower()}",
                 details={
                     "error": str(e),
@@ -776,9 +781,9 @@ async def resend_verification_email(
             raise
         except Exception as e:
             error_type = type(e).__name__
-            background_tasks.add_task(
-                log_security_event,
+            await log_security_event(
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type=f"resend_verification_unexpected_error_{error_type.lower()}",
                 details={"error": str(e), "email": body.email, "ip_address": ip_address},
             )
@@ -811,9 +816,9 @@ async def change_password(
             # This case should ideally not happen if password is a required field
             # and properly managed. Logging it as a server-side issue.
             logger.error(f"User {current_user.email} (ID: {current_user.id}) has no password set.")
-            background_tasks.add_task(
-                log_security_event,
+            await log_security_event(
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type="password_change_error_no_password_set",
                 user_id=current_user.id,
                 details={"email": current_user.email, "ip_address": ip_address},
@@ -823,9 +828,9 @@ async def change_password(
                 detail="An internal error occurred. Please try again later.",
             )
         if not PasswordValidator.verify_password(current_password, current_user.password):
-            background_tasks.add_task(
-                log_security_event,
+            await log_security_event(
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type="password_change_invalid_current_password",
                 user_id=current_user.id,
                 details={"email": current_user.email, "ip_address": ip_address},
@@ -838,6 +843,7 @@ async def change_password(
         await enforce_password_complexity(
             new_password,
             background_tasks=background_tasks,
+            db_session=db_session,
             event_type="password_change_complexity_failed",
             user_id=current_user.id,
             details={"email": current_user.email, "ip_address": ip_address},
@@ -854,9 +860,9 @@ async def change_password(
                 created_by_ip=ip_address,
             )
         except PasswordReuseError as e:
-            background_tasks.add_task(
-                log_security_event,
+            await log_security_event(
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type="password_change_reused_password",
                 user_id=current_user.id,
                 details={
@@ -883,9 +889,9 @@ async def change_password(
             obj_new=user_update_data,
         )
         if not updated_user:
-            background_tasks.add_task(
-                log_security_event,
+            await log_security_event(
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type="password_change_failed_post_update",
                 user_id=current_user.id,
                 details={"email": current_user.email, "ip_address": ip_address},
@@ -931,9 +937,9 @@ async def change_password(
             refresh_token,
             max_age=int(refresh_token_expires.total_seconds()),
         )
-        background_tasks.add_task(
-            log_security_event,
+        await log_security_event(
             background_tasks=background_tasks,
+            db_session=db_session,
             event_type="password_change_successful",
             user_id=current_user.id,
             details={"email": current_user.email, "ip_address": ip_address},
@@ -950,9 +956,9 @@ async def change_password(
             f"from IP {ip_address}: {str(e)}",
             exc_info=True,
         )
-        background_tasks.add_task(
-            log_security_event,
+        await log_security_event(
             background_tasks=background_tasks,
+            db_session=db_session,
             event_type="password_change_unexpected_error",
             user_id=current_user.id,  # Ensure current_user is valid
             details={
@@ -990,9 +996,9 @@ async def get_new_access_token(
     if not refresh_token and body and body.refresh_token:
         refresh_token = body.refresh_token
     if not refresh_token:
-        background_tasks.add_task(
-            log_security_event,
+        await log_security_event(
             background_tasks=background_tasks,
+            db_session=db_session,
             event_type="refresh_token_missing",
             details={"ip_address": ip_address},
         )
@@ -1007,9 +1013,9 @@ async def get_new_access_token(
         try:
             payload = decode_token(refresh_token, token_type="refresh")
         except HTTPException as exc:
-            background_tasks.add_task(
-                log_security_event,
+            await log_security_event(
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type=map_jwt_http_error_to_event(exc, flow="refresh"),
                 details={
                     "token_error": (exc.detail if isinstance(exc.detail, str) else str(exc.detail)),
@@ -1021,9 +1027,9 @@ async def get_new_access_token(
             user_id_from_token = payload["sub"]
             valid_refresh_tokens = await get_valid_tokens(redis_client, user_id_from_token, TokenType.REFRESH)
             if not token_is_allowlisted(valid_refresh_tokens, refresh_token):
-                background_tasks.add_task(
-                    log_security_event,
+                await log_security_event(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type="refresh_token_invalid",
                     details={"user_id": user_id_from_token, "ip_address": ip_address},
                 )
@@ -1040,19 +1046,13 @@ async def get_new_access_token(
                 redis_client, user_id_from_token, refresh_token, client_host
             ):
                 await revoke_session(redis_client, user_id_from_token, refresh_token)
-                # Logged inline as well as queued. A task on background_tasks runs
-                # only if the handler returns a response, and this one raises; the
-                # audit-log sink behind log_security_event is also still a stub.
-                # Until both are fixed this line is the only place the anomaly rate
-                # can be counted -- and ADR 0011 decision 5 defers notifying users
-                # precisely until that rate is known, so it has to be countable.
                 logger.warning(
                     "refresh_origin_network_mismatch: revoked session for token subject "
                     f"{user_id_from_token} presented from {ip_address}"
                 )
-                background_tasks.add_task(
-                    log_security_event,
+                await log_security_event(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type="refresh_origin_network_mismatch",
                     details={"user_id": user_id_from_token, "ip_address": ip_address},
                 )
@@ -1066,9 +1066,9 @@ async def get_new_access_token(
                 user_uuid = UUID(user_id_from_token)
                 user = await crud.user.get(id=user_uuid, db_session=db_session)
             except ValueError:
-                background_tasks.add_task(
-                    log_security_event,
+                await log_security_event(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type="refresh_token_invalid_uuid",
                     details={"user_id": user_id_from_token, "ip_address": ip_address},
                 )
@@ -1097,9 +1097,9 @@ async def get_new_access_token(
                         refresh_token,
                         settings.ACCESS_TOKEN_EXPIRE_MINUTES,
                     )
-                background_tasks.add_task(
-                    log_security_event,
+                await log_security_event(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type="refresh_token_success",
                     user_id=user.id,
                     details={"email": user.email, "ip_address": ip_address},
@@ -1112,9 +1112,9 @@ async def get_new_access_token(
                 # This covers user not found (user is None) or user is inactive
                 event_user_id = user.id if user else user_id_from_token
                 event_email = user.email if user else "N/A"
-                background_tasks.add_task(
-                    log_security_event,
+                await log_security_event(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type="refresh_token_user_not_found_or_inactive",
                     user_id=event_user_id,
                     details={
@@ -1128,9 +1128,9 @@ async def get_new_access_token(
                     detail={"status": False, "message": "User not found or inactive"},
                 )
         else:
-            background_tasks.add_task(
-                log_security_event,
+            await log_security_event(
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type="refresh_token_wrong_type",
                 details={"token_type": payload.get("type"), "ip_address": ip_address},
             )
@@ -1147,9 +1147,9 @@ async def get_new_access_token(
             f"token sub {payload.get('sub') if payload else 'N/A'}: {str(e)}",
             exc_info=True,
         )
-        background_tasks.add_task(
-            log_security_event,
+        await log_security_event(
             background_tasks=background_tasks,
+            db_session=db_session,
             event_type=f"new_access_token_unexpected_error_{error_type.lower()}",
             user_id=payload.get("sub") if payload else None,
             details={
@@ -1184,9 +1184,9 @@ async def login_access_token(
     if not user_record:
         # User doesn't exist, but don't reveal that information
         # Log failed login attempt for non-existent user as a background task
-        background_tasks.add_task(
-            log_security_event,
+        await log_security_event(
             background_tasks=background_tasks,
+            db_session=db_session,
             event_type="oauth2_failed_login",
             details={"email": form_data.username, "reason": "user_not_found"},
         )
@@ -1206,9 +1206,9 @@ async def login_access_token(
             remaining_hours = remaining_time.total_seconds() // 3600
             remaining_minutes = (remaining_time.total_seconds() % 3600) // 60
             # Log locked account login attempt as a background task
-            background_tasks.add_task(
-                log_security_event,
+            await log_security_event(
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type="oauth2_locked_account_attempt",
                 user_id=user_record.id,
                 details={
@@ -1248,9 +1248,9 @@ async def login_access_token(
         # status after increment_failed_attempts was called
         updated_user = await crud.user.get_by_email(email=form_data.username, db_session=db_session)
         if not updated_user:
-            background_tasks.add_task(
-                log_security_event,
+            await log_security_event(
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type="oauth2_failed_login_user_disappeared",
                 details={"email": form_data.username, "reason": "User not found after failed auth attempt"},
             )
@@ -1259,9 +1259,9 @@ async def login_access_token(
                 detail="An unexpected error occurred. Please try again.",
             )
         # Log failed login attempt as a background task
-        background_tasks.add_task(
-            log_security_event,
+        await log_security_event(
             background_tasks=background_tasks,
+            db_session=db_session,
             event_type="oauth2_failed_login",
             user_id=updated_user.id,
             details={
@@ -1311,9 +1311,9 @@ async def login_access_token(
             )
     if not user.is_active:
         # Log inactive user login attempt
-        background_tasks.add_task(
-            log_security_event,
+        await log_security_event(
             background_tasks=background_tasks,
+            db_session=db_session,
             event_type="oauth2_inactive_user_attempt",
             user_id=user.id,
             details={"email": form_data.username},
@@ -1334,9 +1334,9 @@ async def login_access_token(
         session_id=session_id_for(access_token),
     )
     # Log successful OAuth2 login
-    background_tasks.add_task(
-        log_security_event,
+    await log_security_event(
         background_tasks=background_tasks,
+        db_session=db_session,
         event_type="oauth2_successful_login",
         user_id=user.id,
         details={"email": user.email},
@@ -1356,6 +1356,7 @@ async def logout(
     current_user: User = Depends(deps.get_current_user()),
     redis_client: AsyncRedis = Depends(get_redis_client),
     access_token: str = Depends(deps.reusable_oauth2),
+    db_session: AsyncSession = Depends(deps.get_db),
     _: None = Depends(deps.validate_csrf_token),
 ) -> IPostResponseBase:
     """End the calling session and clear the refresh cookie.
@@ -1379,9 +1380,9 @@ async def logout(
                 detail="Unable to identify the current session.",
             )
         clear_refresh_token_cookie(response)
-        background_tasks.add_task(
-            log_security_event,
+        await log_security_event(
             background_tasks=background_tasks,
+            db_session=db_session,
             event_type="user_logout",
             user_id=current_user.id,
             details={"email": current_user.email, "ip_address": ip_address},
@@ -1395,9 +1396,9 @@ async def logout(
             f"Unexpected error in logout for user {current_user.email} " f"from IP {ip_address}: {str(e)}",
             exc_info=True,
         )
-        background_tasks.add_task(
-            log_security_event,
+        await log_security_event(
             background_tasks=background_tasks,
+            db_session=db_session,
             event_type=f"logout_unexpected_error_{error_type.lower()}",
             user_id=current_user.id,
             details={
@@ -1419,6 +1420,7 @@ async def logout_all(
     background_tasks: BackgroundTasks = BackgroundTasks(),
     current_user: User = Depends(deps.get_current_user()),
     redis_client: AsyncRedis = Depends(get_redis_client),
+    db_session: AsyncSession = Depends(deps.get_db),
     _: None = Depends(deps.validate_csrf_token),
 ) -> IPostResponseBase:
     """End every session for the authenticated user and clear the refresh cookie.
@@ -1430,9 +1432,9 @@ async def logout_all(
     try:
         await revoke_all_user_tokens(redis_client, current_user.id)
         clear_refresh_token_cookie(response)
-        background_tasks.add_task(
-            log_security_event,
+        await log_security_event(
             background_tasks=background_tasks,
+            db_session=db_session,
             event_type="user_logout_all",
             user_id=current_user.id,
             details={"email": current_user.email, "ip_address": ip_address},
@@ -1445,9 +1447,9 @@ async def logout_all(
             f"from IP {ip_address}: {str(e)}",
             exc_info=True,
         )
-        background_tasks.add_task(
-            log_security_event,
+        await log_security_event(
             background_tasks=background_tasks,
+            db_session=db_session,
             event_type=f"logout_all_unexpected_error_{error_type.lower()}",
             user_id=current_user.id,
             details={
@@ -1494,26 +1496,26 @@ async def request_password_reset(
             try:
                 email_for_reset = sanitizer.sanitize(str(reset_request.email), "email")
             except Exception as e:
-                background_tasks.add_task(
-                    log_security_event,
+                await log_security_event(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type="password_reset_request_sanitization_failed",
                     details={"error": str(e), "ip_address": ip_address},
                 )
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email format")
             user = await crud.user.get_by_email(email=email_for_reset, db_session=db_session)
             if not user:
-                background_tasks.add_task(
-                    log_security_event,
+                await log_security_event(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type="password_reset_request_invalid_email",
                     details={"email": email_for_reset, "ip_address": ip_address},
                 )
                 return create_response(data={}, message=PASSWORD_RESET_REQUEST_UNIFORM_MESSAGE)
             if not user.is_active:
-                background_tasks.add_task(
-                    log_security_event,
+                await log_security_event(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type="password_reset_request_inactive_user",
                     user_id=user.id,
                     details={"email": email_for_reset, "ip_address": ip_address},
@@ -1535,9 +1537,9 @@ async def request_password_reset(
                 reset_token=reset_token,
                 reset_url=reset_url,
             )
-            background_tasks.add_task(
-                log_security_event,
+            await log_security_event(
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type="password_reset_requested",
                 user_id=user.id,
                 details={"email": user.email, "ip_address": ip_address},
@@ -1562,9 +1564,9 @@ async def request_password_reset(
                 f"from IP {ip_address}: {str(e)}",
                 exc_info=True,
             )
-            background_tasks.add_task(
-                log_security_event,
+            await log_security_event(
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type=f"password_reset_request_unexpected_error_{error_type.lower()}",
                 user_id=user_id_for_log,
                 details={
@@ -1585,7 +1587,7 @@ async def confirm_password_reset(
     reset_confirm: PasswordResetConfirm = Body(...),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     redis_client: AsyncRedis = Depends(get_redis_client),
-    db_session: AsyncSession = Depends(deps.get_db),  # <-- Add this line
+    db_session: AsyncSession = Depends(deps.get_db),
     _: None = Depends(deps.validate_csrf_token),
 ) -> IPostResponseBase:  # No data returned, just a message
     """
@@ -1611,6 +1613,7 @@ async def confirm_password_reset(
             await enforce_password_complexity(
                 reset_confirm.new_password,
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type="password_reset_complexity_failed",
                 details={"ip_address": ip_address, "token_used": reset_confirm.token},
             )
@@ -1619,6 +1622,7 @@ async def confirm_password_reset(
             if not email_from_token_str:
                 await reject_password_reset(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type="password_reset_token_missing_sub",
                     details={"token_used": reset_confirm.token, "ip_address": ip_address},
                 )
@@ -1626,6 +1630,7 @@ async def confirm_password_reset(
             if not user:
                 await reject_password_reset(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type="password_reset_user_not_found",
                     details={
                         "email_from_token": email_from_token_str,
@@ -1642,6 +1647,7 @@ async def confirm_password_reset(
             if not token_is_allowlisted(valid_reset_tokens, reset_confirm.token):
                 await reject_password_reset(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type="password_reset_token_not_in_redis",
                     user_id=user.id,  # user is guaranteed to be not None here
                     details={
@@ -1652,6 +1658,7 @@ async def confirm_password_reset(
             if not user.is_active:
                 await reject_password_reset(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type="password_reset_inactive_account",
                     user_id=user.id,
                     details={"email": user.email, "ip_address": ip_address},
@@ -1664,9 +1671,9 @@ async def confirm_password_reset(
                 )
             except ValueError as e:
                 # Log password history violation as a background task
-                background_tasks.add_task(
-                    log_security_event,
+                await log_security_event(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type="password_reset_history_violation",
                     user_id=user.id,
                     details={"error": str(e), "ip_address": ip_address},
@@ -1679,9 +1686,9 @@ async def confirm_password_reset(
             # session with it: the password just changed hands.
             await revoke_all_user_tokens(redis_client, user.id)
             # Log successful password reset as a background task
-            background_tasks.add_task(
-                log_security_event,
+            await log_security_event(
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type="password_reset_successful",
                 user_id=user.id,
                 details={"email": user.email, "ip_address": ip_address},
@@ -1698,9 +1705,9 @@ async def confirm_password_reset(
                 f"(ID: {user_id_for_log}) from IP {ip_address}: {str(e)}",
                 exc_info=True,
             )
-            background_tasks.add_task(
-                log_security_event,
+            await log_security_event(
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type=f"password_reset_confirm_unexpected_error_{error_type.lower()}",
                 user_id=user_id_for_log,
                 details={
@@ -1723,7 +1730,7 @@ async def reset_password(
     background_tasks: BackgroundTasks,
     redis_client: AsyncRedis = Depends(get_redis_client),
     sanitizer: deps.InputSanitizer = Depends(get_strict_sanitizer),
-    db_session: AsyncSession = Depends(deps.get_db),  # <-- Add this line
+    db_session: AsyncSession = Depends(deps.get_db),
     _: None = Depends(deps.validate_csrf_token),
 ) -> IPostResponseBase:  # No data returned, just a message
     """
@@ -1743,9 +1750,9 @@ async def reset_password(
             body_in.token = sanitized_token
             # Validate password length to prevent DoS attacks
             if len(body_in.new_password) > 1000:
-                background_tasks.add_task(
-                    log_security_event,
+                await log_security_event(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type="password_reset_password_too_long",
                     details={
                         "ip_address": ip_address,
@@ -1754,9 +1761,9 @@ async def reset_password(
                 )
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password too long")
         except Exception as e:
-            background_tasks.add_task(
-                log_security_event,
+            await log_security_event(
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type="password_reset_input_sanitization_failed",
                 details={"error": str(e), "ip_address": ip_address},
             )
@@ -1766,6 +1773,7 @@ async def reset_password(
             await enforce_password_complexity(
                 body_in.new_password,
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type="password_reset_complexity_failed",
                 details={"ip_address": ip_address, "token_used": body_in.token},
             )
@@ -1774,6 +1782,7 @@ async def reset_password(
             if not email_from_token_str:
                 await reject_password_reset(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type="password_reset_token_missing_sub",
                     details={"token_used": body_in.token, "ip_address": ip_address},
                 )
@@ -1781,6 +1790,7 @@ async def reset_password(
             if not user:
                 await reject_password_reset(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type="password_reset_user_not_found",
                     details={
                         "email_from_token": email_from_token_str,
@@ -1797,6 +1807,7 @@ async def reset_password(
             if not token_is_allowlisted(valid_reset_tokens, body_in.token):
                 await reject_password_reset(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type="password_reset_token_not_in_redis",
                     user_id=user.id,  # user is guaranteed to be not None here
                     details={
@@ -1807,6 +1818,7 @@ async def reset_password(
             if not user.is_active:
                 await reject_password_reset(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type="password_reset_inactive_account",
                     user_id=user.id,
                     details={"email": user.email, "ip_address": ip_address},
@@ -1819,9 +1831,9 @@ async def reset_password(
                 )
             except ValueError as e:
                 # Log password history violation as a background task
-                background_tasks.add_task(
-                    log_security_event,
+                await log_security_event(
                     background_tasks=background_tasks,
+                    db_session=db_session,
                     event_type="password_reset_history_violation",
                     user_id=user.id,
                     details={"error": str(e), "ip_address": ip_address},
@@ -1834,9 +1846,9 @@ async def reset_password(
             # session with it: the password just changed hands.
             await revoke_all_user_tokens(redis_client, user.id)
             # Log successful password reset as a background task
-            background_tasks.add_task(
-                log_security_event,
+            await log_security_event(
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type="password_reset_successful",
                 user_id=user.id,
                 details={"email": user.email, "ip_address": ip_address},
@@ -1853,9 +1865,9 @@ async def reset_password(
                 f"(ID: {user_id_for_log}) from IP {ip_address}: {str(e)}",
                 exc_info=True,
             )
-            background_tasks.add_task(
-                log_security_event,
+            await log_security_event(
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type=f"password_reset_confirm_unexpected_error_{error_type.lower()}",
                 user_id=user_id_for_log,
                 details={

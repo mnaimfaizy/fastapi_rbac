@@ -252,8 +252,18 @@ def _db_user(user_id: UUID) -> User:
     return User(id=user_id, email="session-origin@example.com", is_active=True)
 
 
-def _queued_event_types(background_tasks: BackgroundTasks) -> list[str]:
-    return [task.kwargs.get("event_type") for task in background_tasks.tasks]
+@pytest.fixture(autouse=True)
+def recorded_security_events(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Capture event_type values and keep MagicMock sessions off the write path."""
+    events: list[str] = []
+
+    async def recorder(*_args: object, **kwargs: object) -> None:
+        event_type = kwargs.get("event_type")
+        if isinstance(event_type, str):
+            events.append(event_type)
+
+    monkeypatch.setattr("app.api.v1.endpoints.auth.log_security_event", recorder)
+    return events
 
 
 @pytest.fixture
@@ -294,6 +304,7 @@ async def _refresh(
 @pytest.mark.asyncio
 async def test_refresh_from_the_same_network_succeeds_and_keeps_the_session(
     refreshing_user: MagicMock,
+    recorded_security_events: list[str],
 ) -> None:
     redis = MockRedisClient()
     refresh_token = await _seed_refresh_session(redis, refreshing_user, HOME)
@@ -306,7 +317,7 @@ async def test_refresh_from_the_same_network_succeeds_and_keeps_the_session(
         redis, refreshing_user.id, TokenType.REFRESH
     )
     assert token_is_allowlisted(refresh_members, refresh_token) is True
-    assert "refresh_origin_network_mismatch" not in _queued_event_types(background_tasks)
+    assert "refresh_origin_network_mismatch" not in recorded_security_events
 
 
 @pytest.mark.asyncio
@@ -342,6 +353,7 @@ async def test_refresh_from_a_different_network_revokes_that_session(
 @pytest.mark.asyncio
 async def test_origin_anomaly_emits_a_distinguishable_security_event(
     refreshing_user: MagicMock,
+    recorded_security_events: list[str],
 ) -> None:
     """The event must be separable from ordinary refresh failures so the
     anomaly rate can be measured."""
@@ -352,18 +364,16 @@ async def test_origin_anomaly_emits_a_distinguishable_security_event(
     with pytest.raises(HTTPException):
         await _refresh(redis, refresh_token, OTHER_NETWORK, background_tasks)
 
-    event_types = _queued_event_types(background_tasks)
-    assert "refresh_origin_network_mismatch" in event_types
-    assert "refresh_token_invalid" not in event_types
+    assert "refresh_origin_network_mismatch" in recorded_security_events
+    assert "refresh_token_invalid" not in recorded_security_events
 
 
 @pytest.mark.asyncio
 async def test_origin_anomaly_is_logged_where_it_can_actually_be_counted(
     refreshing_user: MagicMock, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """The queued audit event is not observable today -- a background task added
-    before a raise never runs, and the audit sink behind it is still a stub. The
-    anomaly rate has to be countable somewhere, so the handler also logs."""
+    """The handler also logs the anomaly so the rate is countable from logs
+    even when an operator is not reading AuditLog rows."""
     redis = MockRedisClient()
     refresh_token = await _seed_refresh_session(redis, refreshing_user, HOME)
 

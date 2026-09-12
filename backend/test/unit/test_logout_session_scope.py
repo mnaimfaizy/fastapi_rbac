@@ -81,6 +81,7 @@ async def _logout(
         redis_client=redis,  # type: ignore[arg-type]
         _=None,
         access_token=access_token,
+        db_session=AsyncMock(),
     )
 
 
@@ -256,6 +257,7 @@ async def test_logout_all_revokes_every_session() -> None:
         background_tasks=BackgroundTasks(),
         current_user=user,
         redis_client=redis,  # type: ignore[arg-type]
+        db_session=AsyncMock(),
         _=None,
     )
 
@@ -312,6 +314,7 @@ async def test_logout_all_returns_500_when_revocation_fails() -> None:
             background_tasks=BackgroundTasks(),
             current_user=user,
             redis_client=redis,  # type: ignore[arg-type]
+            db_session=AsyncMock(),
             _=None,
         )
 

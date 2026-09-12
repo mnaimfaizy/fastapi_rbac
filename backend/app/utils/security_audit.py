@@ -10,7 +10,7 @@ from app.models.audit_log_model import AuditLog
 async def create_audit_log(
     *,
     db_session: AsyncSession,
-    actor_id: UUID,
+    actor_id: UUID | None,
     action: str,
     resource_type: str,
     resource_id: str,

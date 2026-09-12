@@ -31,25 +31,13 @@ def send_email_task(
 def log_security_event_task(
     event_type: str, user_id: str | None = None, details: dict[Any, Any] | None = None
 ) -> None:
-    """Celery task for logging security events"""
-    import asyncio
-    from uuid import UUID
+    """Unused: security events are written in-process by log_security_event (#243).
 
-    async def async_log_security_event(
-        event_type: str, user_id_str: str | None, details: dict[Any, Any] | None
-    ) -> None:
-        from app.db.session import get_async_session
-
-        async for db_session in get_async_session():
-            UUID(user_id_str) if user_id_str else None
-
-            # TODO: Implement logging to security audit log table
-            # This is a placeholder for actual implementation
-
-            await db_session.commit()
-            break
-
-    asyncio.run(async_log_security_event(event_type, user_id, details or {}))
+    Left registered so a delayed message still in the queue is not
+    NotRegistered. This task must not write a second AuditLog row.
+    """
+    _ = (event_type, user_id, details)
+    return None
 
 
 @celery_app.task
