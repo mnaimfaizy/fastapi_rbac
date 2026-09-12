@@ -110,7 +110,9 @@ describe('VerifyEmailPage', () => {
       first.resolve();
       await Promise.resolve();
     });
-    expect(screen.queryByText('Verification Successful')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Verification Successful')
+    ).not.toBeInTheDocument();
 
     second.reject(
       verificationError('This verification link is invalid or has expired.')
