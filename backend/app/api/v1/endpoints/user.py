@@ -281,12 +281,6 @@ async def update_user(
             await crud.user.update_password(
                 user=user, new_password=user_update.password, db_session=db_session
             )
-            # Create a new update object without the password field
-            update_data = user_update.model_dump(exclude_unset=True)
-            update_data.pop("password", None)  # Remove password from update data
-            user_update_without_password = IUserUpdate(
-                **{k: v for k, v in update_data.items() if k != "password"}
-            )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         # The password has changed hands: every session the target already
@@ -294,6 +288,12 @@ async def update_user(
         # rather than queued -- that ordering was the defect in #206.
         # Revoke this user, not the administrator making the request.
         await revoke_all_user_tokens(redis_client, user.id)
+        # Create a new update object without the password field
+        update_data = user_update.model_dump(exclude_unset=True)
+        update_data.pop("password", None)  # Remove password from update data
+        user_update_without_password = IUserUpdate(
+            **{k: v for k, v in update_data.items() if k != "password"}
+        )
     else:
         user_update_without_password = user_update
 

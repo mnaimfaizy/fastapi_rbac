@@ -13,11 +13,16 @@ from test.utils import get_csrf_token
 from typing import Any, Dict, Tuple
 from uuid import uuid4
 
+from fastapi import BackgroundTasks
 from httpx import AsyncClient, Response
+from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.api.v1.endpoints.user import update_user
 from app.core.config import settings
+from app.models.user_model import User
 from app.schemas.common_schema import TokenType
-from app.utils.token import get_valid_tokens, token_is_allowlisted
+from app.schemas.user_schema import IUserUpdate
+from app.utils.token import add_token_to_redis, get_valid_tokens, token_is_allowlisted
 
 PASSWORD = "TestPassw0rd!47"
 NEW_PASSWORD = "ReplacementPassword!42"
@@ -41,6 +46,10 @@ async def login(client: AsyncClient, email: str, password: str) -> Tuple[str, Di
     return token, {**headers, "Authorization": f"Bearer {token}"}
 
 
+def _admin() -> User:
+    return User(id=uuid4(), email="admin-direct@example.com", first_name="An", last_name="Admin")
+
+
 async def put_user_password(
     client: AsyncClient, headers: Dict[str, str], user_id: Any, password: str
 ) -> Response:
@@ -49,6 +58,33 @@ async def put_user_password(
         json={"password": password},
         headers=headers,
     )
+
+
+async def test_admin_update_revokes_tokens_the_target_already_held(
+    db: AsyncSession, user_factory: Any, redis_mock: Any
+) -> None:
+    """A token the target held before the admin-set password does not survive it."""
+    user = await user_factory.create(password=PASSWORD, verified=True)
+    prior = "prior-access-token-for-admin-reset"
+    await add_token_to_redis(
+        redis_mock,
+        user,
+        prior,
+        TokenType.ACCESS,
+        settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+    )
+
+    await update_user(
+        user_update=IUserUpdate(password=NEW_PASSWORD),
+        user=user,
+        db_session=db,
+        redis_client=redis_mock,
+        current_user=_admin(),
+        background_tasks=BackgroundTasks(),
+    )
+
+    members = await get_valid_tokens(redis_mock, user.id, TokenType.ACCESS)
+    assert token_is_allowlisted(members, prior) is False
 
 
 async def test_admin_set_password_invalidates_the_target_token(
