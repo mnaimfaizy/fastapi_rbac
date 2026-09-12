@@ -62,25 +62,24 @@ def handlers_in(module: str) -> dict:
     }
 
 
-@pytest.mark.parametrize("handler", ["change_password", "confirm_password_reset", "reset_password"])
-def test_every_self_service_password_path_revokes_prior_sessions(handler: str) -> None:
-    """Retiring the field must not touch the mechanism that made it redundant."""
-    handlers = handlers_in("auth.py")
+@pytest.mark.parametrize(
+    ("module", "handler"),
+    [
+        ("auth.py", "change_password"),
+        ("auth.py", "confirm_password_reset"),
+        ("auth.py", "reset_password"),
+        ("user.py", "update_user"),
+    ],
+)
+def test_every_password_path_revokes_prior_sessions(module: str, handler: str) -> None:
+    """Retiring the field must not touch the mechanism that made it redundant.
+
+    Four paths set a password. Self-service lives in ``auth.py``; the
+    administrator path is ``update_user`` in ``user.py``. Each must call
+    ``revoke_all_user_tokens`` itself -- passing it to ``BackgroundTasks``
+    is not a Call of that name, so a deferred revoke fails this guard (#206).
+    """
+    handlers = handlers_in(module)
 
     assert handler in handlers
     assert calls_named(handlers[handler], "revoke_all_user_tokens")
-
-
-def test_the_admin_password_path_is_the_one_that_does_not_revoke() -> None:
-    """Pins the gap so the guard above cannot be read as covering all four paths.
-
-    `PUT /users/{user_id}` sets a password through the same
-    `crud.user.update_password` and revokes nothing -- `user.py` imports no
-    revocation helper at all. That predates #68 and outlives it: changing how
-    sessions are revoked is out of scope there. Tracked as #240; when that
-    lands, delete this test and add the handler to the parametrize list above.
-    """
-    source = (APP_DIR / "api" / "v1" / "endpoints" / "user.py").read_text(encoding="utf-8")
-
-    assert "update_password" in source
-    assert "revoke" not in source

@@ -26,6 +26,7 @@ from app.schemas.user_schema import IUserCreate, IUserRead, IUserRoleAssign, IUs
 from app.utils.account_email_dispatch import issue_verification
 from app.utils.exceptions.user_exceptions import UserSelfDeleteException
 from app.utils.password_policy import enforce_password_complexity
+from app.utils.token import revoke_all_user_tokens
 from app.utils.user_utils import serialize_user
 
 logger = logging.getLogger(__name__)
@@ -251,6 +252,7 @@ async def update_user(
     user_update: IUserUpdate,
     user: User = Depends(user_deps.is_valid_user),
     db_session: AsyncSession = Depends(deps.get_db),
+    redis_client: AsyncRedis = Depends(get_redis_client),
     current_user: User = Depends(deps.get_current_user(required_permissions=["users.update"])),
 ) -> IPostResponseBase[IUserRead]:
     """
@@ -261,6 +263,10 @@ async def update_user(
 
     A new password is subject to the same complexity policy as self-service
     (#198). ``background_tasks`` is required by that helper's audit path.
+
+    A successful password change revokes the *target* user's allowlisted
+    tokens, inline, before the response (#240, #206). The acting
+    administrator's session is not touched.
     """
     # If password is being updated, use password history management
     if user_update.password:
@@ -275,14 +281,19 @@ async def update_user(
             await crud.user.update_password(
                 user=user, new_password=user_update.password, db_session=db_session
             )
-            # Create a new update object without the password field
-            update_data = user_update.model_dump(exclude_unset=True)
-            update_data.pop("password", None)  # Remove password from update data
-            user_update_without_password = IUserUpdate(
-                **{k: v for k, v in update_data.items() if k != "password"}
-            )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
+        # The password has changed hands: every session the target already
+        # holds must die before this response is written. Awaited inline
+        # rather than queued -- that ordering was the defect in #206.
+        # Revoke this user, not the administrator making the request.
+        await revoke_all_user_tokens(redis_client, user.id)
+        # Create a new update object without the password field
+        update_data = user_update.model_dump(exclude_unset=True)
+        update_data.pop("password", None)  # Remove password from update data
+        user_update_without_password = IUserUpdate(
+            **{k: v for k, v in update_data.items() if k != "password"}
+        )
     else:
         user_update_without_password = user_update
 

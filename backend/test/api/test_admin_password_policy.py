@@ -124,7 +124,7 @@ async def test_rejected_admin_create_logs_its_own_security_event(
 
 @pytest.mark.parametrize("password", REJECTED_PASSWORDS)
 async def test_admin_update_rejects_a_password_the_policy_rejects(
-    db: AsyncSession, user_factory: Any, password: str
+    db: AsyncSession, user_factory: Any, redis_mock: MockRedisClient, password: str
 ) -> None:
     user = await user_factory.create(password=ACCEPTED_PASSWORD)
 
@@ -133,6 +133,7 @@ async def test_admin_update_rejects_a_password_the_policy_rejects(
             user_update=IUserUpdate(password=password),
             user=user,
             db_session=db,
+            redis_client=redis_mock,
             current_user=_admin(),
             background_tasks=BackgroundTasks(),
         )
@@ -143,7 +144,7 @@ async def test_admin_update_rejects_a_password_the_policy_rejects(
 
 @pytest.mark.parametrize("password", REJECTED_PASSWORDS)
 async def test_rejected_admin_update_leaves_the_password_unchanged(
-    db: AsyncSession, user_factory: Any, password: str
+    db: AsyncSession, user_factory: Any, redis_mock: MockRedisClient, password: str
 ) -> None:
     user = await user_factory.create(password=ACCEPTED_PASSWORD)
     original_hash = user.password
@@ -153,6 +154,7 @@ async def test_rejected_admin_update_leaves_the_password_unchanged(
             user_update=IUserUpdate(password=password),
             user=user,
             db_session=db,
+            redis_client=redis_mock,
             current_user=_admin(),
             background_tasks=BackgroundTasks(),
         )
@@ -166,7 +168,11 @@ async def test_rejected_admin_update_leaves_the_password_unchanged(
 
 @pytest.mark.parametrize("password", REJECTED_PASSWORDS)
 async def test_rejected_admin_update_logs_its_own_security_event(
-    db: AsyncSession, user_factory: Any, monkeypatch: pytest.MonkeyPatch, password: str
+    db: AsyncSession,
+    user_factory: Any,
+    redis_mock: MockRedisClient,
+    monkeypatch: pytest.MonkeyPatch,
+    password: str,
 ) -> None:
     user = await user_factory.create(password=ACCEPTED_PASSWORD)
     recorded = AsyncMock()
@@ -177,6 +183,7 @@ async def test_rejected_admin_update_logs_its_own_security_event(
             user_update=IUserUpdate(password=password),
             user=user,
             db_session=db,
+            redis_client=redis_mock,
             current_user=_admin(),
             background_tasks=BackgroundTasks(),
         )

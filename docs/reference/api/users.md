@@ -221,6 +221,11 @@ Update an existing user (admin only). A new password is optional; when
 supplied it is subject to the same complexity policy as registration and
 answers `400` with `{ "message": "...", "errors": [...] }` if it fails.
 
+A successful password change revokes the target user's allowlisted access
+and refresh tokens before the response is written. The acting
+administrator's session is not affected. A rejected change (complexity,
+reuse, unknown user) revokes nothing.
+
 **Request Headers:**
 
 ```
