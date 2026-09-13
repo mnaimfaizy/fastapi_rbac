@@ -165,14 +165,16 @@ applying one password to many accounts.
 
 ```python
 audit_log = AuditLog(
-    actor_id=user_id,
-    action="login_attempt",
-    resource_type="user",
-    resource_id=user_id,
-    details={"ip_address": client_ip, "user_agent": user_agent},
-    timestamp=datetime.utcnow()
+    actor_id=user_id,  # null when the event has no known user
+    action="successful_login",
+    resource_type="security_event",
+    resource_id=str(user_id) if user_id else "",
+    details={"ip_address": client_ip, "email": email},
+    timestamp=datetime.utcnow(),
 )
 ```
+
+`log_security_event` writes this row in-process and is awaited, including on paths that then raise `HTTPException`. A failed audit write is logged and does not change the endpoint's status code.
 
 ## 🔍 Security Testing
 

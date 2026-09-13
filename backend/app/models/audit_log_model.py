@@ -9,7 +9,7 @@ from app.models.base_uuid_model import BaseUUIDModel
 
 
 class AuditLogBase(SQLModel):
-    actor_id: UUID = Field(...)
+    actor_id: UUID | None = Field(default=None)
     created_by_id: UUID | None = Field(default=None, foreign_key="User.id", ondelete="SET NULL")
     action: str = Field(...)
     resource_type: str = Field(...)

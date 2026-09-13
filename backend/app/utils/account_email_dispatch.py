@@ -95,6 +95,7 @@ async def consume_account_email_budget(
     redis_client: Redis,
     background_tasks: BackgroundTasks,
     ip_address: str,
+    db_session: AsyncSession,
 ) -> None:
     """Charge one unit of the per-address mail budget, or raise 429.
 
@@ -118,9 +119,9 @@ async def consume_account_email_budget(
     used = int(used_raw) if used_raw else 0
 
     if used >= settings.MAX_ACCOUNT_EMAILS_PER_ADDRESS_PER_HOUR:
-        background_tasks.add_task(
-            log_security_event,
+        await log_security_event(
             background_tasks=background_tasks,
+            db_session=db_session,
             event_type="account_email_budget_exhausted",
             details={"email": email, "ip_address": ip_address},
         )
@@ -240,6 +241,7 @@ async def dispatch_account_email(
         redis_client=redis_client,
         background_tasks=background_tasks,
         ip_address=ip_address,
+        db_session=db_session,
     )
 
     user = await crud.user.get_by_email(db_session=db_session, email=email)
@@ -250,9 +252,9 @@ async def dispatch_account_email(
             # Deliberately sends nothing. Mailing an address with no account
             # would turn this endpoint into an open mailer for unsolicited
             # signup mail; the response-time floor covers this branch instead.
-            background_tasks.add_task(
-                log_security_event,
+            await log_security_event(
                 background_tasks=background_tasks,
+                db_session=db_session,
                 event_type="account_email_absent_no_mail_sent",
                 details={"email": email, "ip_address": ip_address},
             )
@@ -273,9 +275,9 @@ async def dispatch_account_email(
             background_tasks=background_tasks,
             token=token,
         )
-        background_tasks.add_task(
-            log_security_event,
+        await log_security_event(
             background_tasks=background_tasks,
+            db_session=db_session,
             event_type="user_registered",
             user_id=new_user.id,
             details={"email": email, "ip_address": ip_address},
@@ -294,9 +296,9 @@ async def dispatch_account_email(
             redis_client=redis_client,
             background_tasks=background_tasks,
         )
-        background_tasks.add_task(
-            log_security_event,
+        await log_security_event(
             background_tasks=background_tasks,
+            db_session=db_session,
             event_type="account_email_verification_reissued",
             user_id=user.id,
             details={"email": email, "ip_address": ip_address},
@@ -309,9 +311,9 @@ async def dispatch_account_email(
         background_tasks=background_tasks,
         user_email=user.email,
     )
-    background_tasks.add_task(
-        log_security_event,
+    await log_security_event(
         background_tasks=background_tasks,
+        db_session=db_session,
         event_type=(
             "account_email_notice_sent_established"
             if state is AccountState.ESTABLISHED

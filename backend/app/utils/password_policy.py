@@ -28,6 +28,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import BackgroundTasks, HTTPException, status
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.security import PasswordValidator
 from app.utils.background_tasks import log_security_event
@@ -46,6 +47,7 @@ async def enforce_password_complexity(
     event_type: str,
     user_id: Optional[UUID] = None,
     details: Optional[dict] = None,
+    db_session: Optional[AsyncSession] = None,
 ) -> None:
     """Reject ``password`` with 400 unless it satisfies the configured policy.
 
@@ -63,16 +65,14 @@ async def enforce_password_complexity(
     # Awaited rather than queued as ``add_task(log_security_event, ...)``:
     # FastAPI attaches an endpoint's BackgroundTasks to the response it
     # returns, and an HTTPException becomes a fresh response carrying none of
-    # them, so a task queued on a raising path never runs. Awaiting gets the
-    # event to Celery in production, where ``log_security_event`` dispatches
-    # immediately. Outside production it queues the write on the same doomed
-    # BackgroundTasks and the record is still lost -- a gap shared with
-    # app.utils.account_token_responses, not one introduced here.
+    # them, so a task queued on a raising path never runs. ``log_security_event``
+    # writes the AuditLog row in-process (#243).
     await log_security_event(
         background_tasks=background_tasks,
         event_type=event_type,
         user_id=user_id,
         details={**(details or {}), "errors": errors},
+        db_session=db_session,
     )
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,

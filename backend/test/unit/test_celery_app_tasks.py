@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from app.celery_app import celery_app
+from app.worker import log_security_event_task
 
 
 def test_celery_app_imports_worker_tasks() -> None:
@@ -13,6 +14,11 @@ def test_celery_app_imports_worker_tasks() -> None:
     assert "app.worker.log_security_event_task" in registered
     assert "app.worker.send_email_task" in registered
     assert "app.worker.process_account_lockout_task" in registered
+
+
+def test_log_security_event_task_is_a_registered_noop() -> None:
+    """Leftover queue messages must not write a second AuditLog row (#243)."""
+    assert log_security_event_task.run("failed_login", user_id=None, details={"reason": "queued"}) is None
 
 
 def test_celery_config_lists_worker_imports() -> None:

@@ -29,6 +29,7 @@ from typing import NoReturn, Optional
 from uuid import UUID
 
 from fastapi import BackgroundTasks, HTTPException, status
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.utils.background_tasks import log_security_event
 
@@ -67,18 +68,18 @@ async def _reject(
     message: str,
     user_id: Optional[UUID],
     details: dict,
+    db_session: Optional[AsyncSession] = None,
 ) -> NoReturn:
     # Awaited, not queued on ``background_tasks``. FastAPI attaches an
     # endpoint's BackgroundTasks to the response it returns; an HTTPException
     # is turned into a fresh response by the exception handler, which carries
-    # no tasks. Every task queued on a raising path is therefore discarded --
-    # which would leave these branches with no distinguishing record anywhere,
-    # the one thing the uniform response depends on.
+    # no tasks. ``log_security_event`` writes the AuditLog row in-process (#243).
     await log_security_event(
         background_tasks=background_tasks,
         event_type=event_type,
         user_id=user_id,
         details=details,
+        db_session=db_session,
     )
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
@@ -89,6 +90,7 @@ async def reject_verification(
     event_type: str,
     details: dict,
     user_id: Optional[UUID] = None,
+    db_session: Optional[AsyncSession] = None,
 ) -> NoReturn:
     """Record why verification failed, then answer as if nothing was learned."""
     await _reject(
@@ -97,6 +99,7 @@ async def reject_verification(
         message=INVALID_VERIFICATION_TOKEN_MESSAGE,
         user_id=user_id,
         details=details,
+        db_session=db_session,
     )
 
 
@@ -106,6 +109,7 @@ async def reject_password_reset(
     event_type: str,
     details: dict,
     user_id: Optional[UUID] = None,
+    db_session: Optional[AsyncSession] = None,
 ) -> NoReturn:
     """Record why the reset failed, then answer as if nothing was learned."""
     await _reject(
@@ -114,4 +118,5 @@ async def reject_password_reset(
         message=INVALID_PASSWORD_RESET_TOKEN_MESSAGE,
         user_id=user_id,
         details=details,
+        db_session=db_session,
     )

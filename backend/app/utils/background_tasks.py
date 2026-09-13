@@ -3,13 +3,15 @@ Background tasks module for FastAPI RBAC system.
 
 This module provides utility functions for common background tasks such as:
 - Sending email notifications
-- Logging security audit events
+- Logging security audit events (in-process AuditLog writes; see log_security_event)
 - Managing user account states
 
-This module supports both FastAPI BackgroundTasks for simple operations
-and Celery for more complex, long-running, or scheduled tasks.
+Email sending still supports both FastAPI BackgroundTasks and Celery.
+Security events are persisted immediately by log_security_event so a
+subsequent HTTPException cannot drop the write.
 """
 
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
@@ -19,14 +21,18 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app import crud
 from app.core.config import settings
+from app.models.audit_log_model import AuditLog
 from app.models.user_model import User
 from app.utils.duration import humanize_minutes
 from app.utils.email import send_email_with_template
 
+logger = logging.getLogger("fastapi_rbac")
+
+SECURITY_EVENT_RESOURCE_TYPE = "security_event"
+
 # Import Celery tasks if available
 try:
     from app.worker import (
-        log_security_event_task,
         process_account_lockout_task,
         send_email_task,
     )
@@ -35,7 +41,6 @@ try:
 except ImportError:
     CELERY_AVAILABLE = False
     send_email_task = None
-    log_security_event_task = None
     process_account_lockout_task = None
 
 
@@ -173,6 +178,27 @@ async def send_registration_notice_email(
         )
 
 
+async def _persist_security_event(
+    db_session: AsyncSession,
+    *,
+    event_type: str,
+    user_id: Optional[UUID],
+    details: dict,
+) -> None:
+    """Insert one security-event AuditLog row and commit it."""
+    audit_log = AuditLog(
+        actor_id=user_id,
+        action=event_type,
+        resource_type=SECURITY_EVENT_RESOURCE_TYPE,
+        resource_id=str(user_id) if user_id else "",
+        details=details,
+        timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
+    )
+    db_session.add(audit_log)
+    await db_session.commit()
+    await db_session.refresh(audit_log)
+
+
 async def log_security_event(
     background_tasks: BackgroundTasks,
     event_type: str,
@@ -180,47 +206,33 @@ async def log_security_event(
     details: Optional[dict] = None,
     db_session: Optional[AsyncSession] = None,
 ) -> None:
-    """
-    Log a security event to the audit log in the background.
+    """Persist a security event as an AuditLog row.
 
-    Args:
-        background_tasks: BackgroundTasks instance
-        event_type: Type of security event
-        user_id: Optional ID of the user associated with the event
-        details: Optional additional details about the event
-        db_session: Optional database session to use
+    Awaited in-process so a later HTTPException cannot drop the write:
+    FastAPI only runs BackgroundTasks on the response the endpoint returns.
+    ``background_tasks`` is unused and kept so existing call sites stay
+    keyword-compatible. A failed write is logged and swallowed so the
+    original request status is unchanged.
     """
-    # Use Celery for security logging if available
-    # and in production, otherwise use BackgroundTasks
-    if CELERY_AVAILABLE and settings.MODE == "production":
-        # Send via Celery task
-        log_security_event_task.delay(
-            event_type,
-            str(user_id) if user_id else None,
-            details,
-        )
-    else:
-        # Use FastAPI background tasks
-        background_tasks.add_task(
-            _log_security_event_task,
-            event_type,
-            user_id,
-            details,
-            db_session,
-        )
+    _ = background_tasks
+    payload = details or {}
+    try:
+        if db_session is None:
+            from app.db.session import SessionLocal
 
-
-async def _log_security_event_task(
-    event_type: str,
-    user_id: Optional[UUID] = None,
-    details: Optional[dict] = None,
-    db_session: Optional[AsyncSession] = None,
-) -> None:
-    """
-    The actual task that logs a security event to the audit log.
-    """
-    # Implementation for logging security events
-    # This would typically create an entry in a security_audit table
+            async with SessionLocal() as session:
+                await _persist_security_event(
+                    session, event_type=event_type, user_id=user_id, details=payload
+                )
+        else:
+            await _persist_security_event(db_session, event_type=event_type, user_id=user_id, details=payload)
+    except Exception:
+        logger.exception("Failed to persist security event %s", event_type)
+        if db_session is not None:
+            try:
+                await db_session.rollback()
+            except Exception:
+                logger.exception("Failed to roll back session after audit write failure")
 
 
 async def process_account_lockout(

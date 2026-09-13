@@ -146,6 +146,7 @@ async def create_user(
     await enforce_password_complexity(
         new_user.password,
         background_tasks=background_tasks,
+        db_session=db_session,
         event_type="admin_user_create_password_complexity_failed",
         details={"email": new_user.email},
     )
@@ -273,6 +274,7 @@ async def update_user(
         await enforce_password_complexity(
             user_update.password,
             background_tasks=background_tasks,
+            db_session=db_session,
             event_type="admin_user_update_password_complexity_failed",
             user_id=user.id,
             details={"email": user.email},
