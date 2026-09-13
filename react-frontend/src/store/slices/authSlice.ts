@@ -197,6 +197,19 @@ export const logoutUser = createAsyncThunk(
   }
 );
 
+export const logoutAllUser = createAsyncThunk(
+  'auth/logoutAll',
+  async (_, { dispatch }) => {
+    try {
+      await authService.logoutAll();
+    } catch (error) {
+      console.error('Error during logout everywhere:', error);
+    } finally {
+      dispatch(logout());
+    }
+  }
+);
+
 // Create the auth slice
 const authSlice = createSlice({
   name: 'auth',

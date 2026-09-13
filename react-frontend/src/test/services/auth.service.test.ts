@@ -298,6 +298,38 @@ describe('AuthService', () => {
     });
   });
 
+  describe('logoutAll', () => {
+    it('posts /auth/logout/all and does not post /auth/logout', async () => {
+      const mockResponse: AxiosResponse<SuccessResponse<null>> = {
+        data: {
+          status: 'success',
+          message: 'Successfully logged out from all sessions',
+          data: null,
+        },
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config: {} as any,
+      };
+
+      mockedApi.post.mockResolvedValue(mockResponse);
+
+      await authService.logoutAll();
+
+      expect(mockedApi.post).toHaveBeenCalledWith('/auth/logout/all');
+      expect(mockedApi.post).not.toHaveBeenCalledWith('/auth/logout');
+    });
+
+    it('propagates an error when every-session logout fails', async () => {
+      const mockError = new Error('No active session');
+      mockedApi.post.mockRejectedValue(mockError);
+
+      await expect(authService.logoutAll()).rejects.toThrow(
+        'No active session'
+      );
+    });
+  });
+
   describe('requestPasswordReset', () => {
     it('successfully requests password reset', async () => {
       const email = 'test@example.com';
@@ -510,6 +542,7 @@ describe('AuthService', () => {
       expect(typeof authService.login).toBe('function');
       expect(typeof authService.register).toBe('function');
       expect(typeof authService.logout).toBe('function');
+      expect(typeof authService.logoutAll).toBe('function');
       expect(typeof authService.refreshToken).toBe('function');
       expect(typeof authService.getCurrentUser).toBe('function');
       expect(typeof authService.requestPasswordReset).toBe('function');
