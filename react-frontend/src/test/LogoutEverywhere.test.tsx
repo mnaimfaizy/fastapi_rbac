@@ -97,6 +97,40 @@ describe('Log out everywhere', () => {
       });
       expect(mockAuthService.logoutAll).not.toHaveBeenCalled();
       expect(store.getState().auth.isAuthenticated).toBe(false);
+      expect(window.location.pathname).toBe('/login');
+    });
+
+    it('keeps Log out everywhere labelled when the sidebar is collapsed', () => {
+      renderWithProviders(<Sidebar isCollapsed />);
+
+      expect(
+        screen.getByRole('button', { name: 'Log out everywhere' })
+      ).toBeInTheDocument();
+      expect(screen.queryByText('Log out everywhere')).not.toBeInTheDocument();
+    });
+
+    it('still clears client auth when logout/all fails', async () => {
+      mockAuthService.logoutAll.mockRejectedValue(new Error('network'));
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const user = userEvent.setup();
+      const { store } = renderWithProviders(<Sidebar />);
+
+      await user.click(
+        screen.getByRole('button', { name: 'Log out everywhere' })
+      );
+      const dialog = await screen.findByRole('alertdialog');
+      await user.click(
+        within(dialog).getByRole('button', { name: 'Log out everywhere' })
+      );
+
+      await waitFor(() => {
+        expect(mockAuthService.logoutAll).toHaveBeenCalledTimes(1);
+      });
+      expect(store.getState().auth.isAuthenticated).toBe(false);
+      expect(getStoredAccessToken()).toBeNull();
+      expect(hasAuthSessionHint()).toBe(false);
+      expect(window.location.pathname).toBe('/login');
+      errorSpy.mockRestore();
     });
   });
 
@@ -127,6 +161,7 @@ describe('Log out everywhere', () => {
       });
       expect(mockAuthService.logoutAll).not.toHaveBeenCalled();
       expect(store.getState().auth.isAuthenticated).toBe(false);
+      expect(window.location.pathname).toBe('/login');
     });
 
     it('does not revoke sessions or clear auth when confirmation is cancelled', async () => {
