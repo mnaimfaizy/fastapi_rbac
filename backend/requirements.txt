@@ -138,7 +138,7 @@ vine==5.1.0
 virtualenv==20.30.0
 watchfiles==1.2.0
 wcwidth==0.8.2
-websockets==16.1
+websockets==16.1.1
 zxcvbn==4.5.0
 types-requests==2.33.0.20260712
 types-bleach==6.4.0.20260728
