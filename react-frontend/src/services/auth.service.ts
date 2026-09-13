@@ -99,6 +99,13 @@ class AuthService {
   }
 
   /**
+   * Revoke every session for the account, including this one.
+   */
+  async logoutAll(): Promise<void> {
+    await api.post<SuccessResponse<null>>('/auth/logout/all');
+  }
+
+  /**
    * Request password reset for a given email
    */
   async requestPasswordReset(email: string): Promise<void> {
