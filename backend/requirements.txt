@@ -88,7 +88,7 @@ psycopg2-binary==2.9.12
 prompt_toolkit==3.0.53
 pyasn1==0.6.4
 pycodestyle==2.14.0
-pycparser==2.22
+pycparser==3.0
 pydantic==2.13.4
 pydantic-extra-types==2.11.1
 pydantic-settings==2.15.0
