@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Link, useNavigate, Outlet } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
-import { logout } from '../../store/slices/authSlice';
+import { logoutUser } from '../../store/slices/authSlice';
 import { Sidebar } from '../dashboard/sidebar';
+import { LogoutEverywhereControl } from '../auth/LogoutEverywhereControl';
 import { Button } from '@/components/ui/button';
 import { Menu, User } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -20,8 +21,8 @@ const MainLayout = () => {
   const isDesktop = useMediaQuery('(min-width: 1024px)');
   const metaInfo = usePageMeta();
 
-  const handleLogout = () => {
-    dispatch(logout());
+  const handleLogout = async () => {
+    await dispatch(logoutUser());
     navigate('/login');
   };
 
@@ -111,7 +112,7 @@ const MainLayout = () => {
                 </Button>
 
                 {isUserMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-48 py-1 bg-white rounded-md shadow-lg z-10">
+                  <div className="absolute right-0 mt-2 w-56 py-1 bg-white rounded-md shadow-lg z-10">
                     <Link
                       to="/dashboard/profile"
                       className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
@@ -135,6 +136,14 @@ const MainLayout = () => {
                     >
                       Logout
                     </button>
+                    <LogoutEverywhereControl>
+                      <button
+                        type="button"
+                        className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
+                      >
+                        Log out everywhere
+                      </button>
+                    </LogoutEverywhereControl>
                   </div>
                 )}
               </div>

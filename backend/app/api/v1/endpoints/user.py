@@ -5,11 +5,14 @@ from uuid import UUID
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 from fastapi_pagination import Params
+from redis.asyncio import Redis as AsyncRedis
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app import crud
 from app.api import deps
+from app.api.deps import get_redis_client
 from app.core.config import settings
+from app.crud.user_crud import PasswordReuseError
 from app.deps import user_deps
 from app.models import User
 from app.schemas.response_schema import (
@@ -20,8 +23,10 @@ from app.schemas.response_schema import (
     create_response,
 )
 from app.schemas.user_schema import IUserCreate, IUserRead, IUserRoleAssign, IUserUpdate
-from app.utils.background_tasks import send_verification_email
+from app.utils.account_email_dispatch import issue_verification
 from app.utils.exceptions.user_exceptions import UserSelfDeleteException
+from app.utils.password_policy import enforce_password_complexity
+from app.utils.token import revoke_all_user_tokens
 from app.utils.user_utils import serialize_user
 
 logger = logging.getLogger(__name__)
@@ -44,13 +49,17 @@ async def read_users_list(
     """
     users = await crud.user.get_multi_paginated(params=params, db_session=db_session)
 
+    # paginate() builds the page class from this route's return annotation, so
+    # it returns an IGetResponsePaginated, not a Page: the rows live at
+    # .data.items, never .items. The declared Page[ModelType] on
+    # get_multi_paginated describes the CRUD layer, not what arrives here.
     # Convert to a response format that includes roles
     response_data = {
-        "items": [serialize_user(user) for user in users.items],
-        "total": users.total,
-        "page": users.page,
-        "size": users.size,
-        "pages": users.pages,
+        "items": [serialize_user(user) for user in users.data.items],
+        "total": users.data.total,
+        "page": users.data.page,
+        "size": users.data.size,
+        "pages": users.data.pages,
     }
     return create_response(data=response_data)
 
@@ -72,13 +81,17 @@ async def get_user_list_order_by_created_at(
         params=params, order_by="created_at", db_session=db_session
     )
 
+    # paginate() builds the page class from this route's return annotation, so
+    # it returns an IGetResponsePaginated, not a Page: the rows live at
+    # .data.items, never .items. The declared Page[ModelType] on
+    # get_multi_paginated describes the CRUD layer, not what arrives here.
     # Convert to a response format that includes roles
     response_data = {
-        "items": [serialize_user(user) for user in users.items],
-        "total": users.total,
-        "page": users.page,
-        "size": users.size,
-        "pages": users.pages,
+        "items": [serialize_user(user) for user in users.data.items],
+        "total": users.data.total,
+        "page": users.data.page,
+        "size": users.data.size,
+        "pages": users.data.pages,
     }
     return create_response(data=response_data)
 
@@ -113,6 +126,7 @@ async def create_user(
     background_tasks: BackgroundTasks,
     new_user: IUserCreate = Depends(user_deps.user_exists),
     db_session: AsyncSession = Depends(deps.get_db),
+    redis_client: AsyncRedis = Depends(get_redis_client),
     current_user: User = Depends(deps.get_current_user(required_permissions=["users.create"])),
 ) -> IPostResponseBase[IUserRead]:
     """
@@ -124,8 +138,18 @@ async def create_user(
     Note: Admin-created users behavior depends on configuration:
     - ADMIN_CREATED_USERS_AUTO_VERIFIED: Auto-verify admin-created users
     - ADMIN_CREATED_USERS_SEND_EMAIL: Send verification email to admin-created users
+
+    Admin-set passwords are subject to the same complexity policy as
+    self-service (#198). A weaker rule here would leave the new user unable
+    to change the password they were given.
     """
-    from app.core.security import create_verification_token
+    await enforce_password_complexity(
+        new_user.password,
+        background_tasks=background_tasks,
+        db_session=db_session,
+        event_type="admin_user_create_password_complexity_failed",
+        details={"email": new_user.email},
+    )
 
     # Configure user verification based on settings
     if settings.ADMIN_CREATED_USERS_AUTO_VERIFIED:
@@ -143,12 +167,13 @@ async def create_user(
     # Send verification email if configured and user is not auto-verified
     if settings.ADMIN_CREATED_USERS_SEND_EMAIL and not settings.ADMIN_CREATED_USERS_AUTO_VERIFIED:
         try:
-            verification_token = create_verification_token(user.email)
-            await send_verification_email(
+            # issue_verification, not a hand-rolled token plus mail: /verify-email
+            # checks Redis, so a link mailed without the Redis write can never
+            # succeed. Registration and resend come through here too.
+            await issue_verification(
+                user=user,
+                redis_client=redis_client,
                 background_tasks=background_tasks,
-                user_email=user.email,
-                verification_token=verification_token,
-                verification_url=settings.EMAIL_VERIFICATION_URL,
             )
             message += ". Verification email sent"
         except Exception as e:
@@ -191,11 +216,20 @@ async def bulk_update_users(
     """
     Bulk update users. Accepts a dict with 'user_ids': List[UUID], 'updates': IUserUpdate fields.
     Required roles: admin
+
+    A ``password`` key is refused (#198). Applying one password to many users
+    skips the per-account history/reuse path even when the value is strong;
+    set a password on each user individually instead.
     """
     user_ids = bulk_update.get("user_ids")
     updates = bulk_update.get("updates")
     if not user_ids or not isinstance(user_ids, list) or not updates:
         raise HTTPException(status_code=400, detail="user_ids and updates are required")
+    if isinstance(updates, dict) and "password" in updates:
+        raise HTTPException(
+            status_code=400,
+            detail="Password cannot be changed via bulk update. Update each user individually.",
+        )
     updated_users = []
     for user_id in user_ids:
         user = await crud.user.get(id=user_id, db_session=db_session)
@@ -203,16 +237,23 @@ async def bulk_update_users(
             continue
         # Only allow fields that IUserUpdate allows
         update_obj = IUserUpdate(**updates)
-        updated_user = await crud.user.update(obj_current=user, obj_new=update_obj, db_session=db_session)
+        try:
+            updated_user = await crud.user.update(obj_current=user, obj_new=update_obj, db_session=db_session)
+        except PasswordReuseError as e:
+            # Unreachable while a password key is refused above; kept so a
+            # later change that re-allows it cannot skip the reuse policy.
+            raise HTTPException(status_code=400, detail=str(e))
         updated_users.append(serialize_user(updated_user))
     return create_response(data=updated_users, message="Bulk update successful")
 
 
 @router.put("/{user_id}")
 async def update_user(
+    background_tasks: BackgroundTasks,
     user_update: IUserUpdate,
     user: User = Depends(user_deps.is_valid_user),
     db_session: AsyncSession = Depends(deps.get_db),
+    redis_client: AsyncRedis = Depends(get_redis_client),
     current_user: User = Depends(deps.get_current_user(required_permissions=["users.update"])),
 ) -> IPostResponseBase[IUserRead]:
     """
@@ -220,20 +261,41 @@ async def update_user(
 
     Required roles:
     - admin
-    """  # If password is being updated, use password history management
+
+    A new password is subject to the same complexity policy as self-service
+    (#198). ``background_tasks`` is required by that helper's audit path.
+
+    A successful password change revokes the *target* user's allowlisted
+    tokens, inline, before the response (#240, #206). The acting
+    administrator's session is not touched.
+    """
+    # If password is being updated, use password history management
     if user_update.password:
+        await enforce_password_complexity(
+            user_update.password,
+            background_tasks=background_tasks,
+            db_session=db_session,
+            event_type="admin_user_update_password_complexity_failed",
+            user_id=user.id,
+            details={"email": user.email},
+        )
         try:
             await crud.user.update_password(
                 user=user, new_password=user_update.password, db_session=db_session
             )
-            # Create a new update object without the password field
-            update_data = user_update.model_dump(exclude_unset=True)
-            update_data.pop("password", None)  # Remove password from update data
-            user_update_without_password = IUserUpdate(
-                **{k: v for k, v in update_data.items() if k != "password"}
-            )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
+        # The password has changed hands: every session the target already
+        # holds must die before this response is written. Awaited inline
+        # rather than queued -- that ordering was the defect in #206.
+        # Revoke this user, not the administrator making the request.
+        await revoke_all_user_tokens(redis_client, user.id)
+        # Create a new update object without the password field
+        update_data = user_update.model_dump(exclude_unset=True)
+        update_data.pop("password", None)  # Remove password from update data
+        user_update_without_password = IUserUpdate(
+            **{k: v for k, v in update_data.items() if k != "password"}
+        )
     else:
         user_update_without_password = user_update
 
@@ -262,17 +324,6 @@ async def remove_user(
     """
     if current_user.id == user_id:
         raise UserSelfDeleteException()
-
-    # Get the user to check their roles
-    user = await crud.user.get(id=user_id, db_session=db_session)
-    if user and user.roles and len(user.roles) > 0:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                f"User has {len(user.roles)} role(s) assigned and cannot be deleted. "
-                "Please remove all roles first."
-            ),
-        )
 
     deleted_user = await crud.user.remove(id=user_id, db_session=db_session)
     return create_response(data=serialize_user(deleted_user), message="User removed")
@@ -333,10 +384,10 @@ async def read_users(
             params = Params()  # Use default pagination if not provided
         users = await crud.user.get_multi_paginated(params=params, db_session=db_session)
         response_data = {
-            "items": [serialize_user(user) for user in users.items],
-            "total": users.total,
-            "page": users.page,
-            "size": users.size,
-            "pages": users.pages,
+            "items": [serialize_user(user) for user in users.data.items],
+            "total": users.data.total,
+            "page": users.data.page,
+            "size": users.data.size,
+            "pages": users.data.pages,
         }
         return create_response(data=response_data)

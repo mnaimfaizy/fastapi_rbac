@@ -36,6 +36,22 @@ A follow-up may align Poetry with `requirements.txt`; until then, always pin and
 | 6 | Frontend majors / framework | React, Vite, Tailwind, react-router majors | Spike branch + changelog review before bulk bump |
 | 7 | Base images / Docker | Python/Node/Postgres/Redis image tags | Compose bring-up smoke; align CI service images with compose when changing |
 
+## Testing against an unpinned set
+
+Backend test sessions abort when the local virtualenv does not match the `==` pins in
+`backend/requirements.txt`; a drifted venv makes environment artifacts look like
+application defects (see [#200](https://github.com/mnaimfaizy/fastapi_rbac/issues/200)
+and [Testing → Dependency drift guard](TESTING.md#dependency-drift-guard)).
+
+While trialling an upgrade before you edit `requirements.txt`, opt out for that session:
+
+```bash
+SKIP_DEPENDENCY_DRIFT_CHECK=1 python -m pytest test/
+```
+
+Once the lane's bump is written into `requirements.txt`, drop the variable — the guard
+should be green again, and it is a cheap confirmation that the venv matches the PR.
+
 ## Hard stops
 
 Upgrade carefully (changelog review; prefer split PRs if needed):
@@ -90,7 +106,7 @@ About **76** advisory hits across pinned packages (many packages have multiple a
 | `ecdsa` | **Removed** with `python-jose` (HS256-only app; no direct imports) — see #63 | Lane 2 follow-up |
 | `python-jose` | **Removed** — consolidated JWT onto PyJWT only (#63 / [ADR 0001](../adr/0001-pyjwt-sole-jwt-library.md)) | Lane 2 follow-up |
 | `redis` | Patched in Lane 2 → `5.3.1` (no OSV hits on 5.2.1; **major 6+/8 deferred** — hard-stop) | Lane 2 / later |
-| `fastapi-limiter` | **Removed** — unused scaffold init only; HTTP rate limits consolidated onto `slowapi` (#64 / [ADR 0002](../adr/0002-slowapi-sole-http-rate-limit.md)) | Lane 2 follow-up |
+| `fastapi-limiter` | **Removed** — unused scaffold init only; HTTP rate limits consolidated onto `slowapi` (#64 / [ADR 0008](../adr/0008-slowapi-sole-http-rate-limit.md)) | Lane 2 follow-up |
 | `bcrypt` | No OSV hits; left on `5.0.0` | Lane 2 |
 | `passlib` | **Removed** — unused; hashing already uses `bcrypt` directly (#65) | Lane 2 follow-up |
 | `gunicorn` | **Fixed in Lane 4** → `26.0.0` (request-smuggling advisories needed ≥22) | Lane 4 |
@@ -111,12 +127,12 @@ About **76** advisory hits across pinned packages (many packages have multiple a
 - **Decision:** PyJWT is the only JWT implementation; `python-jose` and unused `ecdsa` removed. See [ADR 0001](../adr/0001-pyjwt-sole-jwt-library.md).
 - **Runtime:** `app/core/security.py` encode/decode; session invalidation remains Redis **allowlist** (`app/utils/token.py`), not jti blacklist.
 - **Removed:** unused `app/utils/token_manager.py` (never imported by live auth).
-- **Deferred (security debt, not part of #63 behavior change):** see umbrella [#67](https://github.com/mnaimfaizy/fastapi_rbac/issues/67) — enforce/retire `password_version`; `VALIDATE_TOKEN_IP` honesty/implement; concurrent session limit; orphan `TOKEN_BLACKLIST_*` settings.
+- **Deferred (security debt, not part of #63 behavior change):** see umbrella [#67](https://github.com/mnaimfaizy/fastapi_rbac/issues/67) — enforce/retire `password_version`; `VALIDATE_TOKEN_IP` honesty/implement; concurrent session limit; orphan `TOKEN_BLACKLIST_*` settings. `password_version` was settled by [ADR 0011](../adr/0011-session-security-model.md): retired and its column dropped ([#68](https://github.com/mnaimfaizy/fastapi_rbac/issues/68)). The unimplemented session settings named there were deleted ([#204](https://github.com/mnaimfaizy/fastapi_rbac/issues/204)).
 
 ### Lane 2 hard-stop follow-up — HTTP rate limit consolidation (#64, 2026-07-24)
 
-- **Decision:** `slowapi` is the only HTTP rate limit library; unused `fastapi-limiter` removed. See [ADR 0002](../adr/0002-slowapi-sole-http-rate-limit.md) and [research note](../internal/research/rate-limiting-library-consolidation.md).
-- **Runtime:** shared `Limiter` in `app/core/rate_limit.py` (Redis `storage_uri` outside testing; memory + disabled in testing); auth routes keep existing `@limiter.limit` thresholds.
+- **Decision:** `slowapi` is the only HTTP rate limit library; unused `fastapi-limiter` removed. See [ADR 0008](../adr/0008-slowapi-sole-http-rate-limit.md) and [research note](../internal/research/rate-limiting-library-consolidation.md).
+- **Runtime:** shared `Limiter` in `app/core/rate_limit.py` (`rate_limit_key`: user when authenticated, client address otherwise; Redis `storage_uri` outside testing; memory + disabled in testing); auth routes keep existing `@limiter.limit` thresholds.
 - **Kept separate:** Redis **abuse counters** for registration / resend-verification in `auth.py` (not folded into slowapi in this change).
 
 ### Lane 2 hard-stop follow-up — remove unused passlib (#65, 2026-07-27)

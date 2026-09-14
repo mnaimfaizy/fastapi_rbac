@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Account Already Exists - {{ project_name }}</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        line-height: 1.6;
+        color: #333;
+      }
+      .container {
+        max-width: 600px;
+        margin: 20px auto;
+        padding: 20px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+      }
+      .button {
+        display: inline-block;
+        padding: 10px 20px;
+        background-color: #007bff;
+        color: #fff;
+        text-decoration: none;
+        border-radius: 3px;
+      }
+      .footer {
+        margin-top: 20px;
+        font-size: 0.9em;
+        color: #777;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>An Account Already Exists</h2>
+      <p>Hi {{ username }},</p>
+      <p>
+        Someone just tried to register for {{ project_name }} using this email
+        address. An account already exists for it, so we did not create a new
+        one and nothing about your account has changed.
+      </p>
+      <p>If that was you, you can simply sign in:</p>
+      <p><a href="{{ login_url }}" class="button">Sign In</a></p>
+      <p>
+        If you have forgotten your password, you can set a new one here:
+        <a href="{{ password_reset_url }}">{{ password_reset_url }}</a>
+      </p>
+      <p>
+        If it was not you, no action is needed. Whoever submitted the form was
+        not told whether this address is registered, and they have no access to
+        your account.
+      </p>
+      <div class="footer">
+        <p>Thanks,<br />The {{ project_name }} Team</p>
+      </div>
+    </div>
+  </body>
+</html>

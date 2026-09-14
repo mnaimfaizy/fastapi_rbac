@@ -100,11 +100,11 @@ Found a bug or have a feature request? Please check our [issue tracker](../../is
 ### 2. **Submit Code Changes**
 
 1. **Fork** the repository
-2. **Create** a feature branch: `git checkout -b feature/amazing-feature`
+2. **Create** a branch: `git checkout -b feat/100-user-scoped-rate-limit-keys`
 3. **Make** your changes following our [development guidelines](#development-guidelines)
 4. **Test** your changes thoroughly
 5. **Commit** your changes: `git commit -m 'feat: add amazing feature'`
-6. **Push** to your branch: `git push origin feature/amazing-feature`
+6. **Push** to your branch: `git push origin feat/100-user-scoped-rate-limit-keys`
 7. **Submit** a Pull Request
 
 ### 3. **Improve Documentation**
@@ -162,14 +162,7 @@ Documentation improvements are always welcome! You can:
 
 ### Branch Naming
 
-Use descriptive branch names with prefixes:
-
-- `feat/` - New features
-- `fix/` - Bug fixes
-- `docs/` - Documentation updates
-- `test/` - Test improvements
-- `refactor/` - Code refactoring
-- `chore/` - Maintenance tasks
+Follow the canonical rules in [`docs/agents/branch-names.md`](agents/branch-names.md) (mandatory for humans and agents).
 
 ### Commit Messages
 
@@ -251,8 +244,12 @@ npx eslint . --fix
 
 **Test Structure**:
 
-- **Unit tests**: `backend/test/unit/` - Test individual components
-- **Integration tests**: `backend/test/integration/` - Test complete workflows
+- **Unit tests**: `backend/test/unit/` - No app boot, no database
+- **API tests**: `backend/test/api/` - In-process app via ASGI transport
+- **Integration tests**: `backend/test/integration/` - Requires the Docker stack
+
+  Suites are split by the environment a test needs, not by what it calls. See
+  [ADR 0012](adr/0012-test-suites-split-by-environment.md).
 - **Test utilities**: `backend/test/factories/` and `backend/test/fixtures/`
 
 **Running Tests**:

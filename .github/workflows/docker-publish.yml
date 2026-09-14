@@ -30,6 +30,7 @@ jobs:
   prepare:
     name: Prepare
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     outputs:
@@ -122,6 +123,7 @@ jobs:
     name: Build ${{ matrix.image }}
     needs: prepare
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
     strategy:
@@ -213,6 +215,7 @@ jobs:
     name: Promote latest
     needs: [prepare, build]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -243,6 +246,7 @@ jobs:
     name: Hub descriptions
     needs: [prepare, promote-latest]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     # Soft-fail: Hub API flake must not fail the release or force image rebuilds.
     continue-on-error: true
     permissions:
@@ -285,6 +289,7 @@ jobs:
     needs: [prepare, build, promote-latest]
     if: success()
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -325,6 +330,7 @@ jobs:
     needs: [prepare, build, promote-latest]
     if: failure()
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:

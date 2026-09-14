@@ -10,7 +10,7 @@ This Docker image contains the backend service for the FastAPI RBAC (Role-Based 
 - Role-Based Access Control (RBAC)
 - User and Role management APIs
 - Password hashing and history
-- Token blacklisting with Redis
+- Token allowlisting with Redis (revocation by deleting membership)
 - SQLAlchemy/SQLModel for database operations
 
 ## Available Tags

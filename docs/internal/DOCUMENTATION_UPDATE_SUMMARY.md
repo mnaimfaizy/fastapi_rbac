@@ -70,7 +70,7 @@ All enterprise-grade security implementations have been fully documented:
 
 ### ✅ **JWT Security**
 
-- Token management, blacklisting, and refresh mechanisms
+- Token management, Redis allowlist revocation, and refresh mechanisms
 - Security best practices and implementation details
 - Testing and validation procedures
 

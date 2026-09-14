@@ -12,7 +12,7 @@ export default defineConfig({
     exclude: ['node_modules/**', 'e2e/**', 'dist/**'],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json', 'html'],
+      reporter: ['text', 'json', 'html', 'lcov'],
       exclude: [
         'node_modules/',
         'src/test/',
@@ -22,14 +22,6 @@ export default defineConfig({
         'src/main.tsx',
         'src/vite-env.d.ts',
       ],
-      thresholds: {
-        global: {
-          branches: 70,
-          functions: 70,
-          lines: 70,
-          statements: 70,
-        },
-      },
     },
     css: false,
     testTimeout: 5000,

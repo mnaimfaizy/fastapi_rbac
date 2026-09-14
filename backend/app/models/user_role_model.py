@@ -10,5 +10,5 @@ class UserRole(BaseUUIDModel, table=True):
 
     __tablename__ = "UserRole"  # type: ignore[assignment]
 
-    user_id: UUID = Field(foreign_key="User.id", primary_key=True)
+    user_id: UUID = Field(foreign_key="User.id", primary_key=True, ondelete="RESTRICT")
     role_id: UUID = Field(foreign_key="Role.id", primary_key=True)

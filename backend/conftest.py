@@ -12,6 +12,16 @@ os.environ["MODE"] = "testing"
 # Add the project root directory to Python's path
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
+from test.venv_drift import fail_on_drift  # noqa: E402  (needs the sys.path above)
+
+# Refuse to run against a virtualenv that has drifted from requirements.txt: a
+# stale venv makes environment artifacts look like application defects (#190,
+# #200). This runs here, in the module body, rather than from a pytest hook,
+# because pytest imports the pytest_plugins below -- and with them app.main and
+# every drifted package -- before the first hook fires. Set
+# SKIP_DEPENDENCY_DRIFT_CHECK=1 to run deliberately off-pin.
+fail_on_drift()
+
 """
 Global pytest configuration for the FastAPI RBAC backend project.
 

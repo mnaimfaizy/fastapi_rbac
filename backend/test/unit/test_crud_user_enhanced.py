@@ -289,7 +289,7 @@ class TestUserCRUD:
         # Arrange
         user = await user_factory.create()
         original_password_hash = user.password
-        new_password = "NewSecurePassword123!"
+        new_password = "NewSecurePassw0rd!47"
 
         # Act
         update_data = {"password": new_password}

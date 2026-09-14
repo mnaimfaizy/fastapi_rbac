@@ -75,35 +75,6 @@ class ServiceSettings:
         return self.mode in [ModeEnum.development, ModeEnum.production]
 
     @property
-    def celery_task_routes(self) -> Dict[str, Any]:
-        """
-        Get task routing configuration for Celery
-        """
-        return {
-            "app.worker.send_email": {"queue": "email"},
-            "app.worker.send_reset_password_email": {"queue": "email"},
-            "app.worker.send_verification_email": {"queue": "email"},
-            "app.worker.cleanup_unverified_accounts": {"queue": "cleanup"},
-            "app.worker.cleanup_expired_tokens": {"queue": "cleanup"},
-        }
-
-    @property
-    def celery_beat_schedule(self) -> Dict[str, Any]:
-        """
-        Get scheduled task configuration for Celery Beat
-        """
-        return {
-            "cleanup-unverified-accounts": {
-                "task": "app.worker.cleanup_unverified_accounts",
-                "schedule": 3600.0,  # Run every hour
-            },
-            "cleanup-expired-tokens": {
-                "task": "app.worker.cleanup_expired_tokens",
-                "schedule": 1800.0,  # Run every 30 minutes
-            },
-        }
-
-    @property
     def email_settings(self) -> Dict[str, Any]:
         """
         Get email configuration based on environment

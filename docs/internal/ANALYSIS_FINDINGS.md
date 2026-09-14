@@ -190,7 +190,7 @@ This FastAPI RBAC system demonstrates **exceptional engineering quality** with s
 
 **Security Features Implemented:**
 
-- JWT token management with blacklisting
+- JWT token management with a Redis allowlist
 - Password strength validation with zxcvbn
 - Account locking after failed attempts (5 attempts, 15-minute lockout)
 - Audit logging for security events
@@ -199,7 +199,7 @@ This FastAPI RBAC system demonstrates **exceptional engineering quality** with s
 **Performance Optimizations:**
 
 - Database connection pooling: `DB_POOL_SIZE` / `WEB_CONCURRENCY` with minimum 5
-- Redis for token blacklisting and caching
+- Redis for the token allowlist and caching
 - Background task processing with Celery
 - Health check endpoints for monitoring
 
@@ -426,7 +426,7 @@ add_header Content-Security-Policy "
 
 **Caching Strategy:**
 
-- Redis for token blacklisting
+- Redis for the token allowlist
 - Session storage in Redis
 - Potential for query result caching
 

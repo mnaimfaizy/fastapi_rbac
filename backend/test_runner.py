@@ -64,7 +64,10 @@ def run_unit_tests(
     if test_path:
         cmd.append(test_path)
     else:
-        cmd.append("test/unit/")
+        # Both in-process directories, matching the `test` job in backend-ci.yml.
+        # Keep these in step: a directory that only one of them runs is a
+        # directory whose failures reach nobody. See docs/adr/0012.
+        cmd.extend(["test/unit/", "test/api/"])
 
     # Verbose output
     if verbose:

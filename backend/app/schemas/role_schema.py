@@ -10,8 +10,12 @@ from app.schemas.permission_schema import IPermissionRead
 from app.utils.partial import optional
 
 
-# Define a Pydantic base schema for Role properties
-class RoleSchemaBase(BaseModel):
+# Define a Pydantic base schema for Role properties.
+# Inherits IBaseSchema for from_attributes=True: fastapi-pagination validates
+# raw Role ORM rows straight into IRoleRead, which pydantic v2 refuses without
+# it. Every other schema behind a paginated route already had it; this one was
+# the outlier and GET /roles raised ValidationError because of it.
+class RoleSchemaBase(IBaseSchema):
     name: Optional[str] = Field(None, min_length=1)
     description: Optional[str] = None
     role_group_id: Optional[UUID] = None

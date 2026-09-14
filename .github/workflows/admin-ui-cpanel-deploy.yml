@@ -22,6 +22,7 @@ jobs:
   build-admin-ui-assets:
     name: Build Admin UI Assets
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -71,6 +72,7 @@ jobs:
     name: Upload Admin UI to cPanel
     needs: build-admin-ui-assets
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Download dist artifact
         uses: actions/download-artifact@v8
@@ -92,6 +94,7 @@ jobs:
     name: Smoke Admin UI HTTPS
     needs: upload-admin-ui-cpanel
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: HTTPS reachability check
         env:

@@ -44,14 +44,18 @@ class AuthService {
   }
 
   /**
-   * Register a new user
+   * Register a new user.
+   *
+   * Resolves for every address -- new, awaiting verification, already
+   * registered, or disabled -- and carries no payload, so callers cannot tell
+   * the cases apart either (#113). Branching on anything here would recreate
+   * the account-enumeration oracle in the client.
+   *
+   * Previously typed Promise<Token>, which the server never returned; it sent a
+   * user object and the caller discarded it.
    */
-  async register(userData: UserRegister): Promise<Token> {
-    const response = await api.post<SuccessResponse<Token>>(
-      '/auth/register',
-      userData
-    );
-    return response.data.data;
+  async register(userData: UserRegister): Promise<void> {
+    await api.post<SuccessResponse<null>>('/auth/register', userData);
   }
 
   /**
@@ -88,10 +92,17 @@ class AuthService {
   }
 
   /**
-   * Logout user and invalidate tokens
+   * End the current session. Other sessions on the account stay usable.
    */
   async logout(): Promise<void> {
     await api.post<SuccessResponse<null>>('/auth/logout');
+  }
+
+  /**
+   * Revoke every session for the account, including this one.
+   */
+  async logoutAll(): Promise<void> {
+    await api.post<SuccessResponse<null>>('/auth/logout/all');
   }
 
   /**

@@ -60,11 +60,15 @@ Register a new user (self-service, public).
 ```json
 {
   "email": "newuser@example.com",
-  "password": "SecurePassword123!",
+  "password": "SecurePassw0rd!47",
   "first_name": "Jane",
   "last_name": "Smith"
 }
 ```
+
+The password must satisfy the complexity policy in settings -- the same policy
+the password-reset and change-password endpoints apply. `SecurePassword123!`
+would be rejected for the sequential run `123`.
 
 **Response:**
 
@@ -85,8 +89,18 @@ Register a new user (self-service, public).
 
 **Error Responses:**
 
-- 400 Bad Request: Invalid input, password too long, rate limit exceeded
-- 409 Conflict: Email already registered
+- 400 Bad Request: Invalid input, password too long, rate limit exceeded, or a
+  password that fails the complexity policy. A complexity failure answers with
+  an object rather than a string:
+
+  ```json
+  {
+    "detail": {
+      "message": "Password does not meet complexity requirements.",
+      "errors": ["Password must be at least 12 characters long"]
+    }
+  }
+  ```
 
 ---
 
@@ -111,9 +125,12 @@ Verify a user's email address using a verification token.
 }
 ```
 
+A second call with the same still-valid JWT, after the Redis key has been consumed, returns 200 with `"Email is already verified."` when the account is active and already verified (#239). The token remains single-use: the Redis key is deleted on first success.
+
 **Error Responses:**
 
-- 400 Bad Request: Invalid or expired token, user not found, already verified
+- 400 Bad Request: `"This verification link is invalid or has expired. Please request a new verification email and try again."` — returned identically for an unknown address, a disabled account (including disabled-and-verified), a still-unverified user whose Redis token is missing or does not match, and a wrong or expired token, so the response never confirms that an account exists (#137). The audit log records which it was.
+- 401 Unauthorized: the token itself failed JWT validation
 
 ---
 
@@ -146,7 +163,9 @@ Resend the verification email to a user (rate-limited).
 
 ### POST /api/v1/auth/logout
 
-Log out a user by clearing Redis allowlist entries for access/refresh tokens and deleting the HttpOnly `refresh_token` cookie. Requires CSRF (cookie-authenticated mutation).
+End the calling session: revoke that refresh token and every access token that shares its session id, then delete the HttpOnly `refresh_token` cookie. Other sessions on the account stay usable. Requires CSRF (cookie-authenticated mutation).
+
+Session identity comes from the refresh cookie when present; if the cookie is missing, from the access token's allowlist metadata. If neither yields a session id, the request fails and does not revoke other sessions.
 
 **Request Headers:**
 
@@ -160,6 +179,34 @@ X-CSRF-Token: <csrf_token>
 ```json
 {
   "message": "Successfully logged out"
+}
+```
+
+**Permissions:** Authenticated user
+
+**Error Responses:**
+
+- 400 Bad Request: Unable to identify the current session
+- 401 Unauthorized: Not authenticated
+
+---
+
+### POST /api/v1/auth/logout/all
+
+Revoke every session for the authenticated user (every allowlist token, of any type) and delete the HttpOnly `refresh_token` cookie. Same CSRF and authentication rules as logout. Change-password still calls the revocation primitive directly rather than this route. The first-party SPA posts this from **Log out everywhere** after confirmation.
+
+**Request Headers:**
+
+```
+Authorization: Bearer <access_token>
+X-CSRF-Token: <csrf_token>
+```
+
+**Response:**
+
+```json
+{
+  "message": "Successfully logged out from all sessions"
 }
 ```
 
@@ -228,6 +275,8 @@ Request a password reset email (public, rate-limited).
 }
 ```
 
+The same `200` and the same message are returned for an unknown address, a disabled account, and an active one (#137). Only `MODE=development` differs, where the reset token is echoed back for MailHog.
+
 **Error Responses:**
 
 - 400 Bad Request: Invalid email
@@ -258,7 +307,8 @@ Reset a user's password using a reset token.
 
 **Error Responses:**
 
-- 400 Bad Request: Invalid or expired token, password complexity
+- 400 Bad Request: `"This password reset link is invalid or has expired. Please request a new password reset and try again."` — returned identically for an unknown address, a disabled account, and a token that is wrong, expired or not allow-listed (#137)
+- 400 Bad Request: password complexity or password-history failures, which describe the submitted password and stay distinct
 
 ---
 
@@ -292,6 +342,7 @@ Refresh an access token. Prefer the HttpOnly `refresh_token` cookie (first-party
 
 - 401 Unauthorized: Missing, invalid, or expired refresh token
 - 403 Forbidden: CSRF failure or refresh token not on Redis allowlist
+- 403 Forbidden: the session was revoked because this refresh came from a different origin network than the one it was established from (`VALIDATE_TOKEN_IP`, [ADR 0011](../../adr/0011-session-security-model.md) decision 5). The body is identical to the allowlist rejection above, deliberately: the response does not tell a caller that the address is what gave it away
 
 ---
 

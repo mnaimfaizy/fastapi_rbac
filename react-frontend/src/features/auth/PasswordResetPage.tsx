@@ -22,17 +22,15 @@ import {
   CardTitle,
 } from '../../components/ui/card';
 import { Alert, AlertDescription } from '../../components/ui/alert';
-import { AlertTriangle, CheckCircle } from 'lucide-react';
-import { ErrorResponse, ErrorResponseWithErrors } from '@/models/auth';
+import { CheckCircle } from 'lucide-react';
+import { ApiErrorAlert } from '@/components/auth/ApiErrorAlert';
+import { PasswordRequirements } from '@/components/auth/PasswordRequirements';
+import { passwordPolicySchema } from '@/lib/passwordPolicySchema';
 
 // Define validation schema with Zod
 const resetPasswordSchema = z
   .object({
-    password: z.string().min(8, 'Password must be at least 8 characters'),
-    // .regex(
-    //   /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
-    //   'Password must contain at least one uppercase letter, one lowercase letter, one number and one special character'
-    // ),
+    password: passwordPolicySchema,
     confirmPassword: z.string().min(1, 'Confirm password is required'),
   })
   .refine((data) => data.password === data.confirmPassword, {
@@ -66,6 +64,7 @@ const PasswordResetPage = () => {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<ResetPasswordFormData>({
     resolver: zodResolver(resetPasswordSchema),
@@ -134,36 +133,10 @@ const PasswordResetPage = () => {
           ) : (
             <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
               {error && (
-                <Alert variant="destructive">
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertDescription>
-                    {typeof error === 'object' &&
-                    Object.keys(error).includes('detail') ? (
-                      <>
-                        <span>
-                          {(error as ErrorResponseWithErrors)?.detail?.message}
-                        </span>
-                        <ul>
-                          {(
-                            (error as ErrorResponseWithErrors)?.detail
-                              ?.errors ?? []
-                          ).map((err: string, index) => (
-                            <li
-                              key={err + index}
-                              className="text-xs text-red-600 pl-2"
-                            >
-                              {`-> ${err}`}
-                            </li>
-                          ))}
-                        </ul>
-                      </>
-                    ) : typeof error === 'object' ? (
-                      <span>{(error as ErrorResponse)?.message}</span>
-                    ) : (
-                      <span>{error as string}</span>
-                    )}
-                  </AlertDescription>
-                </Alert>
+                <ApiErrorAlert
+                  error={error}
+                  fallbackMessage="Password reset failed. Please try again."
+                />
               )}
 
               <div className="space-y-2">
@@ -174,6 +147,7 @@ const PasswordResetPage = () => {
                   placeholder="Enter new password"
                   {...register('password')}
                 />
+                <PasswordRequirements value={watch('password') ?? ''} />
                 {errors.password && (
                   <p className="text-sm text-red-600">
                     {errors.password.message}

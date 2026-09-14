@@ -11,6 +11,7 @@ from app.core.security import (
     PasswordValidator,
     create_access_token,
     create_refresh_token,
+    create_verification_token,
     decode_token,
     map_jwt_http_error_to_event,
 )
@@ -128,6 +129,23 @@ def test_decode_token() -> None:
 
     # Check if the token is decoded correctly
     assert decoded["sub"] == user_id
+
+
+def test_decode_token_expired_jwt_is_401() -> None:
+    """A signed token whose exp has lapsed is 401, not 400 (#214)."""
+    token = create_verification_token("nobody@example.com", expires_delta=timedelta(seconds=-30))
+    with pytest.raises(HTTPException) as exc:
+        decode_token(token, token_type="verification")
+    assert exc.value.status_code == status.HTTP_401_UNAUTHORIZED
+    assert exc.value.detail == "Token has expired"
+
+
+def test_decode_token_non_jwt_string_is_400() -> None:
+    """A string with no '.' is invalid format (400), not expiry."""
+    with pytest.raises(HTTPException) as exc:
+        decode_token("expired_token", token_type="verification")
+    assert exc.value.status_code == status.HTTP_400_BAD_REQUEST
+    assert exc.value.detail == "Invalid token format"
 
 
 @pytest.mark.parametrize(

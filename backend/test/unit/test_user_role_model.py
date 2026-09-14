@@ -18,7 +18,6 @@ async def test_create_user_role(db: AsyncSession) -> None:
     user = User(
         email=email,
         password=random_lower_string(),
-        password_version=1,
         is_active=True,
     )
     db.add(user)
@@ -57,7 +56,6 @@ async def test_retrieve_roles_for_user(db: AsyncSession) -> None:
     user = User(
         email=email,
         password=random_lower_string(),
-        password_version=1,
         is_active=True,
     )
     db.add(user)
@@ -122,7 +120,6 @@ async def test_retrieve_users_with_role(db: AsyncSession) -> None:
         user = User(
             email=email,
             password=random_lower_string(),
-            password_version=1,
             is_active=True,
         )
         users.append(user)

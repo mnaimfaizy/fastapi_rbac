@@ -28,52 +28,16 @@ def send_email_task(
 
 
 @celery_app.task
-def cleanup_tokens_task(user_id: str, token_type: str) -> None:
-    """Celery task for cleaning up expired tokens"""
-    import asyncio
-    from uuid import UUID
-
-    from app.schemas.common_schema import TokenType
-
-    async def async_cleanup_tokens(user_id_str: str, token_type_str: str) -> None:
-        from app.db.session import get_redis_client
-
-        async for redis_client in get_redis_client():
-            user_id = UUID(user_id_str)
-            token_type_enum = TokenType(token_type_str)
-
-            # Same key as app.utils.token allowlist (SET), not a …:* pattern
-            token_key = f"user:{user_id}:{token_type_enum}"
-            await redis_client.delete(token_key)
-            # Redis client is closed automatically after exiting the async for loop
-            break  # Exit after first iteration
-
-    asyncio.run(async_cleanup_tokens(user_id, token_type))
-
-
-@celery_app.task
 def log_security_event_task(
     event_type: str, user_id: str | None = None, details: dict[Any, Any] | None = None
 ) -> None:
-    """Celery task for logging security events"""
-    import asyncio
-    from uuid import UUID
+    """Unused: security events are written in-process by log_security_event (#243).
 
-    async def async_log_security_event(
-        event_type: str, user_id_str: str | None, details: dict[Any, Any] | None
-    ) -> None:
-        from app.db.session import get_async_session
-
-        async for db_session in get_async_session():
-            UUID(user_id_str) if user_id_str else None
-
-            # TODO: Implement logging to security audit log table
-            # This is a placeholder for actual implementation
-
-            await db_session.commit()
-            break
-
-    asyncio.run(async_log_security_event(event_type, user_id, details or {}))
+    Left registered so a delayed message still in the queue is not
+    NotRegistered. This task must not write a second AuditLog row.
+    """
+    _ = (event_type, user_id, details)
+    return None
 
 
 @celery_app.task
@@ -105,3 +69,36 @@ def process_account_lockout_task(user_id: str, lock_duration_hours: int = 24) ->
             break
 
     asyncio.run(async_process_lockout(user_id, lock_duration_hours))
+
+
+@celery_app.task
+def cleanup_unverified_users_task() -> int:
+    """Sweep pending users past the verification window (#136).
+
+    Beat runs this hourly, in place of the in-process sleep registration used to
+    schedule — that sleep lost every pending user across a worker restart. This
+    sweep reads its work from the database, so a missed tick costs an hour of
+    latency rather than a row.
+
+    Returns:
+        How many users this pass deleted, for the Celery result and monitoring.
+    """
+    import asyncio
+
+    async def async_cleanup_unverified_users() -> int:
+        from app.db.session import get_async_session, get_redis_client
+        from app.utils.unverified_cleanup import sweep_unverified_users
+
+        deleted_count = 0
+        async for redis_client in get_redis_client():
+            async for db_session in get_async_session():
+                deleted = await sweep_unverified_users(
+                    db_session=db_session,
+                    redis_client=redis_client,
+                )
+                deleted_count = len(deleted)
+                break
+            break
+        return deleted_count
+
+    return asyncio.run(async_cleanup_unverified_users())

@@ -248,20 +248,47 @@ describe('Authentication Flow Tests', () => {
       expect(submitButton).toBeInTheDocument();
     });
 
-    it('validates password strength requirements', async () => {
+    it('shows the password policy before anything is typed', () => {
       renderWithProviders(<SignupForm />);
 
-      const passwordInput = screen.getByLabelText(/^password/i);
+      // The rules a person needs in order to choose a password the API will
+      // accept. Before #194 the form only said "at least 8 characters".
+      expect(screen.getByText(/your password must have/i)).toBeInTheDocument();
+      expect(screen.getByText(/at least 12 characters/i)).toBeInTheDocument();
+      expect(screen.getByText(/no runs like abc or 123/i)).toBeInTheDocument();
+    });
+
+    it('does not submit a password the API would reject', async () => {
+      const mockSignup = vi.fn();
+      mockAuthService.register = mockSignup;
+
+      renderWithProviders(<SignupForm />);
+
       const submitButton = screen.getByRole('button', {
         name: /create account/i,
       });
 
-      fireEvent.change(passwordInput, { target: { value: '123' } });
+      fireEvent.change(screen.getByLabelText(/full name/i), {
+        target: { value: 'John Doe' },
+      });
+      fireEvent.change(screen.getByLabelText(/email/i), {
+        target: { value: 'john@example.com' },
+      });
+      // 11 characters, sequential run, and on the common-password list.
+      fireEvent.change(screen.getByLabelText(/^password/i), {
+        target: { value: 'password123' },
+      });
+      fireEvent.change(screen.getByLabelText(/confirm password/i), {
+        target: { value: 'password123' },
+      });
       fireEvent.click(submitButton);
 
-      // In test environment, react-hook-form validation messages don't appear
-      // We'll check that the form handles weak passwords by verifying form state
-      expect(submitButton).toBeInTheDocument();
+      await waitFor(() => {
+        expect(
+          screen.getByText(/must be at least 12 characters long/i)
+        ).toBeInTheDocument();
+      });
+      expect(mockSignup).not.toHaveBeenCalled();
     });
 
     it('calls signup service with correct data', async () => {
@@ -282,16 +309,18 @@ describe('Authentication Flow Tests', () => {
 
       fireEvent.change(fullNameInput, { target: { value: 'John Doe' } });
       fireEvent.change(emailInput, { target: { value: 'john@example.com' } });
-      fireEvent.change(passwordInput, { target: { value: 'password123' } });
+      fireEvent.change(passwordInput, {
+        target: { value: 'QaRegisterPass!47' },
+      });
       fireEvent.change(confirmPasswordInput, {
-        target: { value: 'password123' },
+        target: { value: 'QaRegisterPass!47' },
       });
       fireEvent.click(submitButton);
 
       await waitFor(() => {
         expect(mockSignup).toHaveBeenCalledWith({
           email: 'john@example.com',
-          password: 'password123',
+          password: 'QaRegisterPass!47',
           first_name: 'John',
           last_name: 'Doe',
           full_name: 'John Doe',

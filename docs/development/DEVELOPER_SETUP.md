@@ -295,7 +295,7 @@ The project uses GitHub Actions for continuous integration, which runs:
 - Unit tests
 - Integration tests
 
-The CI workflow is defined in `.github/workflows/ci.yml` and `.github/workflows/test.yml`.
+The backend workflow is defined in `.github/workflows/backend-ci.yml`. Its `integration-test` job runs the integration suite inside the Docker test stack, since that suite cannot run outside it.
 
 ## Code Quality Guidelines
 

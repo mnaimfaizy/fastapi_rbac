@@ -10,6 +10,7 @@ jobs:
   lint:
     name: Backend Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v7
@@ -59,6 +60,16 @@ jobs:
   test:
     name: Backend Test
     runs-on: ubuntu-latest
+    # Set from the observed distribution, not a small sample: successful runs
+    # range from 12 to 34 minutes. The first value here was 30, taken from six
+    # runs whose maximum was 21, and it killed a healthy run on main at 90%
+    # complete. 60 leaves real headroom over the worst observed run while still
+    # catching a genuine hang six times sooner than GitHub's 360-minute default.
+    #
+    # The suite is slow because the in-process API tests in test/api/ boot the
+    # app and do real database work per test. #212 gave them their own
+    # directory so that cost is visible; it did not make them faster.
+    timeout-minutes: 60
     services:
       postgres:
         # Keep in sync with backend docker-compose*.yml (postgres:15-alpine)
@@ -132,24 +143,185 @@ jobs:
       - name: Test with pytest and coverage (unit tests only)
         run: |
           cd backend
-          pytest test/unit/ --cov=app --cov-report=xml
+          # test/api/ holds the in-process API tests. Same gate, same job: the
+          # split is about what a reader should expect from each directory, not
+          # about running them separately. See docs/adr/0012.
+          pytest test/unit/ test/api/ --cov=app --cov-report=xml
+          # Visible name: upload-artifact skips dotfiles unless told otherwise,
+          # and the combine job must not guess at `.coverage`.
+          cp .coverage coverage.unit.data
 
-      # - name: Test with pytest and coverage (integration tests)
-      #   run: |
-      #     # To run integration tests, use Docker Compose to start all required services
-      #     # and then run the integration test suite. Example:
-      #     docker-compose -f backend/docker-compose.test.minimal.yml up -d
-      #     cd backend
-      #     # Uncomment the following line to run integration tests in CI
-      #     # pytest test/integration/ --cov=app --cov-report=xml
-      #     # Optionally, bring down the services after tests:
-      #     # cd .. && docker-compose -f backend/docker-compose.test.minimal.yml down
-      #   # Note: Integration tests require Docker Compose and full service dependencies.
-      #   # See backend/test/README.md for details.
+      # Integration tests need Postgres, Redis and a live server, so they run in
+      # the Docker test stack in the separate integration-test job below.
+      # Neither job uploads to Codecov: #236 showed that merging the two
+      # Cobertura files under one backend flag produced impossible line data.
+      # The Backend Coverage job combines the data files first.
 
-      - name: Upload coverage to Codecov
+      - name: Upload unit coverage data
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-coverage-unit
+          path: |
+            backend/coverage.unit.data
+            backend/coverage.xml
+          if-no-files-found: error
+          retention-days: 7
+
+  integration-test:
+    name: Backend Integration Test
+    runs-on: ubuntu-latest
+    # The suite takes ~9 minutes against the stack, plus the image build.
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Provision the test environment file
+        run: |
+          cd backend
+          # .env.test is git-ignored; the tracked template holds throwaway values.
+          cp .env.test.example .env.test
+
+      - name: Run integration tests in the Docker test stack
+        run: |
+          cd backend
+          # --exit-code-from makes this step, and so the job, fail when pytest
+          # fails inside the runner container. It also implies
+          # --abort-on-container-exit, so the stack stops with the suite.
+          # Local runs need a `down` first, because `up` reuses an exited runner
+          # container and reports its stale exit code; here the runner is always
+          # fresh.
+          # SERVER_COVERAGE makes the app container run uvicorn under coverage.
+          # The suite drives that container over HTTP, so app/ executes there and
+          # not in the runner -- it is the only place integration coverage exists.
+          # The data file is written by the flush step below, not by this one.
+          SERVER_COVERAGE=1 docker compose -f docker-compose.test.minimal.yml up --build --exit-code-from fastapi_rbac_test_runner fastapi_rbac_test_runner
+
+      - name: Dump stack logs on failure
+        if: failure()
+        run: |
+          cd backend
+          docker compose -f docker-compose.test.minimal.yml logs --no-color --tail=200
+
+      # coverage writes its data file on USR1. The app container is still up at
+      # this point: `up --exit-code-from` stops the runner but leaves this one
+      # running, which is the window this step uses. Do not switch to relying on
+      # shutdown -- uvicorn does not exit inside Docker's grace period, so the
+      # container is SIGKILLed and coverage writes nothing.
+      - name: Flush coverage from the app container
+        run: |
+          cd backend
+          docker kill --signal=USR1 fastapi_rbac_test
+          for i in $(seq 1 30); do
+            [ -f .coverage.integration ] && break
+            sleep 1
+          done
+          ls -l .coverage.integration
+
+      # Deliberately not `if: always()`. When the suite fails, the job has
+      # already reported the real problem; a missing coverage file on top of
+      # that would bury it under a second, misleading error.
+      - name: Convert integration coverage to XML
+        run: |
+          cd backend
+          # Converted inside the image so the XML is built against the same
+          # tree the server traced. The combine job compares this file with
+          # the unit job's XML, then unions the data files with coverage.py.
+          docker compose -f docker-compose.test.minimal.yml run --rm --no-deps --entrypoint "" fastapi_rbac_test_runner coverage xml --data-file=/app/.coverage.integration -o /app/coverage-integration.xml
+          cp .coverage.integration coverage.integration.data
+          ls -l coverage-integration.xml coverage.integration.data
+
+      - name: Upload integration coverage data
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-coverage-integration
+          path: |
+            backend/coverage.integration.data
+            backend/coverage-integration.xml
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Tear down the test stack
+        if: always()
+        run: |
+          cd backend
+          docker compose -f docker-compose.test.minimal.yml down --volumes
+
+  # One backend upload. Codecov merging the two Cobertura files under the same
+  # flag is what #236 caught: auth.py's login try-block listed later lines as
+  # hit and earlier ones as miss, which is impossible if line identity matches.
+  # coverage.py combine is a defined union of hits against one executable line
+  # set. The shared `backend` flag stays so the README badge remains one number
+  # (#222); splitting flags is out of scope.
+  coverage:
+    name: Backend Coverage
+    runs-on: ubuntu-latest
+    needs: [test, integration-test]
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.10"
+          cache: "pip"
+
+      - name: Install coverage.py at the pinned version
+        run: |
+          cd backend
+          python -m pip install --upgrade pip
+          # Python 3.10 has no tomllib; coverage reads pyproject.toml via tomli.
+          coverage_pin=$(grep -E '^coverage==' requirements.txt | sed 's/coverage==/coverage[toml]==/')
+          pip install "$coverage_pin"
+
+      - name: Download unit coverage data
+        uses: actions/download-artifact@v8
+        with:
+          name: backend-coverage-unit
+          # upload-artifact strips the shared `backend/` prefix, so these
+          # files are flat (coverage.xml, coverage.unit.data). Put them
+          # back under backend/ where combine and the comparer run.
+          path: backend
+
+      - name: Download integration coverage data
+        uses: actions/download-artifact@v8
+        with:
+          name: backend-coverage-integration
+          path: backend
+
+      - name: Compare executable line sets then combine
+        run: |
+          cd backend
+          ls -l coverage.xml coverage-integration.xml coverage.unit.data coverage.integration.data
+          # Diagnostic for #236: log whether the two original XMLs agree about
+          # which lines exist. Hits may differ; that is why we combine. Exit 1
+          # is a line-set mismatch (warn, still upload). Any other non-zero
+          # is a missing file or a crash and must fail the job.
+          set +e
+          python test/cobertura_compare.py coverage.xml coverage-integration.xml --file app/api/v1/endpoints/auth.py
+          compare_rc=$?
+          set -e
+          if [ "$compare_rc" -eq 1 ]; then
+            echo "::warning::Original unit and integration XMLs disagree about executable lines in auth.py. Uploading the coverage.py combine anyway."
+          elif [ "$compare_rc" -ne 0 ]; then
+            exit "$compare_rc"
+          fi
+          coverage combine coverage.unit.data coverage.integration.data
+          coverage xml -o coverage-combined.xml
+          ls -l coverage-combined.xml
+
+      - name: Upload combined coverage to Codecov
         uses: codecov/codecov-action@v7
         with:
-          directory: ./backend/
-          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./backend/coverage-combined.xml
+          disable_search: true
+          # The CLI's pycoverage plugin regenerates coverage.xml from any
+          # `.coverage` it finds. That would upload a second, differently
+          # pathed report of the same data — the shape #236 was about.
+          plugins: noop
+          flags: backend
+          fail_ci_if_error: true
           verbose: true

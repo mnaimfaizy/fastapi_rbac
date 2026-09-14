@@ -1,4 +1,5 @@
 from test.utils import random_email, random_lower_string
+from typing import cast
 
 import pytest
 from fastapi import HTTPException
@@ -8,7 +9,16 @@ from app.core.config import settings
 from app.core.security import PasswordValidator
 from app.crud.user_crud import user_crud
 from app.models.role_model import Role
+from app.models.user_model import User
 from app.schemas.user_schema import IUserCreate, IUserUpdate
+
+
+def test_has_verified_follows_the_verified_flag() -> None:
+    """Login consults User.verified. The old is_verified lookup always defaulted True."""
+    pending = cast(User, type("Pending", (), {"verified": False})())
+    established = cast(User, type("Established", (), {"verified": True})())
+    assert user_crud.has_verified(pending) is False
+    assert user_crud.has_verified(established) is True
 
 
 @pytest.mark.asyncio
@@ -106,7 +116,9 @@ async def test_update_user(db: AsyncSession) -> None:  # Added return type
     new_last_name = "UserName"
     user_update = IUserUpdate(
         email=email,  # use existing email
-        password=password,  # use existing password
+        # A password in the payload goes through the reuse policy, which refuses
+        # the one the account already has (#193), so this is a fresh one.
+        password=random_lower_string(),
         first_name=new_first_name,
         last_name=new_last_name,
     )

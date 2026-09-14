@@ -2,15 +2,17 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel
-
 from app.models.role_group_model import RoleGroupBase
+from app.schemas.base_schema import IBaseSchema
 from app.schemas.role_schema import IRoleRead
 from app.utils.partial import optional
 
 
-# Basic user information to include in role group responses
-class IUserBasic(BaseModel):
+# Basic user information to include in role group responses.
+# Inherits IBaseSchema for from_attributes=True: this is nested inside
+# IRoleGroupRead.creator and receives a raw User ORM row, which pydantic v2
+# refuses without it. GET /role-groups?include_hierarchy=true raised on it.
+class IUserBasic(IBaseSchema):
     id: UUID
     email: str
     first_name: str | None = None

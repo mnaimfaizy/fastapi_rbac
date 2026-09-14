@@ -27,7 +27,7 @@ class Role(BaseUUIDModel, RoleBase, table=True):
     name: str | None = Field(default=None, max_length=250, nullable=True, index=True)
     description: str | None = Field(default=None, nullable=True, index=True)
     role_group_id: UUID | None = Field(default=None, foreign_key="RoleGroup.id", nullable=True)
-    created_by_id: UUID | None = Field(default=None, foreign_key="User.id")
+    created_by_id: UUID | None = Field(default=None, foreign_key="User.id", ondelete="SET NULL")
     permissions: List["Permission"] = Relationship(
         link_model=RolePermission,
         back_populates="roles",

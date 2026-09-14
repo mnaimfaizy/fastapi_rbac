@@ -10,6 +10,8 @@
 [![React Frontend CI](https://github.com/mnaimfaizy/fastapi_rbac/actions/workflows/react-frontend-ci.yml/badge.svg)](https://github.com/mnaimfaizy/fastapi_rbac/actions/workflows/react-frontend-ci.yml)
 [![Docker Publish](https://github.com/mnaimfaizy/fastapi_rbac/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/mnaimfaizy/fastapi_rbac/actions/workflows/docker-publish.yml)
 [![Documentation](https://github.com/mnaimfaizy/fastapi_rbac/actions/workflows/docs.yml/badge.svg)](https://github.com/mnaimfaizy/fastapi_rbac/actions/workflows/docs.yml)
+[![Backend Coverage](https://img.shields.io/codecov/c/github/mnaimfaizy/fastapi_rbac?flag=backend&label=backend%20coverage&logo=codecov&logoColor=white)](https://codecov.io/gh/mnaimfaizy/fastapi_rbac?flags%5B0%5D=backend)
+[![Frontend Coverage](https://img.shields.io/codecov/c/github/mnaimfaizy/fastapi_rbac?flag=frontend&label=frontend%20coverage&logo=codecov&logoColor=white)](https://codecov.io/gh/mnaimfaizy/fastapi_rbac?flags%5B0%5D=frontend)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
@@ -182,7 +184,7 @@ npm test
 
 ## 🧪 Integration Testing Environments
 
-This project supports both Docker Compose-based and local integration testing for the backend.
+The backend integration suite runs only in the Docker Compose test stack. Unit tests run locally.
 
 - **Docker Compose-based testing** (recommended for CI and team consistency):
 
@@ -191,22 +193,23 @@ This project supports both Docker Compose-based and local integration testing fo
     - `DATABASE_HOST=fastapi_rbac_db_test`
     - `REDIS_HOST=fastapi_rbac_redis_test`
     - `REDIS_URL=redis://fastapi_rbac_redis_test:6379/0`
+  - Create `backend/.env.test` once from the tracked template:
+    ```powershell
+    Copy-Item backend/.env.test.example backend/.env.test
+    ```
   - Run with:
     ```powershell
-    docker-compose -f docker-compose.test.yml up --build --abort-on-container-exit
+    cd backend; docker compose -f docker-compose.test.minimal.yml down -v; docker compose -f docker-compose.test.minimal.yml up --build --exit-code-from fastapi_rbac_test_runner fastapi_rbac_test_runner
     ```
 
-- **Local testing** (if you want to run tests outside Docker):
-  - Uses `backend/.env.test.local` for environment variables.
-  - Database and Redis hostnames:
-    - `DATABASE_HOST=localhost`
-    - `REDIS_HOST=localhost`
-    - `REDIS_URL=redis://localhost:6379/0`
-  - Make sure Postgres and Redis are running locally.
-  - Run tests with:
-    ```powershell
-    pytest backend/test/integration/
-    ```
+- **Local testing is not supported for the integration suite.** It drives a live
+  server over HTTP against Postgres, so outside the Docker stack every test in
+  `backend/test/integration/` is skipped at collection with a reason naming the
+  command above. A skipped run is not a passing run. Run the unit suite locally
+  instead:
+  ```powershell
+  pytest backend/test/unit/
+  ```
 
 **See comments in `backend/.env.example` for more details.**
 

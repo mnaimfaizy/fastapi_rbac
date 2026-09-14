@@ -16,6 +16,7 @@ jobs:
   deploy:
     name: Deploy docs via FTP
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout main
         uses: actions/checkout@v7

@@ -41,7 +41,7 @@
 | Frontend | Hub `fastapi-rbac-frontend` | React SPA served by **Nginx on port 80**; `VITE_API_BASE_URL` is typically **bake-time** ([Hub README](https://hub.docker.com/r/mnaimfaizy/fastapi-rbac-frontend)) |
 | Worker | Hub `fastapi-rbac-worker` | Celery; Redis broker/backend; same DB/Redis/SMTP access as backend ([Hub README](https://hub.docker.com/r/mnaimfaizy/fastapi-rbac-worker)) |
 | Postgres | **Not** a project Hub image | Postgres **12+** (managed or compose sidecar) |
-| Redis | **Not** a project Hub image | Redis **5+** — Celery + token allowlist/blacklist ([backend Hub README](https://hub.docker.com/r/mnaimfaizy/fastapi-rbac-backend)) |
+| Redis | **Not** a project Hub image | Redis **5+** — Celery + token allowlist ([backend Hub README](https://hub.docker.com/r/mnaimfaizy/fastapi-rbac-backend)) |
 | SMTP | External or sidecar | Optional but required for password-reset email flows (`EMAILS_ENABLED`, `SMTP_*`) |
 
 ```text
@@ -157,9 +157,9 @@ Hub frontend README states `VITE_API_BASE_URL` is used at **docker build** for N
 
 Worker has **no public HTTP port**; it must stay running and share Redis/DB with the API ([worker Hub](https://hub.docker.com/r/mnaimfaizy/fastapi-rbac-worker)). Platforms that sleep free web tiers or omit free background workers (Render Free) are a bad fit ([Render free](https://render.com/docs/free)).
 
-### 3. Redis for auth allowlist / blacklist + Celery
+### 3. Redis for auth allowlist + Celery
 
-Backend Hub documents Redis for token blacklisting; worker uses Redis as Celery broker/backend. Free Key Value on Render is **in-memory only** and **loses data on restart** ([Render free](https://render.com/docs/free)) — unsuitable for auth token state. Prefer persistent Redis (compose volume, Railway Redis, Upstash paid/fixed, etc.).
+Backend Hub documents Redis for the token allowlist; worker uses Redis as Celery broker/backend. Free Key Value on Render is **in-memory only** and **loses data on restart** ([Render free](https://render.com/docs/free)) — unsuitable for auth token state. Prefer persistent Redis (compose volume, Railway Redis, Upstash paid/fixed, etc.).
 
 ### 4. SMTP
 

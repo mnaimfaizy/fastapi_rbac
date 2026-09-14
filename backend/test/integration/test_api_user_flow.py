@@ -34,7 +34,7 @@ async def register_and_verify_user(
     if not email:
         email = random_email()
     if not password:
-        password = "SecurePassword123!"
+        password = "SecurePassw0rd!47"
     user_data = {
         "email": email,
         "first_name": first_name,
@@ -44,9 +44,9 @@ async def register_and_verify_user(
     }
     csrf_token, headers = await get_csrf_token(client)
     response = await client.post(f"{settings.API_V1_STR}/auth/register", json=user_data, headers=headers)
-    if response.status_code != 201:
+    if response.status_code != 200:
         print(f"Registration failed for {email}: {response.status_code} {response.text}")
-    assert response.status_code == 201
+    assert response.status_code == 200
     verification_code = response.json()["data"].get("verification_code")
     # Verify email
     verify_payload = {"token": verification_code}
@@ -215,7 +215,7 @@ class TestUserManagementFlow:
             "email": random_email(),
             "first_name": "John",
             "last_name": "Doe",
-            "password": "SecurePassword123!",
+            "password": "SecurePassw0rd!47",
             "contact_phone": "+1234567890",
             "is_active": True,
         }

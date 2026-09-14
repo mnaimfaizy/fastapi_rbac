@@ -128,9 +128,7 @@ def create_verification_token(subject: Union[str, Any], expires_delta: timedelta
     - Additional entropy
     """
     expire = datetime.now(timezone.utc) + (
-        expires_delta
-        if expires_delta
-        else timedelta(minutes=settings.EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES)
+        expires_delta if expires_delta else timedelta(minutes=settings.VERIFICATION_TOKEN_EXPIRE_MINUTES)
     )
 
     to_encode = add_token_claims(

@@ -1,8 +1,9 @@
+import json
 import os
 import secrets
 from enum import Enum
 from functools import lru_cache
-from typing import Any, Dict, List, Optional, Union
+from typing import Annotated, Any, Dict, List, Optional, Union
 
 from pydantic import (
     AnyHttpUrl,
@@ -13,7 +14,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 # Add these imports for settings sources
 from pydantic_settings.sources import DotEnvSettingsSource, PydanticBaseSettingsSource
@@ -72,9 +73,13 @@ class Settings(BaseSettings):
         "http://localhost:80",
     ]
 
-    # Frontend URL
+    # Frontend URL. The links that go out in email are derived from this after
+    # the environment loads, by derive_frontend_urls below. They are empty here
+    # rather than f-strings over FRONTEND_URL: a default assigned in the class
+    # body captures the default FRONTEND_URL as the class body executes, so an
+    # environment override never reached it.
     FRONTEND_URL: str = "http://localhost:5173"
-    PASSWORD_RESET_URL: str = f"{FRONTEND_URL}/reset-password"
+    PASSWORD_RESET_URL: str = ""
 
     # Database Type Setting
     DATABASE_TYPE: DatabaseTypeEnum = DatabaseTypeEnum.postgresql
@@ -84,6 +89,10 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 100  # 100 days
     REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7)
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = Field(default=30)
+    # Single source of truth for how long a verification link works: the Redis
+    # TTL that /verify-email enforces, the JWT exp, and the duration stated in
+    # the email all read this. A second setting drove the last two and silently
+    # over-promised by 7x (#182).
     VERIFICATION_TOKEN_EXPIRE_MINUTES: int = Field(default=1440)  # 24 hours
     UNVERIFIED_ACCOUNT_CLEANUP_HOURS: int = Field(default=72)  # 3 days
     MAX_LOGIN_ATTEMPTS: int = Field(default=5)
@@ -142,8 +151,9 @@ class Settings(BaseSettings):
     USERS_OPEN_REGISTRATION: bool = False
 
     # Email Verification Settings
-    EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
-    EMAIL_VERIFICATION_URL: str = FRONTEND_URL + "/verify-email"
+    # The link's lifetime is VERIFICATION_TOKEN_EXPIRE_MINUTES above, not here.
+    # Derived from FRONTEND_URL; see derive_frontend_urls.
+    EMAIL_VERIFICATION_URL: str = ""
 
     # Admin User Creation Settings
     ADMIN_CREATED_USERS_AUTO_VERIFIED: bool = True  # Auto-verify admin-created users
@@ -225,8 +235,6 @@ class Settings(BaseSettings):
     LOGIN_HISTORY_DAYS: int = 90  # Keep login history for 90 days
 
     # Session Security
-    SESSION_MAX_AGE: int = 3600  # 1 hour
-    SESSION_EXTEND_ON_ACTIVITY: bool = True  # Reset timer on activity
     REQUIRE_MFA_AFTER_INACTIVITY: bool = True
     INACTIVITY_TIMEOUT: int = 1800  # 30 minutes of inactivity
     CONCURRENT_SESSION_LIMIT: int = 5  # Maximum concurrent sessions
@@ -291,13 +299,34 @@ class Settings(BaseSettings):
     MAX_RESEND_VERIFICATION_ATTEMPTS_PER_HOUR: int = 3
     RATE_LIMIT_PERIOD_RESEND_VERIFICATION_SECONDS: int = 3600
 
+    # Single per-address budget for verification-bearing mail (#113). Registration
+    # and resend-verification previously kept separate buckets, so alternating
+    # between them allowed 3 + 3 emails per hour at one address. Both endpoints
+    # now share this one.
+    MAX_ACCOUNT_EMAILS_PER_ADDRESS_PER_HOUR: int = 3
+    ACCOUNT_EMAIL_RATE_LIMIT_PERIOD_SECONDS: int = 3600
+    # Minimum response time for registration and resend-verification. A floor
+    # rather than a sleep on selected branches: a hand-placed pad goes stale as
+    # soon as a branch is added, which is how the old one stopped covering.
+    UNIFORM_ACCOUNT_RESPONSE_FLOOR_SECONDS: float = 0.5
+
     # Token Security
     ACCESS_TOKEN_ENTROPY_BITS: int = 256  # Entropy for token generation
     VERIFY_TOKEN_ON_EVERY_REQUEST: bool = True
     TOKEN_VERSION_ON_PASSWORD_CHANGE: bool = True  # Invalidate tokens on password change
-    VALIDATE_TOKEN_IP: bool = True  # Validate token against original IP
-    TOKEN_BLACKLIST_ON_LOGOUT: bool = True  # Add tokens to blacklist on logout
-    TOKEN_BLACKLIST_EXPIRY: int = 86400  # Keep blacklisted tokens for 24 hours
+    # Origin-network anomaly detection, not IP binding (ADR 0011 decision 5, #69).
+    # The address a session was established from is recorded with its allowlist
+    # entry; a refresh presented from a different /24 (IPv4) or /64 (IPv6) revokes
+    # that one session. Access tokens are never checked, no request is blocked
+    # outright, and the user's other sessions survive. Behind a reverse proxy this
+    # sees real client addresses only once forwarded headers are trusted (#203).
+    VALIDATE_TOKEN_IP: bool = True
+    # Peers whose X-Forwarded-For / X-Real-IP headers are believed (ADR 0011
+    # decision 8, #203). Addresses or CIDR networks, JSON list or comma-separated.
+    # Defaults to loopback: a deployment that puts the app behind a proxy on
+    # another host or container must name that proxy or its network. A wildcard
+    # is rejected -- see app.utils.client_address.
+    TRUSTED_PROXIES: Annotated[List[str], NoDecode] = ["127.0.0.1", "::1"]
 
     # Rate Limiting and Security Settings
     # MAX_VERIFICATION_ATTEMPTS_PER_HOUR: int = 5
@@ -321,6 +350,34 @@ class Settings(BaseSettings):
         elif isinstance(v, str):
             return [v]
         raise ValueError(v)
+
+    @field_validator("TRUSTED_PROXIES", mode="before")
+    def split_trusted_proxies(cls, v: Any) -> Any:
+        """Accept both env forms: a JSON list, and a bare comma-separated list.
+
+        The field is ``NoDecode`` so this runs on the raw environment string.
+        Without it, ``TRUSTED_PROXIES=172.16.0.0/12`` -- the form an operator
+        reaches for first -- fails to boot with a JSON parse error naming
+        neither the value nor the fix.
+        """
+        from app.utils.client_address import split_entries
+
+        if isinstance(v, str):
+            text = v.strip()
+            return json.loads(text) if text.startswith("[") else split_entries(text)
+        return v
+
+    @field_validator("TRUSTED_PROXIES", mode="after")
+    def validate_trusted_proxies(cls, v: List[str]) -> List[str]:
+        """Fail at startup on a wildcard or a typo rather than per request.
+
+        Parsing lives in ``app.utils.client_address`` so the middleware and this
+        check cannot disagree about what a trusted proxy is.
+        """
+        from app.utils.client_address import parse_trusted_proxies
+
+        parse_trusted_proxies(v)
+        return v
 
     @field_validator("SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD")
     def set_email_values_based_on_mode(cls, v: Any, info: ValidationInfo) -> Any:
@@ -470,6 +527,30 @@ class Settings(BaseSettings):
         return v
 
     @model_validator(mode="after")
+    def derive_frontend_urls(self) -> "Settings":
+        """Point the emailed links at wherever the frontend actually is.
+
+        PASSWORD_RESET_URL and EMAIL_VERIFICATION_URL used to be assigned in the
+        class body as f-strings over FRONTEND_URL. That binds the *default*
+        FRONTEND_URL at class-definition time, so overriding FRONTEND_URL in the
+        environment left them pointing at localhost:5173 -- and .env.production
+        does not set PASSWORD_RESET_URL at all, so production password-reset
+        emails carried a localhost link nobody could follow.
+
+        Deriving here instead means one setting decides where mail points.
+
+        An explicit value still wins: model_fields_set holds only the fields a
+        source actually supplied, so a deployment needing a link on a different
+        host than FRONTEND_URL can still set one.
+        """
+        base = self.FRONTEND_URL.rstrip("/")
+        if "PASSWORD_RESET_URL" not in self.model_fields_set or not self.PASSWORD_RESET_URL:
+            self.PASSWORD_RESET_URL = f"{base}/reset-password"
+        if "EMAIL_VERIFICATION_URL" not in self.model_fields_set or not self.EMAIL_VERIFICATION_URL:
+            self.EMAIL_VERIFICATION_URL = f"{base}/verify-email"
+        return self
+
+    @model_validator(mode="after")
     def validate_production_settings(self) -> "Settings":
         """Validate that critical settings are properly set in production mode"""
         if self.MODE == ModeEnum.production:
@@ -531,50 +612,6 @@ class Settings(BaseSettings):
                 "Please ensure they are set in your .env file or environment variables."
             )
         return self
-
-    def get_environment_specific_settings(self) -> Dict[str, Any]:
-        """Return a dictionary of settings that vary by environment"""
-        mode = self.MODE  # Different settings based on environment
-        base_settings = {}
-        if mode == ModeEnum.development:
-            base_settings = {
-                "DEBUG": True,
-                "LOG_LEVEL": "DEBUG",
-                "PASSWORD_RESET_URL": "http://localhost:3000/reset-password",
-                "DATABASE_TYPE": DatabaseTypeEnum.sqlite,
-                # Development Celery settings
-                "CELERY_TASK_ALWAYS_EAGER": True,  # Run tasks synchronously
-                "CELERY_TASK_EAGER_PROPAGATES": True,
-                "CELERY_WORKER_PREFETCH_MULTIPLIER": 1,
-            }
-        elif mode == ModeEnum.testing:
-            base_settings = {
-                "DEBUG": True,
-                "LOG_LEVEL": "DEBUG",
-                "TESTING": True,
-                "PASSWORD_RESET_URL": "http://localhost:3000/reset-password",
-                "USERS_OPEN_REGISTRATION": True,
-                "DB_POOL_SIZE": 5,
-                "WEB_CONCURRENCY": 1,
-                # Testing Celery settings
-                "CELERY_TASK_ALWAYS_EAGER": True,
-                "CELERY_TASK_EAGER_PROPAGATES": True,
-            }
-        elif mode == ModeEnum.production:
-            base_settings = {
-                "DEBUG": False,
-                "LOG_LEVEL": "INFO",
-                "PASSWORD_RESET_URL": f"https://{self.TOKEN_AUDIENCE}/reset-password",
-                "USERS_OPEN_REGISTRATION": False,
-                "DATABASE_TYPE": DatabaseTypeEnum.postgresql,
-                # Production Celery settings
-                "CELERY_TASK_ALWAYS_EAGER": False,
-                "CELERY_WORKER_PREFETCH_MULTIPLIER": 4,
-                "CELERY_TASK_TIME_LIMIT": 30 * 60,  # 30 minutes
-                "CELERY_TASK_SOFT_TIME_LIMIT": 15 * 60,  # 15 minutes
-            }
-
-        return base_settings
 
     # This configuration uses the new SettingsConfigDict style in Pydantic v2
     model_config = SettingsConfigDict(

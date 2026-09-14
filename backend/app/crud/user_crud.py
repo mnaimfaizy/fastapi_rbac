@@ -4,7 +4,9 @@ from uuid import UUID  # Removed Coroutine
 
 from fastapi import HTTPException
 from pydantic import EmailStr
+from sqlalchemy import delete as sa_delete
 from sqlalchemy import desc, exc  # Keep this import
+from sqlalchemy import update as sa_update
 from sqlalchemy.orm import selectinload
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession  # Keep this import
@@ -12,12 +14,51 @@ from sqlmodel.ext.asyncio.session import AsyncSession  # Keep this import
 from app.core.config import settings
 from app.core.security import PasswordValidator
 from app.crud.base_crud import CRUDBase
+from app.models.audit_log_model import AuditLog
 from app.models.password_history_model import UserPasswordHistory
-
-# Removed unused Permission import
+from app.models.permission_group_model import PermissionGroup
+from app.models.permission_model import Permission
+from app.models.role_group_model import RoleGroup
 from app.models.role_model import Role
 from app.models.user_model import User
+from app.models.user_role_model import UserRole
 from app.schemas.user_schema import IUserCreate, IUserUpdate
+
+
+class PasswordReuseError(ValueError):
+    """The submitted password is one the reuse policy refuses.
+
+    Typed so an endpoint can answer 400 with this message without also
+    forwarding an unrelated ``ValueError`` -- a misuse of the CRUD contract is
+    a server fault, not a password the caller can fix.
+    """
+
+
+def password_reuse_window() -> int:
+    """How many stored passwords the reuse policy refuses.
+
+    ``PASSWORD_HISTORY_SIZE`` is how many old passwords are kept;
+    ``PREVENT_PASSWORD_REUSE`` is how many of them may not be set again. Refusing
+    more than are retained is not possible, so the effective window is the
+    smaller of the two, and setting either to 0 disables the history check.
+    """
+    return min(settings.PASSWORD_HISTORY_SIZE, settings.PREVENT_PASSWORD_REUSE)
+
+
+async def clear_user_delete_references(db_session: AsyncSession, user_id: UUID) -> None:
+    """Clear rows that must not block or outlive a user deletion as orphans (#238).
+
+    Password history is the user's own and is deleted. Creator attribution on
+    RBAC artifacts and audit rows is nulled so those rows survive without a
+    dangling FK. Assigned roles and audit ``actor_id`` are not touched here.
+    """
+    await db_session.exec(  # type: ignore[call-overload]
+        sa_delete(UserPasswordHistory).where(UserPasswordHistory.user_id == user_id)
+    )
+    for model in (Permission, PermissionGroup, Role, RoleGroup, AuditLog):
+        await db_session.exec(  # type: ignore[call-overload]
+            sa_update(model).where(model.created_by_id == user_id).values(created_by_id=None)
+        )
 
 
 class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
@@ -206,9 +247,14 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         else:
             update_data = obj_new.model_dump(exclude_unset=True)
         if "password" in update_data and update_data["password"]:
-            hashed_password = PasswordValidator.get_password_hash(update_data["password"])
-            obj_current.password = hashed_password
-            obj_current.last_changed_password_date = datetime.now(timezone.utc).replace(tzinfo=None)
+            # Routed through update_password rather than hashed here, so a
+            # caller cannot set a password without the reuse policy and the
+            # history append (#193). Raises ValueError on a refused password.
+            await self.update_password(
+                user=obj_current,
+                new_password=update_data["password"],
+                db_session=db_session,
+            )
             del update_data["password"]
         elif "password" in update_data:
             del update_data["password"]
@@ -260,7 +306,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         return obj_current
 
     def has_verified(self, user: User) -> bool:
-        return getattr(user, "is_verified", True)
+        return bool(user.verified)
 
     async def update_is_active(
         self, *, db_obj: list[User], obj_in: IUserUpdate, db_session: AsyncSession | None = None
@@ -309,6 +355,11 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
     async def remove(self, *, id: UUID | str, db_session: AsyncSession | None = None) -> User:
         """
         Remove a user by ID. Requires db_session to be provided explicitly.
+
+        Owned rows (password history) are deleted and creator attribution on
+        surviving RBAC artifacts is nulled so a leftover FK cannot 500 the
+        caller. Assigned roles are refused with 409, matching the endpoint
+        contract (#238).
         """
         if db_session is None:
             raise ValueError("db_session must be provided")
@@ -319,8 +370,26 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         if obj is None:
             raise HTTPException(status_code=404, detail=f"User with id {id} not found")
         assert isinstance(obj, User), f"Expected User instance, got {type(obj)}"
-        await db_session.delete(obj)
-        await db_session.commit()
+        assigned = await db_session.exec(select(UserRole).where(UserRole.user_id == obj.id))
+        assigned_roles = assigned.all()
+        if assigned_roles:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"User has {len(assigned_roles)} role(s) assigned and cannot be deleted. "
+                    "Please remove all roles first."
+                ),
+            )
+        await clear_user_delete_references(db_session, obj.id)
+        try:
+            await db_session.delete(obj)
+            await db_session.commit()
+        except exc.IntegrityError:
+            await db_session.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail="User cannot be deleted because related records still reference them.",
+            )
         return obj
 
     async def add_roles_by_ids(
@@ -361,29 +430,17 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         await db_session.refresh(user, attribute_names=["roles"])
         return user
 
-    async def is_password_reused(
-        self,
-        *,
-        user_id: UUID,
-        new_password_hash: str,
-        db_session: AsyncSession | None = None,
-    ) -> bool:
+    @staticmethod
+    def matches_current_password(*, user: User, new_password: str) -> bool:
+        """Whether ``new_password`` is the password the account already has.
+
+        History rows alone cannot answer this: registration writes none, so a
+        brand new account could "reset" straight back to its sign-up password
+        (#193).
         """
-        Check if a password hash has been reused. Requires db_session to be provided explicitly.
-        """
-        if db_session is None:
-            raise ValueError("db_session must be provided")
-        limit = settings.PREVENT_PASSWORD_REUSE
-        if limit <= 0:
+        if not user.password:
             return False
-        result = await db_session.exec(
-            select(UserPasswordHistory.password_hash)
-            .where(UserPasswordHistory.user_id == user_id)
-            .order_by(desc(UserPasswordHistory.created_at))
-            .limit(limit)
-        )
-        history_hashes = list(result.all())
-        return new_password_hash in history_hashes
+        return PasswordValidator.verify_password(new_password, user.password)
 
     async def is_password_in_history(
         self,
@@ -393,11 +450,16 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         db_session: AsyncSession | None = None,
     ) -> bool:
         """
-        Check if a password is in the user's history. Requires db_session to be provided explicitly.
+        Check if a password is inside the user's reuse window. Requires db_session
+        to be provided explicitly.
+
+        Comparison goes through ``verify_password``. bcrypt salts every hash
+        independently, so hashing the candidate and testing the digest against
+        stored digests can never match -- a check written that way is dead code.
         """
         if db_session is None:
             raise ValueError("db_session must be provided")
-        limit = settings.PASSWORD_HISTORY_SIZE
+        limit = password_reuse_window()
         if limit <= 0:
             return False
         result = await db_session.exec(
@@ -426,32 +488,32 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
     ) -> User:
         """
         Update a user's password. Requires db_session to be provided explicitly.
+
+        This is the single place the reuse policy is applied and the single place
+        the password side effects happen (history append,
+        ``last_changed_password_date``). Every path that sets a password goes through
+        here so none of them can drift (#193).
         """
         if db_session is None:
             raise ValueError("db_session must be provided")
-        if settings.PASSWORD_HISTORY_SIZE > 0 and await self.is_password_in_history(
+        if self.matches_current_password(user=user, new_password=new_password):
+            raise PasswordReuseError("New password must be different from your current password.")
+        window = password_reuse_window()
+        if window > 0 and await self.is_password_in_history(
             user_id=user.id, new_password=new_password, db_session=db_session
         ):
-            raise ValueError(f"Cannot reuse any of your last {settings.PASSWORD_HISTORY_SIZE} passwords.")
+            raise PasswordReuseError(f"Cannot reuse any of your last {window} passwords.")
         new_password_hash = PasswordValidator.get_password_hash(new_password)
-        if settings.PREVENT_PASSWORD_REUSE > 0 and await self.is_password_reused(
-            user_id=user.id,
-            new_password_hash=new_password_hash,
-            db_session=db_session,
-        ):
-            raise ValueError("This password has been used too recently. Please choose a different one.")
-        if user.password is None:
-            raise ValueError("Current user password is not set. Cannot add to history.")
-        await self.add_password_to_history(
-            user_id=user.id,
-            hashed_password=user.password,
-            created_by_ip=created_by_ip,
-            reset_token_id=reset_token_id,
-            db_session=db_session,
-        )
+        if user.password:
+            await self.add_password_to_history(
+                user_id=user.id,
+                hashed_password=user.password,
+                created_by_ip=created_by_ip,
+                reset_token_id=reset_token_id,
+                db_session=db_session,
+            )
         user.password = new_password_hash
         user.last_changed_password_date = datetime.now(timezone.utc).replace(tzinfo=None)
-        user.password_version += 1
         db_session.add(user)
         await db_session.commit()
         await db_session.refresh(user)

@@ -22,9 +22,9 @@ import requests  # type: ignore
 # Configuration
 BASE_URL = "http://localhost:8000"
 # Auth routes declaring Depends(validate_csrf_token) that reach CSRF while
-# unauthenticated. /logout also declares it but authenticates first, so an
-# unauthenticated request is refused at 401 before CSRF runs; including it here
-# would report a false failure.
+# unauthenticated. /logout and /logout/all also declare it but authenticate
+# first, so an unauthenticated request is refused at 401 before CSRF runs;
+# including them here would report a false failure.
 AUTH_ENDPOINTS = [
     "/api/v1/auth/login",
     "/api/v1/auth/register",

@@ -62,7 +62,7 @@ async def test_example_user_creation_with_mock(client: AsyncClient, app: FastAPI
     # Test data
     user_data = {
         "email": random_email(),
-        "password": "TestPassword123!",
+        "password": "TestPassw0rd!47",
         "first_name": "Test",
         "last_name": "User",
         "is_active": True,

@@ -107,6 +107,26 @@ server {
 }
 ```
 
+The backend ignores `X-Forwarded-For` and `X-Real-IP` unless the peer that sent
+them is a configured proxy (ADR 0011 decision 8, #203), so nginx setting them is
+only half the job: set `TRUSTED_PROXIES` in `.env.production` to the proxy's
+address or the network it reaches the backend from.
+
+```env
+# nginx on the same host, proxying to a published port
+TRUSTED_PROXIES=["127.0.0.1","::1"]
+
+# nginx in its own container on the compose bridge network
+TRUSTED_PROXIES=["172.16.0.0/12"]
+```
+
+Until it is set, every request is attributed to the proxy: HTTP rate limiting
+becomes one global bucket shared by every client, security events record the
+proxy's address, and origin-network detection (`VALIDATE_TOKEN_IP`) has nothing
+to compare. A wildcard is rejected at startup — trusting every peer would let any
+client forge its own rate-limit bucket, origin network and audit-log identity in
+a single request.
+
 ### 6. Verify Deployment
 
 - Check that all services are running: `docker-compose -f docker-compose.prod.yml ps`

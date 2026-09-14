@@ -22,7 +22,7 @@ class PermissionGroup(BaseUUIDModel, PermissionGroupBase, table=True):
     __tablename__ = "PermissionGroup"  # type: ignore[assignment]
 
     created_by_id: UUID | None = Field(
-        default=None, foreign_key="User.id"
+        default=None, foreign_key="User.id", ondelete="SET NULL"
     )  # Fixed case: User instead of user
     permission_group_id: UUID | None = Field(
         default=None, foreign_key="PermissionGroup.id", nullable=True, index=True

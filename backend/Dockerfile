@@ -73,8 +73,10 @@ ENV ENVIRONMENT=testing
 ENV TESTING=1
 ENV FASTAPI_ENV=testing
 
-# Install additional testing dependencies
-RUN pip install --no-cache-dir pytest pytest-asyncio pytest-cov httpx
+# Testing dependencies (pytest, pytest-asyncio, pytest-cov, httpx) are already
+# pinned in requirements.txt and installed by the base stage. Re-installing them
+# unpinned here silently upgraded them past the pins, which is exactly the drift
+# the test-session guard in test/venv_drift.py now refuses to run against (#200).
 
 # Copy openssl config to Docker Container
 COPY ./.docker/openssl.cnf /etc/ssl/openssl.cnf

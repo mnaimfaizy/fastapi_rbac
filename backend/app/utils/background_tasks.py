@@ -3,34 +3,36 @@ Background tasks module for FastAPI RBAC system.
 
 This module provides utility functions for common background tasks such as:
 - Sending email notifications
-- Cleaning up expired tokens
-- Logging security audit events
+- Logging security audit events (in-process AuditLog writes; see log_security_event)
 - Managing user account states
 
-This module supports both FastAPI BackgroundTasks for simple operations
-and Celery for more complex, long-running, or scheduled tasks.
+Email sending still supports both FastAPI BackgroundTasks and Celery.
+Security events are persisted immediately by log_security_event so a
+subsequent HTTPException cannot drop the write.
 """
 
-import asyncio
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
 from fastapi import BackgroundTasks
-from redis.asyncio import Redis
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app import crud
 from app.core.config import settings
+from app.models.audit_log_model import AuditLog
 from app.models.user_model import User
-from app.schemas.common_schema import TokenType
+from app.utils.duration import humanize_minutes
 from app.utils.email import send_email_with_template
+
+logger = logging.getLogger("fastapi_rbac")
+
+SECURITY_EVENT_RESOURCE_TYPE = "security_event"
 
 # Import Celery tasks if available
 try:
     from app.worker import (
-        cleanup_tokens_task,
-        log_security_event_task,
         process_account_lockout_task,
         send_email_task,
     )
@@ -39,8 +41,6 @@ try:
 except ImportError:
     CELERY_AVAILABLE = False
     send_email_task = None
-    cleanup_tokens_task = None
-    log_security_event_task = None
     process_account_lockout_task = None
 
 
@@ -65,7 +65,7 @@ async def send_password_reset_email(
         "email": user_email,
         "reset_password_url": reset_link,
         "token": reset_token,
-        "valid_hours": settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES // 60,
+        "valid_for": humanize_minutes(settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES),
     }
 
     # Use Celery for email sending if
@@ -113,7 +113,7 @@ async def send_verification_email(
         "email": user_email,
         "verification_url": verification_link,
         "token": verification_token,
-        "valid_hours": settings.EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES // 60,
+        "valid_for": humanize_minutes(settings.VERIFICATION_TOKEN_EXPIRE_MINUTES),
     }
 
     # Use Celery for email sending if available and in production, otherwise use BackgroundTasks
@@ -136,41 +136,67 @@ async def send_verification_email(
         )
 
 
-async def cleanup_expired_tokens(
+async def send_registration_notice_email(
     background_tasks: BackgroundTasks,
-    redis_client: Redis,
-    user_id: UUID,
-    token_type: TokenType,
+    user_email: str,
 ) -> None:
-    """
-    Add token cleanup task to background tasks.
+    """Tell an existing account holder that someone tried to register with their address.
+
+    Sent instead of a verification email when the address already belongs to an
+    established or disabled account (#113). Registration and resend-verification
+    return the same response in every case, so this email is the only signal
+    that anything happened — and it goes to the address owner, not the caller.
 
     Args:
-        background_tasks: BackgroundTasks instance
-        redis_client: Redis client instance
-        user_id: User ID to clean tokens for
-        token_type: Type of token to clean
+        background_tasks: The FastAPI BackgroundTasks instance
+        user_email: The recipient's email address
     """
-    # Use Celery for token cleanup if
-    # available and in production, otherwise use BackgroundTasks
+    project_name = settings.PROJECT_NAME
+    subject = f"{project_name} - An account already exists for this email"
+    template_context = {
+        "project_name": project_name,
+        "username": user_email,
+        "email": user_email,
+        "login_url": f"{settings.FRONTEND_URL}/login",
+        "password_reset_url": settings.PASSWORD_RESET_URL,
+    }
+
     if CELERY_AVAILABLE and settings.MODE == "production":
-        # Send via Celery task
-        cleanup_tokens_task.delay(str(user_id), token_type.value)
+        send_email_task.delay(
+            email_to=user_email,
+            subject=subject,
+            template_name="registration-notice.html",
+            context=template_context,
+        )
     else:
-        # Use FastAPI background tasks
-        background_tasks.add_task(_cleanup_tokens_task, redis_client, user_id, token_type)
+        background_tasks.add_task(
+            send_email_with_template,
+            email_to=user_email,
+            subject=subject,
+            template_name="registration-notice.html",
+            context=template_context,
+        )
 
 
-async def _cleanup_tokens_task(redis_client: Redis, user_id: UUID, token_type: TokenType) -> None:
-    """
-    Clean up tokens for a user.
-
-    Must use the same Redis key as ``app.utils.token`` allowlist helpers:
-    ``user:{user_id}:{token_type}`` (a SET). The previous ``…:*`` pattern
-    did not match that key and left sessions valid after logout.
-    """
-    token_key = f"user:{user_id}:{token_type}"
-    await redis_client.delete(token_key)
+async def _persist_security_event(
+    db_session: AsyncSession,
+    *,
+    event_type: str,
+    user_id: Optional[UUID],
+    details: dict,
+) -> None:
+    """Insert one security-event AuditLog row and commit it."""
+    audit_log = AuditLog(
+        actor_id=user_id,
+        action=event_type,
+        resource_type=SECURITY_EVENT_RESOURCE_TYPE,
+        resource_id=str(user_id) if user_id else "",
+        details=details,
+        timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
+    )
+    db_session.add(audit_log)
+    await db_session.commit()
+    await db_session.refresh(audit_log)
 
 
 async def log_security_event(
@@ -180,47 +206,33 @@ async def log_security_event(
     details: Optional[dict] = None,
     db_session: Optional[AsyncSession] = None,
 ) -> None:
-    """
-    Log a security event to the audit log in the background.
+    """Persist a security event as an AuditLog row.
 
-    Args:
-        background_tasks: BackgroundTasks instance
-        event_type: Type of security event
-        user_id: Optional ID of the user associated with the event
-        details: Optional additional details about the event
-        db_session: Optional database session to use
+    Awaited in-process so a later HTTPException cannot drop the write:
+    FastAPI only runs BackgroundTasks on the response the endpoint returns.
+    ``background_tasks`` is unused and kept so existing call sites stay
+    keyword-compatible. A failed write is logged and swallowed so the
+    original request status is unchanged.
     """
-    # Use Celery for security logging if available
-    # and in production, otherwise use BackgroundTasks
-    if CELERY_AVAILABLE and settings.MODE == "production":
-        # Send via Celery task
-        log_security_event_task.delay(
-            event_type,
-            str(user_id) if user_id else None,
-            details,
-        )
-    else:
-        # Use FastAPI background tasks
-        background_tasks.add_task(
-            _log_security_event_task,
-            event_type,
-            user_id,
-            details,
-            db_session,
-        )
+    _ = background_tasks
+    payload = details or {}
+    try:
+        if db_session is None:
+            from app.db.session import SessionLocal
 
-
-async def _log_security_event_task(
-    event_type: str,
-    user_id: Optional[UUID] = None,
-    details: Optional[dict] = None,
-    db_session: Optional[AsyncSession] = None,
-) -> None:
-    """
-    The actual task that logs a security event to the audit log.
-    """
-    # Implementation for logging security events
-    # This would typically create an entry in a security_audit table
+            async with SessionLocal() as session:
+                await _persist_security_event(
+                    session, event_type=event_type, user_id=user_id, details=payload
+                )
+        else:
+            await _persist_security_event(db_session, event_type=event_type, user_id=user_id, details=payload)
+    except Exception:
+        logger.exception("Failed to persist security event %s", event_type)
+        if db_session is not None:
+            try:
+                await db_session.rollback()
+            except Exception:
+                logger.exception("Failed to roll back session after audit write failure")
 
 
 async def process_account_lockout(
@@ -273,48 +285,3 @@ async def _process_account_lockout_task(
             break
 
     await crud.user.update(db_obj=user, db_session=db_session)
-
-
-async def cleanup_unverified_account(
-    background_tasks: BackgroundTasks,
-    user_id: UUID,
-    redis_client: Redis,
-    delay_hours: int = 24,
-) -> None:
-    """
-    Cleanup task for unverified accounts.
-    Deletes the account and associated data if not verified within the specified time.
-
-    Args:
-        background_tasks: BackgroundTasks instance
-        user_id: User ID of the account to clean up
-        redis_client: Redis client instance
-        delay_hours: Number of hours to wait before cleanup
-    """
-    try:
-        await asyncio.sleep(delay_hours * 3600)  # Convert hours to seconds
-
-        # Check if user still exists and is still unverified
-        user = await crud.user.get(id=user_id)
-        if user and not user.verified:
-            # Delete verification token from Redis
-            await redis_client.delete(f"verification_token:{user_id}")
-
-            # Delete user
-            await crud.user.delete(id=user_id)
-
-            # Log cleanup
-            background_tasks.add_task(
-                log_security_event,
-                background_tasks=background_tasks,
-                event_type="unverified_account_cleaned_up",
-                details={"user_id": str(user_id)},
-            )
-    except Exception as e:
-        # Log cleanup failure
-        background_tasks.add_task(
-            log_security_event,
-            background_tasks=background_tasks,
-            event_type="unverified_account_cleanup_failed",
-            details={"error": str(e), "user_id": str(user_id)},
-        )

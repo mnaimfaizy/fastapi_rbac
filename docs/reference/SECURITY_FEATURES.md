@@ -47,16 +47,20 @@ const csrfToken = await csrfService.getCsrfToken();
 
 ### 3. HTTP Rate Limiting
 
-**Implementation**: `slowapi` (sole HTTP rate limit library; see [ADR 0002](../adr/0002-slowapi-sole-http-rate-limit.md))
+**Implementation**: `slowapi` (sole HTTP rate limit library; see [ADR 0008](../adr/0008-slowapi-sole-http-rate-limit.md))
 
-**Protected Endpoints** (HTTP rate limits, IP key):
+**Protected Endpoints** (HTTP rate limits, all currently anonymous and therefore address-keyed):
 
 - **Login**: 5 attempts per minute
 - **Registration**: 3 attempts per hour
 - **Password Reset request**: 3 attempts per hour
 - **Access token**: 5 attempts per minute
 
-**Configuration**: shared `Limiter` in `app/core/rate_limit.py` (`get_remote_address`; Redis `storage_uri` outside testing).
+**Configuration**: shared `Limiter` in `app/core/rate_limit.py` (`rate_limit_key`; Redis `storage_uri` outside testing).
+
+The key is `user:{id}` when `get_current_user` has already established the caller, and `ip:{client address}` otherwise. Prefixes keep those two from colliding. The key function does not decode tokens. The four endpoints above never call `get_current_user`, so they stay address-keyed at the thresholds listed. A later authenticated route that takes `@limiter.limit` gets a per-user bucket instead of sharing one address quota.
+
+The address used for the IP key is the *real* client address: `ProxyHeadersMiddleware` corrects `request.client` from `X-Forwarded-For` / `X-Real-IP` when the peer is a `TRUSTED_PROXIES` member, and ignores those headers otherwise ([ADR 0011](../adr/0011-session-security-model.md) decision 8). Behind a proxy that is not configured as trusted, every anonymous client shares one bucket.
 
 Registration / resend-verification also use separate Redis **abuse counters** (not slowapi).
 
@@ -93,16 +97,27 @@ Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'
 - **Refresh Tokens**: Long-lived, HttpOnly Secure cookies (see [ADR 0006](../adr/0006-httponly-refresh-token-cookies.md))
 - **Token Allowlisting**: Only tokens recorded at login/refresh are accepted
 - **Automatic Refresh**: Transparent token renewal via cookie + CSRF
-- **Secure Logout**: Allowlist keys removed and refresh cookie cleared
+- **Secure Logout**: `POST /logout` revokes the calling session only; `POST /logout/all` revokes every session. The refresh cookie is cleared on both. See [ADR 0011](../adr/0011-session-security-model.md) decision 9
+- **Origin-Network Anomaly Detection**: when `VALIDATE_TOKEN_IP` is on, the address a
+  session was established from is recorded with its refresh allowlist entry. A refresh
+  presented from a different IPv4 /24 or IPv6 /64 revokes that one session and answers
+  with the ordinary refresh failure. Access tokens are never checked this way, the
+  user's other sessions survive, and a session with no recorded origin refreshes
+  normally. This is detection, not IP binding -- see
+  [ADR 0011](../adr/0011-session-security-model.md) decision 5
 
 **Security Measures**:
 
 ```python
-# Record token on allowlist at login/refresh (simplified)
-await redis_client.set(f"user:{user_id}:{token_type}", token, ex=token_exp_time)
+# Record tokens on the allowlist at login (simplified)
+await add_session_tokens_to_redis(
+    redis_client, user, access_token, refresh_token,
+    access_expire_minutes=..., refresh_expire_minutes=...,
+)
 
-# Reject tokens missing from the allowlist
-if not await redis_client.get(f"user:{user_id}:{token_type}"):
+# Reject tokens missing from the live allowlist
+valid = await get_valid_tokens(redis_client, user.id, TokenType.ACCESS)
+if not token_is_allowlisted(valid, access_token):
     raise HTTPException(status_code=401, detail="Token has been revoked")
 ```
 
@@ -119,10 +134,19 @@ if not await redis_client.get(f"user:{user_id}:{token_type}"):
 
 **Password Policy**:
 
-- Minimum 8 characters
+- Minimum 12 characters (`PASSWORD_MIN_LENGTH`), maximum 128
+- Upper case, lower case, digit and special character required
+- Rejects common passwords, sequential runs (`abc`, `123`) and repeated runs
 - Strength score validation
 - History tracking for compliance
 - Automatic lockout protection
+
+The thresholds above are settings, not constants in code. Every path that sets
+a password -- registration, password reset, reset confirm, change password,
+and admin create or update of a single user -- applies them through a single
+`enforce_password_complexity` call, so none of them can drift into a looser
+rule of its own. Bulk user update refuses a `password` key rather than
+applying one password to many accounts.
 
 ### 7. Audit Logging
 
@@ -141,14 +165,16 @@ if not await redis_client.get(f"user:{user_id}:{token_type}"):
 
 ```python
 audit_log = AuditLog(
-    actor_id=user_id,
-    action="login_attempt",
-    resource_type="user",
-    resource_id=user_id,
-    details={"ip_address": client_ip, "user_agent": user_agent},
-    timestamp=datetime.utcnow()
+    actor_id=user_id,  # null when the event has no known user
+    action="successful_login",
+    resource_type="security_event",
+    resource_id=str(user_id) if user_id else "",
+    details={"ip_address": client_ip, "email": email},
+    timestamp=datetime.utcnow(),
 )
 ```
+
+`log_security_event` writes this row in-process and is awaited, including on paths that then raise `HTTPException`. A failed audit write is logged and does not change the endpoint's status code.
 
 ## 🔍 Security Testing
 

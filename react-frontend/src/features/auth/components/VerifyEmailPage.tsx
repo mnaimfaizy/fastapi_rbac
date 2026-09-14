@@ -15,42 +15,56 @@ import {
 } from '../../../components/ui/card';
 import { AxiosError } from 'axios';
 
+type VerificationStatus = 'loading' | 'success' | 'error';
+
 export function VerifyEmailPage() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
   const navigate = useNavigate();
-  const [isLoading, setIsLoading] = useState(true);
+  const [status, setStatus] = useState<VerificationStatus>('loading');
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+
     const verify = async () => {
       if (!token) {
+        if (cancelled) {
+          return;
+        }
         setError('Verification token is missing.');
-        setIsLoading(false);
+        setStatus('error');
         return;
       }
 
-      setIsLoading(true);
+      setStatus('loading');
       setError(null);
-      setSuccess(false);
 
       try {
         await AuthService.verifyEmail({ token });
-        setSuccess(true);
+        if (cancelled) {
+          return;
+        }
+        setError(null);
+        setStatus('success');
       } catch (err) {
+        if (cancelled) {
+          return;
+        }
         const axiosError = err as AxiosError<{ message?: string }>;
         const errorMessage =
           axiosError.response?.data?.message ||
           'Email verification failed. The link might be invalid or expired.';
         setError(errorMessage);
+        setStatus('error');
         console.error('Verification error:', err);
-      } finally {
-        setIsLoading(false);
       }
     };
 
     verify();
+    return () => {
+      cancelled = true;
+    };
   }, [token]);
 
   return (
@@ -60,19 +74,17 @@ export function VerifyEmailPage() {
           <CardTitle>Email Verification</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {isLoading && <p>Verifying your email...</p>}
+          {status === 'loading' && <p>Verifying your email...</p>}
 
-          {error && (
+          {status === 'error' && error && (
             <Alert variant="destructive">
               <AlertTitle>Verification Failed</AlertTitle>
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
 
-          {success && (
+          {status === 'success' && (
             <Alert variant="default" className="w-full">
-              {' '}
-              {/* Changed variant to default */}
               <AlertTitle>Verification Successful</AlertTitle>
               <AlertDescription>
                 Your email has been verified successfully. You can now log in.
@@ -87,7 +99,7 @@ export function VerifyEmailPage() {
             </Alert>
           )}
 
-          {!isLoading && error && (
+          {status === 'error' && (
             <div className="text-center text-sm">
               Need a new verification link?{' '}
               <Link to="/resend-verification-email" className="underline">

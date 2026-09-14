@@ -29,7 +29,7 @@ async def register_and_verify_user(client: AsyncClient, user_data: Dict[str, Any
     # Register user
     csrf_token, headers = await get_csrf_token(client)
     response = await client.post(f"{settings.API_V1_STR}/auth/register", json=user_data, headers=headers)
-    assert response.status_code == 201
+    assert response.status_code == 200
     verification_code = response.json()["data"].get("verification_code")
     # Verify user
     verify_payload = {"token": verification_code}
@@ -121,7 +121,7 @@ class TestRoleManagementFlow:
     @pytest.mark.asyncio
     async def test_admin_role_crud_flow(self, client: AsyncClient) -> None:
         admin_email = unique_email("admin_role_crud")
-        admin_password = "AdminTest123!"
+        admin_password = "AdminTest!47xY"
         admin_data = {
             "email": admin_email,
             "password": admin_password,
@@ -197,7 +197,7 @@ class TestRoleManagementFlow:
     @pytest.mark.asyncio
     async def test_role_permission_assignment_flow(self, client: AsyncClient) -> None:
         admin_email = unique_email("admin_role_perm")
-        admin_password = "AdminTest123!"
+        admin_password = "AdminTest!47xY"
         admin_data = {
             "email": admin_email,
             "password": admin_password,
@@ -304,7 +304,7 @@ class TestRoleManagementFlow:
     @pytest.mark.asyncio
     async def test_role_list_and_pagination(self, client: AsyncClient) -> None:
         admin_email = unique_email("admin_role_list")
-        admin_password = "AdminTest123!"
+        admin_password = "AdminTest!47xY"
         admin_data = {
             "email": admin_email,
             "password": admin_password,
@@ -351,7 +351,7 @@ class TestRoleManagementFlow:
     @pytest.mark.asyncio
     async def test_role_duplicate_name_handling(self, client: AsyncClient) -> None:
         admin_email = unique_email("admin_role_dup")
-        admin_password = "AdminTest123!"
+        admin_password = "AdminTest!47xY"
         admin_data = {
             "email": admin_email,
             "password": admin_password,
@@ -390,7 +390,7 @@ class TestRoleManagementFlow:
     @pytest.mark.asyncio
     async def test_role_with_users_deletion_handling(self, client: AsyncClient) -> None:
         admin_email = unique_email("admin_role_userdel")
-        admin_password = "AdminTest123!"
+        admin_password = "AdminTest!47xY"
         admin_data = {
             "email": admin_email,
             "password": admin_password,
@@ -417,7 +417,7 @@ class TestRoleManagementFlow:
 
         # Register and verify a regular user
         user_email = unique_email("roleuserdel_regular")
-        user_password = "UserTest123!"
+        user_password = "UserTest!47xY"
         user_data = {
             "email": user_email,
             "password": user_password,
@@ -457,7 +457,7 @@ class TestRoleManagementFlow:
     @pytest.mark.asyncio
     async def test_permission_based_role_access(self, client: AsyncClient) -> None:
         admin_email = unique_email("admin_role_access")
-        admin_password = "AdminTest123!"
+        admin_password = "AdminTest!47xY"
         admin_data = {
             "email": admin_email,
             "password": admin_password,
@@ -471,7 +471,7 @@ class TestRoleManagementFlow:
 
         # Register and verify regular user
         user_email = unique_email("roleaccess_regular")
-        user_password = "UserTest123!"
+        user_password = "UserTest!47xY"
         user_data = {
             "email": user_email,
             "password": user_password,
@@ -498,7 +498,7 @@ class TestRoleManagementFlow:
     @pytest.mark.asyncio
     async def test_role_search_and_filtering(self, client: AsyncClient) -> None:
         admin_email = unique_email("admin_role_search")
-        admin_password = "AdminTest123!"
+        admin_password = "AdminTest!47xY"
         admin_data = {
             "email": admin_email,
             "password": admin_password,
@@ -535,12 +535,14 @@ class TestRoleManagementFlow:
             filtered_roles = response.json()["data"]["items"]
             admin_role_found = any("admin" in role["name"].lower() for role in filtered_roles)
             assert admin_role_found
-        # Test filtering by name pattern
-        # Use a pattern that matches the test-created roles with UUID suffixes
-        response = await client.get(f"{settings.API_V1_STR}/roles?name_pattern=*role_*", headers=auth_headers)
-        if response.status_code == 200:
-            filtered_roles = response.json()["data"]["items"]
-            filtered_names = [role["name"] for role in filtered_roles]
-            # Assert all test-created roles are present in the filtered results
-            for name in created_names:
-                assert name in filtered_names
+        # Filter to the names this test created rather than assuming they fit
+        # on page one of ``name_pattern=*role_*`` (#214). Earlier runs leave
+        # roles in a persistent volume and push new ones off the first page.
+        for name in created_names:
+            response = await client.get(
+                f"{settings.API_V1_STR}/roles?search={name}",
+                headers=auth_headers,
+            )
+            assert response.status_code == 200, response.text
+            found = [role["name"] for role in response.json()["data"]["items"]]
+            assert name in found

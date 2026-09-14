@@ -11,11 +11,13 @@ import {
   KeyRound,
   Folder,
   FolderHeart,
+  Laptop,
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAppDispatch } from '../../store/hooks';
 import { logoutUser } from '../../store/slices/authSlice';
 import { usePermissions } from '@/hooks/usePermissions';
+import { LogoutEverywhereControl } from '@/components/auth/LogoutEverywhereControl';
 
 interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
   isCollapsed?: boolean;
@@ -29,8 +31,8 @@ export function Sidebar({ className, isCollapsed = false }: SidebarProps) {
 
   const isActive = (path: string) => location.pathname.startsWith(path);
 
-  const handleLogout = () => {
-    dispatch(logoutUser());
+  const handleLogout = async () => {
+    await dispatch(logoutUser());
     navigate('/login');
   };
 
@@ -246,11 +248,27 @@ export function Sidebar({ className, isCollapsed = false }: SidebarProps) {
                 'w-full justify-start text-red-500 hover:text-red-600 hover:bg-red-100/20',
                 isCollapsed && 'justify-center'
               )}
+              aria-label="Logout"
               onClick={handleLogout}
             >
               <LogOut className={cn('h-5 w-5', !isCollapsed && 'mr-2')} />
               {!isCollapsed && 'Logout'}
             </Button>
+
+            <LogoutEverywhereControl>
+              <Button
+                variant="ghost"
+                size={isCollapsed ? 'icon' : 'default'}
+                className={cn(
+                  'w-full justify-start text-red-500 hover:text-red-600 hover:bg-red-100/20',
+                  isCollapsed && 'justify-center'
+                )}
+                aria-label="Log out everywhere"
+              >
+                <Laptop className={cn('h-5 w-5', !isCollapsed && 'mr-2')} />
+                {!isCollapsed && 'Log out everywhere'}
+              </Button>
+            </LogoutEverywhereControl>
           </div>
         </div>
       </div>

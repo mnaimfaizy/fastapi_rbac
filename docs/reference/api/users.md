@@ -168,7 +168,9 @@ Authorization: Bearer <access_token>
 
 ### POST /api/v1/users
 
-Create a new user (admin only).
+Create a new user (admin only). The password is subject to the same complexity
+policy as registration; a rejected password answers `400` with
+`{ "message": "...", "errors": [...] }`.
 
 **Request Headers:**
 
@@ -215,7 +217,14 @@ Authorization: Bearer <access_token>
 
 ### PUT /api/v1/users/{user_id}
 
-Update an existing user (admin only).
+Update an existing user (admin only). A new password is optional; when
+supplied it is subject to the same complexity policy as registration and
+answers `400` with `{ "message": "...", "errors": [...] }` if it fails.
+
+A successful password change revokes the target user's allowlisted access
+and refresh tokens before the response is written. The acting
+administrator's session is not affected. A rejected change (complexity,
+reuse, unknown user) revokes nothing.
 
 **Request Headers:**
 
@@ -298,7 +307,8 @@ Authorization: Bearer <access_token>
 
 ### PUT /api/v1/users/bulk-update
 
-Bulk update users (admin only).
+Bulk update users (admin only). A `password` key in `updates` is refused with
+`400` -- set a password on each user individually.
 
 **Request Headers:**
 
@@ -336,6 +346,8 @@ Authorization: Bearer <access_token>
 ### DELETE /api/v1/users/{user_id}
 
 Delete a user by ID (admin only). Cannot delete self or users with roles assigned.
+
+Password history is deleted with the user. Roles, permissions, and groups they created remain, with `created_by_id` set to null. Audit log rows remain, including the original `actor_id`. See [ADR 0013](../../adr/0013-user-deletion-foreign-keys.md).
 
 **Request Headers:**
 

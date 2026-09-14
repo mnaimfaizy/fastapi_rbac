@@ -14,7 +14,8 @@ from app.utils.partial import optional
 # Properties to receive via API on creation
 class IUserCreate(UserBase):
     role_id: list[UUID] | None = None
-    # Password is required on creation as per UserBase
+    # No min_length here: the policy lives in settings and is applied by
+    # enforce_password_complexity in the admin create endpoint (#198).
     password: str
     last_changed_password_date: datetime | None = None
     expiry_date: datetime | None = None
@@ -26,7 +27,11 @@ class IUserCreate(UserBase):
 # Properties for user registration
 class UserRegister(BaseModel):
     email: EmailStr
-    password: str = Field(..., min_length=8)
+    # No min_length here: the policy lives in settings (PASSWORD_MIN_LENGTH is
+    # 12) and is applied by enforce_password_complexity in the endpoint. A
+    # schema-level 8 was a second, looser rule that contradicted it and
+    # answered 422 with no indication of which policy rule failed (#192).
+    password: str
     first_name: str | None = None
     last_name: str | None = None
 
@@ -48,7 +53,8 @@ class IUserUpdate(UserBase):
     role_id: list[UUID] | None = None
     contact_phone: str | None = None
     expiry_date: datetime | None = None
-    # Password update is optional - handled by @optional
+    # Optional: a supplied password is checked by enforce_password_complexity
+    # in the admin update endpoint (#198). Blank / omitted means leave as-is.
     password: str
 
 
@@ -124,17 +130,6 @@ class IUserLoginSchema(BaseModel):
     permissions: list[str] | None = None
 
 
-class IUserPasswordReset(BaseModel):
-    is_active: bool | None = None
-    needs_to_change_password: bool | None = None
-    expiry_date: datetime | None = None
-
-
-class INewPassword(BaseModel):
-    password: str = Field(..., min_length=8, description="New password to set")
-    token: str = Field(..., description="Reset token received via email")
-
-
 class IUserStatus(str, Enum):
     active = "active"
     inactive = "inactive"
@@ -150,13 +145,6 @@ class PasswordResetRequest(BaseModel):
     """Schema for requesting a password reset"""
 
     email: EmailStr = Field(..., description="Email address of the user requesting password reset")
-
-
-class PasswordResetConfirm(BaseModel):
-    """Schema for confirming a password reset with token"""
-
-    token: str = Field(..., description="Reset token received via email")
-    new_password: str = Field(..., min_length=8, description="New password to set")
 
 
 class IUserRoleAssign(BaseModel):

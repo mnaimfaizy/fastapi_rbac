@@ -5,7 +5,7 @@ Role-based access control API and admin UI: users, roles, permissions, and auth 
 ## Language
 
 **HTTP rate limit**:
-A coarse request quota enforced by the shared slowapi limiter on selected HTTP routes (keyed by client IP today).
+A coarse request quota enforced by the shared slowapi limiter on selected HTTP routes (keyed by authenticated user when the request has one, otherwise by client address).
 _Avoid_: Rate limiting (when referring only to this mechanism), fastapi-limiter, DoS middleware
 
 **Abuse counter**:
@@ -20,6 +20,10 @@ _Avoid_: Account (when meaning the auth principal), client
 A user that exists but has not completed email verification.
 _Avoid_: Unverified account, pending account, unconfirmed user
 
+**Verification window**:
+The bounded period after registration in which a pending user may verify. Once it lapses the user ceases to exist and the address is free to register again.
+_Avoid_: Cleanup window, grace period, unverified account cleanup, expiry
+
 **Established user**:
 A verified, active user.
 _Avoid_: Verified account, confirmed user
@@ -31,6 +35,30 @@ _Avoid_: Inactive account, banned user, locked user (locking is the separate, te
 **Uniform registration response**:
 The invariant that registration and resend-verification return one fixed response for every email address, so neither confirms nor denies that a user exists.
 _Avoid_: Generic error, anti-enumeration
+
+**Uniform token-flow rejection**:
+The same invariant for verify-email and the password-reset endpoints: every failure that required looking an account up returns one fixed message per flow, so a disabled user is indistinguishable from an unknown address or a bad token. Which failure occurred is recorded as a security event instead.
+_Avoid_: Generic error, invalid token message
+
+**Session**:
+One refresh token and the access tokens derived from it. A user may hold several concurrent sessions, bounded by the concurrent session limit; revoking one leaves the others intact.
+_Avoid_: Login, token pair, connection
+
+**Allowlist**:
+The Redis record of tokens currently accepted, checked on every authenticated request. Removing an entry revokes it immediately, and this is the sole session revocation mechanism.
+_Avoid_: Blacklist, denylist, token blacklist, session store
+
+**Origin network**:
+The network a session was established from (IPv4 /24 or IPv6 /64), recorded alongside the session. A refresh presented from a different origin network is an anomaly that revokes that one session; it is not a hard block on the request.
+_Avoid_: Token IP, IP binding, IP validation
+
+**Client address**:
+The address a request is attributed to. Resolved once at the edge from the socket peer, or from that peer's forwarded headers when it is a trusted proxy. Rate limiting, security events, and origin network all read this one answer.
+_Avoid_: Remote address, IP, request IP (when they mean separate readings)
+
+**Trusted proxy**:
+A peer whose `X-Forwarded-For` and `X-Real-IP` headers the backend believes, named by address or network in configuration. Headers from any other peer are ignored; a wildcard cannot be configured, because trusting every peer lets a client forge its own client address.
+_Avoid_: Proxy allowlist, forwarded-for whitelist
 
 **Role**:
 A named set of permissions assignable to users.

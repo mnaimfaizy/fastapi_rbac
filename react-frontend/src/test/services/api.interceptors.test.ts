@@ -82,3 +82,187 @@ describe('api 401 interceptor', () => {
     expect(refreshAccessToken).toHaveBeenCalled();
   });
 });
+
+describe('api error body normalisation', () => {
+  const complexityRejection = (errors: string[]) => ({
+    response: {
+      status: 400,
+      data: {
+        detail: {
+          message: 'Password does not meet complexity requirements.',
+          errors,
+        },
+      },
+    },
+    config: { url: '/auth/register', headers: {} },
+  });
+
+  it('keeps a field_name body as a field-specific error', async () => {
+    const error = {
+      response: {
+        status: 400,
+        data: {
+          detail: {
+            field_name: 'email',
+            message: 'Incorrect email or password',
+          },
+        },
+      },
+      config: { url: '/auth/login', headers: {} },
+    };
+
+    await expect(responseErrorHandler(error)).rejects.toBeDefined();
+
+    expect(error.response.data).toEqual({
+      status: 'error',
+      message: 'Incorrect email or password',
+      errors: [{ field: 'email', message: 'Incorrect email or password' }],
+    });
+  });
+
+  it('surfaces the policy rules that failed instead of a generic message', async () => {
+    const error = complexityRejection([
+      'Password must be at least 12 characters long',
+      'Password must contain at least one digit',
+    ]);
+
+    await expect(responseErrorHandler(error)).rejects.toBeDefined();
+
+    expect(error.response.data).toEqual({
+      status: 'error',
+      message: 'Password does not meet complexity requirements.',
+      errors: [
+        { message: 'Password must be at least 12 characters long' },
+        { message: 'Password must contain at least one digit' },
+      ],
+    });
+  });
+
+  it('keeps a string detail as the error message', async () => {
+    const error = {
+      response: {
+        status: 404,
+        data: { detail: 'Reset token is invalid or has expired' },
+      },
+      config: { url: '/auth/reset-password', headers: {} },
+    };
+
+    await expect(responseErrorHandler(error)).rejects.toBeDefined();
+
+    expect(error.response.data).toEqual({
+      status: 'error',
+      message: 'Reset token is invalid or has expired',
+      errors: [{ message: 'Reset token is invalid or has expired' }],
+    });
+  });
+
+  it('keeps a structured message when the body has no field_name', async () => {
+    const error = {
+      response: {
+        status: 400,
+        data: { detail: { message: 'Account locked until 12:00' } },
+      },
+      config: { url: '/auth/login', headers: {} },
+    };
+
+    await expect(responseErrorHandler(error)).rejects.toBeDefined();
+
+    expect(error.response.data).toEqual({
+      status: 'error',
+      message: 'Account locked until 12:00',
+    });
+  });
+
+  it('yields a visible generic message for an unrecognised shape without nesting the original payload', async () => {
+    const error = {
+      response: { status: 400, data: { detail: { something: 'else' } } },
+      config: { url: '/auth/register', headers: {} },
+    };
+
+    await expect(responseErrorHandler(error)).rejects.toBeDefined();
+
+    expect(error.response.data).toEqual({
+      status: 'error',
+      message: 'An unexpected error occurred',
+    });
+  });
+
+  it('leaves an already-normalised error body unchanged', async () => {
+    const error = {
+      response: {
+        status: 400,
+        data: {
+          status: 'error',
+          message: 'Invalid Current Password',
+          errors: [{ message: 'Invalid Current Password' }],
+        },
+      },
+      config: { url: '/auth/change-password', headers: {} },
+    };
+
+    await expect(responseErrorHandler(error)).rejects.toBeDefined();
+
+    expect(error.response.data).toEqual({
+      status: 'error',
+      message: 'Invalid Current Password',
+      errors: [{ message: 'Invalid Current Password' }],
+    });
+  });
+
+  it('uses the generic message when a complexity body has only whitespace as its summary', async () => {
+    const error = {
+      response: {
+        status: 400,
+        data: {
+          detail: {
+            message: '   ',
+            errors: ['Password must contain at least one digit'],
+          },
+        },
+      },
+      config: { url: '/auth/register', headers: {} },
+    };
+
+    await expect(responseErrorHandler(error)).rejects.toBeDefined();
+
+    expect(error.response.data).toEqual({
+      status: 'error',
+      message: 'An unexpected error occurred',
+      errors: [{ message: 'Password must contain at least one digit' }],
+    });
+  });
+
+  it('yields a visible generic message for an array detail without nesting it', async () => {
+    const error = {
+      response: {
+        status: 422,
+        data: {
+          detail: [{ loc: ['body', 'password'], msg: 'field required' }],
+        },
+      },
+      config: { url: '/auth/register', headers: {} },
+    };
+
+    await expect(responseErrorHandler(error)).rejects.toBeDefined();
+
+    expect(error.response.data).toEqual({
+      status: 'error',
+      message: 'An unexpected error occurred',
+    });
+  });
+
+  it('rewrites a whitespace-only string detail to a visible generic message', async () => {
+    const error = {
+      response: { status: 400, data: { detail: '   ' } },
+      config: { url: '/auth/register', headers: {} },
+    };
+
+    await expect(responseErrorHandler(error)).rejects.toBeDefined();
+
+    expect(error.response.data).toEqual({
+      status: 'error',
+      message: 'An unexpected error occurred',
+      errors: [{ message: 'An unexpected error occurred' }],
+    });
+  });
+});
