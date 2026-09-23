@@ -34,7 +34,7 @@ The revocation primitive is also misnamed. `cleanup_expired_tokens` does not rem
 
 8. **Forwarded headers are trusted from the reverse proxy only, never by wildcard.** Trusting them from anywhere lets any client forge its own address for rate limiting, origin-network detection, and the audit log simultaneously. This is a prerequisite for decision 5 and has standalone value.
 
-9. **Logout ends the calling session only.** `POST /logout` revokes that session's refresh token and the access tokens that share its id; the user's other sessions stay usable. `POST /logout/all` revokes every allowlist token for the caller. Change-password keeps calling `revoke_all_user_tokens` directly rather than going through HTTP. This supersedes the #205 criterion that logout remove every entry for a user: that criterion was written before sessions had identities to scope to (#237).
+9. **Logout ends the calling session only.** `POST /logout` revokes that session's refresh token and the access tokens that share its id; the user's other sessions stay usable. `POST /logout/all` revokes every allowlist token for the caller. Change-password keeps calling `revoke_all_user_tokens` directly rather than going through HTTP (since #271, from inside `password_policy.change_password`, before the password change commits). This supersedes the #205 criterion that logout remove every entry for a user: that criterion was written before sessions had identities to scope to (#237).
 
 ## Considered options
 

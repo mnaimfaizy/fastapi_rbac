@@ -60,6 +60,14 @@ _Avoid_: Remote address, IP, request IP (when they mean separate readings)
 A peer whose `X-Forwarded-For` and `X-Real-IP` headers the backend believes, named by address or network in configuration. Headers from any other peer are ignored; a wildcard cannot be configured, because trusting every peer lets a client forge its own client address.
 _Avoid_: Proxy allowlist, forwarded-for whitelist
 
+**Password policy**:
+The rules a password must satisfy before it is accepted for a user: complexity (length, character classes, no common, sequential or repeated runs), and, when replacing a password, reuse (not the current password nor one inside the history window). The thresholds are settings; `app/utils/password_policy.py` is the one module that applies them, and a refusal answers `400` with `detail = {"message", "errors"}` on every path.
+_Avoid_: Password validation, complexity check (when meaning the whole policy), password rules (when meaning reuse too)
+
+**Password change**:
+Replacing an existing user's password, for one of three reasons: self-service (the user knows the current password), reset (the user holds a live reset link) or admin set. Whatever the reason, it is one ordered operation: password policy, then stage the new hash and history row, then end every session in the allowlist, then commit, then audit. A partial failure leaves the user logged out with the old password intact, never the reverse. Admitting the first password of a new user (registration, admin create) is not a password change; only the complexity rules apply to it.
+_Avoid_: Password update, password reset (when meaning any change), set password
+
 **Role**:
 A named set of permissions assignable to users.
 _Avoid_: Group (when meaning a role)

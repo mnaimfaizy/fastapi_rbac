@@ -12,7 +12,6 @@ from app import crud
 from app.api import deps
 from app.api.deps import get_redis_client
 from app.core.config import settings
-from app.crud.user_crud import PasswordReuseError
 from app.deps import user_deps
 from app.models import User
 from app.schemas.response_schema import (
@@ -23,10 +22,10 @@ from app.schemas.response_schema import (
     create_response,
 )
 from app.schemas.user_schema import IUserCreate, IUserRead, IUserRoleAssign, IUserUpdate
+from app.utils import password_policy
 from app.utils.account_email_dispatch import issue_verification
 from app.utils.exceptions.user_exceptions import UserSelfDeleteException
-from app.utils.password_policy import enforce_password_complexity
-from app.utils.token import revoke_all_user_tokens
+from app.utils.password_policy import InitialPasswordReason, PasswordChangeReason
 from app.utils.user_utils import serialize_user
 
 logger = logging.getLogger(__name__)
@@ -143,12 +142,12 @@ async def create_user(
     self-service (#198). A weaker rule here would leave the new user unable
     to change the password they were given.
     """
-    await enforce_password_complexity(
+    await password_policy.accept_initial_password(
         new_user.password,
-        background_tasks=background_tasks,
+        reason=InitialPasswordReason.ADMIN_CREATE,
+        email=new_user.email,
+        actor=current_user,
         db_session=db_session,
-        event_type="admin_user_create_password_complexity_failed",
-        details={"email": new_user.email},
     )
 
     # Configure user verification based on settings
@@ -237,19 +236,13 @@ async def bulk_update_users(
             continue
         # Only allow fields that IUserUpdate allows
         update_obj = IUserUpdate(**updates)
-        try:
-            updated_user = await crud.user.update(obj_current=user, obj_new=update_obj, db_session=db_session)
-        except PasswordReuseError as e:
-            # Unreachable while a password key is refused above; kept so a
-            # later change that re-allows it cannot skip the reuse policy.
-            raise HTTPException(status_code=400, detail=str(e))
+        updated_user = await crud.user.update(obj_current=user, obj_new=update_obj, db_session=db_session)
         updated_users.append(serialize_user(updated_user))
     return create_response(data=updated_users, message="Bulk update successful")
 
 
 @router.put("/{user_id}")
 async def update_user(
-    background_tasks: BackgroundTasks,
     user_update: IUserUpdate,
     user: User = Depends(user_deps.is_valid_user),
     db_session: AsyncSession = Depends(deps.get_db),
@@ -262,49 +255,31 @@ async def update_user(
     Required roles:
     - admin
 
-    A new password is subject to the same complexity policy as self-service
-    (#198). ``background_tasks`` is required by that helper's audit path.
-
-    A successful password change revokes the *target* user's allowlisted
-    tokens, inline, before the response (#240, #206). The acting
-    administrator's session is not touched.
+    A new password goes through ``password_policy.change_password`` like every
+    other path that sets one (#271): the same rules and reuse policy as
+    self-service (#198), and the *target* user's sessions end before the
+    response is written (#240, #206). The acting administrator's session is
+    not touched. The password is a temporary one, so the user is flagged to
+    change it.
     """
-    # If password is being updated, use password history management
-    if user_update.password:
-        await enforce_password_complexity(
-            user_update.password,
-            background_tasks=background_tasks,
+    update_data = user_update.model_dump(exclude_unset=True)
+    # Popped whether or not it is blank: crud.user.update refuses a password
+    # key outright, and blank / omitted means leave the password as-is.
+    new_password = update_data.pop("password", None)
+    if new_password:
+        await password_policy.change_password(
+            user,
+            new_password,
+            reason=PasswordChangeReason.ADMIN,
+            actor=current_user,
+            client_address=None,
             db_session=db_session,
-            event_type="admin_user_update_password_complexity_failed",
-            user_id=user.id,
-            details={"email": user.email},
+            redis_client=redis_client,
         )
-        try:
-            await crud.user.update_password(
-                user=user, new_password=user_update.password, db_session=db_session
-            )
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
-        # The password has changed hands: every session the target already
-        # holds must die before this response is written. Awaited inline
-        # rather than queued -- that ordering was the defect in #206.
-        # Revoke this user, not the administrator making the request.
-        await revoke_all_user_tokens(redis_client, user.id)
-        # Create a new update object without the password field
-        update_data = user_update.model_dump(exclude_unset=True)
-        update_data.pop("password", None)  # Remove password from update data
-        user_update_without_password = IUserUpdate(
-            **{k: v for k, v in update_data.items() if k != "password"}
-        )
-    else:
-        user_update_without_password = user_update
 
     # Update other fields if any
-    update_fields = user_update_without_password.__fields__
-    if any(getattr(user_update_without_password, field) is not None for field in update_fields):
-        updated_user = await crud.user.update(
-            obj_current=user, obj_new=user_update_without_password, db_session=db_session
-        )
+    if any(value is not None for value in update_data.values()):
+        updated_user = await crud.user.update(obj_current=user, obj_new=update_data, db_session=db_session)
         return create_response(data=serialize_user(updated_user), message="User updated successfully")
 
     return create_response(data=serialize_user(user), message="No changes to update")

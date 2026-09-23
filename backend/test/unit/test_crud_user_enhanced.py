@@ -285,21 +285,17 @@ class TestUserCRUD:
         db: AsyncSession,
         user_factory: UserFactory,
     ) -> None:
-        """Test user password update."""
+        """crud.user.update refuses a password; password_policy sets it (#271)."""
         # Arrange
         user = await user_factory.create()
         original_password_hash = user.password
-        new_password = "NewSecurePassw0rd!47"
 
-        # Act
-        update_data = {"password": new_password}
-        updated_user = await crud.user.update(db_session=db, obj_current=user, obj_new=update_data)
-
-        # Assert
-        assert updated_user.password != original_password_hash
-        assert updated_user.password != new_password  # Should be hashed
-        assert updated_user.password is not None
-        assert len(updated_user.password) > 50  # Hashed password length
+        # Act / Assert
+        with pytest.raises(ValueError, match="does not set passwords"):
+            await crud.user.update(
+                db_session=db, obj_current=user, obj_new={"password": "NewSecurePassw0rd!47"}
+            )
+        assert user.password == original_password_hash
 
     @pytest.mark.asyncio
     async def test_create_user_with_logging(
