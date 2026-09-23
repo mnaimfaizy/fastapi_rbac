@@ -33,6 +33,7 @@ from app.schemas.response_schema import ErrorDetail, create_error_response
 from app.utils.client_address import ProxyHeadersMiddleware
 from app.utils.exceptions.user_exceptions import UserSelfDeleteException
 from app.utils.fastapi_globals import GlobalsMiddleware, g
+from app.utils.password_policy import PasswordRefused
 
 # Coerce to str for Starlette CORSMiddleware (settings may type origins as str | AnyHttpUrl)
 allowed_origins: list[str] = [str(origin) for origin in (settings.BACKEND_CORS_ORIGINS or ["*"])]
@@ -393,6 +394,16 @@ async def custom_exception_handler(request: Request, exc: CustomException) -> JS
             errors=[ErrorDetail(code=exc.code, message=exc.message)],
         ).model_dump(),
     )
+
+
+@fastapi_app.exception_handler(PasswordRefused)
+async def password_refused_handler(request: Request, exc: PasswordRefused) -> JSONResponse:
+    """Answer every password-policy refusal the same way, on every path (#271).
+
+    The body keeps the ``detail = {"message", "errors"}`` shape the complexity
+    refusal has always had, so clients see one format for rules and reuse.
+    """
+    return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"detail": exc.detail})
 
 
 @fastapi_app.exception_handler(UserSelfDeleteException)

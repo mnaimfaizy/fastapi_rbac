@@ -116,9 +116,6 @@ async def test_update_user(db: AsyncSession) -> None:  # Added return type
     new_last_name = "UserName"
     user_update = IUserUpdate(
         email=email,  # use existing email
-        # A password in the payload goes through the reuse policy, which refuses
-        # the one the account already has (#193), so this is a fresh one.
-        password=random_lower_string(),
         first_name=new_first_name,
         last_name=new_last_name,
     )
@@ -135,36 +132,21 @@ async def test_update_user(db: AsyncSession) -> None:  # Added return type
 
 
 @pytest.mark.asyncio
-async def test_update_user_password(db: AsyncSession) -> None:  # Added return type
-    """Test updating a user's password"""
-    # Create a user
+async def test_update_user_refuses_a_password(db: AsyncSession) -> None:
+    """A password is set only through app.utils.password_policy (#271)."""
     email = random_email()
     password = random_lower_string()
-    user_in = IUserCreate(
-        email=email,
-        password=password,
-    )
-    user = await user_crud.create(obj_in=user_in, db_session=db)
+    user = await user_crud.create(obj_in=IUserCreate(email=email, password=password), db_session=db)
+    original_hash = user.password
 
-    # Create update data with new password
-    new_password = random_lower_string()
-    user_update = IUserUpdate(
-        email=email,  # use existing email
-        password=new_password,
-    )
+    with pytest.raises(ValueError, match="does not set passwords"):
+        await user_crud.update(
+            obj_current=user,
+            obj_new=IUserUpdate(email=email, password=random_lower_string()),
+            db_session=db,
+        )
 
-    # Update the user
-    updated_user = await user_crud.update(obj_current=user, obj_new=user_update, db_session=db)
-
-    # Check that the password was updated correctly
-    assert updated_user.id == user.id
-    assert updated_user.email == user.email  # Email should remain unchanged
-    assert updated_user.password is not None  # Added assertion
-    assert PasswordValidator.verify_password(new_password, updated_user.password)
-    assert user.password is not None  # Added assertion
-    assert not PasswordValidator.verify_password(
-        password, updated_user.password
-    )  # Old password should not work
+    assert user.password == original_hash
 
 
 @pytest.mark.asyncio
@@ -268,6 +250,8 @@ async def test_password_history_enforcement(db: AsyncSession) -> None:
     for _ in range(history_size):
         new_password = random_lower_string()
         await user_crud.update_password(user=user, new_password=new_password, db_session=db)
+        # update_password stages; its caller (password_policy) owns the commit.
+        await db.commit()
 
     with pytest.raises(ValueError, match=f"Cannot reuse any of your last {history_size} passwords"):
         await user_crud.update_password(user=user, new_password=password, db_session=db)

@@ -1,7 +1,8 @@
 """An admin-set password revokes the target user's allowlisted sessions (#240).
 
 ``PUT /users/{user_id}`` was the one password-setting path that did not call
-``revoke_all_user_tokens``. Self-service already does; an administrator
+``revoke_all_user_tokens``. It now ends sessions through
+``password_policy.change_password`` like every other path (#271); an administrator
 reset is the response to a compromised account, so it must lock the old
 sessions out before the response is written.
 
@@ -13,7 +14,6 @@ from test.utils import get_csrf_token
 from typing import Any, Dict, Tuple
 from uuid import uuid4
 
-from fastapi import BackgroundTasks
 from httpx import AsyncClient, Response
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -80,7 +80,6 @@ async def test_admin_update_revokes_tokens_the_target_already_held(
         db_session=db,
         redis_client=redis_mock,
         current_user=_admin(),
-        background_tasks=BackgroundTasks(),
     )
 
     members = await get_valid_tokens(redis_mock, user.id, TokenType.ACCESS)

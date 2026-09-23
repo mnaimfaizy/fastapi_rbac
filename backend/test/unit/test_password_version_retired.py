@@ -48,13 +48,17 @@ def test_password_version_appears_nowhere_in_the_app_package() -> None:
 
 def calls_named(function: ast.AST, name: str) -> bool:
     for node in ast.walk(function):
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == name:
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        called = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+        if called == name:
             return True
     return False
 
 
-def handlers_in(module: str) -> dict:
-    tree = ast.parse((APP_DIR / "api" / "v1" / "endpoints" / module).read_text(encoding="utf-8"))
+def handlers_in(path: Path) -> dict:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
     return {
         node.name: node
         for node in ast.walk(tree)
@@ -75,11 +79,23 @@ def test_every_password_path_revokes_prior_sessions(module: str, handler: str) -
     """Retiring the field must not touch the mechanism that made it redundant.
 
     Four paths set a password. Self-service lives in ``auth.py``; the
-    administrator path is ``update_user`` in ``user.py``. Each must call
-    ``revoke_all_user_tokens`` itself -- passing it to ``BackgroundTasks``
-    is not a Call of that name, so a deferred revoke fails this guard (#206).
+    administrator path is ``update_user`` in ``user.py``. Since #271 each goes
+    through ``password_policy.change_password`` and none revokes on its own,
+    so no path can end sessions after its commit or skip it.
     """
-    handlers = handlers_in(module)
+    handlers = handlers_in(APP_DIR / "api" / "v1" / "endpoints" / module)
 
     assert handler in handlers
-    assert calls_named(handlers[handler], "revoke_all_user_tokens")
+    assert calls_named(handlers[handler], "change_password")
+    assert not calls_named(handlers[handler], "revoke_all_user_tokens")
+
+
+def test_the_policy_module_revokes_prior_sessions() -> None:
+    """The one place a password changes is the one place sessions end.
+
+    Awaited inline -- passing it to ``BackgroundTasks`` is not a Call of that
+    name, so a deferred revoke fails this guard (#206).
+    """
+    handlers = handlers_in(APP_DIR / "utils" / "password_policy.py")
+
+    assert calls_named(handlers["change_password"], "revoke_all_user_tokens")

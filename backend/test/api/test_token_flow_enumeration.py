@@ -37,6 +37,7 @@ from app.utils.token import add_token_to_redis
 
 PASSWORD = "TestPassw0rd!47"
 NEW_PASSWORD = "ReplacementPassword!42"
+WEAK_PASSWORD = "password"
 
 ABSENT_EMAIL = "no-such-account@example.com"
 ACTIVE_EMAIL = "active-user@example.com"
@@ -60,11 +61,13 @@ async def post_verify_email(client: AsyncClient, token: str) -> Response:
     return await client.post(auth_url("/verify-email"), json={"token": token}, headers=headers)
 
 
-async def post_reset_confirm(client: AsyncClient, path: str, token: str) -> Response:
+async def post_reset_confirm(
+    client: AsyncClient, path: str, token: str, new_password: str = NEW_PASSWORD
+) -> Response:
     _, headers = await get_csrf_token(client)
     return await client.post(
         auth_url(path),
-        json={"token": token, "new_password": NEW_PASSWORD},
+        json={"token": token, "new_password": new_password},
         headers=headers,
     )
 
@@ -375,6 +378,34 @@ async def test_reset_confirm_separates_the_disabled_and_bad_token_branches(
         "password_reset_inactive_account",
         "password_reset_token_not_in_redis",
     ]
+
+
+@pytest.mark.parametrize("path", CONFIRM_PATHS)
+async def test_reset_confirm_checks_the_token_before_the_password_rules(
+    client: AsyncClient, user_factory: Any, redis_mock: Any, path: str
+) -> None:
+    """A weak password with a bad link gets the uniform rejection (#271).
+
+    The rules used to run first, so any caller could learn which rules a
+    password failed without holding a link. They now run after the token, so
+    only the holder of a live link sees a rules or reuse refusal; everyone
+    else gets the same answer as for a strong password (ADR 0010, decision 6).
+    """
+    active, disabled = await seed_users(user_factory)
+    disabled_token = security.create_reset_token(disabled.email)
+    await add_token_to_redis(
+        redis_mock, disabled, disabled_token, TokenType.RESET, settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
+    )
+
+    not_allowlisted = observable(
+        await post_reset_confirm(client, path, security.create_reset_token(active.email), WEAK_PASSWORD)
+    )
+    absent = observable(
+        await post_reset_confirm(client, path, security.create_reset_token(ABSENT_EMAIL), WEAK_PASSWORD)
+    )
+    disabled_response = observable(await post_reset_confirm(client, path, disabled_token, WEAK_PASSWORD))
+
+    assert not_allowlisted == absent == disabled_response == (400, INVALID_PASSWORD_RESET_TOKEN_MESSAGE)
 
 
 @pytest.mark.parametrize("path", CONFIRM_PATHS)
