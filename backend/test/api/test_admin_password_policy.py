@@ -19,10 +19,13 @@ from typing import Any, Dict
 from uuid import uuid4
 
 from httpx import AsyncClient
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app import crud
+from app.api.v1.endpoints.user import bulk_update_users
 from app.core.config import settings
 from app.core.security import PasswordValidator
+from app.models.user_model import User
 from app.utils.password_policy import PASSWORD_COMPLEXITY_FAILURE_MESSAGE
 
 # Satisfies every rule in settings. Shared with the self-service policy tests.
@@ -169,3 +172,22 @@ async def test_bulk_update_rejects_a_password_key(client: AsyncClient, user_fact
     assert response.json() == {
         "detail": "Password cannot be changed via bulk update. Update each user individually."
     }
+
+
+async def test_bulk_update_without_a_password_key_succeeds(db: AsyncSession, user_factory: Any) -> None:
+    """Refusing ``password`` must not break the fields bulk update is for.
+
+    Called directly with UUID ids: over HTTP the route answers 500 for any
+    update because the JSON ids reach the UUID column as strings, a separate
+    defect this test does not cover.
+    """
+    target = await user_factory.create(password=ACCEPTED_PASSWORD, first_name="Before")
+
+    response = await bulk_update_users(
+        bulk_update={"user_ids": [target.id], "updates": {"first_name": "After"}},
+        db_session=db,
+        current_user=User(id=uuid4(), email="admin@example.com"),
+    )
+
+    assert response.message == "Bulk update successful"
+    assert [user["first_name"] for user in response.data] == ["After"]

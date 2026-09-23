@@ -268,6 +268,32 @@ async def test_a_redis_failure_leaves_the_stored_password_unchanged(
     assert SUCCEEDED_EVENT[reason] not in await _audit_actions(db)
 
 
+async def test_a_failed_reload_does_not_mask_the_original_failure(
+    db: AsyncSession,
+    user_factory: Any,
+    redis_mock: MockRedisClient,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """If the reload after the rollback fails too, the caller still sees the Redis error."""
+    user = await _locked_user_with_sessions(db, user_factory, redis_mock)
+    user_id, original_hash = user.id, user.password
+
+    async def refresh_fails(*args: Any, **kwargs: Any) -> None:
+        raise RuntimeError("database went away")
+
+    monkeypatch.setattr(db, "refresh", refresh_fails)
+    with pytest.raises(ConnectionError):
+        await _change(
+            user, NEW_PASSWORD, PasswordChangeReason.SELF, db, _FailingRedis(redis_mock, fail_after=1)
+        )
+    monkeypatch.undo()
+
+    assert "Failed to reload user after discarding a password change" in caplog.text
+    reloaded = await _reload(db, user_id)
+    assert reloaded.password == original_hash
+
+
 # --------------------------------------------------------------------------
 # accept_initial_password: rules only
 # --------------------------------------------------------------------------
