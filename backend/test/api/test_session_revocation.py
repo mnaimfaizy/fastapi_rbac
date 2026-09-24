@@ -13,6 +13,11 @@ checked the final allowlist would pass against an implementation that adds
 first and deletes afterwards on a different schedule, which is the shape of the
 bug.
 
+Since #271 the revocation half runs inside ``password_policy.change_password``,
+before its commit, and reissuing stays in the handler. What the policy module
+revokes is asserted in ``test/unit/test_password_change.py``; what is tested
+here is that the handler's reissue still comes after it.
+
 ADR 0011 records the rename that comes with the fix: the primitive is
 `revoke_user_tokens`, it deletes the user's allowlist set, and it is the only
 implementation of that deletion left in the tree. `cleanup_expired_tokens`
@@ -34,6 +39,7 @@ from httpx import AsyncClient, Response
 from app.core import security
 from app.core.config import settings
 from app.schemas.common_schema import TokenType
+from app.utils.account_token_responses import INVALID_PASSWORD_RESET_TOKEN_MESSAGE
 from app.utils.token import (
     add_token_to_redis,
     get_valid_tokens,
@@ -188,20 +194,6 @@ async def test_change_password_leaves_the_new_tokens_allowlisted(
     assert len(refresh_members) == 1, "exactly one session survives a password change"
 
 
-async def test_change_password_revokes_the_previous_token(
-    client: AsyncClient, user_factory: Any, redis_mock: Any
-) -> None:
-    user = await user_factory.create(email="revoked@example.com", password=PASSWORD, verified=True)
-    user_id = user.id
-    old_access, headers = await login(client, "revoked@example.com", PASSWORD)
-
-    response = await post_change_password(client, headers, PASSWORD, NEW_PASSWORD)
-    assert response.status_code == 200, response.text
-
-    members = await get_valid_tokens(redis_mock, user_id, TokenType.ACCESS)
-    assert token_is_allowlisted(members, old_access) is False
-
-
 async def test_new_token_authenticates_immediately_after_change_password(
     client: AsyncClient, user_factory: Any
 ) -> None:
@@ -240,10 +232,11 @@ async def test_change_password_revokes_a_pending_reset_link(
 
     RESET is an allowlist type and is the only thing gating a forgot-password
     link. Leaving it behind means an attacker who requested a reset before the
-    victim changed their password can still redeem it afterwards.
+    victim changed their password can still redeem it afterwards. Which token
+    types the policy module revokes is asserted in
+    ``test/unit/test_password_change.py``; this is the route-level outcome.
     """
     user = await user_factory.create(email="pendingreset@example.com", password=PASSWORD, verified=True)
-    user_id = user.id
     reset_token = security.create_reset_token("pendingreset@example.com")
     await add_token_to_redis(
         redis_mock,
@@ -257,14 +250,14 @@ async def test_change_password_revokes_a_pending_reset_link(
     response = await post_change_password(client, headers, PASSWORD, NEW_PASSWORD)
     assert response.status_code == 200, response.text
 
-    assert await get_valid_tokens(redis_mock, user_id, TokenType.RESET) == set()
     _, csrf = await get_csrf_token(client)
     redeemed = await client.post(
         auth_url("/password-reset/confirm"),
         json={"token": reset_token, "new_password": "YetAnotherPhrase!91"},
         headers=csrf,
     )
-    assert redeemed.status_code != 200, "the stale reset link was still redeemable"
+    assert redeemed.status_code == 400, "the stale reset link was still redeemable"
+    assert redeemed.json() == {"detail": INVALID_PASSWORD_RESET_TOKEN_MESSAGE}
 
 
 # --------------------------------------------------------------------------

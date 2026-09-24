@@ -1,4 +1,4 @@
-"""Every path that sets a password applies one policy (#192).
+"""Every self-service route refuses a password the rules refuse (#192, #271).
 
 ``PasswordValidator.validate_complexity`` returns ``(is_valid, errors)``.
 Registration tested that tuple for falsiness instead of unpacking it, and a
@@ -7,49 +7,55 @@ The 8-character common password ``password`` was accepted at sign-up and then
 refused by ``/auth/password-reset/confirm``, ``/auth/reset_password`` and
 ``/auth/change_password``.
 
-What is under test is the agreement, not one endpoint's spelling of it: a
-password the validator rejects must be rejected at registration too, before a
-user row, a verification token or a verification email exists. The last test
-guards the shape of the fix -- the tuple is unpacked in exactly one place, so
-a password path added later cannot reintroduce the same misuse.
+What each refusal does to the account and the audit log is asserted once,
+through the policy module, in ``test/unit/test_password_change.py``. Here each
+route gets one test per outcome class and asserts status and body only. The
+admin routes are in ``test_admin_password_policy.py``; reuse refusals and
+successes are in ``test_password_reuse.py``.
 """
 
 import ast
 from pathlib import Path
-from typing import Any, Dict, Tuple
-from unittest.mock import AsyncMock
+from test.utils import get_csrf_token
+from typing import Any, Dict
 
 import pytest
-from httpx import AsyncClient
+from httpx import AsyncClient, Response
 
 from app import crud
+from app.core import security
 from app.core.config import settings
 from app.core.security import PasswordValidator
+from app.models.user_model import User
+from app.schemas.common_schema import TokenType
 from app.utils.account_email_dispatch import ACCOUNT_EMAIL_UNIFORM_MESSAGE
 from app.utils.password_policy import PASSWORD_COMPLEXITY_FAILURE_MESSAGE
+from app.utils.token import add_token_to_redis
 
 # The three named in #192. Each fails a different rule: too common and too
 # short, sequential characters, and length alone.
 REJECTED_PASSWORDS = ["password", "NewPassword123!", "Short1!"]
+REJECTED_PASSWORD = REJECTED_PASSWORDS[0]
 
 # Satisfies every rule in settings: 12+ characters, all four character classes,
 # no sequential run, no repeated run.
 ACCEPTED_PASSWORD = "QaRegisterPass!47"
+
+CONFIRM_PATHS = ["/password-reset/confirm", "/reset_password"]
 
 
 def auth_url(path: str) -> str:
     return f"{settings.API_V1_STR}/auth{path}"
 
 
-async def csrf_headers(client: AsyncClient) -> Dict[str, str]:
-    response = await client.get(auth_url("/csrf-token"))
-    assert response.status_code == 200
-    return {"X-CSRF-Token": response.json()["data"]["csrf_token"]}
+def rules_refusal(password: str) -> Dict[str, Any]:
+    _, errors = PasswordValidator.validate_complexity(password)
+    return {"detail": {"message": PASSWORD_COMPLEXITY_FAILURE_MESSAGE, "errors": errors}}
 
 
-async def post_register(client: AsyncClient, email: str, password: str) -> Tuple[int, Dict[str, Any]]:
-    headers = await csrf_headers(client)
-    response = await client.post(
+async def post_register(client: AsyncClient, email: str, password: str) -> Response:
+    _, headers = await get_csrf_token(client)
+    return await client.post(
         auth_url("/register"),
         json={
             "email": email,
@@ -59,11 +65,18 @@ async def post_register(client: AsyncClient, email: str, password: str) -> Tuple
         },
         headers=headers,
     )
-    return response.status_code, response.json()
+
+
+async def issue_reset_token(redis_mock: Any, user: User) -> str:
+    token = security.create_reset_token(user.email)
+    await add_token_to_redis(
+        redis_mock, user, token, TokenType.RESET, settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
+    )
+    return token
 
 
 # --------------------------------------------------------------------------
-# The validator's own verdicts, so the endpoint tests below are anchored
+# The validator's own verdicts, so the route tests below are anchored
 # --------------------------------------------------------------------------
 
 
@@ -80,76 +93,102 @@ def test_sample_password_is_accepted_by_the_policy() -> None:
 
 
 # --------------------------------------------------------------------------
-# Registration applies it
+# Registration
 # --------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("password", REJECTED_PASSWORDS)
-async def test_registration_rejects_a_password_the_policy_rejects(client: AsyncClient, password: str) -> None:
-    status_code, body = await post_register(client, "weak-password@example.com", password)
+async def test_registration_rules_refused(client: AsyncClient, password: str) -> None:
+    response = await post_register(client, "weak-password@example.com", password)
 
-    assert status_code == 400, body
-    detail = body["detail"]
-    assert detail["message"] == PASSWORD_COMPLEXITY_FAILURE_MESSAGE
-    assert detail["errors"] == PasswordValidator.validate_complexity(password)[1]
+    assert response.status_code == 400, response.text
+    assert response.json() == rules_refusal(password)
 
 
-async def test_registration_accepts_a_policy_compliant_password(client: AsyncClient) -> None:
-    status_code, body = await post_register(client, "strong-password@example.com", ACCEPTED_PASSWORD)
+async def test_registration_succeeded(client: AsyncClient) -> None:
+    response = await post_register(client, "strong-password@example.com", ACCEPTED_PASSWORD)
 
-    assert status_code == 200, body
-    assert body["message"] == ACCOUNT_EMAIL_UNIFORM_MESSAGE
+    assert response.status_code == 200, response.text
+    assert response.json()["message"] == ACCOUNT_EMAIL_UNIFORM_MESSAGE
 
 
-@pytest.mark.parametrize("password", REJECTED_PASSWORDS)
-async def test_rejected_registration_creates_no_user(client: AsyncClient, db: Any, password: str) -> None:
-    """The reject must land before the row, the token and the email."""
+async def test_rejected_registration_creates_no_user(client: AsyncClient, db: Any) -> None:
+    """The refusal must land before the row, the token and the email."""
     email = "no-row-please@example.com"
 
-    status_code, _ = await post_register(client, email, password)
-    assert status_code == 400
+    response = await post_register(client, email, REJECTED_PASSWORD)
+    assert response.status_code == 400
 
     db.expunge_all()
     assert await crud.user.get_by_email(db_session=db, email=email) is None
 
 
-@pytest.mark.parametrize("password", REJECTED_PASSWORDS)
-async def test_rejected_registration_logs_the_security_event(
-    client: AsyncClient, monkeypatch: pytest.MonkeyPatch, password: str
-) -> None:
-    """``registration_password_complexity_failed`` was dead along with the branch."""
-    recorded = AsyncMock()
-    monkeypatch.setattr("app.utils.password_policy.log_security_event", recorded)
-
-    status_code, _ = await post_register(client, "audited@example.com", password)
-    assert status_code == 400
-
-    recorded.assert_awaited_once()
-    assert recorded.await_args.kwargs["event_type"] == "registration_password_complexity_failed"
-    assert recorded.await_args.kwargs["details"]["errors"]
-
-
 async def test_registration_still_answers_uniformly_for_an_existing_account(
     client: AsyncClient, user_factory: Any
 ) -> None:
-    """The complexity reject must not become an account-existence oracle (#113, #137).
+    """The rules refusal must not become an account-existence oracle (#113, #137).
 
     A compliant password answers the same for an address that exists as for one
-    that does not, exactly as before -- the new reject path is reachable only
-    when the submitted password alone is at fault.
+    that does not -- the refusal is reachable only when the submitted password
+    alone is at fault.
     """
     existing = "already-registered@example.com"
     await user_factory.create(email=existing, password=ACCEPTED_PASSWORD, verified=True, is_active=True)
 
-    absent_result = await post_register(client, "never-seen@example.com", ACCEPTED_PASSWORD)
-    existing_result = await post_register(client, existing, ACCEPTED_PASSWORD)
+    absent = await post_register(client, "never-seen@example.com", ACCEPTED_PASSWORD)
+    present = await post_register(client, existing, ACCEPTED_PASSWORD)
 
-    assert absent_result[0] == existing_result[0] == 200
-    assert absent_result[1]["message"] == existing_result[1]["message"] == ACCOUNT_EMAIL_UNIFORM_MESSAGE
+    assert absent.status_code == present.status_code == 200
+    assert absent.json()["message"] == present.json()["message"] == ACCOUNT_EMAIL_UNIFORM_MESSAGE
 
 
 # --------------------------------------------------------------------------
-# ...and so does every other password-setting path, through the same call
+# Change password
+# --------------------------------------------------------------------------
+
+
+async def test_change_password_rules_refused(client: AsyncClient, user_factory: Any) -> None:
+    user = await user_factory.create(password=ACCEPTED_PASSWORD, verified=True, is_active=True)
+    _, headers = await get_csrf_token(client)
+    login = await client.post(
+        auth_url("/login"), json={"email": user.email, "password": ACCEPTED_PASSWORD}, headers=headers
+    )
+    assert login.status_code == 200, login.text
+    headers["Authorization"] = f"Bearer {login.json()['data']['access_token']}"
+
+    response = await client.post(
+        auth_url("/change_password"),
+        json={"current_password": ACCEPTED_PASSWORD, "new_password": REJECTED_PASSWORD},
+        headers=headers,
+    )
+
+    assert response.status_code == 400, response.text
+    assert response.json() == rules_refusal(REJECTED_PASSWORD)
+
+
+# --------------------------------------------------------------------------
+# Both reset-confirm routes
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("path", CONFIRM_PATHS)
+async def test_reset_rules_refused(
+    client: AsyncClient, user_factory: Any, redis_mock: Any, path: str
+) -> None:
+    user = await user_factory.create(password=ACCEPTED_PASSWORD, verified=True, is_active=True)
+    token = await issue_reset_token(redis_mock, user)
+    _, headers = await get_csrf_token(client)
+
+    response = await client.post(
+        auth_url(path), json={"token": token, "new_password": REJECTED_PASSWORD}, headers=headers
+    )
+
+    assert response.status_code == 400, response.text
+    assert response.json() == rules_refusal(REJECTED_PASSWORD)
+
+
+# --------------------------------------------------------------------------
+# The shape of the fix
 # --------------------------------------------------------------------------
 
 
@@ -163,7 +202,7 @@ def test_validate_complexity_has_exactly_one_caller() -> None:
     This is the regression guard for #192: the original bug was not a wrong
     comparison, it was four independent call sites, one of which got the
     contract wrong. A new password path must go through
-    ``enforce_password_complexity`` rather than call the validator itself.
+    ``app.utils.password_policy`` rather than call the validator itself.
     """
     callers = set()
     for path in _app_package().rglob("*.py"):
@@ -177,5 +216,5 @@ def test_validate_complexity_has_exactly_one_caller() -> None:
 
     assert callers == {"utils/password_policy.py"}, (
         "validate_complexity returns a tuple and must be called only by "
-        f"enforce_password_complexity; also called from: {sorted(callers)}"
+        f"app.utils.password_policy; also called from: {sorted(callers)}"
     )

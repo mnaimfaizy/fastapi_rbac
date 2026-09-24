@@ -22,7 +22,6 @@ from app.core.security import (  # For password complexity / JWT audit mapping
     decode_token,
     map_jwt_http_error_to_event,
 )
-from app.crud.user_crud import PasswordReuseError
 from app.models.user_model import User
 from app.schemas.common_schema import TokenType
 from app.schemas.response_schema import IPostResponseBase, create_response
@@ -30,10 +29,10 @@ from app.schemas.token_schema import PasswordResetConfirm, RefreshToken, Token, 
 from app.schemas.user_schema import PasswordResetRequest  # Used for resend-verification
 from app.schemas.user_schema import (
     IUserRead,
-    IUserUpdate,
     UserRegister,
     VerifyEmail,
 )
+from app.utils import password_policy
 from app.utils.account_email_dispatch import (
     ACCOUNT_EMAIL_UNIFORM_MESSAGE,
     dispatch_account_email,
@@ -50,7 +49,12 @@ from app.utils.background_tasks import (
     send_password_reset_email,
 )
 from app.utils.client_address import get_client_ip
-from app.utils.password_policy import enforce_password_complexity
+from app.utils.password_policy import (
+    InitialPasswordReason,
+    PasswordChangeReason,
+    PasswordRefused,
+    accept_initial_password,
+)
 from app.utils.response_timing import response_time_floor
 from app.utils.token import (
     add_derived_access_token_to_redis,
@@ -478,12 +482,13 @@ async def register(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="This email domain is not allowed for registration.",
                 )
-            await enforce_password_complexity(
+            await accept_initial_password(
                 user_in.password,
-                background_tasks=background_tasks,
+                reason=InitialPasswordReason.REGISTRATION,
+                email=user_in.email,
+                actor=None,
+                client_address=ip_address,
                 db_session=db_session,
-                event_type="registration_password_complexity_failed",
-                details={"email": user_in.email, "ip_address": ip_address},
             )
 
             result = await dispatch_account_email(
@@ -513,7 +518,7 @@ async def register(
                 response_data = {"verification_code": result.verification_token}
 
             return create_response(data=response_data, message=ACCOUNT_EMAIL_UNIFORM_MESSAGE)
-        except HTTPException:
+        except (HTTPException, PasswordRefused):
             raise
         except Exception as e:
             await log_security_event(
@@ -839,69 +844,21 @@ async def change_password(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid Current Password",
             )
-        # Validate new password complexity
-        await enforce_password_complexity(
+        # Rules, reuse, ending every session (a pending reset link included:
+        # knowing the current password supersedes it), commit and audit all
+        # happen in the policy module (#271). This path used to reimplement
+        # them and got the reuse check wrong (#193).
+        await password_policy.change_password(
+            current_user,
             new_password,
-            background_tasks=background_tasks,
+            reason=PasswordChangeReason.SELF,
+            actor=current_user,
+            client_address=ip_address,
             db_session=db_session,
-            event_type="password_change_complexity_failed",
-            user_id=current_user.id,
-            details={"email": current_user.email, "ip_address": ip_address},
+            redis_client=redis_client,
         )
-        # The reuse policy and the history append both live in update_password.
-        # This path used to reimplement them and got the reuse check wrong -- it
-        # compared a freshly salted bcrypt digest against stored digests, which
-        # can never match (#193).
-        try:
-            await crud.user.update_password(
-                user=current_user,
-                new_password=new_password,
-                db_session=db_session,
-                created_by_ip=ip_address,
-            )
-        except PasswordReuseError as e:
-            await log_security_event(
-                background_tasks=background_tasks,
-                db_session=db_session,
-                event_type="password_change_reused_password",
-                user_id=current_user.id,
-                details={
-                    "email": current_user.email,
-                    "ip_address": ip_address,
-                    "error": str(e),
-                },
-            )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=str(e),
-            )
-        # Clearing the lockout state is this endpoint's own concern, not the
-        # password policy's, so it stays here.
-        user_update_data = IUserUpdate(  # type: ignore
-            number_of_failed_attempts=0,
-            is_locked=False,
-            locked_until=None,
-            needs_to_change_password=False,  # <-- Ensure this is set to False after password change
-        )
-        updated_user = await crud.user.update(
-            db_session=db_session,  # Ensure db_session is passed
-            obj_current=current_user,
-            obj_new=user_update_data,
-        )
-        if not updated_user:
-            await log_security_event(
-                background_tasks=background_tasks,
-                db_session=db_session,
-                event_type="password_change_failed_post_update",
-                user_id=current_user.id,
-                details={"email": current_user.email, "ip_address": ip_address},
-            )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to update password. Please try again.",
-            )
-        # current_user is updated in-place by crud.user.update and is the same as updated_user.
-        # Create tokens using the updated user's information.
+        # Issuing the fresh session stays here: it belongs to this caller, not
+        # to the policy.
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         refresh_token_expires = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
         access_token = security.create_access_token(
@@ -917,12 +874,9 @@ async def change_password(
             refresh_token=None,  # HttpOnly cookie; not exposed to JS
             user=user_read_for_token,  # Pass the IUserRead instance
         )
-        # Revoke everything first, then allowlist the new tokens. The order is
-        # the fix for #206: revocation used to be queued and ran after the
-        # response, deleting the very tokens this response hands back. Any
-        # pending reset link goes too -- knowing the current password
-        # supersedes it.
-        await revoke_all_user_tokens(redis_client, current_user.id)
+        # The old sessions were ended above, before these are allowlisted. The
+        # order is the fix for #206: revocation used to be queued and ran after
+        # the response, deleting the very tokens this response hands back.
         await add_session_tokens_to_redis(
             redis_client,
             current_user,
@@ -937,17 +891,10 @@ async def change_password(
             refresh_token,
             max_age=int(refresh_token_expires.total_seconds()),
         )
-        await log_security_event(
-            background_tasks=background_tasks,
-            db_session=db_session,
-            event_type="password_change_successful",
-            user_id=current_user.id,
-            details={"email": current_user.email, "ip_address": ip_address},
-        )
         # Expire all objects in the session to ensure latest data is visible in subsequent requests
         db_session.expire_all()
         return create_response(data=data, message="Password changed successfully")
-    except HTTPException:
+    except (HTTPException, PasswordRefused):
         raise
     except Exception as e:
         # ip_address is guaranteed to be defined here
@@ -1429,8 +1376,8 @@ async def logout_all(
 ) -> IPostResponseBase:
     """End every session for the authenticated user and clear the refresh cookie.
 
-    Change-password still calls ``revoke_all_user_tokens`` directly rather than
-    going through this route.
+    Change-password ends sessions through ``password_policy.change_password``
+    rather than going through this route.
     """
     ip_address = get_client_ip(request) or "Unknown"
     try:
@@ -1605,22 +1552,20 @@ async def confirm_password_reset(
     behind the allow-list check, so the disabled branch is now reachable only
     by a caller already holding a live token.
 
-    Password complexity and history failures stay distinct: they describe the
-    submitted password, not the account.
+    Password rules and reuse refusals stay distinct: they describe the
+    submitted password, not the account. They are checked after the token
+    (#271), so only a caller holding a live reset link can see one; anyone
+    else gets the uniform rejection whatever password they sent.
     """
     ip_address = get_client_ip(request) or "Unknown"
     email_from_token_str: str | None = None
+    # Bound before the try so the except path can read them whichever step
+    # raised (#278).
+    user: User | None = None
+    payload: dict | None = None
 
     async with response_time_floor():
         try:
-            # Validate new password complexity before anything else
-            await enforce_password_complexity(
-                reset_confirm.new_password,
-                background_tasks=background_tasks,
-                db_session=db_session,
-                event_type="password_reset_complexity_failed",
-                details={"ip_address": ip_address, "token_used": reset_confirm.token},
-            )
             payload = security.decode_token(reset_confirm.token, token_type="reset")
             email_from_token_str = payload.get("sub")
             if not email_from_token_str:
@@ -1667,39 +1612,22 @@ async def confirm_password_reset(
                     user_id=user.id,
                     details={"email": user.email, "ip_address": ip_address},
                 )
-            try:
-                # This will check history, update password,
-                # and update last_changed_password_date
-                await crud.user.update_password(
-                    user=user, new_password=reset_confirm.new_password, db_session=db_session
-                )
-            except ValueError as e:
-                # Log password history violation as a background task
-                await log_security_event(
-                    background_tasks=background_tasks,
-                    db_session=db_session,
-                    event_type="password_reset_history_violation",
-                    user_id=user.id,
-                    details={"error": str(e), "ip_address": ip_address},
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Unable to set new password. Please ensure it meets all security requirements.",
-                )
-            # Revoke the reset link so it cannot be replayed, and every
-            # session with it: the password just changed hands.
-            await revoke_all_user_tokens(redis_client, user.id)
-            # Log successful password reset as a background task
-            await log_security_event(
-                background_tasks=background_tasks,
+            # The password rules run here, after the token, not before it: a
+            # rules or reuse refusal is then reachable only by the holder of a
+            # live reset link (ADR 0010, decision 6). Ending every session
+            # revokes the reset link too, so it cannot be replayed.
+            await password_policy.change_password(
+                user,
+                reset_confirm.new_password,
+                reason=PasswordChangeReason.RESET,
+                actor=None,
+                client_address=ip_address,
                 db_session=db_session,
-                event_type="password_reset_successful",
-                user_id=user.id,
-                details={"email": user.email, "ip_address": ip_address},
+                redis_client=redis_client,
             )
             return create_response(data={}, message="Password has been reset successfully")
-        except HTTPException:
-            raise  # Re-raise HTTPException directly
+        except (HTTPException, PasswordRefused):
+            raise
         except Exception as e:
             error_type = type(e).__name__
             user_id_for_log = user.id if user else (payload["sub"] if payload else None)
@@ -1746,6 +1674,10 @@ async def reset_password(
     """
     ip_address = get_client_ip(request) or "Unknown"
     email_from_token_str: str | None = None
+    # Bound before the try so the except path can read them whichever step
+    # raised (#278).
+    user: User | None = None
+    payload: dict | None = None
     async with response_time_floor():
         # Input sanitization for password reset data
         try:
@@ -1773,14 +1705,6 @@ async def reset_password(
             )
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid input data")
         try:
-            # Validate new password complexity before anything else
-            await enforce_password_complexity(
-                body_in.new_password,
-                background_tasks=background_tasks,
-                db_session=db_session,
-                event_type="password_reset_complexity_failed",
-                details={"ip_address": ip_address, "token_used": body_in.token},
-            )
             payload = security.decode_token(body_in.token, token_type="reset")
             email_from_token_str = payload.get("sub")
             if not email_from_token_str:
@@ -1827,39 +1751,22 @@ async def reset_password(
                     user_id=user.id,
                     details={"email": user.email, "ip_address": ip_address},
                 )
-            try:
-                # This will check history, update password,
-                # and update last_changed_password_date
-                await crud.user.update_password(
-                    user=user, new_password=body_in.new_password, db_session=db_session
-                )
-            except ValueError as e:
-                # Log password history violation as a background task
-                await log_security_event(
-                    background_tasks=background_tasks,
-                    db_session=db_session,
-                    event_type="password_reset_history_violation",
-                    user_id=user.id,
-                    details={"error": str(e), "ip_address": ip_address},
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Unable to set new password. Please ensure it meets all security requirements.",
-                )
-            # Revoke the reset link so it cannot be replayed, and every
-            # session with it: the password just changed hands.
-            await revoke_all_user_tokens(redis_client, user.id)
-            # Log successful password reset as a background task
-            await log_security_event(
-                background_tasks=background_tasks,
+            # The password rules run here, after the token, not before it: a
+            # rules or reuse refusal is then reachable only by the holder of a
+            # live reset link (ADR 0010, decision 6). Ending every session
+            # revokes the reset link too, so it cannot be replayed.
+            await password_policy.change_password(
+                user,
+                body_in.new_password,
+                reason=PasswordChangeReason.RESET,
+                actor=None,
+                client_address=ip_address,
                 db_session=db_session,
-                event_type="password_reset_successful",
-                user_id=user.id,
-                details={"email": user.email, "ip_address": ip_address},
+                redis_client=redis_client,
             )
             return create_response(data={}, message="Password has been reset successfully")
-        except HTTPException:
-            raise  # Re-raise HTTPException directly
+        except (HTTPException, PasswordRefused):
+            raise
         except Exception as e:
             error_type = type(e).__name__
             user_id_for_log = user.id if user else (payload["sub"] if payload else None)

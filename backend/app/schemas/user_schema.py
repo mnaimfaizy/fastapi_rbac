@@ -15,7 +15,7 @@ from app.utils.partial import optional
 class IUserCreate(UserBase):
     role_id: list[UUID] | None = None
     # No min_length here: the policy lives in settings and is applied by
-    # enforce_password_complexity in the admin create endpoint (#198).
+    # password_policy.accept_initial_password in the admin create endpoint (#198).
     password: str
     last_changed_password_date: datetime | None = None
     expiry_date: datetime | None = None
@@ -28,7 +28,7 @@ class IUserCreate(UserBase):
 class UserRegister(BaseModel):
     email: EmailStr
     # No min_length here: the policy lives in settings (PASSWORD_MIN_LENGTH is
-    # 12) and is applied by enforce_password_complexity in the endpoint. A
+    # 12) and is applied by password_policy.accept_initial_password. A
     # schema-level 8 was a second, looser rule that contradicted it and
     # answered 422 with no indication of which policy rule failed (#192).
     password: str
@@ -53,8 +53,8 @@ class IUserUpdate(UserBase):
     role_id: list[UUID] | None = None
     contact_phone: str | None = None
     expiry_date: datetime | None = None
-    # Optional: a supplied password is checked by enforce_password_complexity
-    # in the admin update endpoint (#198). Blank / omitted means leave as-is.
+    # Optional: a supplied password goes through password_policy.change_password
+    # in the admin update endpoint (#198, #271). Blank / omitted means leave as-is.
     password: str
 
 

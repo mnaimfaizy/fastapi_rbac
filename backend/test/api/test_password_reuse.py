@@ -13,28 +13,28 @@ entirely unenforced:
    reimplementing the sequence inline. It therefore ran no effective reuse
    check and skipped the history append.
 
-The property under test is the agreement, not one endpoint's spelling of it: a
-password the policy refuses must be refused on every path, and a password the
-policy accepts must produce the same side effects on every path. The structural
-test at the end guards the shape of the fix -- the side effects are written in
-exactly one place, so a password path added later cannot quietly skip them.
+Every path now sets a password through ``app.utils.password_policy`` (#271).
+What a reuse refusal or a success does to the account, the history and the
+allowlist is asserted once, through that module, in
+``test/unit/test_password_change.py``. Here each self-service route gets one
+test per outcome class and asserts status and body only; the admin route is in
+``test_admin_password_policy.py``. The structural tests at the end guard the
+shape of the fix -- the side effects are written in exactly one place, so a
+password path added later cannot quietly skip them.
 """
 
 import ast
 from pathlib import Path
 from test.utils import get_csrf_token
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 import pytest
 from httpx import AsyncClient, Response
-from sqlmodel import select
-from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core import security
 from app.core.config import settings
 from app.core.security import PasswordValidator
 from app.crud.user_crud import password_reuse_window, user_crud
-from app.models.password_history_model import UserPasswordHistory
 from app.models.user_model import User
 from app.schemas.common_schema import TokenType
 from app.utils.token import add_token_to_redis
@@ -47,14 +47,15 @@ THIRD_PASSWORD = "AnotherGoodPhrase!73"
 
 CONFIRM_PATHS = ["/password-reset/confirm", "/reset_password"]
 
+CURRENT_PASSWORD_MESSAGE = "New password must be different from your current password."
+
 
 def auth_url(path: str) -> str:
     return f"{settings.API_V1_STR}/auth{path}"
 
 
-def detail_of(response: Response) -> str:
-    body: Dict[str, Any] = response.json()
-    return str(body.get("detail", body.get("message", "")))
+def reuse_refusal(message: str) -> Dict[str, Any]:
+    return {"detail": {"message": message, "errors": [message]}}
 
 
 async def post_reset_confirm(client: AsyncClient, path: str, token: str, new_password: str) -> Response:
@@ -100,13 +101,6 @@ async def post_change_password(
     )
 
 
-async def history_hashes(db: AsyncSession, user: User) -> List[str]:
-    result = await db.exec(
-        select(UserPasswordHistory.password_hash).where(UserPasswordHistory.user_id == user.id)
-    )
-    return list(result.all())
-
-
 # --------------------------------------------------------------------------
 # Why the old check could not work
 # --------------------------------------------------------------------------
@@ -129,82 +123,37 @@ def test_reuse_window_never_exceeds_what_is_retained() -> None:
 
 
 # --------------------------------------------------------------------------
-# The policy itself, at the one place it lives
-# --------------------------------------------------------------------------
-
-
-async def test_update_password_refuses_the_current_password_with_empty_history(
-    db: AsyncSession, user_factory: Any
-) -> None:
-    """Defect 1: nothing in history, and the current password still refused."""
-    user = await user_factory.create(password=SIGNUP_PASSWORD)
-    assert await history_hashes(db, user) == []
-
-    with pytest.raises(ValueError, match="different from your current password"):
-        await user_crud.update_password(user=user, new_password=SIGNUP_PASSWORD, db_session=db)
-
-
-async def test_update_password_refuses_a_password_inside_the_window(
-    db: AsyncSession, user_factory: Any
-) -> None:
-    user = await user_factory.create(password=SIGNUP_PASSWORD)
-    await user_crud.update_password(user=user, new_password=SECOND_PASSWORD, db_session=db)
-
-    with pytest.raises(ValueError, match=f"last {password_reuse_window()} passwords"):
-        await user_crud.update_password(user=user, new_password=SIGNUP_PASSWORD, db_session=db)
-
-
-async def test_update_password_accepts_a_genuinely_new_password(db: AsyncSession, user_factory: Any) -> None:
-    user = await user_factory.create(password=SIGNUP_PASSWORD)
-    previous_hash = user.password
-
-    await user_crud.update_password(user=user, new_password=SECOND_PASSWORD, db_session=db)
-
-    assert PasswordValidator.verify_password(SECOND_PASSWORD, user.password)
-    assert await history_hashes(db, user) == [previous_hash]
-
-
-# --------------------------------------------------------------------------
-# Both reset-confirm endpoints
+# Both reset-confirm routes
 # --------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("path", CONFIRM_PATHS)
-async def test_reset_refuses_the_current_password_on_a_fresh_account(
-    client: AsyncClient, db: AsyncSession, user_factory: Any, redis_mock: Any, path: str
+async def test_reset_reuse_refused(
+    client: AsyncClient, user_factory: Any, redis_mock: Any, path: str
 ) -> None:
-    """The live repro from #193: register, then reset back to the sign-up password."""
+    """The live repro from #193: register, then reset back to the sign-up password.
+
+    The real reuse message, not a generic one: only a caller holding a live
+    reset link can reach it (#271, ADR 0010).
+    """
     user = await user_factory.create(password=SIGNUP_PASSWORD, verified=True, is_active=True)
-    email = user.email
-    assert await history_hashes(db, user) == []
     token = await issue_reset_token(redis_mock, user)
 
     response = await post_reset_confirm(client, path, token, SIGNUP_PASSWORD)
 
     assert response.status_code == 400, response.text
-    db.expunge_all()
-    reloaded = await user_crud.get_by_email(db_session=db, email=email)
-    assert reloaded is not None
-    assert PasswordValidator.verify_password(SIGNUP_PASSWORD, reloaded.password)
-    assert await history_hashes(db, reloaded) == []
+    assert response.json() == reuse_refusal(CURRENT_PASSWORD_MESSAGE)
 
 
 @pytest.mark.parametrize("path", CONFIRM_PATHS)
-async def test_reset_accepts_a_genuinely_new_password(
-    client: AsyncClient, db: AsyncSession, user_factory: Any, redis_mock: Any, path: str
-) -> None:
+async def test_reset_succeeded(client: AsyncClient, user_factory: Any, redis_mock: Any, path: str) -> None:
     user = await user_factory.create(password=SIGNUP_PASSWORD, verified=True, is_active=True)
-    email = user.email
     token = await issue_reset_token(redis_mock, user)
 
     response = await post_reset_confirm(client, path, token, SECOND_PASSWORD)
 
     assert response.status_code == 200, response.text
-    db.expunge_all()
-    reloaded = await user_crud.get_by_email(db_session=db, email=email)
-    assert reloaded is not None
-    assert reloaded.password is not None
-    assert PasswordValidator.verify_password(SECOND_PASSWORD, reloaded.password)
+    assert response.json()["message"] == "Password has been reset successfully"
 
 
 # --------------------------------------------------------------------------
@@ -212,9 +161,7 @@ async def test_reset_accepts_a_genuinely_new_password(
 # --------------------------------------------------------------------------
 
 
-async def test_change_password_refuses_the_current_password(
-    client: AsyncClient, db: AsyncSession, user_factory: Any
-) -> None:
+async def test_change_password_reuse_refused(client: AsyncClient, user_factory: Any) -> None:
     """The live repro from #193: current == new returned 200."""
     user = await user_factory.create(password=SIGNUP_PASSWORD, verified=True, is_active=True)
     headers = await login_headers(client, user.email, SIGNUP_PASSWORD)
@@ -222,59 +169,28 @@ async def test_change_password_refuses_the_current_password(
     response = await post_change_password(client, headers, SIGNUP_PASSWORD, SIGNUP_PASSWORD)
 
     assert response.status_code == 400, response.text
-    assert "current password" in detail_of(response).lower()
+    assert response.json() == reuse_refusal(CURRENT_PASSWORD_MESSAGE)
 
 
-async def test_change_password_refuses_a_password_inside_the_window(
-    client: AsyncClient, db: AsyncSession, user_factory: Any
-) -> None:
+async def test_change_password_succeeded(client: AsyncClient, user_factory: Any) -> None:
     user = await user_factory.create(password=SIGNUP_PASSWORD, verified=True, is_active=True)
-    email = user.email
-    headers = await login_headers(client, email, SIGNUP_PASSWORD)
-
-    first = await post_change_password(client, headers, SIGNUP_PASSWORD, SECOND_PASSWORD)
-    assert first.status_code == 200, first.text
-    # A successful change revokes the tokens it was made with.
-    db.expunge_all()
-    headers = await login_headers(client, email, SECOND_PASSWORD)
-
-    response = await post_change_password(client, headers, SECOND_PASSWORD, SIGNUP_PASSWORD)
-
-    assert response.status_code == 400, response.text
-    assert str(password_reuse_window()) in detail_of(response)
-
-
-async def test_change_password_accepts_a_new_password_with_the_same_side_effects(
-    client: AsyncClient, db: AsyncSession, user_factory: Any
-) -> None:
-    """Defect 3: this path skipped the history append."""
-    user = await user_factory.create(password=SIGNUP_PASSWORD, verified=True, is_active=True)
-    email = user.email
-    previous_hash = user.password
-    headers = await login_headers(client, email, SIGNUP_PASSWORD)
+    headers = await login_headers(client, user.email, SIGNUP_PASSWORD)
 
     response = await post_change_password(client, headers, SIGNUP_PASSWORD, SECOND_PASSWORD)
 
     assert response.status_code == 200, response.text
-    db.expunge_all()
-    reloaded = await user_crud.get_by_email(db_session=db, email=email)
-    assert reloaded is not None
-    assert reloaded.password is not None
-    assert PasswordValidator.verify_password(SECOND_PASSWORD, reloaded.password)
-    assert await history_hashes(db, reloaded) == [previous_hash]
+    assert response.json()["message"] == "Password changed successfully"
 
 
-async def test_change_password_still_refuses_a_wrong_current_password(
-    client: AsyncClient, user_factory: Any
-) -> None:
-    """The reuse rule must not shadow the older, more specific rejection."""
+async def test_change_password_wrong_current_password(client: AsyncClient, user_factory: Any) -> None:
+    """The current-password check authenticates the caller and runs first."""
     user = await user_factory.create(password=SIGNUP_PASSWORD, verified=True, is_active=True)
     headers = await login_headers(client, user.email, SIGNUP_PASSWORD)
 
     response = await post_change_password(client, headers, THIRD_PASSWORD, SECOND_PASSWORD)
 
     assert response.status_code == 400, response.text
-    assert detail_of(response) == "Invalid Current Password"
+    assert response.json() == {"detail": "Invalid Current Password"}
 
 
 # --------------------------------------------------------------------------
@@ -316,6 +232,22 @@ def test_password_side_effects_are_written_in_exactly_one_place() -> None:
         )
 
     assert _modules_matching(stamps_the_password_change) == {"crud/user_crud.py"}
+
+
+def _calls_named(name: str) -> Any:
+    def predicate(node: ast.AST) -> bool:
+        if not isinstance(node, ast.Call):
+            return False
+        func = node.func
+        called = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+        return bool(called == name)
+
+    return predicate
+
+
+def test_only_the_policy_module_stages_a_password() -> None:
+    """No route can set a password without the rules, reuse and revocation (#271)."""
+    assert _modules_matching(_calls_named("update_password")) == {"utils/password_policy.py"}
 
 
 def test_no_reuse_check_compares_bcrypt_digests() -> None:

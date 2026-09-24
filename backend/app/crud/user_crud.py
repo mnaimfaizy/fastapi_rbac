@@ -246,18 +246,12 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
             update_data = obj_new
         else:
             update_data = obj_new.model_dump(exclude_unset=True)
-        if "password" in update_data and update_data["password"]:
-            # Routed through update_password rather than hashed here, so a
-            # caller cannot set a password without the reuse policy and the
-            # history append (#193). Raises ValueError on a refused password.
-            await self.update_password(
-                user=obj_current,
-                new_password=update_data["password"],
-                db_session=db_session,
-            )
-            del update_data["password"]
-        elif "password" in update_data:
-            del update_data["password"]
+        if "password" in update_data:
+            # A password is accepted only through
+            # app.utils.password_policy.change_password, which applies the
+            # rules, the reuse policy and session revocation in order (#271).
+            # Taking one here would let a caller skip all three.
+            raise ValueError("crud.user.update does not set passwords; use password_policy.change_password")
         if "role_id" in update_data:
             role_ids = update_data.pop("role_id", [])
             if role_ids:
@@ -484,15 +478,15 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         new_password: str,
         db_session: AsyncSession | None = None,
         created_by_ip: str | None = None,
-        reset_token_id: UUID | None = None,
     ) -> User:
         """
-        Update a user's password. Requires db_session to be provided explicitly.
+        Stage a new password for ``user``. Requires db_session to be provided explicitly.
 
         This is the single place the reuse policy is applied and the single place
         the password side effects happen (history append,
-        ``last_changed_password_date``). Every path that sets a password goes through
-        here so none of them can drift (#193).
+        ``last_changed_password_date``) (#193). It does not commit:
+        ``app.utils.password_policy.change_password`` is its caller and owns the
+        commit, so it can end the user's sessions first (#271).
         """
         if db_session is None:
             raise ValueError("db_session must be provided")
@@ -509,14 +503,11 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
                 user_id=user.id,
                 hashed_password=user.password,
                 created_by_ip=created_by_ip,
-                reset_token_id=reset_token_id,
                 db_session=db_session,
             )
         user.password = new_password_hash
         user.last_changed_password_date = datetime.now(timezone.utc).replace(tzinfo=None)
         db_session.add(user)
-        await db_session.commit()
-        await db_session.refresh(user)
         return user
 
     async def increment_failed_attempts(self, *, user: User, db_session: AsyncSession | None = None) -> User:
@@ -579,7 +570,9 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         db_session: AsyncSession | None = None,
     ) -> None:
         """
-        Add a password to the user's password history. Requires db_session to be provided explicitly.
+        Stage a password history row. Requires db_session to be provided explicitly.
+
+        Does not commit; the row lands with the password change it records.
         """
         if db_session is None:
             raise ValueError("db_session must be provided")
@@ -590,8 +583,6 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
             reset_token_id=reset_token_id,
         )
         db_session.add(password_history)
-        await db_session.commit()
-        await db_session.refresh(password_history)
         return None
 
     async def get_with_roles_permissions(

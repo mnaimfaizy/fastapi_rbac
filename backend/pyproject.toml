@@ -25,6 +25,12 @@ exclude = '''
 # same file two ways; #236 found that merge produced impossible line data.
 relative_files = true
 source = ["app"]
+# SQLAlchemy's asyncio layer runs every DB call through a greenlet switch.
+# Without "greenlet" here coverage.py stops tracing a request handler at its
+# first awaited query, so every line after it reads as a miss even when a test
+# ran it (#271: codecov/patch flagged the reset and change-password handlers'
+# tails, all exercised by test/api). "thread" keeps the default tracer.
+concurrency = ["greenlet", "thread"]
 
 [tool.coverage.paths]
 # Safety net if a data file still carries an absolute Docker path.

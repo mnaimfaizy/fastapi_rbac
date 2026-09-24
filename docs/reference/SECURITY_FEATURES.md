@@ -142,11 +142,14 @@ if not token_is_allowlisted(valid, access_token):
 - Automatic lockout protection
 
 The thresholds above are settings, not constants in code. Every path that sets
-a password -- registration, password reset, reset confirm, change password,
-and admin create or update of a single user -- applies them through a single
-`enforce_password_complexity` call, so none of them can drift into a looser
-rule of its own. Bulk user update refuses a `password` key rather than
-applying one password to many accounts.
+a password goes through `app/utils/password_policy.py`, so none of them can
+drift into a looser rule of its own. Registration and admin create call
+`accept_initial_password` (rules only). Change password, both reset-confirm
+endpoints and admin update of a single user call `change_password`, which
+applies the rules, then the reuse policy, then ends every session, then
+commits, then writes the success audit event. A refusal is answered as `400`
+with `detail = {"message", "errors"}` on every path. Bulk user update refuses
+a `password` key rather than applying one password to many accounts.
 
 ### 7. Audit Logging
 
