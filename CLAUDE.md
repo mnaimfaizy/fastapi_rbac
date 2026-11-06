@@ -10,6 +10,13 @@ Only these live in the repo; every other skill comes from the user-level install
 - `.claude/agents/release-notes.md`: release-notes sub-agent
 - `docs/agents/`: repo-side configuration the installed skills read
 
+### Kit-owned files (Agent-kit, pinned to a tag)
+
+These files are copied from one pinned Agent-kit tag. They are an exception to "no vendoring". Never edit them by hand; re-copy them from a new tag instead. The full list, the pin and the upgrade steps are in [`docs/agents/agent-kit.md`](docs/agents/agent-kit.md).
+
+- `.claude/skills/{code-review,security-audit,security-finding-triage,security-response}` (in this repo, the kit's `code-review` replaces the user-level one)
+- `.github/{agent-runtime,agent-pipeline,security-audit}`
+
 ## Agent skills
 
 ### Issue tracker
@@ -39,6 +46,10 @@ Branch names must follow [`docs/agents/branch-names.md`](docs/agents/branch-name
 ### Release
 
 User-invoked skill: `.claude/skills/release`. Opens a Release PR (notes via release-notes sub-agent). Canonical notes behavior: [`docs/agents/release-notes-agent.md`](docs/agents/release-notes-agent.md).
+
+### Agent-kit
+
+The CI security audit (and later, plan → implement → review) runs through Agent-kit. The integration's single source of truth is [`docs/agents/agent-kit.md`](docs/agents/agent-kit.md). In this repo, the kit's "Allowlist" is always called the **actor allowlist**, because **Allowlist** means the Redis token allowlist.
 
 ## Project conventions
 
