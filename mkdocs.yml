@@ -51,6 +51,7 @@ nav:
       - "Frontend Architecture": "development/FRONTEND_ARCHITECTURE.md"
       - "Dependency Upgrades": "development/DEPENDENCY_UPGRADES.md"
       - "Knowledge Graph (graphify)": "agents/graphify.md"
+      - "Agent-kit integration": "agents/agent-kit.md"
   - "Deployment":
       - "Overview": "deployment/index.md"
       - "Hub runtime":

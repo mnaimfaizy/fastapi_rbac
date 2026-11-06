@@ -89,3 +89,11 @@ updates:
           - patch
           - minor
           - major
+    ignore:
+      # Agent-kit pins are moved by hand with the files copied from the same
+      # tag (docs/agents/agent-kit.md). Never auto-bump to a pre-release.
+      - dependency-name: "*"
+        versions:
+          - "*-alpha.*"
+          - "*-beta.*"
+          - "*-rc.*"

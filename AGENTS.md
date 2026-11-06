@@ -8,6 +8,11 @@ Project-owned agent assets that do live here:
 - `.claude/agents/release-notes.md`: release-notes sub-agent
 - `docs/agents/`: repo-side configuration the installed skills read
 
+Kit-owned files are copied from one pinned [Agent-kit](docs/agents/agent-kit.md) tag. They are an exception to "no vendoring". Never edit them by hand; re-copy them from a new tag instead:
+
+- `.claude/skills/{code-review,security-audit,security-finding-triage,security-response}` (in this repo, the kit's `code-review` replaces the user-level one)
+- `.github/{agent-runtime,agent-pipeline,security-audit}`
+
 ## Agent skills
 
 ### Issue tracker
@@ -38,8 +43,12 @@ Branch names must follow [`docs/agents/branch-names.md`](docs/agents/branch-name
 
 User-invoked [`release`](.claude/skills/release/SKILL.md) skill: propose version → release-notes sub-agent → Release PR → return PR URL. Notes agent SSOT: [`docs/agents/release-notes-agent.md`](docs/agents/release-notes-agent.md).
 
+### Agent-kit
+
+The CI security audit (and later, plan → implement → review) runs through Agent-kit. The integration's single source of truth is [`docs/agents/agent-kit.md`](docs/agents/agent-kit.md). In this repo, the kit's "Allowlist" is always called the **actor allowlist**, because **Allowlist** means the Redis token allowlist.
+
 ## Notes
 
-- Engineering skills come from the user-level install; do not re-vendor them into this repository.
+- Engineering skills come from the user-level install; do not re-vendor them into this repository. The only exception is the Agent-kit kit-owned files listed above.
 - `.claude/skills/release` is project-owned and is maintained here.
 - Prefer project conventions from `.github/copilot-instructions.md` when there is a conflict.

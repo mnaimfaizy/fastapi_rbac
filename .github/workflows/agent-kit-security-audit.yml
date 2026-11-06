@@ -1,0 +1,46 @@
+name: Agent-kit security audit
+
+# Caller for the Agent-kit security audit (full mode only, for now).
+# Findings go only to a private draft security advisory; the run log carries
+# counts and severity, never details.
+#
+# Off until the repository variable CLAUDE_SECURITY_AUDIT_ENABLED is exactly
+# "true" (the Kill switch). Needs the CLAUDE_CODE_OAUTH_TOKEN and
+# AGENT_KIT_ADVISORIES_TOKEN secrets.
+#
+# The uses: pin and the files copied from Agent-kit (.claude/skills/{code-review,
+# security-audit,security-finding-triage,security-response},
+# .github/{agent-runtime,agent-pipeline,security-audit}) must be the same tag.
+# Upgrade them together: docs/agents/agent-kit.md.
+
+on:
+  schedule:
+    - cron: "0 3 * * 1" # Monday 03:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write
+
+concurrency:
+  group: agent-kit-security-audit-full
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    uses: mnaimfaizy/agent-kit/.github/workflows/security-audit-reusable.yml@v1.0.0-alpha.8
+    with:
+      mode: full
+      kill_switch: ${{ vars.CLAUDE_SECURITY_AUDIT_ENABLED != 'true' }}
+      model: ${{ vars.CLAUDE_MODEL_AUDIT || vars.CLAUDE_MODEL || 'claude-opus-5' }}
+      # Actor allowlist (Agent-kit's "Allowlist"; not the Redis token Allowlist).
+      # Scheduled runs act as the last login to edit the schedule.
+      allowlist_actors: '["mnaimfaizy"]'
+      threat_model_path: ".security/threat-model.md"
+      findings_ledger_path: ".security/findings-ledger.md"
+      notify_email: false
+      scan_command: ""
+    secrets:
+      advisories_token: ${{ secrets.AGENT_KIT_ADVISORIES_TOKEN }}
+      claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
