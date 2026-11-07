@@ -15,7 +15,8 @@
 // the contract test.
 //
 // Glob is judged on its pattern as well as its path: the pattern alone can
-// name an absolute or climbing location.
+// name an absolute or climbing location. A brace group is expanded first, and
+// every expansion judged, because Glob expands braces itself.
 //
 // A lexical check alone is not enough: the checkout is untrusted, and a symlink
 // inside it passes a string comparison while the kernel follows it out of the
@@ -73,17 +74,94 @@ function hasGitSegment(rel) {
 }
 
 const GLOB_MAGIC = /[*?[\]{}!()]/;
+const MAX_BRACE_EXPANSIONS = 256;
+
+/** Split a brace group's content on its top-level commas. */
+function splitTopLevel(content) {
+  const parts = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < content.length; i++) {
+    const c = content[i];
+    if (c === "{") depth++;
+    else if (c === "}") depth--;
+    else if (c === "," && depth === 0) {
+      parts.push(content.slice(start, i));
+      start = i + 1;
+    }
+  }
+  parts.push(content.slice(start));
+  return parts;
+}
+
+/**
+ * Every pattern a brace pattern expands to, or null when it cannot be judged:
+ * unbalanced braces, a group without a comma that holds `..` (a sequence such
+ * as `{-..0}` expands to `/` and `.`), or more than MAX_BRACE_EXPANSIONS
+ * expansions. Expanding more than the tool would only adds patterns to judge.
+ */
+export function expandBraces(pattern) {
+  let depth = 0;
+  for (const c of pattern) {
+    if (c === "{") depth++;
+    else if (c === "}" && --depth < 0) return null;
+  }
+  if (depth !== 0) return null;
+
+  const out = [];
+  const pending = [pattern];
+  while (pending.length > 0) {
+    const s = pending.pop();
+    let expanded = false;
+    for (let i = s.indexOf("{"); i !== -1; i = s.indexOf("{", i + 1)) {
+      let level = 0;
+      let j = i;
+      for (; j < s.length; j++) {
+        if (s[j] === "{") level++;
+        else if (s[j] === "}" && --level === 0) break;
+      }
+      const content = s.slice(i + 1, j);
+      const parts = splitTopLevel(content);
+      if (parts.length > 1) {
+        for (const part of parts) pending.push(s.slice(0, i) + part + s.slice(j + 1));
+        expanded = true;
+        break;
+      }
+      if (content.includes("..")) return null; // a sequence
+      // A group with no comma is literal; look for groups after or inside it.
+    }
+    if (!expanded) out.push(s);
+    if (out.length + pending.length > MAX_BRACE_EXPANSIONS) return null;
+  }
+  return out;
+}
 
 /**
  * Glob matches its pattern from the filesystem, not from `path`: an absolute
  * pattern, one that climbs with `..`, or one whose literal leading directories
  * pass through a symlink lists names outside the tree whatever `path` says. So
  * refuse the first two outright, and judge the literal prefix as a path under
- * `path` with the same on-disk resolution as every other target.
+ * `path` with the same on-disk resolution as every other target. Glob expands
+ * brace groups itself, and one can hide any of those inside it, so every
+ * expansion is judged.
  */
 function decideGlobPattern(pattern, path, workspace) {
   if (pattern == null || pattern === "") return null;
   const p = String(pattern);
+  if (!/[{}]/.test(p)) return decideExpandedPattern(p, path, workspace);
+  const expansions = expandBraces(p);
+  if (expansions === null) {
+    return `read confined to the workspace; refused a Glob pattern whose braces cannot be judged: ${p}`;
+  }
+  for (const expansion of expansions) {
+    const reason = decideExpandedPattern(expansion, path, workspace);
+    if (reason) return reason;
+  }
+  return null;
+}
+
+function decideExpandedPattern(p, path, workspace) {
+  if (p === "") return null;
   const segments = p.split(/[\\/]/);
   if (/^([\\/~]|[A-Za-z]:)/.test(p) || segments.includes("..")) {
     return `read confined to the workspace; refused a Glob pattern outside GITHUB_WORKSPACE: ${p}`;
