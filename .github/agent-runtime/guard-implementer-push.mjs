@@ -15,6 +15,12 @@
 // The base branch is read from a file staged beside this script, outside the
 // workspace, so the agent cannot point the diff at a different base.
 //
+// git reads the checkout's .git/config, which can name commands git runs, and
+// this hook holds the agent's credentials. So before running git it checks
+// that config against the staged allowlist (check-git-config.mjs), and runs
+// git with fsmonitor and hooks turned off on the command line, which wins over
+// any config file. A checkout that fails the check refuses the push.
+//
 // Contract: stdin is the PreToolUse hook JSON. Print a deny decision as JSON on
 // stdout to refuse; print nothing (exit 0) to let the normal permission flow
 // proceed. The settings run this with `|| exit 2`, so a guard that cannot load
@@ -22,6 +28,10 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+import { checkGitDir } from "./check-git-config.mjs";
+
+// Passed before every git subcommand here: `-c` wins over the config files.
+export const GIT_HARDENING = ["-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null"];
 
 const GUARDED = /^\.github\/(workflows|actions)\//;
 // Path and ref characters only: no shell operator can sit in either.
@@ -70,16 +80,23 @@ export function decidePush(payload, listChanged) {
   return null;
 }
 
+function workspace() {
+  return process.env.GITHUB_WORKSPACE || process.cwd();
+}
+
 function git(args) {
-  return execFileSync("git", args, {
-    cwd: process.env.GITHUB_WORKSPACE || process.cwd(),
+  return execFileSync("git", [...GIT_HARDENING, ...args], {
+    cwd: workspace(),
     encoding: "utf8",
+    env: { ...process.env, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null" },
     stdio: ["ignore", "pipe", "ignore"],
   });
 }
 
 function listChanged(ref) {
   try {
+    // Run no git in a checkout whose git config or hooks are not as expected.
+    if (checkGitDir(`${workspace()}/.git`).length > 0) return null;
     const base = readFileSync(
       `${process.env.RUNNER_TEMP}/read-confinement/push-guard-base`,
       "utf8",
@@ -97,7 +114,15 @@ function listChanged(ref) {
       }
     }
     if (baseRef === null) return null;
-    const out = git(["diff", "--name-only", "--no-renames", `${baseRef}...${ref}`, "--"]);
+    const out = git([
+      "diff",
+      "--name-only",
+      "--no-renames",
+      "--no-ext-diff",
+      "--no-textconv",
+      `${baseRef}...${ref}`,
+      "--",
+    ]);
     return out.split("\n").filter(Boolean);
   } catch {
     return null;
