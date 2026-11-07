@@ -1,0 +1,181 @@
+name: Agent-kit pipeline
+
+# Caller for the Agent-kit plan -> implement -> review flow.
+#
+# Off until the repository variable CLAUDE_PIPELINE_ENABLED is exactly "true"
+# (the Kill switch). Do not set it before every Stage 2 prerequisite in
+# docs/agents/agent-kit.md is done (rulesets, Claude GitHub App, labels).
+#
+# Trigger labels: agent:plan and agent:implement on an issue, agent:review on a
+# pull request. Each run removes its label. Only logins on the actor allowlist
+# (Agent-kit's "Allowlist"; not the Redis token Allowlist) can start a run.
+#
+# The uses: pins and the files copied from Agent-kit must be the same tag as
+# agent-kit-security-audit.yml. Upgrade them together: docs/agents/agent-kit.md.
+#
+# setup_commands and verify_commands are code the job runs. Never build them
+# from issue or PR text.
+
+on:
+  issues:
+    types: [labeled]
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Issue number (plan, implement)"
+        required: false
+        default: ""
+      mode:
+        description: "plan | implement | review"
+        required: true
+        default: "plan"
+      pr_number:
+        description: "PR number (review)"
+        required: false
+        default: ""
+      head_sha:
+        description: "PR head SHA (review)"
+        required: false
+        default: ""
+      base_sha:
+        description: "PR base SHA (review)"
+        required: false
+        default: ""
+      base_ref:
+        description: "PR base branch (review)"
+        required: false
+        default: "main"
+
+permissions: {}
+
+jobs:
+  plan:
+    if: |
+      (github.event_name == 'issues' && github.event.label.name == 'agent:plan') ||
+      (github.event_name == 'workflow_dispatch' && inputs.mode == 'plan')
+    concurrency:
+      group: agent-kit-plan-${{ github.event.issue.number || inputs.issue_number }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      issues: write
+    uses: mnaimfaizy/agent-kit/.github/workflows/agent-plan-reusable.yml@v1.0.0-alpha.9
+    with:
+      kill_switch: ${{ vars.CLAUDE_PIPELINE_ENABLED != 'true' }}
+      model: ${{ vars.CLAUDE_MODEL_PLAN || vars.CLAUDE_MODEL || 'claude-opus-5' }}
+      allowlist_actors: '["mnaimfaizy"]'
+      trigger_label: "agent:plan"
+      issue_number: ${{ github.event_name == 'issues' && github.event.issue.number || inputs.issue_number }}
+      planner_marker: "<!-- agent-kit-plan -->"
+    secrets:
+      claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+  implement:
+    if: |
+      (github.event_name == 'issues' && github.event.label.name == 'agent:implement') ||
+      (github.event_name == 'workflow_dispatch' && inputs.mode == 'implement')
+    concurrency:
+      group: agent-kit-implement-${{ github.event.issue.number || inputs.issue_number }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      id-token: write
+    uses: mnaimfaizy/agent-kit/.github/workflows/agent-implement-reusable.yml@v1.0.0-alpha.9
+    with:
+      kill_switch: ${{ vars.CLAUDE_PIPELINE_ENABLED != 'true' }}
+      model: ${{ vars.CLAUDE_MODEL_IMPLEMENT || vars.CLAUDE_MODEL || 'claude-opus-5' }}
+      allowlist_actors: '["mnaimfaizy"]'
+      trigger_label: "agent:implement"
+      issue_number: ${{ github.event_name == 'issues' && github.event.issue.number || inputs.issue_number }}
+      planner_marker: "<!-- agent-kit-plan -->"
+      trusted_plan_author: "github-actions[bot]"
+      base_branch: "main"
+      # Branch names follow docs/agents/branch-names.md: <prefix>/<issue>-<slug>.
+      # The prefix comes from the issue's type label; feat/ when there is none
+      # (and on manual dispatch, which has no issue payload).
+      branch_prefix: >-
+        ${{
+          contains(github.event.issue.labels.*.name, 'bug') && 'fix/' ||
+          contains(github.event.issue.labels.*.name, 'documentation') && 'docs/' ||
+          (contains(github.event.issue.labels.*.name, 'cleanup') ||
+           contains(github.event.issue.labels.*.name, 'maintenance') ||
+           contains(github.event.issue.labels.*.name, 'dependencies')) && 'chore/' ||
+          'feat/'
+        }}
+      branch_name_template: "{{prefix}}{{entityNumber}}-{{description}}"
+      # Toolchains come from the runner's tool cache (no downloads). The venv
+      # and Node are put on PATH for the rest of the job through GITHUB_PATH.
+      # Redis runs as a container because some unit tests talk to it; the unit
+      # suite uses SQLite, so no Postgres is needed.
+      setup_commands: |
+        set -euo pipefail
+        PY="$(ls -d /opt/hostedtoolcache/Python/3.10.*/x64 2>/dev/null | sort -V | tail -n 1)"
+        NODE="$(ls -d /opt/hostedtoolcache/node/22.*/x64 2>/dev/null | sort -V | tail -n 1)"
+        [ -n "$PY" ] || { echo "Python 3.10 is not in the runner tool cache."; exit 1; }
+        [ -n "$NODE" ] || { echo "Node 22 is not in the runner tool cache."; exit 1; }
+        "$PY/bin/python3" -m venv "$RUNNER_TEMP/venv"
+        echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+        echo "$NODE/bin" >> "$GITHUB_PATH"
+        export PATH="$RUNNER_TEMP/venv/bin:$NODE/bin:$PATH"
+        python -m pip install --quiet --upgrade pip
+        python -m pip install --quiet -r backend/requirements.txt
+        (cd react-frontend && npm ci --legacy-peer-deps --no-audit --no-fund)
+        docker run -d --name agent-kit-redis -p 6379:6379 redis:7.2-alpine >/dev/null
+      # Fast checks only. API, integration and e2e suites are left to PR CI.
+      verify_commands: |
+        set -euo pipefail
+        export MODE=testing PYTHONPATH=.
+        export DATABASE_USER=postgres DATABASE_PASSWORD=postgres DATABASE_HOST=localhost DATABASE_PORT=5432 DATABASE_NAME=test
+        export REDIS_HOST=localhost REDIS_PORT=6379
+        export SECRET_KEY=testing_secret_key JWT_REFRESH_SECRET_KEY=another_testing_secret_key JWT_RESET_SECRET_KEY=reset_testing_secret_key
+        export ENCRYPT_KEY=a_very_strong_encryption_key_32
+        export BACKEND_CORS_ORIGINS='["http://localhost:8000", "http://localhost:5173"]'
+        export PROJECT_NAME="FastAPI RBAC Test" TOKEN_ISSUER=test_issuer TOKEN_AUDIENCE=test_audience
+        export FIRST_SUPERUSER_EMAIL=admin@example.com FIRST_SUPERUSER_PASSWORD=admin123
+        export USER_CHANGED_PASSWORD_DATE=2023-01-01T00:00:00
+        cd backend
+        black --check --config pyproject.toml .
+        isort --check-only --settings-path pyproject.toml .
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --max-line-length=110 --extend-ignore=E203
+        mypy --config-file pyproject.toml app
+        pytest test/unit/ -q
+        cd ../react-frontend
+        npm run lint
+        npm run format -- --check
+        npm run build
+    secrets:
+      claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+  review:
+    if: |
+      (github.event_name == 'pull_request' && github.event.label.name == 'agent:review') ||
+      (github.event_name == 'workflow_dispatch' && inputs.mode == 'review')
+    concurrency:
+      group: agent-kit-review-${{ github.event.pull_request.number || inputs.pr_number }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: write
+    uses: mnaimfaizy/agent-kit/.github/workflows/agent-review-reusable.yml@v1.0.0-alpha.9
+    with:
+      kill_switch: ${{ vars.CLAUDE_PIPELINE_ENABLED != 'true' }}
+      model: ${{ vars.CLAUDE_MODEL_REVIEW || vars.CLAUDE_MODEL || 'claude-opus-5' }}
+      allowlist_actors: '["mnaimfaizy"]'
+      trigger_label: "agent:review"
+      pr_number: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.pr_number }}
+      head_sha: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || inputs.head_sha }}
+      base_sha: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || inputs.base_sha }}
+      base_ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref || inputs.base_ref }}
+      is_fork: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+      planner_marker: "<!-- agent-kit-plan -->"
+      trusted_plan_author: "github-actions[bot]"
+      # Without a Verified plan, a maintainer's issue comment that starts with
+      # <!-- agent-kit-brief --> is accepted as the spec.
+      trusted_spec_authors: '["mnaimfaizy"]'
+    secrets:
+      claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
