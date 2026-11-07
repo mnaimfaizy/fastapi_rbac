@@ -128,14 +128,12 @@ jobs:
       # Fast checks only. API, integration and e2e suites are left to PR CI.
       verify_commands: |
         set -euo pipefail
+        # Non-secret settings only. Database, signing-key and superuser settings
+        # keep their config.py defaults: the unit suite uses SQLite and random keys.
         export MODE=testing PYTHONPATH=.
-        export DATABASE_USER=postgres DATABASE_PASSWORD=postgres DATABASE_HOST=localhost DATABASE_PORT=5432 DATABASE_NAME=test
         export REDIS_HOST=localhost REDIS_PORT=6379
-        export SECRET_KEY=testing_secret_key JWT_REFRESH_SECRET_KEY=another_testing_secret_key JWT_RESET_SECRET_KEY=reset_testing_secret_key
-        export ENCRYPT_KEY=a_very_strong_encryption_key_32
         export BACKEND_CORS_ORIGINS='["http://localhost:8000", "http://localhost:5173"]'
         export PROJECT_NAME="FastAPI RBAC Test" TOKEN_ISSUER=test_issuer TOKEN_AUDIENCE=test_audience
-        export FIRST_SUPERUSER_EMAIL=admin@example.com FIRST_SUPERUSER_PASSWORD=admin123
         export USER_CHANGED_PASSWORD_DATE=2023-01-01T00:00:00
         cd backend
         black --check --config pyproject.toml .

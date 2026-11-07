@@ -81,7 +81,7 @@ Caller choices:
 
 - **Branch names** follow [`branch-names.md`](branch-names.md): `branch_name_template` is `{{prefix}}{{entityNumber}}-{{description}}`, and `branch_prefix` comes from the issue's labels: `bug` gives `fix/`, `documentation` gives `docs/`, `cleanup`, `maintenance` or `dependencies` give `chore/`, anything else gives `feat/`. A manual dispatch has no issue payload, so it always gets `feat/`. If the name already exists, the action falls back to its default `claude/…` naming.
 - **`setup_commands`** take Python 3.10 and Node 22 from the runner's tool cache (no downloads), create a venv under `$RUNNER_TEMP`, install `backend/requirements.txt` and run `npm ci --legacy-peer-deps`, and start a Redis container for the unit tests. They run in both the implement and verify jobs.
-- **`verify_commands`** run the fast checks only, with the same test environment variables as Backend CI:
+- **`verify_commands`** run the fast checks only, with Backend CI's non-secret test settings (database, signing-key and superuser settings keep their `config.py` defaults):
   - backend: `black --check`, `isort --check-only`, `flake8` with the strict `E9,F63,F7,F82` set, `mypy app`, and `pytest test/unit/` (SQLite)
   - frontend: `npm run lint`, `npm run format -- --check`, `npm run build`
   - API, integration and e2e suites are left to PR CI.
