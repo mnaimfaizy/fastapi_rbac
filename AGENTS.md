@@ -45,7 +45,7 @@ User-invoked [`release`](.claude/skills/release/SKILL.md) skill: propose version
 
 ### Agent-kit
 
-The CI security audit (and later, plan → implement → review) runs through Agent-kit. The integration's single source of truth is [`docs/agents/agent-kit.md`](docs/agents/agent-kit.md). In this repo, the kit's "Allowlist" is always called the **actor allowlist**, because **Allowlist** means the Redis token allowlist.
+The CI security audit and the plan → implement → review pipeline run through Agent-kit. The integration's single source of truth is [`docs/agents/agent-kit.md`](docs/agents/agent-kit.md). In this repo, the kit's "Allowlist" is always called the **actor allowlist**, because **Allowlist** means the Redis token allowlist.
 
 ## Notes
 

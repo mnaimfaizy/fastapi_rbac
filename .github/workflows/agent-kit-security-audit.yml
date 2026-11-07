@@ -11,7 +11,8 @@ name: Agent-kit security audit
 # The uses: pin and the files copied from Agent-kit (.claude/skills/{code-review,
 # security-audit,security-finding-triage,security-response},
 # .github/{agent-runtime,agent-pipeline,security-audit}) must be the same tag.
-# Upgrade them together: docs/agents/agent-kit.md.
+# Upgrade them together, along with agent-kit-pipeline.yml:
+# docs/agents/agent-kit.md.
 
 on:
   schedule:
