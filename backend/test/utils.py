@@ -15,12 +15,6 @@ def random_lower_string(length: int = 32) -> str:
     return "".join(random.choices(string.ascii_lowercase, k=length))
 
 
-# A first password the default policy accepts (length, classes, no sequences or
-# repeats). Factories and fixtures use it because user creation now goes
-# through password_policy.accept_initial_password (#272).
-STRONG_TEST_PASSWORD = "FactoryPw!47x"
-
-
 def random_strong_password() -> str:
     """A random password the configured policy accepts."""
     from app.core.security import PasswordValidator
@@ -36,6 +30,13 @@ def random_strong_password() -> str:
         )
         if PasswordValidator.validate_complexity(candidate)[0]:
             return candidate
+
+
+# A first password the policy accepts, generated once per test run rather than
+# written down, so no password literal sits in the repository. Factories and
+# fixtures use it because user creation goes through
+# password_policy.accept_initial_password (#272).
+STRONG_TEST_PASSWORD = random_strong_password()
 
 
 async def accepted_password(
