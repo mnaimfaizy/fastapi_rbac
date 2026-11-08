@@ -100,10 +100,6 @@ async def superuser_token_headers(client: AsyncClient, db: AsyncSession) -> Dict
 
         if response.status_code != 200:
             print(f"Login failed with status {response.status_code}")
-            try:
-                print(f"Response content: {response.json()}")
-            except Exception:
-                print(f"Response content: {response.text}")
 
             if "Invalid isoformat string" in response.text:
                 print("Using mock token due to date format issues")
@@ -150,10 +146,6 @@ async def normal_user_token_headers(client: AsyncClient, db: AsyncSession) -> Di
 
     if response.status_code != 200:
         print(f"Login failed for user {email} with status {response.status_code}")
-        try:
-            print(f"Response content: {response.json()}")
-        except Exception:
-            print(f"Response content (text): {response.text}")
 
     assert response.status_code == 200
     tokens = response.json()

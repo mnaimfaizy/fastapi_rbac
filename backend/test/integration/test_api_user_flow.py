@@ -45,7 +45,7 @@ async def register_and_verify_user(
     csrf_token, headers = await get_csrf_token(client)
     response = await client.post(f"{settings.API_V1_STR}/auth/register", json=user_data, headers=headers)
     if response.status_code != 200:
-        print(f"Registration failed for {email}: {response.status_code} {response.text}")
+        print(f"Registration failed for {email}: {response.status_code}")
     assert response.status_code == 200
     verification_code = response.json()["data"].get("verification_code")
     # Verify email
@@ -63,14 +63,14 @@ async def login_user(client: AsyncClient, email: str, password: str) -> Optional
     login_data = {"email": email, "password": password}
     response = await client.post(f"{settings.API_V1_STR}/auth/login", json=login_data, headers=headers)
     if response.status_code != 200:
-        print(f"Admin login failed for {email}: {response.status_code} {response.text}")
+        print(f"Login failed for {email}: {response.status_code}")
     if response.status_code == 200:
         json_resp = response.json()
         token = json_resp.get("access_token")
         if not token and "data" in json_resp and isinstance(json_resp["data"], dict):
             token = json_resp["data"].get("access_token")
         if not token:
-            print(f"Login for {email} returned 200 but no access_token. Response: {response.text}")
+            print(f"Login for {email} returned 200 but no access_token")
         if isinstance(token, str):
             return token
         return None
@@ -382,7 +382,6 @@ class TestUserManagementFlow:
             password = new_password  # Update for later use if needed
 
         # Step 1: Get own profile
-        print("User JWT access token:", user_token)
         if user_token is None:
             pytest.fail("User token is None, login failed.")
         assert isinstance(user_token, str)  # for mypy
