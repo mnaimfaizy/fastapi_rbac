@@ -153,3 +153,44 @@ async def test_seeded_superuser_can_use_the_configured_password(db: AsyncSession
 
     assert superuser is not None
     assert PasswordValidator.verify_password(settings.FIRST_SUPERUSER_PASSWORD, superuser.password)
+
+
+def _fresh_seed_data(monkeypatch: Any) -> list[str]:
+    """Point init_db at seed users that do not exist yet, so it has to create them.
+
+    The db fixture has already seeded the real addresses, and init_db only
+    creates users that are missing.
+    """
+    tag = random_email().split("@")[0]
+    fresh = [
+        {
+            "user_data": entry["user_data"].model_copy(update={"email": f"{tag}-{i}@example.com"}),
+            "role_names": entry["role_names"],
+        }
+        for i, entry in enumerate(init_db_module.INITIAL_USERS_DATA)
+    ]
+    monkeypatch.setattr(init_db_module, "INITIAL_USERS_DATA", fresh)
+    monkeypatch.setattr(init_db_module, "SUPERUSER_EMAIL", fresh[0]["user_data"].email)
+    return [entry["user_data"].email for entry in fresh]
+
+
+async def test_init_db_with_a_weak_password_creates_no_user(db: AsyncSession, monkeypatch: Any) -> None:
+    emails = _fresh_seed_data(monkeypatch)
+    monkeypatch.setattr(settings, "FIRST_SUPERUSER_PASSWORD", "admin123")
+
+    with pytest.raises(RuntimeError, match="FIRST_SUPERUSER_PASSWORD does not meet the password policy"):
+        await init_db_module.init_db(db)
+
+    for email in emails:
+        assert await _user_count(db, email) == 0
+
+
+async def test_init_db_with_a_compliant_password_seeds_every_user(db: AsyncSession, monkeypatch: Any) -> None:
+    emails = _fresh_seed_data(monkeypatch)
+
+    await init_db_module.init_db(db)
+
+    for email in emails:
+        user = await user_crud.get_by_email(email=email, db_session=db)
+        assert user is not None, email
+        assert PasswordValidator.verify_password(settings.FIRST_SUPERUSER_PASSWORD, user.password)

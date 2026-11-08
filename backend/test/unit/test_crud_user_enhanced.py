@@ -1,5 +1,3 @@
-from test.utils import STRONG_TEST_PASSWORD, accepted_password
-
 """
 Enhanced unit tests for user CRUD operations.
 
@@ -8,6 +6,7 @@ CRUD operations with proper mocking and isolation.
 """
 
 from test.factories.async_factories import AsyncUserFactory
+from test.utils import STRONG_TEST_PASSWORD, accepted_password
 from uuid import UUID
 
 import pytest

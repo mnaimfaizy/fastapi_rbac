@@ -52,6 +52,11 @@ class DatabaseTypeEnum(str, Enum):
     postgresql = "postgresql"
 
 
+# Public, documented in .env.example and .env.test.example. Development and
+# test seeding use it; production refuses it.
+DEFAULT_FIRST_SUPERUSER_PASSWORD = "ChangeMe!Admin47"
+
+
 class Settings(BaseSettings):
     # Core Settings
     MODE: ModeEnum = ModeEnum.development
@@ -147,8 +152,8 @@ class Settings(BaseSettings):
     PGADMIN_DEFAULT_PASSWORD: str = "admin"  # User Settings
     FIRST_SUPERUSER_EMAIL: EmailStr = "admin@example.com"
     # Seeding puts this through the password policy (#272), so the default must
-    # pass it. Override it in every real deployment.
-    FIRST_SUPERUSER_PASSWORD: str = "ChangeMe!Admin47"
+    # pass it. Production refuses it (validate_production_settings).
+    FIRST_SUPERUSER_PASSWORD: str = DEFAULT_FIRST_SUPERUSER_PASSWORD
     USER_CHANGED_PASSWORD_DATE: Optional[str] = None
     USERS_OPEN_REGISTRATION: bool = False
 
@@ -581,6 +586,13 @@ class Settings(BaseSettings):
 
             assert self.ENCRYPT_KEY is not None, "ENCRYPT_KEY must be set in .env for production mode"
             assert len(self.ENCRYPT_KEY) >= 32, "ENCRYPT_KEY should be at least 32 characters in production"
+
+            # The default passes the password policy so development seeding
+            # works, which also means seeding would not stop a production
+            # deployment that forgot to set its own (#272).
+            assert (
+                self.FIRST_SUPERUSER_PASSWORD != DEFAULT_FIRST_SUPERUSER_PASSWORD
+            ), "Set FIRST_SUPERUSER_PASSWORD for production; the shipped default is public"
         return self
 
     @model_validator(mode="after")
