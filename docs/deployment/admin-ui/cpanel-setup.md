@@ -71,7 +71,7 @@ docker compose --env-file .env -f compose.yml up -d api
 
 ## 4. Deploy
 
-**Automatic after Release PR merge:** `release-tag-on-merge` dispatches this workflow with `ref=vX.Y.Z` (same reason Docker Publish is dispatched: `GITHUB_TOKEN` tag pushes do not start other workflows).
+**Automatic after Release PR merge:** `release-tag-on-merge` pushes the `vX.Y.Z` tag with a deploy key, and that tag push starts this workflow.
 
 **Also:** a human-pushed `v*` tag starts this workflow directly.
 

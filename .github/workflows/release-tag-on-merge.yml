@@ -3,9 +3,15 @@ name: Release Tag on Merge
 # When a Release PR (head branch release/v*) is merged into main, create the
 # annotated SemVer tag and a GitHub Release. Branch name is the version SSOT.
 #
-# Downstream workflows: tags pushed with GITHUB_TOKEN do not start other
-# workflows, so this job dispatches docker-publish.yml and
-# admin-ui-cpanel-deploy.yml via workflow_dispatch after the tag exists.
+# The tag is pushed over SSH with a deploy key (secret RELEASE_TAG_DEPLOY_KEY),
+# not GITHUB_TOKEN, because the "Release tags" ruleset blocks v* tag creation
+# for everyone except admins and deploy keys. On a personal-account repository
+# GitHub Actions cannot be a ruleset bypass actor.
+# See docs/agents/agent-kit.md ("Turning the pipeline on").
+#
+# Downstream workflows: a deploy-key push starts other workflows (a
+# GITHUB_TOKEN push would not), so docker-publish.yml and
+# admin-ui-cpanel-deploy.yml run from their own `push: tags: v*` triggers.
 # Manual paths remain: push a v* tag yourself, or Run workflow on those
 # workflows. Do not also trigger on release: published (avoids double builds).
 
@@ -16,7 +22,6 @@ on:
 
 permissions:
   contents: write
-  actions: write
 
 jobs:
   tag-and-release:
@@ -53,11 +58,24 @@ jobs:
           echo "prerelease=${PRERELEASE}" >> "$GITHUB_OUTPUT"
           echo "Parsed version=${VERSION} prerelease=${PRERELEASE}"
 
+      - name: Require the release tag deploy key
+        env:
+          HAS_KEY: ${{ secrets.RELEASE_TAG_DEPLOY_KEY != '' }}
+        shell: bash
+        run: |
+          if [[ "$HAS_KEY" != "true" ]]; then
+            echo "::error::Secret RELEASE_TAG_DEPLOY_KEY is not set. The Release tags ruleset only lets admins and deploy keys create v* tags."
+            exit 1
+          fi
+
       - name: Checkout merge commit
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
           fetch-depth: 0
+          # SSH remote with the deploy key, so the tag push below can bypass
+          # the Release tags ruleset.
+          ssh-key: ${{ secrets.RELEASE_TAG_DEPLOY_KEY }}
 
       - name: Verify VERSION file matches branch
         shell: bash
@@ -155,34 +173,4 @@ jobs:
           echo "- Tag / release: \`${VERSION}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Branch SSOT: \`${{ steps.version.outputs.branch }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Pre-release: \`${PRERELEASE}\`" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Trigger Docker Publish
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          VERSION="${{ steps.version.outputs.version }}"
-
-          # workflow_dispatch is allowed to chain from GITHUB_TOKEN; tag push is not.
-          gh workflow run docker-publish.yml \
-            --repo "${{ github.repository }}" \
-            -f tag="${VERSION}"
-
-          echo "Dispatched Docker Publish for ${VERSION}"
-          echo "- Docker Publish: dispatched (\`${VERSION}\`)." >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Trigger Admin UI cPanel Deploy
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          VERSION="${{ steps.version.outputs.version }}"
-
-          gh workflow run admin-ui-cpanel-deploy.yml \
-            --repo "${{ github.repository }}" \
-            -f ref="${VERSION}"
-
-          echo "Dispatched Admin UI cPanel Deploy for ${VERSION}"
-          echo "- Admin UI cPanel Deploy: dispatched (\`${VERSION}\`)." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Docker Publish and Admin UI cPanel Deploy start from the tag push." >> "$GITHUB_STEP_SUMMARY"

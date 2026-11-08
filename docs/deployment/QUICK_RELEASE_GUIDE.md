@@ -108,11 +108,11 @@ git branch -d hotfix/v1.2.4
 
 ### Scenario 6: Manual Workflow Trigger
 
-**When:** Need to rebuild/republish an existing version, or publish when the automatic dispatch after Release Tag on Merge did not run
+**When:** Need to rebuild/republish an existing version, or publish when the tag push from Release Tag on Merge did not start it
 
 Docker Publish supports two triggers (both valid):
 
-- **Automatic after Release PR merge:** `release-tag-on-merge` creates the `v*` tag/Release, then dispatches **Docker Publish** and **Admin UI cPanel Deploy** (a tag push from `GITHUB_TOKEN` alone does not start other workflows).
+- **Automatic after Release PR merge:** `release-tag-on-merge` pushes the `v*` tag with the `RELEASE_TAG_DEPLOY_KEY` deploy key and creates the Release. The tag push starts **Docker Publish** and **Admin UI cPanel Deploy**.
 - **Manual:** push a `v*` tag yourself, or use **Actions → Docker Publish / Admin UI cPanel Deploy → Run workflow**.
 
 1. Go to GitHub Actions → Docker Publish workflow

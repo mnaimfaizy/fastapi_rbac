@@ -52,6 +52,7 @@ The reusable workflows (`*-reusable.yml`) are **not** copied.
 | --- | --- | --- |
 | Secret | `CLAUDE_CODE_OAUTH_TOKEN` | From `claude setup-token`. All flows |
 | Secret | `AGENT_KIT_ADVISORIES_TOKEN` | Fine-grained PAT, this repository only, **Repository security advisories: Read and write**. Track its expiry |
+| Secret | `RELEASE_TAG_DEPLOY_KEY` | Private half of the write deploy key `release-tag-on-merge.yml` pushes `v*` tags with (see the tag ruleset step). Not an Agent-kit secret, but the tag ruleset depends on it |
 | Variable | `CLAUDE_SECURITY_AUDIT_ENABLED` | Audit Kill switch. The audit runs only when this is exactly `true` |
 | Variable | `CLAUDE_PIPELINE_ENABLED` | Pipeline Kill switch. Unset until every step in "Turning the pipeline on" is done |
 | Variable | `CLAUDE_MODEL` | `claude-opus-5-5`. Per-flow overrides (`CLAUDE_MODEL_AUDIT`, …) are left unset |
@@ -100,23 +101,44 @@ Do all of these first. The Caller is safe to have on `main` before then, because
      | gh api -X PUT repos/mnaimfaizy/fastapi_rbac/rulesets/19662620 --input -
    ```
 
-3. **Tag ruleset.** Protect `v*` tags, because a tag push publishes to Docker Hub. Only admins and GitHub Actions (`release-tag-on-merge.yml` pushes tags with `GITHUB_TOKEN`) may bypass it:
+3. **Tag ruleset.** Protect `v*` tags, because a tag push publishes to Docker Hub. On a personal-account repository GitHub Actions cannot be a ruleset bypass actor, so `release-tag-on-merge.yml` pushes its tag over SSH with a deploy key, and only admins and deploy keys may bypass:
+   1. Make a key pair (no passphrase) outside the repository:
 
-   ```bash
-   gh api -X POST repos/mnaimfaizy/fastapi_rbac/rulesets --input - <<'EOF'
-   {
-     "name": "Release tags",
-     "target": "tag",
-     "enforcement": "active",
-     "conditions": { "ref_name": { "include": ["refs/tags/v*"], "exclude": [] } },
-     "rules": [ { "type": "creation" }, { "type": "update" }, { "type": "deletion" }, { "type": "non_fast_forward" } ],
-     "bypass_actors": [
-       { "actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always" },
-       { "actor_id": 15368, "actor_type": "Integration", "bypass_mode": "always" }
-     ]
-   }
-   EOF
-   ```
+      ```bash
+      ssh-keygen -t ed25519 -N "" -C "release-tag-on-merge" -f ~/release-tag-deploy-key
+      ```
+
+   2. Add the public key as a deploy key **with write access**:
+
+      ```bash
+      gh repo deploy-key add ~/release-tag-deploy-key.pub --repo mnaimfaizy/fastapi_rbac --title "release-tag-on-merge" --allow-write
+      ```
+
+   3. Store the private key as the Actions secret `RELEASE_TAG_DEPLOY_KEY`, then delete both key files:
+
+      ```bash
+      gh secret set RELEASE_TAG_DEPLOY_KEY --repo mnaimfaizy/fastapi_rbac < ~/release-tag-deploy-key && rm ~/release-tag-deploy-key ~/release-tag-deploy-key.pub
+      ```
+
+   4. Create the ruleset:
+
+      ```bash
+      gh api -X POST repos/mnaimfaizy/fastapi_rbac/rulesets --input - <<'EOF'
+      {
+        "name": "Release tags",
+        "target": "tag",
+        "enforcement": "active",
+        "conditions": { "ref_name": { "include": ["refs/tags/v*"], "exclude": [] } },
+        "rules": [ { "type": "creation" }, { "type": "update" }, { "type": "deletion" }, { "type": "non_fast_forward" } ],
+        "bypass_actors": [
+          { "actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always" },
+          { "actor_type": "DeployKey", "bypass_mode": "always" }
+        ]
+      }
+      EOF
+      ```
+
+   A deploy key with write access can push any branch or tag, so treat `RELEASE_TAG_DEPLOY_KEY` like an admin credential. Only `release-tag-on-merge.yml` reads it.
 
 4. **Release-branch creation.** Add a `creation` rule to the existing **Release branch** ruleset (`release/**/*`). Its bypass list is already admins and maintainers only:
 
