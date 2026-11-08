@@ -113,11 +113,20 @@ jobs:
       # suite uses SQLite, so no Postgres is needed.
       setup_commands: |
         set -euo pipefail
-        PY="$(ls -d /opt/hostedtoolcache/Python/3.10.*/x64 2>/dev/null | sort -V | tail -n 1)"
-        NODE="$(ls -d /opt/hostedtoolcache/node/22.*/x64 2>/dev/null | sort -V | tail -n 1)"
-        [ -n "$PY" ] || { echo "Python 3.10 is not in the runner tool cache."; exit 1; }
+        # Newest tool-cache match for a glob, or empty. `|| true` because ls
+        # exits 2 on no match, which pipefail would turn into a silent exit.
+        cached() { ls -d $1 2>/dev/null | sort -V | tail -n 1 || true; }
+        PY="$(cached '/opt/hostedtoolcache/Python/3.10.*/x64')"
+        NODE="$(cached '/opt/hostedtoolcache/node/22.*/x64')"
         [ -n "$NODE" ] || { echo "Node 22 is not in the runner tool cache."; exit 1; }
-        "$PY/bin/python3" -m venv "$RUNNER_TEMP/venv"
+        if [ -n "$PY" ]; then
+          "$PY/bin/python3" -m venv "$RUNNER_TEMP/venv"
+        else
+          # ubuntu-26.04 caches no CPython 3.10 (end of life). uv installs a
+          # standalone 3.10; --seed puts pip in the venv for the steps below.
+          echo "Python 3.10 is not in the runner tool cache; installing it with uv."
+          pipx run uv venv --seed --python 3.10 "$RUNNER_TEMP/venv"
+        fi
         echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
         echo "$NODE/bin" >> "$GITHUB_PATH"
         export PATH="$RUNNER_TEMP/venv/bin:$NODE/bin:$PATH"
