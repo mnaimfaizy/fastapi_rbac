@@ -7,7 +7,7 @@ Agent-kit supplies reusable GitHub Actions workflows that run Claude Code in thi
 | Flow | Stage | Status here |
 | --- | --- | --- |
 | Security audit | 1 | Adopted; runs weekly while the Kill switch is `true` |
-| Plan → implement → review | 2 | Not adopted yet; see the Stage 2 prerequisites below |
+| Plan → implement → review | 2 | Caller landed; off until the prerequisites below are done and its Kill switch is `true` |
 
 For the kit's own terms (Caller, Kill switch, Trigger label, Verified plan, Threat pack), see the [Agent-kit glossary](https://github.com/mnaimfaizy/agent-kit/blob/main/GLOSSARY.md). They are tooling terms, not product terms, so they stay out of this repository's `CONTEXT.md`.
 
@@ -42,6 +42,7 @@ The reusable workflows (`*-reusable.yml`) are **not** copied.
 | Path | Purpose |
 | --- | --- |
 | `.github/workflows/agent-kit-security-audit.yml` | Audit Caller: weekly `full` run (Monday 03:00 UTC) plus manual dispatch |
+| `.github/workflows/agent-kit-pipeline.yml` | Pipeline Caller: plan and implement on issue labels, review on PR labels, plus manual dispatch |
 | `.security/threat-model.md` | Threat pack: assets, trust boundaries, attack paths. Public |
 | `.security/findings-ledger.md` | Threat pack: concept-id fingerprints of known findings only. Public; never holds details |
 
@@ -52,6 +53,7 @@ The reusable workflows (`*-reusable.yml`) are **not** copied.
 | Secret | `CLAUDE_CODE_OAUTH_TOKEN` | From `claude setup-token`. All flows |
 | Secret | `AGENT_KIT_ADVISORIES_TOKEN` | Fine-grained PAT, this repository only, **Repository security advisories: Read and write**. Track its expiry |
 | Variable | `CLAUDE_SECURITY_AUDIT_ENABLED` | Audit Kill switch. The audit runs only when this is exactly `true` |
+| Variable | `CLAUDE_PIPELINE_ENABLED` | Pipeline Kill switch. Unset until every step in "Turning the pipeline on" is done |
 | Variable | `CLAUDE_MODEL` | `claude-opus-5-5`. Per-flow overrides (`CLAUDE_MODEL_AUDIT`, …) are left unset |
 
 The optional extras are not used: the Dependabot alerts token (Dependabot alerts are off on this repository) and the SMTP email notice.
@@ -65,11 +67,32 @@ The optional extras are not used: the Dependabot alerts token (Dependabot alerts
 
 To stop the audit, set the variable to anything else or delete it. No commit is needed.
 
-## Stage 2 prerequisites (plan → implement → review)
+## Plan → implement → review
 
-Do all of these before the pipeline Caller lands:
+The pipeline Caller is `.github/workflows/agent-kit-pipeline.yml`. Each job runs when its Trigger label is added, or from **Run workflow** with `mode` set:
 
-1. **Branch naming.** Since `v1.0.0-alpha.9` ([agent-kit#52](https://github.com/mnaimfaizy/agent-kit/issues/52)), the Caller sets the implementer's branch name with `branch_prefix` and `branch_name_template`. The template must contain `{{entityNumber}}`, for example `feat/{{entityNumber}}-{{description}}`, so agent branches follow [`branch-names.md`](branch-names.md). A template has one fixed prefix and cannot follow each issue's type, so decide which prefix to use when the Caller lands. If the templated name already exists, the action falls back to its default `claude/…` naming.
+| Trigger | On | What runs |
+| --- | --- | --- |
+| `agent:plan` | issue | Posts a plan comment that starts with `<!-- agent-kit-plan -->`. Only a plan comment by `github-actions[bot]` counts as the Verified plan |
+| `agent:implement` | issue with a Verified plan | Writes the change on a branch, runs the verify commands in a job with no write credential, then opens a draft PR |
+| `agent:review` | pull request | Reviews the PR with the kit-owned `code-review` skill against the Verified plan, or against a `<!-- agent-kit-brief -->` comment by a login in `trusted_spec_authors` (`["mnaimfaizy"]`). Fork PRs are skipped |
+
+Caller choices:
+
+- **Branch names** follow [`branch-names.md`](branch-names.md): `branch_name_template` is `{{prefix}}{{entityNumber}}-{{description}}`, and `branch_prefix` comes from the issue's labels: `bug` gives `fix/`, `documentation` gives `docs/`, `cleanup`, `maintenance` or `dependencies` give `chore/`, anything else gives `feat/`. A manual dispatch has no issue payload, so it always gets `feat/`. If the name already exists, the action falls back to its default `claude/…` naming.
+- **`setup_commands`** take Python 3.10 and Node 22 from the runner's tool cache (no downloads), create a venv under `$RUNNER_TEMP`, install `backend/requirements.txt` and run `npm ci --legacy-peer-deps`, and start a Redis container for the unit tests. They run in both the implement and verify jobs.
+- **`verify_commands`** run the fast checks only, with Backend CI's non-secret test settings (database, signing-key and superuser settings keep their `config.py` defaults):
+  - backend: `black --check`, `isort --check-only`, `flake8` with the strict `E9,F63,F7,F82` set, `mypy app`, and `pytest test/unit/` (SQLite)
+  - frontend: `npm run lint`, `npm run format -- --check`, `npm run build`
+  - API, integration and e2e suites are left to PR CI.
+- **`extra_allowed_tools`** is left empty. The implementer cannot run the test suite itself; the verify job does. Widening it would let agent-written code run with the Claude App token.
+- Each job asks for only the permissions its reusable workflow needs. Runs are serialised per issue or PR.
+
+## Turning the pipeline on
+
+Do all of these first. The Caller is safe to have on `main` before then, because nothing runs while the Kill switch is unset.
+
+1. **Claude GitHub App** installed on this repository, so the implementer's draft PRs start CI.
 2. **Stop the App merging its own PR.** The **Strict rules for main branch** ruleset (id `19662620`) requires a pull request, but with zero required approvals that does not stop the Claude GitHub App merging its own pull request. Add an `update` rule so only the bypass roles can change `main`. Its bypass list is already admins and maintainers. Merges then need the bypass, which skips required checks, so wait for CI before merging:
 
    ```bash
@@ -102,14 +125,24 @@ Do all of these before the pipeline Caller lands:
      | gh api -X PUT repos/mnaimfaizy/fastapi_rbac/rulesets/19662085 --input -
    ```
 
-5. **Claude GitHub App** installed on this repository, so the implementer's draft PRs start CI.
-6. **Pipeline Caller:**
-   - `verify_commands` run the fast checks only:
-     - backend: `black --check`, `isort --check-only`, `flake8` with the strict `E9,F63,F7,F82` set, `mypy app`, and `pytest test/unit/` (SQLite; needs the CI env vars)
-     - frontend: `npm run lint`, `npm run format -- --check`, `npm run build`
-   - `setup_commands` install Python 3.10 with uv, then run `pip install -r backend/requirements.txt` and `npm ci --legacy-peer-deps`.
-   - API, integration and e2e suites are left to PR CI.
-7. **Labels:** `agent:plan`, `agent:implement` and `agent:review`, then set `CLAUDE_PIPELINE_ENABLED=true`.
+5. **Labels:**
+
+   ```bash
+   gh label create agent:plan --color 5319E7 --description "Agent-kit: write a plan for this issue"
+   ```
+
+   ```bash
+   gh label create agent:implement --color 5319E7 --description "Agent-kit: implement the Verified plan"
+   ```
+
+   ```bash
+   gh label create agent:review --color 5319E7 --description "Agent-kit: review this pull request"
+   ```
+
+6. `gh variable set CLAUDE_PIPELINE_ENABLED --body true`
+7. Try it on a small `ready-for-agent` issue: add `agent:plan`, read the plan, then add `agent:implement`, then add `agent:review` to the draft PR.
+
+To stop the pipeline, set the variable to anything else or delete it.
 
 ## Labels: triage state versus trigger
 
