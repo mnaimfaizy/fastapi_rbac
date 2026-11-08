@@ -28,7 +28,6 @@ The current test suite (41 passing tests) works effectively without requiring fa
 Located in `test/factories/`:
 
 - `async_factories.py` - **AsyncUserFactory** (currently used in comprehensive tests)
-- `user_factory.py` - **UserFactory** (available, using factory_boy)
 - `rbac_factory.py` - **RoleFactory, PermissionFactory** (used in RBAC tests)
 - `auth_factory.py` - **AuthFactory** (available for auth scenarios)
 - `audit_factory.py` - **AuditLogFactory** (available for audit testing)
@@ -51,11 +50,12 @@ Located in `test/fixtures/`:
 ```python
 # Currently using AsyncUserFactory effectively
 from test.factories.async_factories import AsyncUserFactory
+from test.utils import STRONG_TEST_PASSWORD
 
 user_factory = AsyncUserFactory(db)
 existing_user = await user_factory.create_user(
     email="user1001@example.com",
-    password="password123",
+    password=STRONG_TEST_PASSWORD,  # must pass the password policy (#272)
     first_name="First1001",
     last_name="Last1001"
 )
@@ -87,7 +87,6 @@ user_data = await user_factory.create_user_data()
 ### Model Factories (Available)
 
 - `AsyncUserFactory`: Creates User instances with async support ✅ **Used**
-- `UserFactory`: Creates User instances with factory_boy ⚠️ **Available**
 - `RoleFactory`: Creates Role instances ⚠️ **Available**
 - `PermissionFactory`: Creates Permission instances ⚠️ **Available**
 - `PermissionGroupFactory`: Creates PermissionGroup instances ⚠️ **Available**
@@ -286,7 +285,7 @@ async def test_with_mocked_user(client, app):
 
 1. **Use Factory Traits for Common Patterns**
 
-   - Use `UserFactory.admin()` instead of `UserFactory(is_superuser=True)`
+   - Use `user_factory.create_admin()` instead of `user_factory.create(is_superuser=True)`
    - Create your own traits for common test scenarios
 
 2. **Centralize Complex Setup Logic**

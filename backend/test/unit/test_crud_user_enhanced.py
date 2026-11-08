@@ -1,3 +1,5 @@
+from test.utils import STRONG_TEST_PASSWORD, accepted_password
+
 """
 Enhanced unit tests for user CRUD operations.
 
@@ -5,7 +7,7 @@ This module demonstrates best practices for unit testing
 CRUD operations with proper mocking and isolation.
 """
 
-from test.factories.user_factory import UserFactory
+from test.factories.async_factories import AsyncUserFactory
 from uuid import UUID
 
 import pytest
@@ -24,7 +26,7 @@ class TestUserCRUD:
     async def test_create_user_success(
         self,
         db: AsyncSession,
-        user_factory: UserFactory,
+        user_factory: AsyncUserFactory,
     ) -> None:
         """Test successful user creation."""
         # Arrange
@@ -33,11 +35,15 @@ class TestUserCRUD:
             first_name="Test",
             last_name="User",
             contact_phone="+1234567890",
-            password="test_password123",
+            password=STRONG_TEST_PASSWORD,
         )
 
         # Act
-        created_user = await crud.user.create(db_session=db, obj_in=user_data)
+        created_user = await crud.user.create(
+            db_session=db,
+            obj_in=user_data,
+            password=await accepted_password(db, user_data.password, email=user_data.email),
+        )
 
         # Assert
         assert created_user is not None
@@ -57,7 +63,7 @@ class TestUserCRUD:
     async def test_get_user_by_id_success(
         self,
         db: AsyncSession,
-        user_factory: UserFactory,
+        user_factory: AsyncUserFactory,
     ) -> None:
         """Test successful user retrieval by ID."""
         # Arrange
@@ -91,7 +97,7 @@ class TestUserCRUD:
     async def test_get_user_by_email_success(
         self,
         db: AsyncSession,
-        user_factory: UserFactory,
+        user_factory: AsyncUserFactory,
     ) -> None:
         """Test successful user retrieval by email."""
         # Arrange
@@ -118,7 +124,7 @@ class TestUserCRUD:
     async def test_update_user_success(
         self,
         db: AsyncSession,
-        user_factory: UserFactory,
+        user_factory: AsyncUserFactory,
     ) -> None:
         """Test successful user update."""  # Arrange
         user = await user_factory.create()
@@ -143,7 +149,7 @@ class TestUserCRUD:
     async def test_update_user_partial(
         self,
         db: AsyncSession,
-        user_factory: UserFactory,
+        user_factory: AsyncUserFactory,
     ) -> None:
         """Test partial user update."""  # Arrange
         user = await user_factory.create()
@@ -161,7 +167,7 @@ class TestUserCRUD:
     async def test_delete_user_success(
         self,
         db: AsyncSession,
-        user_factory: UserFactory,
+        user_factory: AsyncUserFactory,
     ) -> None:
         """Test successful user deletion."""
         # Arrange
@@ -197,7 +203,7 @@ class TestUserCRUD:
     async def test_list_users_pagination(
         self,
         db: AsyncSession,
-        user_factory: UserFactory,
+        user_factory: AsyncUserFactory,
     ) -> None:
         """Test user listing with pagination."""
         # Arrange
@@ -236,7 +242,7 @@ class TestUserCRUD:
     async def test_user_activation_deactivation(
         self,
         db: AsyncSession,
-        user_factory: UserFactory,
+        user_factory: AsyncUserFactory,
     ) -> None:
         """Test user activation and deactivation."""
         # Arrange
@@ -263,7 +269,7 @@ class TestUserCRUD:
     async def test_user_verification_status(
         self,
         db: AsyncSession,
-        user_factory: UserFactory,
+        user_factory: AsyncUserFactory,
     ) -> None:
         """Test user verification status handling."""
         # Arrange
@@ -283,7 +289,7 @@ class TestUserCRUD:
     async def test_user_password_update(
         self,
         db: AsyncSession,
-        user_factory: UserFactory,
+        user_factory: AsyncUserFactory,
     ) -> None:
         """crud.user.update refuses a password; password_policy sets it (#271)."""
         # Arrange
@@ -308,11 +314,15 @@ class TestUserCRUD:
             email="logging_test@example.com",
             first_name="Logging",
             last_name="Test",
-            password="test_password123",
+            password=STRONG_TEST_PASSWORD,
         )
 
         # Act
-        created_user = await crud.user.create(db_session=db, obj_in=user_data)
+        created_user = await crud.user.create(
+            db_session=db,
+            obj_in=user_data,
+            password=await accepted_password(db, user_data.password, email=user_data.email),
+        )
 
         # Assert
         assert created_user is not None
@@ -321,7 +331,7 @@ class TestUserCRUD:
     async def test_user_search_functionality(
         self,
         db: AsyncSession,
-        user_factory: UserFactory,
+        user_factory: AsyncUserFactory,
     ) -> None:
         """Test user search functionality if implemented."""
         # Arrange
@@ -343,7 +353,7 @@ class TestUserCRUD:
     async def test_concurrent_user_operations(
         self,
         db: AsyncSession,
-        user_factory: UserFactory,
+        user_factory: AsyncUserFactory,
     ) -> None:
         """Test concurrent user operations."""
         import asyncio

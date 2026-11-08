@@ -11,17 +11,25 @@ from app.utils.partial import optional
 # Removed unused SQLModel import
 
 
-# Properties to receive via API on creation
-class IUserCreate(UserBase):
+# What crud.user.create / create_with_role need besides the password. There is
+# deliberately no password field: CRUD takes the hash only from the
+# AcceptedPassword that password_policy.accept_initial_password returns (#272),
+# so internally built create payloads never carry a plaintext.
+class IUserCreateFields(UserBase):
     role_id: list[UUID] | None = None
-    # No min_length here: the policy lives in settings and is applied by
-    # password_policy.accept_initial_password in the admin create endpoint (#198).
-    password: str
     last_changed_password_date: datetime | None = None
     expiry_date: datetime | None = None
     number_of_failed_attempts: int | None = 0  # Adding the missing field with default value
     verified: bool = False  # Add verified field, default to False
     roles: list[dict[str, Any]] | None = None  # Adding roles field
+
+
+# Properties to receive via API on creation
+class IUserCreate(IUserCreateFields):
+    # No min_length here: the policy lives in settings and is applied by
+    # password_policy.accept_initial_password in the admin create endpoint (#198).
+    # CRUD never reads this field; it takes the AcceptedPassword instead (#272).
+    password: str
 
 
 # Properties for user registration

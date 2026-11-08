@@ -27,7 +27,8 @@ from app import crud
 from app.core import security
 from app.core.config import settings
 from app.models.user_model import User
-from app.schemas.user_schema import IUserCreate, UserRegister
+from app.schemas.user_schema import IUserCreateFields, UserRegister
+from app.utils.accepted_password import AcceptedPassword
 from app.utils.background_tasks import (
     log_security_event,
     send_registration_notice_email,
@@ -175,18 +176,20 @@ async def issue_verification(
 async def _create_pending_user(
     *,
     registration: UserRegister,
+    password: AcceptedPassword,
     db_session: AsyncSession,
     verification_code: str,
 ) -> User:
     """Create an unverified user and assign the default role."""
-    user_create = IUserCreate(
-        **registration.model_dump(),
+    # The plaintext is left out: CRUD takes only the accepted password (#272).
+    user_create = IUserCreateFields(
+        **registration.model_dump(exclude={"password"}),
         verified=False,
         verification_code=verification_code,
         roles=[],
         last_changed_password_date=datetime.now(timezone.utc).replace(tzinfo=None),
     )
-    new_user = await crud.user.create(db_session=db_session, obj_in=user_create)
+    new_user = await crud.user.create(db_session=db_session, obj_in=user_create, password=password)
 
     if not new_user or not getattr(new_user, "id", None):
         raise HTTPException(
@@ -215,6 +218,7 @@ async def dispatch_account_email(
     ip_address: str,
     may_create: bool,
     registration: Optional[UserRegister] = None,
+    accepted_password: Optional[AcceptedPassword] = None,
 ) -> DispatchResult:
     """Dispatch the one email an address's state calls for, revealing nothing.
 
@@ -230,6 +234,11 @@ async def dispatch_account_email(
     The caller is responsible for returning an identical response regardless of
     the :class:`AccountState` in the result, and for wrapping the call in
     :func:`app.utils.response_timing.response_time_floor`.
+
+    With ``may_create=True`` the caller passes both ``registration`` and the
+    ``accepted_password`` that ``password_policy.accept_initial_password``
+    returned for it. The create branch never hashes ``registration.password``
+    itself (#272).
 
     Raises:
         HTTPException: 429 when the address's mail budget is exhausted. This is
@@ -262,10 +271,14 @@ async def dispatch_account_email(
 
         if registration is None:
             raise ValueError("registration payload is required when may_create is True")
+        # Fails closed: there is no fallback to hashing registration.password.
+        if accepted_password is None:
+            raise ValueError("accepted_password is required when may_create is True")
 
         token = security.create_verification_token(email)
         new_user = await _create_pending_user(
             registration=registration,
+            password=accepted_password,
             db_session=db_session,
             verification_code=token,
         )

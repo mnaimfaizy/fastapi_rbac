@@ -3,7 +3,7 @@ Authentication-related test fixtures.
 """
 
 from datetime import datetime, timezone
-from test.utils import random_email, random_lower_string
+from test.utils import accepted_password, random_email, random_strong_password
 from typing import Dict
 
 import pytest_asyncio
@@ -19,23 +19,28 @@ from app.utils.uuid6 import uuid7
 async def superuser_token_headers(client: AsyncClient, db: AsyncSession) -> Dict[str, str]:
     """Return authentication headers for a superuser."""
     from app.crud.user_crud import user_crud
-    from app.schemas.user_schema import IUserCreate
+    from app.schemas.user_schema import IUserCreateFields
 
     # Try to verify if superuser exists
     try:
         superuser = await user_crud.get_by_email(email=settings.FIRST_SUPERUSER_EMAIL, db_session=db)
         if not superuser:
             # Create superuser if it doesn't exist
-            superuser_data = IUserCreate(
+            superuser_data = IUserCreateFields(
                 email=settings.FIRST_SUPERUSER_EMAIL,
-                password=settings.FIRST_SUPERUSER_PASSWORD,
                 is_active=True,
                 is_superuser=True,
                 first_name="Super",
                 last_name="User",
                 role_id=[],
             )
-            await user_crud.create(obj_in=superuser_data, db_session=db)
+            await user_crud.create(
+                obj_in=superuser_data,
+                password=await accepted_password(
+                    db, settings.FIRST_SUPERUSER_PASSWORD, email=settings.FIRST_SUPERUSER_EMAIL
+                ),
+                db_session=db,
+            )
     except Exception as e:
         print(f"Error verifying superuser: {e}")
         try:
@@ -119,17 +124,18 @@ async def superuser_token_headers(client: AsyncClient, db: AsyncSession) -> Dict
 async def normal_user_token_headers(client: AsyncClient, db: AsyncSession) -> Dict[str, str]:
     """Return authentication headers for a normal user."""
     from app.crud.user_crud import user_crud
-    from app.schemas.user_schema import IUserCreate
+    from app.schemas.user_schema import IUserCreateFields
 
     # Create regular user
     email = random_email()
-    password = random_lower_string()
-    user_in = IUserCreate(
+    password = random_strong_password()
+    user_in = IUserCreateFields(
         email=email,
-        password=password,
         is_active=True,
     )
-    await user_crud.create(obj_in=user_in, db_session=db)
+    await user_crud.create(
+        obj_in=user_in, password=await accepted_password(db, password, email=email), db_session=db
+    )
 
     # Login as user
     login_data = {

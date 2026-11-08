@@ -44,7 +44,9 @@ class TestDashboardFlow:
         )
         # Create admin user
         admin_user = await user_factory.create_admin()
-        status_code, login_response = await login_user_with_csrf(client, admin_user.email, "admin123")
+        status_code, login_response = await login_user_with_csrf(
+            client, admin_user.email, settings.FIRST_SUPERUSER_PASSWORD
+        )
         if status_code != 200:
             print("LOGIN ERROR:", login_response)
         assert status_code == 200
@@ -85,7 +87,9 @@ class TestDashboardFlow:
         """Test dashboard user analytics endpoints."""
         # Create admin user and some test data
         admin_user = await user_factory.create_admin()
-        status_code, login_response = await login_user_with_csrf(client, admin_user.email, "admin123")
+        status_code, login_response = await login_user_with_csrf(
+            client, admin_user.email, settings.FIRST_SUPERUSER_PASSWORD
+        )
         assert status_code == 200
         admin_token = login_response["data"]["access_token"]
 
@@ -132,7 +136,9 @@ class TestDashboardFlow:
         """Test dashboard role analytics endpoints."""
         # Create admin user and test roles
         admin_user = await user_factory.create_admin()
-        status_code, login_response = await login_user_with_csrf(client, admin_user.email, "admin123")
+        status_code, login_response = await login_user_with_csrf(
+            client, admin_user.email, settings.FIRST_SUPERUSER_PASSWORD
+        )
         assert status_code == 200
         admin_token = login_response["data"]["access_token"]
 
@@ -172,7 +178,9 @@ class TestDashboardFlow:
         """Test dashboard activity metrics endpoints."""
         # Create admin user
         admin_user = await user_factory.create_admin()
-        status_code, login_response = await login_user_with_csrf(client, admin_user.email, "admin123")
+        status_code, login_response = await login_user_with_csrf(
+            client, admin_user.email, settings.FIRST_SUPERUSER_PASSWORD
+        )
         assert status_code == 200
         admin_token = login_response["data"]["access_token"]
         auth_headers = {"Authorization": f"Bearer {admin_token}"}
@@ -210,7 +218,9 @@ class TestDashboardFlow:
         """Test dashboard system health endpoints."""
         # Create admin user
         admin_user = await user_factory.create_admin()
-        status_code, login_response = await login_user_with_csrf(client, admin_user.email, "admin123")
+        status_code, login_response = await login_user_with_csrf(
+            client, admin_user.email, settings.FIRST_SUPERUSER_PASSWORD
+        )
         assert status_code == 200
         admin_token = login_response["data"]["access_token"]
         auth_headers = {"Authorization": f"Bearer {admin_token}"}
@@ -244,7 +254,9 @@ class TestDashboardFlow:
         """Test dashboard recent activities endpoint."""
         # Create admin user and perform some activities
         admin_user = await user_factory.create_admin()
-        status_code, login_response = await login_user_with_csrf(client, admin_user.email, "admin123")
+        status_code, login_response = await login_user_with_csrf(
+            client, admin_user.email, settings.FIRST_SUPERUSER_PASSWORD
+        )
         assert status_code == 200
         admin_token = login_response["data"]["access_token"]
 
@@ -381,7 +393,9 @@ class TestDashboardFlow:
         """Test dashboard endpoints with date range filtering."""
         # Create admin user
         admin_user = await user_factory.create_admin()
-        status_code, login_response = await login_user_with_csrf(client, admin_user.email, "admin123")
+        status_code, login_response = await login_user_with_csrf(
+            client, admin_user.email, settings.FIRST_SUPERUSER_PASSWORD
+        )
         assert status_code == 200
         admin_token = login_response["data"]["access_token"]
         auth_headers = {"Authorization": f"Bearer {admin_token}"}
@@ -410,7 +424,9 @@ class TestDashboardFlow:
         """Test dashboard data export functionality if available."""
         # Create admin user
         admin_user = await user_factory.create_admin()
-        status_code, login_response = await login_user_with_csrf(client, admin_user.email, "admin123")
+        status_code, login_response = await login_user_with_csrf(
+            client, admin_user.email, settings.FIRST_SUPERUSER_PASSWORD
+        )
         assert status_code == 200
         admin_token = login_response["data"]["access_token"]
         auth_headers = {"Authorization": f"Bearer {admin_token}"}

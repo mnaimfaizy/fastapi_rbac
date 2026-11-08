@@ -146,7 +146,9 @@ class Settings(BaseSettings):
     PGADMIN_DEFAULT_EMAIL: EmailStr = "admin@example.com"
     PGADMIN_DEFAULT_PASSWORD: str = "admin"  # User Settings
     FIRST_SUPERUSER_EMAIL: EmailStr = "admin@example.com"
-    FIRST_SUPERUSER_PASSWORD: str = "admin123"
+    # Seeding puts this through the password policy (#272), so the default must
+    # pass it. Override it in every real deployment.
+    FIRST_SUPERUSER_PASSWORD: str = "ChangeMe!Admin47"
     USER_CHANGED_PASSWORD_DATE: Optional[str] = None
     USERS_OPEN_REGISTRATION: bool = False
 

@@ -47,7 +47,7 @@ docker run -d \
   -e ACCESS_TOKEN_EXPIRE_MINUTES=30 \
   -e REFRESH_TOKEN_EXPIRE_DAYS=7 \
   -e FIRST_SUPERUSER_EMAIL=admin@example.com \
-  -e FIRST_SUPERUSER_PASSWORD=changethispassword \
+  -e FIRST_SUPERUSER_PASSWORD='Your-Strong-Admin-Pw!47' \
   # Add other necessary environment variables as per backend/.env.example
   mnaimfaizy/fastapi-rbac-backend:latest # Or a specific version tag like :v1.0.0
 ```

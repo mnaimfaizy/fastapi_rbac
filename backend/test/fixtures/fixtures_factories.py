@@ -10,7 +10,6 @@ from test.factories.rbac_factory import (
     RoleFactory,
     RoleGroupFactory,
 )
-from test.factories.user_factory import UserFactory
 from typing import Any, AsyncGenerator, Callable, Dict, List, Optional, Protocol
 
 import pytest
@@ -30,9 +29,10 @@ class HeadersCallable(Protocol):
 @pytest_asyncio.fixture(scope="function")
 async def db_factories(db: AsyncSession) -> AsyncGenerator[None, None]:
     """Setup factories to use the test database session."""
-    # Set the SQLAlchemy session for all factories
+    # Set the SQLAlchemy session for all factories. There is no user factory
+    # here: users are created through the password policy, which is async, so
+    # tests use the user_factory fixture (AsyncUserFactory) instead (#272).
     factories = [
-        UserFactory,
         RoleFactory,
         PermissionFactory,
         PermissionGroupFactory,
@@ -48,28 +48,6 @@ async def db_factories(db: AsyncSession) -> AsyncGenerator[None, None]:
     # Reset DB session to None after the test
     for factory in factories:
         factory._meta.sqlalchemy_session = None  # type: ignore
-
-
-@pytest_asyncio.fixture(scope="function")
-async def make_user(db_factories: None) -> FactoryCallable:
-    """Factory fixture to create User instances."""
-
-    async def _make_user(**kwargs: Any) -> Any:
-        """Create and return a User instance."""
-        return UserFactory(**kwargs)
-
-    return _make_user
-
-
-@pytest_asyncio.fixture(scope="function")
-async def make_admin_user(db_factories: None) -> FactoryCallable:
-    """Factory fixture to create admin User instances."""
-
-    async def _make_admin_user(**kwargs: Any) -> Any:
-        """Create and return an admin User instance."""
-        return UserFactory.admin(**kwargs)
-
-    return _make_admin_user
 
 
 @pytest_asyncio.fixture(scope="function")

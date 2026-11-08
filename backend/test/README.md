@@ -31,7 +31,7 @@ This document provides comprehensive information about the refactored test suite
   - Database, app, Redis, and service mocks available and used
   - Factory and auth fixtures available (optimization opportunity)
 - **Factories:**
-  - AsyncUserFactory, UserFactory, RoleFactory, PermissionFactory, etc.
+  - AsyncUserFactory, RoleFactory, PermissionFactory, etc.
   - Centralized, maintainable test data creation
 - **Best Practices:**
   - All async DB queries use `await db.exec(select(...))` (not `.execute()`)
@@ -277,7 +277,7 @@ unverified = await user_factory.create_unverified_user()
 
 ### Available Factories
 
-- **UserFactory**: Creates user instances with various states
+- **AsyncUserFactory** (`user_factory` fixture): Creates users through the password policy (#272); pass a policy-compliant `password`
 - **RoleFactory**: Creates roles with permissions
 - **PermissionFactory**: Creates permissions with groups
 - **PermissionGroupFactory**: Creates permission groups
@@ -302,7 +302,7 @@ unverified = await user_factory.create_unverified_user()
 ## Factory Pattern Best Practices and Usage
 
 - **Centralize test data creation** using factories (see `factories/`):
-  - `AsyncUserFactory`, `UserFactory`, `RoleFactory`, `PermissionFactory`, etc.
+  - `AsyncUserFactory`, `RoleFactory`, `PermissionFactory`, etc.
 - **Usage Example:**
 
   ```python

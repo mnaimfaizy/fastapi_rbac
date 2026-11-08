@@ -482,7 +482,7 @@ async def register(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="This email domain is not allowed for registration.",
                 )
-            await accept_initial_password(
+            accepted_password = await accept_initial_password(
                 user_in.password,
                 reason=InitialPasswordReason.REGISTRATION,
                 email=user_in.email,
@@ -499,6 +499,7 @@ async def register(
                 ip_address=ip_address,
                 may_create=True,
                 registration=user_in,
+                accepted_password=accepted_password,
             )
 
             await redis_client.incr(ip_rate_limit_key)

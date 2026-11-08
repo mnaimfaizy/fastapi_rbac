@@ -1,4 +1,4 @@
-from test.utils import random_email, random_lower_string
+from test.utils import accepted_password, random_email, random_lower_string, random_strong_password
 from typing import cast
 
 import pytest
@@ -26,7 +26,7 @@ async def test_create_user(db: AsyncSession) -> None:  # Added return type
     """Test creating a user through CRUD operations"""
     # Create user data
     email = random_email()
-    password = random_lower_string()
+    password = random_strong_password()
     first_name = random_lower_string()
     last_name = random_lower_string()
 
@@ -39,7 +39,11 @@ async def test_create_user(db: AsyncSession) -> None:  # Added return type
     )
 
     # Create user in DB - using keyword arguments
-    user = await user_crud.create(obj_in=user_in, db_session=db)
+    user = await user_crud.create(
+        obj_in=user_in,
+        password=await accepted_password(db, user_in.password, email=user_in.email),
+        db_session=db,
+    )
 
     # Check that user was created with correct data
     assert user.email == email
@@ -58,12 +62,16 @@ async def test_get_user(db: AsyncSession) -> None:  # Added return type
     """Test retrieving a user by ID"""
     # Create a user
     email = random_email()
-    password = random_lower_string()
+    password = random_strong_password()
     user_in = IUserCreate(
         email=email,
         password=password,
     )
-    user = await user_crud.create(obj_in=user_in, db_session=db)
+    user = await user_crud.create(
+        obj_in=user_in,
+        password=await accepted_password(db, user_in.password, email=user_in.email),
+        db_session=db,
+    )
 
     # Get the user by ID
     stored_user = await user_crud.get(id=user.id, db_session=db)
@@ -80,12 +88,16 @@ async def test_get_user_by_email(db: AsyncSession) -> None:  # Added return type
     """Test retrieving a user by email"""
     # Create a user
     email = random_email()
-    password = random_lower_string()
+    password = random_strong_password()
     user_in = IUserCreate(
         email=email,
         password=password,
     )
-    user = await user_crud.create(obj_in=user_in, db_session=db)
+    user = await user_crud.create(
+        obj_in=user_in,
+        password=await accepted_password(db, user_in.password, email=user_in.email),
+        db_session=db,
+    )
 
     # Get the user by email
     stored_user = await user_crud.get_by_email(email=email, db_session=db)
@@ -102,14 +114,18 @@ async def test_update_user(db: AsyncSession) -> None:  # Added return type
     """Test updating a user"""
     # Create a user
     email = random_email()
-    password = random_lower_string()
+    password = random_strong_password()
     user_in = IUserCreate(
         email=email,
         password=password,
         first_name="Original",
         last_name="Name",
     )
-    user = await user_crud.create(obj_in=user_in, db_session=db)
+    user = await user_crud.create(
+        obj_in=user_in,
+        password=await accepted_password(db, user_in.password, email=user_in.email),
+        db_session=db,
+    )
 
     # Create update data
     new_first_name = "Updated"
@@ -135,14 +151,18 @@ async def test_update_user(db: AsyncSession) -> None:  # Added return type
 async def test_update_user_refuses_a_password(db: AsyncSession) -> None:
     """A password is set only through app.utils.password_policy (#271)."""
     email = random_email()
-    password = random_lower_string()
-    user = await user_crud.create(obj_in=IUserCreate(email=email, password=password), db_session=db)
+    password = random_strong_password()
+    user = await user_crud.create(
+        obj_in=IUserCreate(email=email, password=password),
+        password=await accepted_password(db, password, email=email),
+        db_session=db,
+    )
     original_hash = user.password
 
     with pytest.raises(ValueError, match="does not set passwords"):
         await user_crud.update(
             obj_current=user,
-            obj_new=IUserUpdate(email=email, password=random_lower_string()),
+            obj_new=IUserUpdate(email=email, password=random_strong_password()),
             db_session=db,
         )
 
@@ -154,12 +174,16 @@ async def test_authenticate_user(db: AsyncSession) -> None:  # Added return type
     """Test user authentication"""
     # Create a user
     email = random_email()
-    password = random_lower_string()
+    password = random_strong_password()
     user_in = IUserCreate(
         email=email,
         password=password,
     )
-    user = await user_crud.create(obj_in=user_in, db_session=db)
+    user = await user_crud.create(
+        obj_in=user_in,
+        password=await accepted_password(db, user_in.password, email=user_in.email),
+        db_session=db,
+    )
 
     # Authenticate with correct credentials
     authenticated_user = await user_crud.authenticate(email=email, password=password, db_session=db)
@@ -174,7 +198,7 @@ async def test_authenticate_user(db: AsyncSession) -> None:  # Added return type
     assert wrong_user is None
 
     # Check that authentication fails with wrong password
-    wrong_user = await user_crud.authenticate(email=email, password=random_lower_string(), db_session=db)
+    wrong_user = await user_crud.authenticate(email=email, password=random_strong_password(), db_session=db)
     assert wrong_user is None
 
 
@@ -186,9 +210,13 @@ async def test_get_multi_users(db: AsyncSession) -> None:  # Added return type
     for i in range(user_count):
         user_in = IUserCreate(
             email=random_email(),
-            password=random_lower_string(),
+            password=random_strong_password(),
         )
-        await user_crud.create(obj_in=user_in, db_session=db)
+        await user_crud.create(
+            obj_in=user_in,
+            password=await accepted_password(db, user_in.password, email=user_in.email),
+            db_session=db,
+        )
 
     # Get users with pagination - first page
     users = await user_crud.get_multi(skip=0, limit=5, db_session=db)
@@ -208,12 +236,16 @@ async def test_delete_user(db: AsyncSession) -> None:  # Added return type
     """Test deleting a user"""
     # Create a user
     email = random_email()
-    password = random_lower_string()
+    password = random_strong_password()
     user_in = IUserCreate(
         email=email,
         password=password,
     )
-    user = await user_crud.create(obj_in=user_in, db_session=db)
+    user = await user_crud.create(
+        obj_in=user_in,
+        password=await accepted_password(db, user_in.password, email=user_in.email),
+        db_session=db,
+    )
 
     # Delete the user
     deleted_user = await user_crud.remove(id=user.id, db_session=db)
@@ -230,12 +262,20 @@ async def test_delete_user(db: AsyncSession) -> None:  # Added return type
 async def test_create_user_with_duplicate_email(db: AsyncSession) -> None:
     """Test creating a user with a duplicate email"""
     email = random_email()
-    password = random_lower_string()
+    password = random_strong_password()
     user_in = IUserCreate(email=email, password=password)
-    await user_crud.create(obj_in=user_in, db_session=db)
+    await user_crud.create(
+        obj_in=user_in,
+        password=await accepted_password(db, user_in.password, email=user_in.email),
+        db_session=db,
+    )
 
     with pytest.raises(HTTPException, match="User with this email already exists"):
-        await user_crud.create(obj_in=user_in, db_session=db)
+        await user_crud.create(
+            obj_in=user_in,
+            password=await accepted_password(db, user_in.password, email=user_in.email),
+            db_session=db,
+        )
 
 
 @pytest.mark.asyncio
@@ -243,12 +283,16 @@ async def test_password_history_enforcement(db: AsyncSession) -> None:
     """Test that a user cannot reuse any of their last N passwords."""
     history_size = settings.PASSWORD_HISTORY_SIZE
     email = random_email()
-    password = random_lower_string()
+    password = random_strong_password()
     user_in = IUserCreate(email=email, password=password)
-    user = await user_crud.create(obj_in=user_in, db_session=db)
+    user = await user_crud.create(
+        obj_in=user_in,
+        password=await accepted_password(db, user_in.password, email=user_in.email),
+        db_session=db,
+    )
 
     for _ in range(history_size):
-        new_password = random_lower_string()
+        new_password = random_strong_password()
         await user_crud.update_password(user=user, new_password=new_password, db_session=db)
         # update_password stages; its caller (password_policy) owns the commit.
         await db.commit()
@@ -261,9 +305,13 @@ async def test_password_history_enforcement(db: AsyncSession) -> None:
 async def test_inactive_user_behavior(db: AsyncSession) -> None:
     """Test that inactive users cannot authenticate (integration-compatible)"""
     email = random_email()
-    password = random_lower_string()
+    password = random_strong_password()
     user_in = IUserCreate(email=email, password=password)
-    user = await user_crud.create(obj_in=user_in, db_session=db)
+    user = await user_crud.create(
+        obj_in=user_in,
+        password=await accepted_password(db, user_in.password, email=user_in.email),
+        db_session=db,
+    )
 
     user.is_active = False
     await db.commit()
@@ -278,14 +326,18 @@ async def test_inactive_user_behavior(db: AsyncSession) -> None:
 async def test_role_assignment_on_user_creation(db: AsyncSession) -> None:
     """Test assigning roles to a user during creation"""
     email = random_email()
-    password = random_lower_string()
+    password = random_strong_password()
     role = Role(name="Test Role")
     db.add(role)
     await db.commit()
     await db.refresh(role)
 
     user_in = IUserCreate(email=email, password=password, role_id=[role.id])
-    user = await user_crud.create(obj_in=user_in, db_session=db)
+    user = await user_crud.create(
+        obj_in=user_in,
+        password=await accepted_password(db, user_in.password, email=user_in.email),
+        db_session=db,
+    )
 
     assert len(user.roles) == 1
     assert user.roles[0].id == role.id
@@ -295,9 +347,13 @@ async def test_role_assignment_on_user_creation(db: AsyncSession) -> None:
 async def test_email_verification_workflow(db: AsyncSession) -> None:
     """Test email verification workflow"""
     email = random_email()
-    password = random_lower_string()
+    password = random_strong_password()
     user_in = IUserCreate(email=email, password=password)
-    user = await user_crud.create(obj_in=user_in, db_session=db)
+    user = await user_crud.create(
+        obj_in=user_in,
+        password=await accepted_password(db, user_in.password, email=user_in.email),
+        db_session=db,
+    )
 
     assert not user.verified
 

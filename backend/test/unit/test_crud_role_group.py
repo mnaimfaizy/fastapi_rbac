@@ -1,4 +1,4 @@
-from test.utils import random_email, random_lower_string
+from test.utils import accepted_password, random_email, random_lower_string, random_strong_password
 from uuid import UUID
 
 import pytest
@@ -22,13 +22,17 @@ from app.schemas.user_schema import IUserCreate
 async def test_user(db: AsyncSession) -> User:
     """Create a test user for tests that require a user"""
     email = random_email()
-    password = random_lower_string()
+    password = random_strong_password()
     user_in = IUserCreate(
         email=email,
         password=password,
         is_active=True,
     )
-    user = await user_crud.create(obj_in=user_in, db_session=db)
+    user = await user_crud.create(
+        obj_in=user_in,
+        password=await accepted_password(db, user_in.password, email=user_in.email),
+        db_session=db,
+    )
     return user
 
 
