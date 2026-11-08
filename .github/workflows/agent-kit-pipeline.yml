@@ -137,9 +137,12 @@ jobs:
       # Fast checks only. API, integration and e2e suites are left to PR CI.
       verify_commands: |
         set -euo pipefail
-        # Non-secret settings only. Database, signing-key and superuser settings
-        # keep their config.py defaults: the unit suite uses SQLite and random keys.
+        # Non-secret settings only. Signing-key and superuser settings keep
+        # their config.py defaults. The unit suite uses SQLite, but Settings
+        # still builds Postgres URIs at import, so it needs a host, port and
+        # name; no database user or password is set.
         export MODE=testing PYTHONPATH=.
+        export DATABASE_HOST=localhost DATABASE_PORT=5432 DATABASE_NAME=test
         export REDIS_HOST=localhost REDIS_PORT=6379
         export BACKEND_CORS_ORIGINS='["http://localhost:8000", "http://localhost:5173"]'
         export PROJECT_NAME="FastAPI RBAC Test" TOKEN_ISSUER=test_issuer TOKEN_AUDIENCE=test_audience
