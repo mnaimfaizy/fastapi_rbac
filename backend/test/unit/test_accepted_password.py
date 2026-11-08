@@ -50,6 +50,7 @@ async def test_repr_does_not_show_the_hash(db: AsyncSession) -> None:
 async def test_email_binding_ignores_case(db: AsyncSession) -> None:
     accepted = await accepted_password(db, email="Mixed.Case@Example.com")
 
+    assert accepted.email == "Mixed.Case@Example.com"
     assert accepted.is_for("mixed.case@example.com")
     assert not accepted.is_for("someone.else@example.com")
 
