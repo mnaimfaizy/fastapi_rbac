@@ -328,7 +328,7 @@ class TestAuthenticationSecurity:
         email, password = await _registered_user(client)
 
         for _ in range(settings.MAX_LOGIN_ATTEMPTS):
-            response = await _login(client, email, "Wrong!Passw0rd47")
+            response = await _login(client, email, random_strong_password())
             assert response.status_code == 422, response.text
 
         response = await _login(client, email, password)
