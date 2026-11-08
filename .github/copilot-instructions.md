@@ -23,7 +23,7 @@ This project is a user-management microservice: FastAPI backend + React/TypeScri
 | Release notes agent (canonical) | [`docs/agents/release-notes-agent.md`](../docs/agents/release-notes-agent.md) |
 | Release skill (Release PR) | [`.claude/skills/release/SKILL.md`](../.claude/skills/release/SKILL.md) |
 
-If `graphify-out/graph.json` exists, prefer `graphify query` / `path` / `explain` for “how does X connect to Y” questions.
+When the `graphify` MCP server is connected, use it for "what directly calls or imports X" questions and confirm against the file. Do not use it for FastAPI `Depends(...)` wiring or client-to-route links; see the knowledge graph guide above.
 
 **Commit messages are mandatory:** follow [`docs/agents/commit-messages.md`](../docs/agents/commit-messages.md) strictly (plain conventional commits, no emoji, component/domain scopes). Do not invent alternate formats.
 

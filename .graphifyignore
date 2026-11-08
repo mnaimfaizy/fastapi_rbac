@@ -1,0 +1,44 @@
+# graphify ignore rules (gitignore syntax). graphify also honours .gitignore,
+# so this file only lists TRACKED paths that would add noise to the code graph.
+# Changing it needs a full rebuild: scripts/development/graphify/build-graph.sh
+# See docs/agents/graphify.md.
+
+# Alembic migrations. Every revision defines upgrade()/downgrade(), so they mint
+# dozens of same-named nodes the graph cannot tell apart. The current schema is
+# backend/app/models.
+backend/alembic/versions/
+
+# SQL init scripts. graphify's SQL extractor only links tables within SQL; the
+# app reaches the database through SQLModel classes, so these add no edges.
+**/*.sql
+
+# Build and tool config: not domain knowledge.
+**/*.json
+**/*.toml
+pgadmin/
+**/*.config.js
+**/*.config.ts
+**/*.config.mjs
+**/*.config.cjs
+**/eslint.config.*
+**/.eslintrc*
+**/vite-env.d.ts
+
+# Agent harness files, CI and editor config.
+.claude/
+.cursor/
+.github/
+.idea/
+.vscode/
+.security/
+
+# Docs. The first build (`extract --code-only`) skips them, but the refresh
+# (`graphify update`) parses Markdown structure; excluding them here keeps the
+# two producing the same code-only graph.
+**/*.md
+**/*.mdx
+**/*.mdc
+
+# Docs site and generated output.
+site/
+graphify-out/

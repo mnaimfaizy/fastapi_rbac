@@ -33,7 +33,7 @@ System architecture and auth-flow narrative: `docs/reference/architecture.md`. H
 
 ### Knowledge graph (graphify)
 
-If `graphify-out/graph.json` exists, query it first for architecture questions. See `docs/agents/graphify.md` for install, build (`--code-only`), update, and git policy.
+Optional and per-developer. When the `graphify` MCP server is connected, use `get_neighbors` for "what directly calls or imports X" and `god_nodes` for orientation, then confirm against the file. Never use it for FastAPI `Depends(...)` wiring, client-to-route links, or same-named symbols: it fails silently there. Setup, refresh hooks and the full do/don't table: `docs/agents/graphify.md`.
 
 ### Commit messages (mandatory)
 

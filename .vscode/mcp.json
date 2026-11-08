@@ -2,6 +2,11 @@
   "servers": {
     "github": {
       "url": "https://api.githubcopilot.com/mcp/"
+    },
+    "graphify": {
+      "type": "stdio",
+      "command": "graphify-mcp",
+      "args": ["graphify-out/graph.json"]
     }
   }
 }

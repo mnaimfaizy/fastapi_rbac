@@ -321,13 +321,15 @@ The configured tools enforce these guidelines automatically:
 
 ## Knowledge graph (optional)
 
-For architecture navigation, install graphify (`uv tool install graphifyy`) and build a local code graph:
+graphify gives agents a local code graph over MCP. To opt in, install it, build the graph once, and install the git hooks that keep it current:
 
 ```powershell
-.\scripts\development\graphify\Update-Graphify.ps1 -Full
+uv tool install "graphifyy[mcp]==0.9.43"
+.\scripts\development\graphify\Build-Graph.ps1
+pre-commit install
 ```
 
-See [`docs/agents/graphify.md`](../agents/graphify.md) for install, query, and git policy details.
+See [`docs/agents/graphify.md`](../agents/graphify.md) for what it is good for, what it gets wrong, and how the refresh hooks work.
 
 ## Troubleshooting
 

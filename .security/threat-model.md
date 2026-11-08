@@ -20,7 +20,7 @@ Canonical behaviour lives in [`docs/reference/architecture.md`](../docs/referenc
 | Audit log | `AuditLog` rows written by `log_security_event` | The only record of which uniform-rejection branch ran (ADR 0010). Compliance trail that outlives users (ADR 0013) |
 | Account-existence secrecy | Registration, resend, verify-email and password-reset responses | The **uniform registration response** and **uniform token-flow rejection** invariants (ADR 0007, ADR 0010) |
 | **Client address** integrity | `backend/app/utils/client_address.py`, `TRUSTED_PROXIES` | Feeds the **HTTP rate limit**, security events and **origin network** detection at once |
-| Release and deploy credentials | `DOCKERHUB_*`, `FTP_*`, `UI_FTP_*`, `CODECOV_TOKEN`, `GRAPHIFY_PR_TOKEN`, `RELEASE_TAG_DEPLOY_KEY` Actions secrets | Publish a poisoned image or admin UI build. The deploy key bypasses the `v*` tag ruleset |
+| Release and deploy credentials | `DOCKERHUB_*`, `FTP_*`, `UI_FTP_*`, `CODECOV_TOKEN`, `RELEASE_TAG_DEPLOY_KEY` Actions secrets | Publish a poisoned image or admin UI build. The deploy key bypasses the `v*` tag ruleset |
 | Release tags and published images | `v*` tags trigger `docker-publish.yml`; Docker Hub images are the Hub runtime | Whoever pushes a tag ships to every operator |
 | Agent credentials | `CLAUDE_CODE_OAUTH_TOKEN`, `AGENT_KIT_ADVISORIES_TOKEN` | Model spend; draft-advisory writes. The advisories token must never reach an agent |
 | Security findings | Private draft advisories only | Public-log rule: never in Actions logs, artifacts, issues, PRs, or the findings ledger |

@@ -41,7 +41,7 @@ Correct: `feat/100-user-scoped-rate-limit-keys`
 
 Correct: `docs/91-branch-naming-convention`
 
-When there is no tracker issue, omit the number: `chore/graphify-report`.
+When there is no tracker issue, omit the number: `chore/graphify-mcp-hooks`.
 
 ## Harness prefixes
 
