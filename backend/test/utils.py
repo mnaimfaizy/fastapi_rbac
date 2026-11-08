@@ -161,7 +161,6 @@ async def login_user_with_csrf(
     csrf_token, headers = await get_csrf_token(client)
 
     login_data = {"email": username, "password": password}
-    print("LOGIN REQUEST:", login_data, headers)
 
     response = await client.post(
         f"{settings.API_V1_STR}/auth/login",
@@ -173,5 +172,4 @@ async def login_user_with_csrf(
         response_json = response.json()
     except Exception:
         response_json = {"error": "Failed to parse JSON response"}
-    print("LOGIN RESPONSE:", response.status_code, response_json)
     return response.status_code, response_json
