@@ -12,7 +12,7 @@ This module tests all authentication endpoints including:
 
 from datetime import datetime, timedelta, timezone
 from test.factories.async_factories import AsyncUserFactory
-from test.utils import get_csrf_token, random_email
+from test.utils import STRONG_TEST_PASSWORD, get_csrf_token, random_email, random_strong_password
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -43,6 +43,38 @@ def _response_message(response: Response) -> str:
     if isinstance(detail, dict):
         return str(detail.get("message", detail))
     return str(detail)
+
+
+async def _registered_user(client: AsyncClient) -> tuple[str, str]:
+    """Register and verify a user through the API, returning its email and password.
+
+    In the Docker stack the client talks to a separate server process, which
+    cannot see users created in the test's own (rolled-back) database session,
+    so a user that has to log in is created over HTTP.
+    """
+    email = random_email()
+    password = random_strong_password()
+    _, csrf_headers = await get_csrf_token(client)
+    response = await client.post(
+        f"{settings.API_V1_STR}/auth/register",
+        json={"email": email, "password": password, "first_name": "Comp", "last_name": "Auth"},
+        headers=csrf_headers,
+    )
+    assert response.status_code == 200, response.text
+    token = response.json()["data"]["verification_code"]
+    _, csrf_headers = await get_csrf_token(client)
+    response = await client.post(
+        f"{settings.API_V1_STR}/auth/verify-email", json={"token": token}, headers=csrf_headers
+    )
+    assert response.status_code == 200, response.text
+    return email, password
+
+
+async def _login(client: AsyncClient, email: str, password: str) -> Response:
+    _, csrf_headers = await get_csrf_token(client)
+    return await client.post(
+        f"{settings.API_V1_STR}/auth/login", json={"email": email, "password": password}, headers=csrf_headers
+    )
 
 
 class TestComprehensiveAuth:
@@ -264,7 +296,7 @@ class TestComprehensiveAuth:
                     assert "access_token" in response.json()["data"]
 
                     # Step 4: Verify old password doesn't work
-                    login_data["password"] = "password123"  # Default from factory
+                    login_data["password"] = STRONG_TEST_PASSWORD  # Default from factory
 
                     response = await client.post(
                         f"{settings.API_V1_STR}/auth/login",
@@ -284,64 +316,24 @@ class TestAuthenticationSecurity:
     """Test security features of authentication."""
 
     @pytest.mark.asyncio
-    async def test_account_lockout_after_failed_attempts(
-        self,
-        client: AsyncClient,
-        db: AsyncSession,
-        user_factory: AsyncUserFactory,
-        redis_mock: MagicMock,
-    ) -> None:
+    @pytest.mark.xfail(
+        strict=True,
+        reason="#275: the attempt that locks the account answers 500 (lockout background task TypeError)",
+    )
+    async def test_account_lockout_after_failed_attempts(self, client: AsyncClient) -> None:
         """
-        Test that a user's account is locked after multiple failed login attempts
-        to prevent brute-force attacks.
+        After MAX_LOGIN_ATTEMPTS wrong passwords the account is locked, and even
+        the correct password is refused until the lockout ends.
         """
+        email, password = await _registered_user(client)
 
-        # Create a verified user
-        user = await user_factory.create(verified=True)
-        await db.commit()
+        for _ in range(settings.MAX_LOGIN_ATTEMPTS):
+            response = await _login(client, email, random_strong_password())
+            assert response.status_code == 422, response.text
 
-        # Get CSRF token for login attempts
-        csrf_token, csrf_headers = await get_csrf_token(client)
-        csrf_headers["Content-Type"] = "application/x-www-form-urlencoded"
-
-        # Make multiple failed login attempts
-        login_data = {"username": user.email, "password": "wrong_password"}
-
-        # First few attempts should return authentication error
-        for i in range(settings.MAX_LOGIN_ATTEMPTS - 1):
-            response = await client.post(
-                f"{settings.API_V1_STR}/auth/login",
-                data=login_data,
-                headers=csrf_headers,
-            )
-            assert response.status_code in [400, 401, 422]
-            if response.status_code in [400, 401]:
-                assert "invalid credentials" in response.json().get("message", "").lower()
-
-        # Final attempt should trigger account lockout
-        response = await client.post(
-            f"{settings.API_V1_STR}/auth/login",
-            data=login_data,
-            headers=csrf_headers,
-        )
-
-        assert response.status_code in [400, 401, 422]
-        if response.status_code in [400, 401]:
-            response_data = response.json()  # Should either show lockout or invalid credentials
-            assert any(
-                phrase in response_data.get("message", "").lower()
-                for phrase in ["account has been locked", "invalid credentials", "locked"]
-            )
-
-        # Even correct password should fail now (if lockout is implemented)
-        login_data["password"] = "password123"  # Correct password
-        response = await client.post(
-            f"{settings.API_V1_STR}/auth/login",
-            data=login_data,
-            headers=csrf_headers,
-        )
-
-        assert response.status_code in [400, 401, 422]
+        response = await _login(client, email, password)
+        assert response.status_code == 422, response.text
+        assert "locked" in response.text.lower()
 
     @pytest.mark.asyncio
     async def test_rate_limiting_on_login(self, client: AsyncClient) -> None:
@@ -372,55 +364,27 @@ class TestAuthenticationSecurity:
         assert all(status in valid_responses for status in responses)
 
     @pytest.mark.asyncio
-    async def test_allowlist_revocation_on_logout(
-        self,
-        client: AsyncClient,
-        db: AsyncSession,
-        user_factory: AsyncUserFactory,
-        redis_mock: MagicMock,  # Use the available redis_mock fixture
-    ) -> None:
+    async def test_allowlist_revocation_on_logout(self, client: AsyncClient) -> None:
         """
         Logout removes the tokens from the Redis allowlist, so they cannot
         be reused on protected endpoints.
         """
+        email, password = await _registered_user(client)
 
-        # Create and login a user
-        user = await user_factory.create(verified=True)
-        await db.commit()
+        response = await _login(client, email, password)
+        assert response.status_code == 200, response.text
+        headers = {"Authorization": f"Bearer {response.json()['data']['access_token']}"}
 
-        # Get CSRF token for login
-        csrf_token, csrf_headers = await get_csrf_token(client)
-        csrf_headers["Content-Type"] = "application/x-www-form-urlencoded"
+        response = await client.get(f"{settings.API_V1_STR}/users/me", headers=headers)
+        assert response.status_code == 200, response.text
 
-        login_data = {"username": user.email, "password": "password123"}
+        _, logout_csrf = await get_csrf_token(client)
+        response = await client.post(f"{settings.API_V1_STR}/auth/logout", headers={**headers, **logout_csrf})
+        assert response.status_code == 200, response.text
 
-        response = await client.post(
-            f"{settings.API_V1_STR}/auth/login",
-            data=login_data,
-            headers=csrf_headers,
-        )
-
-        if response.status_code == 200:
-            access_token = response.json()["data"]["access_token"]
-
-            # Access protected endpoint (should work)
-            headers = {"Authorization": f"Bearer {access_token}"}
-            response = await client.get(f"{settings.API_V1_STR}/users/", headers=headers)
-            assert response.status_code == 200
-
-            # Logout
-            _, logout_csrf = await get_csrf_token(client)
-            response = await client.post(
-                f"{settings.API_V1_STR}/auth/logout",
-                headers={**headers, **logout_csrf},
-            )
-            if response.status_code == 200:
-                # Try to use token after logout (should fail)
-                response = await client.get(f"{settings.API_V1_STR}/users/", headers=headers)
-                assert response.status_code == 401
-        else:
-            # Login failed due to services/mocking - test endpoint structure
-            assert response.status_code in [400, 401, 422]
+        # A revoked token is 403, the contract test_api_auth_allowlist.py asserts.
+        response = await client.get(f"{settings.API_V1_STR}/users/me", headers=headers)
+        assert response.status_code == 403, response.text
 
 
 class TestAuthenticationEdgeCases:
@@ -561,48 +525,29 @@ class TestAuthenticationEdgeCases:
         assert "expired" in _response_message(response).lower()
 
     @pytest.mark.asyncio
-    async def test_change_password_with_weak_password(
-        self,
-        client: AsyncClient,
-        db: AsyncSession,
-        user_factory: AsyncUserFactory,
-        redis_mock: MagicMock,
-    ) -> None:
+    async def test_change_password_with_weak_password(self, client: AsyncClient) -> None:
         """
         Test that the system rejects attempts to change to a weak password,
         enforcing password complexity rules.
         """
+        email, password = await _registered_user(client)
 
-        # Create and login a user
-        user = await user_factory.create(verified=True)
-        await db.commit()
+        response = await _login(client, email, password)
+        assert response.status_code == 200, response.text
+        headers = {"Authorization": f"Bearer {response.json()['data']['access_token']}"}
 
-        # Get CSRF token for login
-        csrf_token, csrf_headers = await get_csrf_token(client)
-        csrf_headers["Content-Type"] = "application/x-www-form-urlencoded"
-
-        # Login to get token
-        login_data = {"username": user.email, "password": "password123"}
-
+        _, csrf_headers = await get_csrf_token(client)
         response = await client.post(
-            f"{settings.API_V1_STR}/auth/login",
-            data=login_data,
-            headers=csrf_headers,
+            f"{settings.API_V1_STR}/auth/change_password",
+            json={"current_password": password, "new_password": "weak"},
+            headers={**headers, **csrf_headers},
         )
+        assert response.status_code == 400, response.text
+        assert response.json()["detail"]["errors"]
 
-        if response.status_code == 200:
-            access_token = response.json()["data"]["access_token"]
-            headers = {"Authorization": f"Bearer {access_token}"}
-
-            # Try to change to weak password
-            response = await client.post(
-                f"{settings.API_V1_STR}/auth/change_password",
-                json={"current_password": "password123", "new_password": "weak"},  # Too weak
-                headers=headers,
-            )
-
-            # Should either reject weak password or endpoint doesn't exist
-            assert response.status_code in [400, 404, 422]
+        # The refused change left the original password in place.
+        response = await _login(client, email, password)
+        assert response.status_code == 200, response.text
 
     @pytest.mark.asyncio
     @patch("app.utils.background_tasks.send_verification_email")
@@ -642,68 +587,42 @@ class TestAuthenticationEdgeCases:
         assert len(data["data"]["csrf_token"]) > 0
 
     @pytest.mark.asyncio
-    async def test_multiple_device_login(
-        self,
-        client: AsyncClient,
-        db: AsyncSession,
-        user_factory: AsyncUserFactory,
-        redis_mock: MagicMock,
-    ) -> None:
+    async def test_multiple_device_login(self, client: AsyncClient) -> None:
         """
         Test that a user can be logged in on multiple devices simultaneously,
         and that logging out from one device does not affect the others.
         """
+        email, password = await _registered_user(client)
 
-        # Create a verified user
-        user = await user_factory.create(verified=True)
-        await db.commit()
+        # Logout identifies the session from the refresh cookie, so each
+        # "device" keeps its own cookies instead of sharing the client's jar.
+        response1 = await _login(client, email, password)
+        device1_cookies = dict(client.cookies)
+        client.cookies.clear()
+        response2 = await _login(client, email, password)
+        assert response1.status_code == 200, response1.text
+        assert response2.status_code == 200, response2.text
 
-        # Get CSRF token for login
-        csrf_token, csrf_headers = await get_csrf_token(client)
-        csrf_headers["Content-Type"] = "application/x-www-form-urlencoded"
+        token1 = response1.json()["data"]["access_token"]
+        token2 = response2.json()["data"]["access_token"]
+        assert token1 != token2
+        headers1 = {"Authorization": f"Bearer {token1}"}
+        headers2 = {"Authorization": f"Bearer {token2}"}
 
-        # Login on device 1
-        login_data = {"username": user.email, "password": "password123"}
-        response1 = await client.post(
-            f"{settings.API_V1_STR}/auth/login",
-            data=login_data,
-            headers=csrf_headers,
+        assert (await client.get(f"{settings.API_V1_STR}/users/me", headers=headers1)).status_code == 200
+        assert (await client.get(f"{settings.API_V1_STR}/users/me", headers=headers2)).status_code == 200
+
+        client.cookies.clear()
+        client.cookies.update(device1_cookies)
+        _, logout_csrf = await get_csrf_token(client)
+        logout_response = await client.post(
+            f"{settings.API_V1_STR}/auth/logout", headers={**headers1, **logout_csrf}
         )
+        assert logout_response.status_code == 200, logout_response.text
 
-        # Login on device 2
-        response2 = await client.post(
-            f"{settings.API_V1_STR}/auth/login",
-            data=login_data,
-            headers=csrf_headers,
-        )
-
-        if response1.status_code == 200 and response2.status_code == 200:
-            token1 = response1.json()["data"]["access_token"]
-            token2 = response2.json()["data"]["access_token"]
-            assert token1 != token2
-
-            headers1 = {"Authorization": f"Bearer {token1}"}
-            headers2 = {"Authorization": f"Bearer {token2}"}
-
-            # Both tokens should work
-            response1_me = await client.get(f"{settings.API_V1_STR}/users/me", headers=headers1)
-            assert response1_me.status_code == 200
-            response2_me = await client.get(f"{settings.API_V1_STR}/users/me", headers=headers2)
-            assert response2_me.status_code == 200
-
-            # Logout from device 1
-            _, logout_csrf = await get_csrf_token(client)
-            logout_response = await client.post(
-                f"{settings.API_V1_STR}/auth/logout",
-                headers={**headers1, **logout_csrf},
-            )
-            if logout_response.status_code == 200:
-                # Token 1 should be invalid
-                response1_after_logout = await client.get(f"{settings.API_V1_STR}/users/me", headers=headers1)
-                assert response1_after_logout.status_code == 401
-                # Token 2 should still be valid
-                response2_after_logout = await client.get(f"{settings.API_V1_STR}/users/me", headers=headers2)
-                assert response2_after_logout.status_code == 200
+        # Device 1's token is revoked (403); device 2's session is untouched.
+        assert (await client.get(f"{settings.API_V1_STR}/users/me", headers=headers1)).status_code == 403
+        assert (await client.get(f"{settings.API_V1_STR}/users/me", headers=headers2)).status_code == 200
 
 
 class TestAuthenticationValidation:

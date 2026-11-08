@@ -4,13 +4,58 @@ from typing import Any, Dict, Tuple
 
 from fastapi.testclient import TestClient
 from httpx import AsyncClient
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import settings
+from app.utils.accepted_password import AcceptedPassword
 
 
 def random_lower_string(length: int = 32) -> str:
     """Generate a random lowercase string."""
     return "".join(random.choices(string.ascii_lowercase, k=length))
+
+
+def random_strong_password() -> str:
+    """A random password the configured policy accepts."""
+    from app.core.security import PasswordValidator
+
+    pool = string.ascii_letters + string.digits + "!@#%^&*"
+    while True:
+        candidate = (
+            random.choice(string.ascii_uppercase)
+            + random.choice(string.ascii_lowercase)
+            + random.choice(string.digits)
+            + random.choice("!@#%^&*")
+            + "".join(random.choices(pool, k=12))
+        )
+        if PasswordValidator.validate_complexity(candidate)[0]:
+            return candidate
+
+
+# A first password the policy accepts, generated once per test run rather than
+# written down, so no password literal sits in the repository. Factories and
+# fixtures use it because user creation goes through
+# password_policy.accept_initial_password (#272).
+STRONG_TEST_PASSWORD = random_strong_password()
+
+
+async def accepted_password(
+    db_session: AsyncSession, password: str = STRONG_TEST_PASSWORD, *, email: str
+) -> AcceptedPassword:
+    """Run ``password`` through the policy for ``email``, as every creation path must (#272).
+
+    Uses ADMIN_CREATE rather than a test-only reason: tests create users the
+    way an administrator does, and the enum stays free of test-only members.
+    """
+    from app.utils.password_policy import InitialPasswordReason, accept_initial_password
+
+    return await accept_initial_password(
+        password,
+        reason=InitialPasswordReason.ADMIN_CREATE,
+        email=email,
+        actor=None,
+        db_session=db_session,
+    )
 
 
 def random_email() -> str:

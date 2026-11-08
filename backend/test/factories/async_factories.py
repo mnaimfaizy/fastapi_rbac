@@ -6,13 +6,14 @@ for testing purposes.
 """
 
 from datetime import datetime, timedelta
+from test.utils import STRONG_TEST_PASSWORD, accepted_password
 from typing import Any, Dict, List, Optional, Union
 from uuid import UUID
 
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.core.security import PasswordValidator
+from app.core.config import settings
 from app.models.permission_group_model import PermissionGroup
 from app.models.permission_model import Permission
 from app.models.role_group_model import RoleGroup
@@ -77,10 +78,11 @@ class AsyncUserFactory(AsyncFactoryBase):
         if last_name is None:
             last_name = self._get_fake_name("Last")
         if password is None:
-            password = "password123"
+            password = STRONG_TEST_PASSWORD
 
-        # Hash the password
-        hashed_password = PasswordValidator.get_password_hash(password)
+        # Through the policy like every other creation path (#272): a weak
+        # password here raises PasswordRefused instead of creating the user.
+        hashed_password = (await accepted_password(self.session, password, email=email)).hash
 
         # Prepare user data
         user_data = {
@@ -127,7 +129,8 @@ class AsyncUserFactory(AsyncFactoryBase):
 
         kwargs.setdefault("email", admin_email)
         kwargs.setdefault("is_superuser", True)
-        kwargs.setdefault("password", "admin123")
+        # The seeded admin's password, so tests can log in as either.
+        kwargs.setdefault("password", settings.FIRST_SUPERUSER_PASSWORD)
         return await self.create(**kwargs)
 
     async def create_locked(self, **kwargs: Any) -> User:

@@ -22,7 +22,8 @@ from app.models.role_group_model import RoleGroup
 from app.models.role_model import Role
 from app.models.user_model import User
 from app.models.user_role_model import UserRole
-from app.schemas.user_schema import IUserCreate, IUserUpdate
+from app.schemas.user_schema import IUserCreate, IUserCreateFields, IUserUpdate
+from app.utils.accepted_password import AcceptedPassword, require_accepted_password
 
 
 class PasswordReuseError(ValueError):
@@ -112,16 +113,26 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
             return None
         return user
 
-    async def create_with_role(self, *, obj_in: IUserCreate, db_session: AsyncSession | None = None) -> User:
+    async def create_with_role(
+        self,
+        *,
+        obj_in: IUserCreateFields,
+        password: AcceptedPassword,
+        db_session: AsyncSession | None = None,
+    ) -> User:
         """
         Create a user with roles. Requires db_session to be provided explicitly.
+
+        ``password`` must come from ``password_policy.accept_initial_password``
+        for ``obj_in.email``; a plaintext is refused (#272).
         """
         if db_session is None:
             raise ValueError("db_session must be provided")
+        accepted = require_accepted_password(password, email=obj_in.email)
         user_data = obj_in.model_dump(exclude={"role_id", "password"})
         user_data["roles"] = []
         db_obj = User(**user_data)
-        db_obj.password = PasswordValidator.get_password_hash(obj_in.password)
+        db_obj.password = accepted.hash
         try:
             db_session.add(db_obj)
             role_ids = obj_in.role_id if obj_in.role_id is not None else []
@@ -165,29 +176,32 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
             raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
         return db_obj
 
-    async def create(
+    # Narrower than CRUDBase.create on purpose: a User instance would carry
+    # whatever hash its caller put on it, which is the bypass #272 closes.
+    async def create(  # type: ignore[override]
         self,
         *,
-        obj_in: IUserCreate | User,
+        obj_in: IUserCreateFields,
+        password: AcceptedPassword,
         created_by_id: UUID | str | None = None,
         db_session: AsyncSession | None = None,
     ) -> User:
         """
         Create a user. Requires db_session to be provided explicitly.
+
+        ``password`` must come from ``password_policy.accept_initial_password``
+        for ``obj_in.email``; a plaintext is refused (#272).
         """
         if db_session is None:
             raise ValueError("db_session must be provided")
-        role_ids: list[UUID] = []
-        if isinstance(obj_in, IUserCreate):
-            role_ids = obj_in.role_id if obj_in.role_id is not None else []
-            obj_in_data = obj_in.model_dump(exclude={"password", "role_id"})
-            obj_in_data["roles"] = []
-            db_obj = User(**obj_in_data)
-            db_obj.password = PasswordValidator.get_password_hash(obj_in.password)
-        else:
-            db_obj = obj_in
-            if db_obj.roles is None:
-                db_obj.roles = []
+        if not isinstance(obj_in, IUserCreateFields):
+            raise TypeError("crud.user.create takes an IUserCreateFields, not " + type(obj_in).__name__)
+        accepted = require_accepted_password(password, email=obj_in.email)
+        role_ids: list[UUID] = obj_in.role_id if obj_in.role_id is not None else []
+        obj_in_data = obj_in.model_dump(exclude={"password", "role_id"})
+        obj_in_data["roles"] = []
+        db_obj = User(**obj_in_data)
+        db_obj.password = accepted.hash
         if created_by_id:
             db_obj.created_by_id = created_by_id
         try:
@@ -206,7 +220,7 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
                 db_obj.roles = roles
             await db_session.commit()
             await db_session.refresh(db_obj)
-            if role_ids or (isinstance(obj_in, User) and obj_in.roles is not None and len(obj_in.roles) > 0):
+            if role_ids:
                 await db_session.refresh(db_obj, attribute_names=["roles"])
         except exc.IntegrityError as e:
             await db_session.rollback()

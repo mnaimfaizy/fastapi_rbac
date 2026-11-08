@@ -15,7 +15,9 @@ from app.schemas.permission_group_schema import IPermissionGroupCreate
 from app.schemas.permission_schema import IPermissionCreate
 from app.schemas.role_group_schema import IRoleGroupCreate
 from app.schemas.role_schema import IRoleCreate
-from app.schemas.user_schema import IUserCreate
+from app.schemas.user_schema import IUserCreateFields
+from app.utils.accepted_password import AcceptedPassword
+from app.utils.password_policy import InitialPasswordReason, PasswordRefused, accept_initial_password
 from app.utils.string_utils import format_permission_name
 
 current_date = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -24,10 +26,9 @@ SUPERUSER_EMAIL = settings.FIRST_SUPERUSER_EMAIL
 
 INITIAL_USERS_DATA: List[Dict[str, Any]] = [
     {
-        "user_data": IUserCreate(
+        "user_data": IUserCreateFields(
             first_name="Admin",
             last_name="FastAPI",
-            password=settings.FIRST_SUPERUSER_PASSWORD,
             email=SUPERUSER_EMAIL,
             is_superuser=True,
             is_active=True,
@@ -40,10 +41,9 @@ INITIAL_USERS_DATA: List[Dict[str, Any]] = [
         "role_names": ["Admin"],
     },
     {
-        "user_data": IUserCreate(
+        "user_data": IUserCreateFields(
             first_name="Manager",
             last_name="FastAPI",
-            password=settings.FIRST_SUPERUSER_PASSWORD,
             email="manager@example.com",
             is_superuser=False,
             is_active=True,
@@ -56,10 +56,9 @@ INITIAL_USERS_DATA: List[Dict[str, Any]] = [
         "role_names": ["Manager"],
     },
     {
-        "user_data": IUserCreate(
+        "user_data": IUserCreateFields(
             first_name="User",
             last_name="FastAPI",
-            password=settings.FIRST_SUPERUSER_PASSWORD,
             email="user@example.com",
             is_superuser=False,
             is_active=True,
@@ -243,6 +242,28 @@ INITIAL_ROLES: List[Dict[str, Any]] = [
 ]
 
 
+async def _accept_seed_password(email: str, *, db_session: AsyncSession) -> AcceptedPassword:
+    """Put FIRST_SUPERUSER_PASSWORD through the same policy as every other first password (#272).
+
+    Seeding used to hash it unchecked. A value the policy refuses now stops
+    seeding with a message that names the setting, so a deployment cannot come
+    up with a weak administrator password.
+    """
+    try:
+        return await accept_initial_password(
+            settings.FIRST_SUPERUSER_PASSWORD,
+            reason=InitialPasswordReason.SEED,
+            email=email,
+            actor=None,
+            db_session=db_session,
+        )
+    except PasswordRefused as refused:
+        raise RuntimeError(
+            "FIRST_SUPERUSER_PASSWORD does not meet the password policy, so the initial users "
+            "cannot be created: " + "; ".join(refused.errors)
+        ) from refused
+
+
 async def get_or_create_superuser(db_session: AsyncSession) -> UserModel:
     user = await crud.user.get_by_email(email=SUPERUSER_EMAIL, db_session=db_session)
     if not user:
@@ -253,7 +274,11 @@ async def get_or_create_superuser(db_session: AsyncSession) -> UserModel:
         if not superuser_data_entry:
             raise Exception(f"Superuser email {SUPERUSER_EMAIL} not found in INITIAL_USERS_DATA.")
 
-        user = await crud.user.create(obj_in=superuser_data_entry, db_session=db_session)
+        user = await crud.user.create(
+            obj_in=superuser_data_entry,
+            password=await _accept_seed_password(superuser_data_entry.email, db_session=db_session),
+            db_session=db_session,
+        )
         if not user:
             raise Exception(f"Could not create superuser {SUPERUSER_EMAIL}")
     return user
@@ -359,7 +384,11 @@ async def init_db(db_session: AsyncSession) -> None:
 
         if not user_obj:
             if user_data_schema.email != SUPERUSER_EMAIL:  # Superuser already handled
-                user_obj = await crud.user.create(obj_in=user_data_schema, db_session=db_session)
+                user_obj = await crud.user.create(
+                    obj_in=user_data_schema,
+                    password=await _accept_seed_password(user_data_schema.email, db_session=db_session),
+                    db_session=db_session,
+                )
 
         if not user_obj:
             print(f"Warning: User {user_data_schema.email} not found/created. Skip role assignment.")

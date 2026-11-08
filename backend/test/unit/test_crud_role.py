@@ -1,4 +1,4 @@
-from test.utils import random_email, random_lower_string
+from test.utils import accepted_password, random_email, random_lower_string, random_strong_password
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID
 
@@ -191,13 +191,17 @@ async def test_add_role_to_user(db: AsyncSession) -> None:
     """Test adding a role to a user"""
     # Create a user
     email = random_email()
-    password = random_lower_string(12)
+    password = random_strong_password()
     user_in = IUserCreate(
         email=email,
         password=password,
         is_active=True,
     )
-    user = await user_crud.create(obj_in=user_in, db_session=db)
+    user = await user_crud.create(
+        obj_in=user_in,
+        password=await accepted_password(db, user_in.password, email=user_in.email),
+        db_session=db,
+    )
 
     # Create a role
     role_name = f"test-role-{random_lower_string(8)}"
@@ -220,13 +224,17 @@ async def test_add_role_to_user_not_found(db: AsyncSession) -> None:
     """Test adding a non-existent role to a user raises ValueError"""
     # Create a user
     email = random_email()
-    password = random_lower_string(12)
+    password = random_strong_password()
     user_in = IUserCreate(
         email=email,
         password=password,
         is_active=True,
     )
-    user = await user_crud.create(obj_in=user_in, db_session=db)
+    user = await user_crud.create(
+        obj_in=user_in,
+        password=await accepted_password(db, user_in.password, email=user_in.email),
+        db_session=db,
+    )
 
     # Try to add non-existent role to user
     non_existent_id = UUID("00000000-0000-0000-0000-000000000000")
@@ -298,13 +306,17 @@ async def test_user_exist_in_role(db: AsyncSession) -> None:
 
     # Create a user
     email = random_email()
-    password = random_lower_string(12)
+    password = random_strong_password()
     user_in = IUserCreate(
         email=email,
         password=password,
         is_active=True,
     )
-    user = await user_crud.create(obj_in=user_in, db_session=db)
+    user = await user_crud.create(
+        obj_in=user_in,
+        password=await accepted_password(db, user_in.password, email=user_in.email),
+        db_session=db,
+    )
 
     # Add user to role
     await role_crud.add_role_to_user(user=user, role_id=role.id, db_session=db)
@@ -533,13 +545,17 @@ async def test_invalidate_user_permission_caches(db: AsyncSession) -> None:
 
     # Create a user
     email = random_email()
-    password = random_lower_string(12)
+    password = random_strong_password()
     user_in = IUserCreate(
         email=email,
         password=password,
         is_active=True,
     )
-    user = await user_crud.create(obj_in=user_in, db_session=db)
+    user = await user_crud.create(
+        obj_in=user_in,
+        password=await accepted_password(db, user_in.password, email=user_in.email),
+        db_session=db,
+    )
 
     # Add user to role
     await role_crud.add_role_to_user(user=user, role_id=role.id, db_session=db)

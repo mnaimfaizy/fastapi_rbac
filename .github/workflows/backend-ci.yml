@@ -112,7 +112,6 @@ jobs:
       TOKEN_ISSUER: "test_issuer"
       TOKEN_AUDIENCE: "test_audience"
       FIRST_SUPERUSER_EMAIL: "admin@example.com"
-      FIRST_SUPERUSER_PASSWORD: "admin123"
       USER_CHANGED_PASSWORD_DATE: "2023-01-01T00:00:00" # Example date
       JWT_REFRESH_SECRET_KEY: "another_testing_secret_key"
       JWT_RESET_SECRET_KEY: "reset_testing_secret_key"

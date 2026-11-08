@@ -143,8 +143,12 @@ if not token_is_allowlisted(valid, access_token):
 
 The thresholds above are settings, not constants in code. Every path that sets
 a password goes through `app/utils/password_policy.py`, so none of them can
-drift into a looser rule of its own. Registration and admin create call
-`accept_initial_password` (rules only). Change password, both reset-confirm
+drift into a looser rule of its own. Registration, admin create and database
+seeding call `accept_initial_password` (rules only), which returns an
+`AcceptedPassword` holding the hash. `crud.user.create` and `create_with_role`
+accept only that, never a plaintext, so a new way of creating users cannot
+skip the policy: it is a type error, and refused at runtime. Seeding refuses a
+`FIRST_SUPERUSER_PASSWORD` that fails the policy. Change password, both reset-confirm
 endpoints and admin update of a single user call `change_password`, which
 applies the rules, then the reuse policy, then ends every session, then
 commits, then writes the success audit event. A refusal is answered as `400`

@@ -9,7 +9,10 @@ missed twice. Every path now calls one of two operations here instead:
 - :func:`change_password` replaces the password of an existing user
   (self-service change, both reset-confirm endpoints, admin set).
 - :func:`accept_initial_password` admits the first password of a user that
-  does not exist yet (registration, admin create).
+  does not exist yet (registration, admin create, database seeding) and
+  returns the :class:`~app.utils.accepted_password.AcceptedPassword` that
+  ``crud.user.create`` and ``create_with_role`` require (#272), so no creation
+  path can skip it.
 
 A refusal is raised as :class:`PasswordRefused` and answered by one exception
 handler (``app.main``) as 400 with ``detail = {"message", "errors"}``, so the
@@ -41,6 +44,7 @@ from app import crud
 from app.core.security import PasswordValidator
 from app.crud.user_crud import PasswordReuseError
 from app.models.user_model import User
+from app.utils.accepted_password import AcceptedPassword, _issue
 from app.utils.background_tasks import log_security_event
 from app.utils.token import revoke_all_user_tokens
 
@@ -66,6 +70,8 @@ class InitialPasswordReason(Enum):
 
     REGISTRATION = "registration"
     ADMIN_CREATE = "admin_create"
+    # app.db.init_db seeding the first users from FIRST_SUPERUSER_PASSWORD.
+    SEED = "seed"
 
 
 class PasswordRefusalKind(str, Enum):
@@ -101,6 +107,7 @@ _RULES_REFUSED_EVENT = {
     PasswordChangeReason.ADMIN: "admin_user_update_password_complexity_failed",
     InitialPasswordReason.REGISTRATION: "registration_password_complexity_failed",
     InitialPasswordReason.ADMIN_CREATE: "admin_user_create_password_complexity_failed",
+    InitialPasswordReason.SEED: "seed_user_password_complexity_failed",
 }
 _REUSE_REFUSED_EVENT = {
     PasswordChangeReason.SELF: "password_change_reused_password",
@@ -277,12 +284,17 @@ async def accept_initial_password(
     actor: Optional[User],
     db_session: AsyncSession,
     client_address: Optional[str] = None,
-) -> None:
+) -> AcceptedPassword:
     """Admit the first password of a user about to be created, or raise.
 
     Only the rules apply: there is no history to reuse from and no session to
     end. Called before anything is written, so a refusal leaves no user row,
     token or email behind.
+
+    Returns the hashed password bound to ``email``. ``crud.user.create`` and
+    ``create_with_role`` accept nothing else, so this check cannot be skipped
+    by a creation path (#272).
     """
     details = _audit_details(email=email, actor=actor, client_address=client_address)
     await _check_rules(password, reason=reason, user=None, details=details, db_session=db_session)
+    return _issue(password, email=email)

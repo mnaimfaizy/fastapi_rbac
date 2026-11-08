@@ -142,7 +142,7 @@ async def create_user(
     self-service (#198). A weaker rule here would leave the new user unable
     to change the password they were given.
     """
-    await password_policy.accept_initial_password(
+    accepted_password = await password_policy.accept_initial_password(
         new_user.password,
         reason=InitialPasswordReason.ADMIN_CREATE,
         email=new_user.email,
@@ -161,7 +161,9 @@ async def create_user(
         message = "User created successfully"
 
     # Create the user
-    user = await crud.user.create_with_role(obj_in=new_user, db_session=db_session)
+    user = await crud.user.create_with_role(
+        obj_in=new_user, password=accepted_password, db_session=db_session
+    )
 
     # Send verification email if configured and user is not auto-verified
     if settings.ADMIN_CREATED_USERS_SEND_EMAIL and not settings.ADMIN_CREATED_USERS_AUTO_VERIFIED:

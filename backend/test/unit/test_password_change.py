@@ -22,6 +22,7 @@ from app.models.audit_log_model import AuditLog
 from app.models.password_history_model import UserPasswordHistory
 from app.models.user_model import User
 from app.schemas.common_schema import TokenType
+from app.utils.accepted_password import AcceptedPassword
 from app.utils.password_policy import (
     PASSWORD_COMPLEXITY_FAILURE_MESSAGE,
     InitialPasswordReason,
@@ -304,6 +305,7 @@ async def test_a_failed_reload_does_not_mask_the_original_failure(
     [
         (InitialPasswordReason.REGISTRATION, "registration_password_complexity_failed"),
         (InitialPasswordReason.ADMIN_CREATE, "admin_user_create_password_complexity_failed"),
+        (InitialPasswordReason.SEED, "seed_user_password_complexity_failed"),
     ],
 )
 async def test_initial_password_rules_refused(
@@ -321,10 +323,14 @@ async def test_initial_password_rules_refused(
 
 @pytest.mark.parametrize("reason", list(InitialPasswordReason))
 async def test_initial_password_accepted(db: AsyncSession, reason: InitialPasswordReason) -> None:
-    await accept_initial_password(
+    accepted = await accept_initial_password(
         CURRENT_PASSWORD, reason=reason, email="new@example.com", actor=None, db_session=db
     )
 
+    # The hash of what was accepted, bound to the address it was accepted for (#272).
+    assert isinstance(accepted, AcceptedPassword)
+    assert PasswordValidator.verify_password(CURRENT_PASSWORD, accepted.hash)
+    assert accepted.is_for("new@example.com")
     assert await _audit_actions(db) == []
 
 
