@@ -58,7 +58,7 @@ If the install fails with `Access is denied` on Windows, a running `graphify-mcp
    .\scripts\development\graphify\Build-Graph.ps1
    ```
 
-2. Install the git hooks. `.pre-commit-config.yaml` sets `default_install_hook_types`, so this one command installs the pre-commit, post-commit and post-merge hooks. Run it again even if you installed pre-commit before, since older installs only set up the pre-commit hook:
+2. Install the git hooks. `.pre-commit-config.yaml` sets `default_install_hook_types`, so this one command installs the pre-commit, post-commit, post-merge and post-rewrite hooks. Run it again even if you installed pre-commit before, since older installs only set up the pre-commit hook:
 
    ```bash
    pre-commit install
@@ -70,14 +70,15 @@ To check the server by hand: `graphify god-nodes` (CLI) should list hubs such as
 
 ## How the graph stays current
 
-Two pre-commit hooks at the `post-commit` and `post-merge` stages call `scripts/development/graphify/graphify-refresh.sh`:
+Three pre-commit hooks at the `post-commit`, `post-merge` and `post-rewrite` stages call `scripts/development/graphify/graphify-refresh.sh`:
 
 | Hook | Fires on | Changed files |
 | --- | --- | --- |
-| `graphify-refresh-commit` | `git commit` | the files in `HEAD` |
-| `graphify-refresh-merge` | `git merge`, and so `git pull` | `git diff ORIG_HEAD HEAD` |
+| `graphify-refresh-commit` | `git commit`, including a merge commit you make after resolving a conflict | `git diff HEAD^1 HEAD` |
+| `graphify-refresh-merge` | `git merge`, and so a merging `git pull` | `git diff ORIG_HEAD HEAD` |
+| `graphify-refresh-rewrite` | the end of a rebase, and so `git pull --rebase` | `git diff ORIG_HEAD HEAD` |
 
-`post-merge` is needed because `git merge` never fires `post-commit`: not for a fast-forward, where no commit is created, and not for the merge commit it writes itself.
+`post-merge` is needed because `git merge` never fires `post-commit`: not for a fast-forward, where no commit is created, and not for the merge commit it writes itself. `post-rewrite` is needed because a rebase fires neither: the `post-commit` calls for each replayed commit hit the rebase guard below, and only `post-rewrite` runs once the rebase finishes. The rewrite hook ignores `git commit --amend`, which `post-commit` already covers.
 
 When a changed file is Python under `backend/` or TS/JS under `react-frontend/src/`, the script queues those files in `graphify-out/.hook-refresh.pending` and starts a background worker, and the git command returns immediately. The worker re-parses only the queued files and makes no LLM call; a typical refresh takes under a minute. Output is appended to `~/.cache/graphify-rebuild-<repo folder>.log`.
 
@@ -94,7 +95,7 @@ The script does nothing, and never fails the git command, when:
 | `graphify` is not on `PATH` or in `~/.local/bin` | You have not installed graphify |
 | `graphify-out/graph.json` does not exist | You have not opted in with a first build |
 | You are in a linked git worktree | `graphify-out/` belongs to the primary checkout; a worktree would write a partial graph and race it |
-| A rebase, merge or cherry-pick is in progress | A rebuild mid-sequence is wasted work |
+| A rebase is replaying commits | The `post-rewrite` call at the end of the rebase refreshes everything in one batch |
 | No backend or frontend source file changed | Docs and config changes do not affect the code graph |
 
 `PYTHONHASHSEED=0` is set in the hook and in the build scripts. graphify's community clustering iterates sets whose order is otherwise randomised per process, so without it a refresh with no code changes still reshuffles communities.

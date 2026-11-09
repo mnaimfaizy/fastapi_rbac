@@ -1,10 +1,10 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
 
-# `pre-commit install` installs all three. post-commit and post-merge only run
-# the graphify refresh, which is a no-op unless you opted in to graphify
-# (docs/agents/graphify.md).
-default_install_hook_types: [pre-commit, post-commit, post-merge]
+# `pre-commit install` installs all four. post-commit, post-merge and
+# post-rewrite only run the graphify refresh, which is a no-op unless you opted
+# in to graphify (docs/agents/graphify.md).
+default_install_hook_types: [pre-commit, post-commit, post-merge, post-rewrite]
 # Hooks without their own `stages` run at commit time only, not after commits
 # or merges.
 default_stages: [pre-commit]
@@ -139,6 +139,14 @@ repos:
         entry: scripts/development/graphify/graphify-refresh.sh merge
         language: script
         stages: [post-merge]
+        always_run: true
+        pass_filenames: false
+        verbose: true
+      - id: graphify-refresh-rewrite
+        name: graphify refresh (rebase/pull --rebase)
+        entry: scripts/development/graphify/graphify-refresh.sh rewrite
+        language: script
+        stages: [post-rewrite]
         always_run: true
         pass_filenames: false
         verbose: true

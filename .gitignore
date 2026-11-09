@@ -25,4 +25,3 @@ memory_test_db_default
 # graphify knowledge graph: generated locally and refreshed by git hooks, never
 # committed. .mcp.json and .graphifyignore are committed. See docs/agents/graphify.md.
 graphify-out/
-**/graphify-out/

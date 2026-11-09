@@ -12,7 +12,7 @@ Scripts for local development environment:
 - `code-quality/manage-code-quality.ps1` - Code formatting, linting, and import fixing
 - `database/create-databases.sql` - Database creation scripts
 - `graphify/Build-Graph.ps1` / `graphify/build-graph.sh` - Build the local knowledge graph from scratch (see `docs/agents/graphify.md`)
-- `graphify/graphify-refresh.sh` - Post-commit/post-merge graph refresh, run by pre-commit hooks
+- `graphify/graphify-refresh.sh` - Post-commit/post-merge/post-rewrite graph refresh, run by pre-commit hooks
 
 ### Docker Scripts (`docker/`)
 

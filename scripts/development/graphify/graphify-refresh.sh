@@ -1,18 +1,25 @@
 #!/usr/bin/env bash
 # Refresh the local graphify knowledge graph after a commit or a merge/pull.
 #
-# Called by the pre-commit framework at the post-commit and post-merge stages
-# (see .pre-commit-config.yaml). The only argument says which event fired, and
-# so how to name the set of files that just changed:
+# Called by the pre-commit framework at the post-commit, post-merge and
+# post-rewrite stages (see .pre-commit-config.yaml). The only argument says
+# which event fired, and so how to name the set of files that just changed:
 #
-#   commit  the files in HEAD
-#   merge   git diff ORIG_HEAD..HEAD (fallback HEAD@{1}). This is the hook that
-#           covers `git pull`: git merge never fires post-commit, neither for a
-#           fast-forward nor for the merge commit it writes itself.
+#   commit   git diff HEAD^1..HEAD: the commit's files, and for a merge commit
+#            made by `git commit` (after a conflict or --no-commit) everything
+#            the merge brought in. Falls back to diff-tree --root for a root
+#            commit.
+#   merge    git diff ORIG_HEAD..HEAD (fallback HEAD@{1}). This covers a merging
+#            `git pull`: git merge never fires post-commit, neither for a
+#            fast-forward nor for the merge commit it writes itself.
+#   rewrite  git diff ORIG_HEAD..HEAD after a rebase, which covers
+#            `git pull --rebase`. A rebase fires neither post-merge nor (past the
+#            rebase guard) post-commit. Amends are ignored here because
+#            post-commit already handled them.
 #
-# The rebuild is `graphify update .`: AST only, no LLM, no network. It runs
-# detached in the background so the git command returns at once; progress goes
-# to ~/.cache/graphify-rebuild-<repo folder>.log.
+# The rebuild re-parses only the changed files (AST only, no LLM, no network;
+# see the worker below). It runs detached in the background so the git command
+# returns at once; progress goes to ~/.cache/graphify-rebuild-<repo folder>.log.
 #
 # Every guard below exits 0. A skipped refresh must never fail the git command
 # that triggered it, and the whole script is a no-op for anyone who has not
@@ -103,6 +110,14 @@ fi
 
 TRIGGER="${1:-commit}"
 
+# post-rewrite fires for `git commit --amend` too; post-commit already covered
+# that. pre-commit passes the rewrite kind in PRE_COMMIT_REWRITE_COMMAND; a
+# direct call can pass it as the second argument.
+if [ "$TRIGGER" = "rewrite" ] &&
+  [ "${PRE_COMMIT_REWRITE_COMMAND:-${2:-}}" != "rebase" ]; then
+  exit 0
+fi
+
 # Locate graphify. `uv tool install` puts it in ~/.local/bin, which is not
 # always on PATH for hooks launched from a GUI git client.
 GRAPHIFY_BIN=$(command -v graphify 2>/dev/null) || true
@@ -124,17 +139,25 @@ if [ -n "$_GFY_COMMONDIR" ] && [ "$_GFY_GITDIR" != "$_GFY_COMMONDIR" ]; then
   exit 0
 fi
 
-# Never rebuild mid-rebase, mid-merge or mid-cherry-pick.
-for _state in "$_GFY_GITDIR/rebase-merge" "$_GFY_GITDIR/rebase-apply"; do
-  if [ -d "$_state" ]; then
-    exit 0
-  fi
-done
-for _state in "$_GFY_GITDIR/MERGE_HEAD" "$_GFY_GITDIR/CHERRY_PICK_HEAD"; do
-  if [ -f "$_state" ]; then
-    exit 0
-  fi
-done
+# Skip the post-commit calls a rebase makes for each replayed commit; the
+# post-rewrite call at the end covers the whole rebase in one batch. git runs
+# post-rewrite while the rebase-merge state directory still exists, so that
+# call is exempt.
+#
+# There is deliberately no MERGE_HEAD or CHERRY_PICK_HEAD check. git still has
+# each of them in place when it runs post-merge for a merge commit and
+# post-commit for every successful pick, so such a check would skip every
+# merging pull and every cherry-pick. A merge stopped by a conflict or
+# --no-commit fires no hook, and post-commit for the concluding commit runs
+# after MERGE_HEAD is gone. Each pick of a multi-commit cherry-pick queues its
+# own files, and the worker's lock serialises them.
+if [ "$TRIGGER" != "rewrite" ]; then
+  for _state in "$_GFY_GITDIR/rebase-merge" "$_GFY_GITDIR/rebase-apply"; do
+    if [ -d "$_state" ]; then
+      exit 0
+    fi
+  done
+fi
 
 # Refresh an existing graph only. The first build is a deliberate, manual
 # opt-in step (scripts/development/graphify/build-graph.sh).
@@ -151,8 +174,15 @@ case "$TRIGGER" in
     fi
     TRIGGER_TEXT="merge brought in code"
     ;;
+  rewrite)
+    CHANGED=$(git diff --name-only ORIG_HEAD HEAD 2>/dev/null) || true
+    TRIGGER_TEXT="rebase brought in code"
+    ;;
   *)
-    CHANGED=$(git diff-tree --no-commit-id --name-only -r HEAD 2>/dev/null) || true
+    # Diff against the first parent: diff-tree prints nothing for a merge
+    # commit. --root covers the very first commit, which has no parent.
+    CHANGED=$(git diff --name-only 'HEAD^1' HEAD 2>/dev/null ||
+      git diff-tree --no-commit-id --name-only -r --root HEAD 2>/dev/null) || true
     TRIGGER_TEXT="code changed"
     ;;
 esac

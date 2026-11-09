@@ -2,7 +2,7 @@
 # Build the local graphify knowledge graph from scratch (AST only, no LLM).
 #
 # Run this once after installing graphify to opt in. After that, the
-# post-commit and post-merge hooks keep the graph current on their own.
+# post-commit, post-merge and post-rewrite hooks keep the graph current on their own.
 # Re-run it after changing .graphifyignore, or whenever the graph looks wrong.
 #
 # Full guide: docs/agents/graphify.md
