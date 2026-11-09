@@ -48,7 +48,7 @@ class TestDashboardFlow:
             client, admin_user.email, settings.FIRST_SUPERUSER_PASSWORD
         )
         if status_code != 200:
-            print("LOGIN ERROR:", login_response)
+            print("LOGIN ERROR:", status_code)
         assert status_code == 200
         admin_token = login_response["data"]["access_token"]
         auth_headers = {"Authorization": f"Bearer {admin_token}"}

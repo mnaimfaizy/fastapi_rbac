@@ -35,7 +35,7 @@ class TestPermissionManagementFlow:
             headers=headers,
         )
         if response.status_code != 200:
-            print("Admin login failed:", response.status_code, response.text)
+            print("Admin login failed:", response.status_code)
         assert response.status_code == 200
         return response.json()["data"]["access_token"]
 
@@ -502,24 +502,13 @@ class TestPermissionManagementFlow:
             headers=headers,
         )
         if response.status_code != 200:
-            try:
-                print("Registration failed:", response.status_code, response.json())
-            except Exception:
-                print("Registration failed:", response.status_code, response.text)
-        else:
-            try:
-                print("Registration succeeded. Response:", response.json())
-            except Exception:
-                print("Registration succeeded. Response (raw):", response.text)
+            print("Registration failed:", response.status_code)
         assert response.status_code == 200
         # After registration, extract user id and verification code, and verify the user before login
         registration_json = response.json()
         verification_code = registration_json["data"].get("verification_code")
         if not verification_code:
-            print(
-                "ERROR: No verification_code in registration response. Registration JSON:",
-                registration_json,
-            )
+            print("ERROR: No verification_code in registration response.")
             import pytest
 
             pytest.fail("No verification_code in registration response; cannot verify user.")
@@ -532,11 +521,9 @@ class TestPermissionManagementFlow:
             headers=headers,
         )
         if response.status_code != 200:
-            print("User verification failed:", response.status_code, response.text)
+            print("User verification failed:", response.status_code)
         assert response.status_code == 200
-        # Print verification response for debug
         verification_json = response.json()
-        print("Verification response:", verification_json)
         needs_pw_change = verification_json["data"].get("needs_to_change_password")
         if needs_pw_change:
             # After verification, login as the user to get access token
@@ -588,8 +575,6 @@ class TestPermissionManagementFlow:
                 admin_debug_response.status_code,
                 admin_debug_response.text,
             )
-            # DEBUG: Print password being used for login
-            print("[DEBUG] Password being used for login after password change:", user_data["password"])
             # DEBUG: Fetch user object as admin after password change
             csrf_token, admin_debug_headers = await get_csrf_token(client)
             admin_debug_headers["Authorization"] = f"Bearer {admin_token}"
@@ -611,7 +596,7 @@ class TestPermissionManagementFlow:
             headers=headers,
         )
         if response.status_code != 200:
-            print("Login after password change failed:", response.status_code, response.text)
+            print("Login after password change failed:", response.status_code)
         assert response.status_code == 200
         regular_token = response.json()["data"]["access_token"]
         regular_headers = {"Authorization": f"Bearer {regular_token}"}
