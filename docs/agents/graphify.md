@@ -102,7 +102,8 @@ The script does nothing, and never fails the git command, when:
 
 ### What the hooks do not cover
 
-- **Branch switches.** `git checkout` fires neither hook, so after switching branches the graph describes whichever branch was last refreshed. Rerun the build script if it matters.
+- **Branch switches.** `git checkout` fires none of the refresh hooks, so after switching branches the graph describes whichever branch was last refreshed. Rerun the build script if it matters.
+- **A fast-forward `git rebase`.** When you have no local commits, `git rebase origin/main` fast-forwards, and git fires only `post-checkout`, which these hooks don't use. `git pull --rebase` is not affected: in that case git fast-forwards through a merge, which fires `post-merge`. After a fast-forward `git rebase`, rerun the build script, or use `git pull --rebase` or `git merge --ff-only` instead.
 - **Changes to `.graphifyignore`.** `update` keeps nodes from files that left the scan. Rebuild with the build script.
 - **Linked worktrees** (including `.claude/worktrees/`). There is no `graphify-out/` there, so the MCP server answers `graph.json not found`. Pass `project_path` with the primary checkout's absolute path on the tool call; the answer then describes the primary checkout's branch, not the worktree's.
 

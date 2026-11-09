@@ -168,27 +168,36 @@ fi
 case "$TRIGGER" in
   merge)
     if git rev-parse --verify --quiet ORIG_HEAD >/dev/null 2>&1; then
-      CHANGED=$(git diff --name-only ORIG_HEAD HEAD 2>/dev/null) || true
+      CHANGED=$(git diff --name-only --no-renames ORIG_HEAD HEAD 2>/dev/null) || true
     else
-      CHANGED=$(git diff --name-only 'HEAD@{1}' HEAD 2>/dev/null) || true
+      CHANGED=$(git diff --name-only --no-renames 'HEAD@{1}' HEAD 2>/dev/null) || true
     fi
     TRIGGER_TEXT="merge brought in code"
     ;;
   rewrite)
-    CHANGED=$(git diff --name-only ORIG_HEAD HEAD 2>/dev/null) || true
+    CHANGED=$(git diff --name-only --no-renames ORIG_HEAD HEAD 2>/dev/null) || true
     TRIGGER_TEXT="rebase brought in code"
     ;;
   *)
     # Diff against the first parent: diff-tree prints nothing for a merge
     # commit. --root covers the very first commit, which has no parent.
-    CHANGED=$(git diff --name-only 'HEAD^1' HEAD 2>/dev/null ||
+    CHANGED=$(git diff --name-only --no-renames 'HEAD^1' HEAD 2>/dev/null ||
       git diff-tree --no-commit-id --name-only -r --root HEAD 2>/dev/null) || true
     TRIGGER_TEXT="code changed"
     ;;
 esac
 
 # Only source files count. Docs and config changes never trigger a rebuild.
-# .graphifyignore still applies on top of this inside graphify.
+#
+# --no-renames above lists a renamed file's old path as a deletion. Without it,
+# moving a source file out of these paths (or into an ignored one) would queue
+# nothing, and the old file's nodes would stay in the graph.
+#
+# Paths that .graphifyignore excludes (alembic migrations, vite-env.d.ts) can be
+# queued here on purpose. _rebuild_code checks every changed path against the
+# same detect() result a full build uses: an excluded file that still exists
+# is skipped, and a deleted one is evicted. Keeping the ignore rules in
+# .graphifyignore alone stops the two lists from drifting apart.
 SOURCES=$(printf '%s\n' "$CHANGED" | grep -E '^(backend/.*\.py|react-frontend/src/.*\.(ts|tsx|js|jsx))$') || true
 if [ -z "$SOURCES" ]; then
   exit 0
