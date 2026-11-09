@@ -1,5 +1,7 @@
 # Research: Automating graphify output refresh
 
+> **Superseded (2026-11-09).** The weekly CI refresh and the committed `GRAPH_REPORT.md` described here have been retired. graphify is now an opt-in local tool: an MCP server plus post-commit, post-merge and post-rewrite refresh hooks, with nothing committed. See [`docs/agents/graphify.md`](../agents/graphify.md). This page is kept as a record of the earlier design.
+
 **Date:** 2026-07-23
 **Question:** How should this repo regenerate graphify knowledge-graph output when PRs are opened/merged or when relevant code changes — GitHub Actions, git hooks, pre-commit, or something else?
 

@@ -1,201 +1,148 @@
 # Knowledge Graph (graphify)
 
-[graphify](https://github.com/safishamsi/graphify) (PyPI package `graphifyy`) builds a persistent knowledge graph of this repository so agents and humans can answer architecture questions without re-exploring the tree every session.
+[graphify](https://github.com/safishamsi/graphify) (PyPI package `graphifyy`) builds an AST-based graph of this repository's code and serves it to agents over MCP. It is an **opt-in, per-developer supplement** to grep and reading code, not a replacement for either.
 
-This guide is **project-level** adoption. Runtime auth/RBAC behavior is unchanged.
+Nothing about it is committed except configuration. Each developer who opts in builds the graph once, and git hooks keep it current after commits and pulls. There is no CI job.
 
-## What it is for
+Runtime auth and RBAC behavior are unaffected.
 
-Use the graph when asking:
+## What it is good for
 
-- How auth/token lifecycle connects (JWT + Redis)
-- How RBAC domain entities relate (`user` → `role` → `permission`, role/permission groups)
-- Where API deps → CRUD → models seams sit
-- How the React auth layer talks to `/api/v1` auth endpoints
+- **`get_neighbors <symbol>`**: direct callers, callees and importers of a function or class, each with `file:line`. It lists one edge per calling function, not one per call site, so use grep when you need every call line.
+- **`god_nodes`**: the most-connected nodes. A good first look at an unfamiliar area.
+- **`query_graph "<question>"`**: broad "what relates to X" context.
+- **`shortest_path A B`**: how two symbols connect through calls and imports.
+- **`graphify-out/GRAPH_REPORT.md`**: a community map of the codebase. Communities are unnamed (`Community N`) because the build makes no LLM call.
 
-Prefer **raw code search** when you need exact line edits, new files that are not in the graph yet, or string literals / config values.
+## What it must not be used for
 
-## Install
+These fail **silently**: the graph returns a plausible but incomplete or wrong answer with no warning.
 
-Requires Python 3.10+.
-
-### Windows (PowerShell)
-
-```powershell
-# Preferred
-uv tool install graphifyy
-
-# Or
-pip install graphifyy
-# If `graphify` is not on PATH, add your Python Scripts folder, e.g.:
-#   %APPDATA%\Python\Python313\Scripts
-# Or use: pipx install graphifyy
-```
-
-### Unix (macOS / Linux)
-
-```bash
-uv tool install graphifyy
-# or: pipx install graphifyy
-# or: pip install graphifyy
-```
-
-Verify:
-
-```bash
-graphify --help
-```
-
-Optional: sync the local skill copy after upgrades:
-
-```bash
-graphify install
-```
-
-## Git policy for `graphify-out/`
-
-**Decision (v1): partial commit.**
-
-| Artifact | Git | Reason |
+| Question | Why the graph gets it wrong | Use instead |
 | --- | --- | --- |
-| `GRAPH_REPORT.md` | **Committed** | Stable human/agent summary (god nodes, surprises, suggested questions) |
-| `graphify-out/README.md` | **Committed** | Points maintainers at this guide |
-| `graph.json`, `graph.html`, `manifest.json`, `cache/`, `.graphify_*` | **Gitignored** | Large / high-churn; rebuild locally |
+| Which endpoints use a dependency, or require permission X | Calls inside `Depends(...)` defaults are not edges. `get_neighbors get_current_user` shows tests and `deps.py` but none of the ~40 `Depends(deps.get_current_user(...))` route guards | `grep -rn "Depends(deps.get_current_user" backend/app` |
+| Anything across the HTTP boundary (React client to FastAPI route) | The graph is AST-only; there is no edge from an `axios` call to the route handling it | Grep the URL path in both `react-frontend/src` and `backend/app/api` |
+| A symbol whose name exists in more than one file (`create`, `get`, `upgrade`) | It cannot tell same-named symbols apart and may answer for a different one | Grep, then read the file |
+| Database schema or migrations | `backend/alembic/versions/` and `*.sql` are excluded on purpose (see `.graphifyignore`) | `backend/app/models/` |
+| Code changed since the last refresh | The graph only knows what the last refresh saw | Read the file |
 
-After clone, generate queryable artifacts with the build commands below before using `graphify query` / `path` / `explain`.
+Always confirm a graph answer against the actual file before relying on it.
 
-Sensitive paths (`.env`, credentials, etc.) are skipped by graphify detect; if detect reports `skipped_sensitive`, that is expected.
+## Setup (once per machine)
 
-## Build / update
-
-Default v1 scope: **code AST only** (`--code-only`). No API key required. Docs/images need a semantic LLM pass (`graphify extract` without `--code-only` plus a configured backend) — optional follow-up.
-
-### Windows (PowerShell)
-
-```powershell
-# From repo root — initial or full rebuild (AST, no LLM)
-graphify extract . --code-only --out .
-
-# Name communities + refresh report (no LLM labels)
-graphify cluster-only . --no-label
-
-# After code changes (incremental AST, no LLM)
-graphify update .
-```
-
-Or use the helper:
-
-```powershell
-.\scripts\development\graphify\Update-Graphify.ps1
-.\scripts\development\graphify\Update-Graphify.ps1 -Full
-```
-
-### Unix
+Requires [uv](https://docs.astral.sh/uv/). Install the pinned version **with the `mcp` extra**:
 
 ```bash
-graphify extract . --code-only --out .
-graphify cluster-only . --no-label
-graphify update .
+uv tool install "graphifyy[mcp]==0.9.43"
 ```
 
-Or:
+The `mcp` extra provides `graphify-mcp`. Without it, the MCP server fails to start (`ModuleNotFoundError: No module named 'mcp'`, or `MCP error -32000: Connection closed` in Claude Code) while the CLI and the refresh hooks keep working, so nothing else looks broken. Because the extra is recorded in uv's receipt, `uv tool upgrade graphifyy` keeps it. Reinstalling plain `graphifyy` drops it.
+
+After any install or upgrade, resync the user-level `/graphify` skill, which is pinned to the version that wrote it:
 
 ```bash
-./scripts/development/graphify/update-graphify.sh
-./scripts/development/graphify/update-graphify.sh --full
+graphify install --platform claude
 ```
 
-Corpus note: a full-repo detect is typically **>500 files**. Prefer `--code-only` for the free AST path, or scope to `backend/app`, `react-frontend/src`, and `docs` if you need a smaller semantic extract.
+If the install fails with `Access is denied` on Windows, a running `graphify-mcp` (from an open agent session in any repo) is locking the files. Close that session, or stop the `graphify-mcp` process, and install again.
 
-## Query / path / explain
+## Opt in for this repository
 
-Requires local `graphify-out/graph.json` (gitignored — build first).
+1. Build the graph (about two minutes, no LLM, no network):
 
-```bash
-graphify query "How does login connect to Redis token storage?"
-graphify query "Where are permission checks enforced before CRUD?" --dfs --budget 1500
-graphify path "login()" "add_token_to_redis()"
-graphify explain "User"
-```
+   ```bash
+   bash scripts/development/graphify/build-graph.sh
+   ```
 
-Open `graphify-out/graph.html` in a browser for interactive exploration (local only).
+   ```powershell
+   .\scripts\development\graphify\Build-Graph.ps1
+   ```
 
-## When agents should use the graph
+2. Install the git hooks. `.pre-commit-config.yaml` sets `default_install_hook_types`, so this one command installs the pre-commit, post-commit, post-merge and post-rewrite hooks. Run it again even if you installed pre-commit before, since older installs only set up the pre-commit hook:
 
-If `graphify-out/graph.json` exists, **query it first** for architecture / relationship / “how does X connect to Y” questions. Fall back to README, `docs/agents/domain.md`, and code search when the graph is missing, stale, or insufficient.
+   ```bash
+   pre-commit install
+   ```
 
-Domain vocabulary to keep consistent: `user`, `role`, `permission`, `role group`, `permission group` — see [`domain.md`](./domain.md).
+3. Restart your agent session so it picks up the `graphify` MCP server, and approve the project server if prompted. In Claude Code, `claude mcp list` should report `graphify: … ✔ Connected`.
 
-## Community labels (optional)
+To check the server by hand: `graphify god-nodes` (CLI) should list hubs such as `User`, `cn()` and `TokenType`.
 
-Default rebuilds use `--no-label` (placeholder `Community N` names, zero LLM cost). To rename communities with an LLM backend:
+## How the graph stays current
 
-```bash
-graphify label . --backend gemini   # requires GEMINI_API_KEY / GOOGLE_API_KEY (or another supported backend)
-```
+Three pre-commit hooks at the `post-commit`, `post-merge` and `post-rewrite` stages call `scripts/development/graphify/graphify-refresh.sh`:
 
-### Maintainer notes from the initial code-only build
+| Hook | Fires on | Changed files |
+| --- | --- | --- |
+| `graphify-refresh-commit` | `git commit`, including a merge commit you make after resolving a conflict | `git diff HEAD^1 HEAD` |
+| `graphify-refresh-merge` | `git merge`, and so a merging `git pull` | `git diff ORIG_HEAD HEAD` |
+| `graphify-refresh-rewrite` | the end of a rebase, and so `git pull --rebase` | `git diff ORIG_HEAD HEAD` |
 
-God-node / surprise highlights worth keeping in mind:
+`post-merge` is needed because `git merge` never fires `post-commit`: not for a fast-forward, where no commit is created, and not for the merge commit it writes itself. `post-rewrite` is needed because a rebase fires neither: the `post-commit` calls for each replayed commit hit the rebase guard below, and only `post-rewrite` runs once the rebase finishes. The rewrite hook ignores `git commit --amend`, which `post-commit` already covers.
 
-- Domain hubs: `User`, `Role`, `Permission` rank among highest-degree nodes (alongside utilities like `UUID` / test helpers).
-- Auth → Redis: `login()` has an inferred `calls` edge to `add_token_to_redis()` (`auth.py` → `token.py`).
-- Frontend import cycles through `api.ts` ↔ Redux slices ↔ `*.service.ts` are real structural loops; treat them as navigation signals, not necessarily bugs.
-- Community 0 hubs include frontend auth UI (`LoginForm`, `ProtectedRoute`, `InitAuth`); permission/role model communities cluster around the RBAC models package.
+When a changed file is Python under `backend/` or TS/JS under `react-frontend/src/`, the script queues those files in `graphify-out/.hook-refresh.pending` and starts a background worker, and the git command returns immediately. The worker re-parses only the queued files and makes no LLM call; a typical refresh takes under a minute. Output is appended to `~/.cache/graphify-rebuild-<repo folder>.log`.
 
-Re-read `graphify-out/GRAPH_REPORT.md` after each full rebuild — numbers and community IDs drift.
+Two implementation details are deliberate:
 
-## Automation (committed report)
+- **Incremental by changed files.** `graphify update .` re-parses every file on each run (over five minutes here with one worker). The worker instead calls `graphify.watch._rebuild_code(changed_paths=...)`, the entry point graphify's own git hooks use. It is a private API, which is one reason the version is pinned. If graphify's Python cannot be located, the worker falls back to `graphify update .`.
+- **Its own lock.** graphify's rebuild lock uses `fcntl` and does nothing on Windows, so two quick commits would rebuild concurrently and race on `graphify-out/`. The worker takes a `mkdir` lock instead (`graphify-out/.hook-refresh.lock`). A hook that finds it held leaves its files in the queue for the running worker, which drains the queue until it is empty. A lock older than 30 minutes is treated as left behind by a killed refresh and removed.
 
-CI keeps the **committed** summary fresh without pushing to protected `main` and without opening one bot PR per feature PR.
+The script does nothing, and never fails the git command, when:
 
-| Trigger | Workflow |
+| Condition | Why |
 | --- | --- |
-| Weekly (Monday 06:00 UTC) | [`.github/workflows/graphify-report.yml`](../../.github/workflows/graphify-report.yml) |
-| Manual | Actions → **Refresh graphify report** → **Run workflow** |
+| `GRAPHIFY_SKIP_HOOK=1` is set | Explicit opt-out for one command |
+| `graphify` is not on `PATH` or in `~/.local/bin` | You have not installed graphify |
+| `graphify-out/graph.json` does not exist | You have not opted in with a first build |
+| You are in a linked git worktree | `graphify-out/` belongs to the primary checkout; a worktree would write a partial graph and race it |
+| A rebase is replaying commits | The `post-rewrite` call at the end of the rebase refreshes everything in one batch |
+| No backend or frontend source file changed | Docs and config changes do not affect the code graph |
 
-Behavior:
+`PYTHONHASHSEED=0` is set in the hook and in the build scripts. graphify's community clustering iterates sets whose order is otherwise randomised per process, so without it a refresh with no code changes still reshuffles communities.
 
-1. Full-repo `extract --code-only` + `cluster-only --no-label` (no API key).
-2. If `graphify-out/GRAPH_REPORT.md` changed, push fixed branch `chore/graphify-report`.
-3. Create **or update** a single maintenance PR into `main` (never stacks multiple graphify PRs).
-4. A human reviews and merges; the bot does **not** push to `main`.
+### What the hooks do not cover
 
-This job is **not** a required status check and must not block feature PRs.
+- **Branch switches.** `git checkout` fires none of the refresh hooks, so after switching branches the graph describes whichever branch was last refreshed. Rerun the build script if it matters.
+- **A fast-forward `git rebase`.** When you have no local commits, `git rebase origin/main` fast-forwards, and git fires only `post-checkout`, which these hooks don't use. `git pull --rebase` is not affected: in that case git fast-forwards through a merge, which fires `post-merge`. After a fast-forward `git rebase`, rerun the build script, or use `git pull --rebase` or `git merge --ff-only` instead.
+- **Changes to `.graphifyignore`.** `update` keeps nodes from files that left the scan. Rebuild with the build script.
+- **Linked worktrees** (including `.claude/worktrees/`). There is no `graphify-out/` there, so the MCP server answers `graph.json not found`. Pass `project_path` with the primary checkout's absolute path on the tool call; the answer then describes the primary checkout's branch, not the worktree's.
 
-### Repo setup (required for PR creation)
+## Harness registration
 
-`GITHUB_TOKEN` can push the maintenance branch, but creating the PR needs one of:
+The MCP server is plain stdio, so the same command is registered for each harness. The config formats are not interchangeable.
 
-1. **Preferred:** Settings → Actions → General → Workflow permissions → enable **Allow GitHub Actions to create and approve pull requests**, or
-2. Add a PAT (contents + pull requests) as repository secret `GRAPHIFY_PR_TOKEN`.
+| Harness | Config | Top-level key |
+| --- | --- | --- |
+| Claude Code | `.mcp.json` | `mcpServers` |
+| Copilot / VS Code | `.vscode/mcp.json` | `servers` |
+| Cursor | `.cursor/mcp.json` | `mcpServers` |
 
-Without one of those, the workflow refreshes and pushes `chore/graphify-report` but fails at `gh pr create`.
+`.claude/settings.json` pre-approves the read-only graph tools. `list_prs`, `get_pr_impact` and `triage_prs` are deliberately not pre-approved: they rank a changed file by the size of its own community, not by what depends on it, which inverts the risk of hub files such as `backend/app/api/deps.py`.
 
-Design notes: [`docs/research/graphify-automation.md`](../research/graphify-automation.md).
+Without graphify installed, an agent simply has no graphify tools and falls back to grep. That is the expected path, not an error.
 
-### Optional local hooks
+## Version pin
 
-For a live local `graph.json` while developing (gitignored; not published by CI):
+`0.9.43` is pinned here and in the install commands in the build scripts. graphify is pre-1.0 and its on-disk graph format is not guaranteed stable across versions, so to bump it: change the pin everywhere it appears, reinstall, rerun `graphify install --platform claude`, and rebuild the graph.
+
+## Optional: named communities
+
+The build leaves communities as `Community N` to stay free of LLM calls. To name them once, through your local Claude CLI:
 
 ```bash
-graphify hook install    # post-commit + post-checkout, AST only
-# GRAPHIFY_SKIP_HOOK=1   # opt out for one command
-graphify hook uninstall
+graphify label . --backend claude-cli
 ```
 
-Prefer the update scripts above if you do not want git hooks.
+Pass `--backend` explicitly. Without it graphify uses whichever API key it finds in the environment, which can send source to an external endpoint.
 
 ## Non-goals
 
-- Replacing MkDocs / human docs
-- CI that **blocks** merges on graph freshness
-- Committing heavy `graphify-out/` artifacts (`graph.json`, `graph.html`, cache)
-- One automated graphify PR per feature PR
+- A CI job, or any committed graph output
+- Graph freshness as a merge requirement
+- Docs, images or other non-code content in the graph
 
 ## References
 
 - Upstream: <https://github.com/safishamsi/graphify>
-- Package: `graphifyy` on PyPI (CLI remains `graphify`)
 - Issue: [#28](https://github.com/mnaimfaizy/fastapi_rbac/issues/28)
-- Automation research: [`docs/research/graphify-automation.md`](../research/graphify-automation.md)
+- Previous CI-based design (retired): [`docs/research/graphify-automation.md`](../research/graphify-automation.md)

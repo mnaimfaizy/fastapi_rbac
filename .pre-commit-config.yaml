@@ -1,5 +1,14 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
+
+# `pre-commit install` installs all four. post-commit, post-merge and
+# post-rewrite only run the graphify refresh, which is a no-op unless you opted
+# in to graphify (docs/agents/graphify.md).
+default_install_hook_types: [pre-commit, post-commit, post-merge, post-rewrite]
+# Hooks without their own `stages` run at commit time only, not after commits
+# or merges.
+default_stages: [pre-commit]
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
@@ -112,3 +121,32 @@ repos:
           ]
         # If mypy needs dependencies from your project, add them here:
         additional_dependencies: ["types-bleach==6.2.0.20250514"]
+  # Refresh the local graphify graph after commits and merges/pulls that touch
+  # source. Runs in the background and never fails the git command. No-op for
+  # anyone without graphify installed and a graph built. See docs/agents/graphify.md.
+  - repo: local
+    hooks:
+      - id: graphify-refresh-commit
+        name: graphify refresh (commit)
+        entry: scripts/development/graphify/graphify-refresh.sh commit
+        language: script
+        stages: [post-commit]
+        always_run: true
+        pass_filenames: false
+        verbose: true
+      - id: graphify-refresh-merge
+        name: graphify refresh (merge/pull)
+        entry: scripts/development/graphify/graphify-refresh.sh merge
+        language: script
+        stages: [post-merge]
+        always_run: true
+        pass_filenames: false
+        verbose: true
+      - id: graphify-refresh-rewrite
+        name: graphify refresh (rebase/pull --rebase)
+        entry: scripts/development/graphify/graphify-refresh.sh rewrite
+        language: script
+        stages: [post-rewrite]
+        always_run: true
+        pass_filenames: false
+        verbose: true

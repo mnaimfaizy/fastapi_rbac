@@ -21,7 +21,7 @@ A follow-up may align Poetry with `requirements.txt`; until then, always pin and
 2. **Dev/test first**, then security-critical patch/minor clusters, then related runtime clusters; majors last (spike first).
 3. **One cluster per PR** (or a tightly related cluster).
 4. Every PR must keep CI green: Backend CI + React Frontend CI (and auth e2e when touching auth clients).
-5. After meaningful code-touching upgrades, optionally run `graphify update .` locally and note concerning `GRAPH_REPORT.md` god-node shifts on the PR.
+5. After meaningful code-touching upgrades, optionally compare `graphify god-nodes` before and after locally and note concerning shifts on the PR.
 
 ## Lanes and gates
 
@@ -207,4 +207,4 @@ Playwright e2e job remains `if: false` — needs a workflow that starts API + DB
 2. Frontend: lint + `test:run` + production build.
 3. Auth-touched: login, refresh, logout; CSRF if middleware changed.
 4. DB-touched: Alembic heads apply cleanly on empty DB.
-5. Optional: `graphify query` on a path that crosses upgraded modules still makes sense.
+5. Optional: `graphify path` between symbols that cross upgraded modules still makes sense.

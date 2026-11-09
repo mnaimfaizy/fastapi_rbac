@@ -1,19 +1,23 @@
 ---
-description: Prefer graphify knowledge graph for architecture questions when graphify-out/graph.json exists
+description: When and when not to use the graphify MCP server (local code graph)
 globs:
 alwaysApply: true
 ---
 
 # graphify (project)
 
-If `graphify-out/graph.json` exists, use it **first** for architecture, module relationship, and “how does X connect to Y” questions:
+graphify is optional and per-developer. When the `graphify` MCP server is connected (`.cursor/mcp.json`), use it for:
 
-```bash
-graphify query "<question>"
-graphify path "A" "B"
-graphify explain "NodeLabel"
-```
+- `get_neighbors <symbol>`: what directly calls or imports a function or class
+- `god_nodes`: the most-connected symbols, for orientation in an unfamiliar area
 
-If the graph is missing, follow `docs/agents/graphify.md` to build (`graphify extract . --code-only --out .`). Do not invent edges. Prefer domain terms from `docs/agents/domain.md`: user, role, permission, role group, permission group.
+Confirm every answer against the actual file. The graph can be stale.
 
-For written architecture / auth-flow narrative (not graph edges), use `docs/reference/architecture.md`. This rule does not replace MkDocs or runtime application behavior.
+Never use it for these; it fails silently and returns an incomplete answer:
+
+- FastAPI `Depends(...)` wiring, such as which endpoints require a permission. Grep `Depends(deps.get_current_user` instead.
+- Links from the React client to FastAPI routes. Grep the URL path on both sides.
+- Symbols whose name exists in more than one file.
+- Database schema. Read `backend/app/models/`.
+
+If the server is not connected, use search and file reads. Setup and refresh hooks: `docs/agents/graphify.md`. Domain terms: `docs/agents/domain.md`.
