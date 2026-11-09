@@ -10,7 +10,7 @@ Project-owned agent assets that do live here:
 
 Kit-owned files are copied from one pinned [Agent-kit](docs/agents/agent-kit.md) tag. They are an exception to "no vendoring". Never edit them by hand; re-copy them from a new tag instead:
 
-- `.claude/skills/{code-review,security-audit,security-finding-triage,security-response}` (in this repo, the kit's `code-review` replaces the user-level one)
+- `.claude/skills/{code-review,security-audit,security-finding-triage,security-response,explainer}` (in this repo, the kit's `code-review` replaces the user-level one)
 - `.github/{agent-runtime,agent-pipeline,security-audit}`
 
 ## Agent skills

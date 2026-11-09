@@ -17,13 +17,13 @@ Agent-kit calls the list of GitHub logins allowed to trigger a run its "Allowlis
 
 ## Pinned tag
 
-Current pin: **`v1.0.0-alpha.9`** (commit `ac52d893057c287c2707e6678649256c09e1388c`).
+Current pin: **`v1.0.0-beta.1`** (commit `9674eadec36f842b29fb34d8c159f75506fe6b59`).
 
 Agent-kit uses a split contract: the reusable workflows are referenced remotely (`uses: …@<tag>`), and the files below are copied in **from the same tag**. Never mix tags.
 
 ## Kit-owned files
 
-These files are copied from the pinned tag and committed. They are an explicit exception to the rule that engineering skills come from the user-level install. **Do not edit them by hand.** Change them only by re-copying from a new tag.
+These files are copied from the pinned tag and committed. They are an explicit exception to the rule that engineering skills come from the user-level install. **Do not edit them by hand.** Change them only by re-copying from a new tag. The tag's `kit-owned-paths.txt` is the authoritative list; this table mirrors it.
 
 | Path | Used by |
 | --- | --- |
@@ -31,6 +31,7 @@ These files are copied from the pinned tag and committed. They are an explicit e
 | `.claude/skills/security-audit/` | audit flow |
 | `.claude/skills/security-finding-triage/` | triaging an audit advisory by hand |
 | `.claude/skills/security-response/` | responding to a confirmed finding by hand |
+| `.claude/skills/explainer/` | optional: writing an Explainer Page by hand; no flow uses it |
 | `.github/agent-runtime/` | every flow: hooks that confine agent reads to the workspace and, for implement, writes to the working tree; implement's git-config and push guards |
 | `.github/agent-pipeline/` | plan and implement (prompts, draft-PR fallback) |
 | `.github/security-audit/` | audit (prompt, advisory publisher, email notifier) |
@@ -172,20 +173,23 @@ To stop the pipeline, set the variable to anything else or delete it.
 
 ## Upgrading
 
-1. Read the Agent-kit CHANGELOG between the current tag and the new one. A Major bump means Caller changes.
-2. Replace the kit-owned folders with the new tag's copies. Delete them first, so files the kit removed don't linger:
+Use the `@mnaimfaizy/agent-kit` CLI, at the same version as the new tag. It needs the current pins to be `v1.0.0-alpha.11` or later.
+
+1. Read the Agent-kit release notes and CHANGELOG between the current tag and the new one. A Major bump means Caller changes.
+2. From a clean branch, run `upgrade`. It replaces every Kit-owned path (delete, then copy), rewrites all four `uses:` pins, prints the `examples/` diff, and runs the `doctor --ci` checks. It commits nothing:
 
    ```bash
-   TAG=v1.0.0-alpha.9   # the new tag
-   git clone --depth 1 --branch "$TAG" https://github.com/mnaimfaizy/agent-kit.git /tmp/agent-kit
-   for p in .claude/skills/code-review .claude/skills/security-audit .claude/skills/security-finding-triage \
-            .claude/skills/security-response .github/agent-runtime .github/agent-pipeline .github/security-audit; do
-     rm -rf "$p" && cp -R "/tmp/agent-kit/$p" "$p"
-   done
-   rm -rf /tmp/agent-kit
+   TAG=v1.0.0-beta.2   # the new tag; the CLI version is the tag without the leading v
+   npx "@mnaimfaizy/agent-kit@${TAG#v}" upgrade --tag "$TAG"
    ```
 
-3. Bump every `uses: mnaimfaizy/agent-kit/…@<tag>` to the new tag **in the same commit**, and update the pin above.
-4. Diff the Callers against the new tag's `examples/` for new or renamed inputs.
+3. Apply anything relevant from the printed `examples/` diff to the Callers by hand (new or renamed inputs), and update the pin above.
+4. Run the full check, then commit the pins and the Kit-owned paths **in the same commit**:
+
+   ```bash
+   npx "@mnaimfaizy/agent-kit@${TAG#v}" doctor
+   ```
+
+   `doctor` reports a warning that `release-tag-on-merge.yml` pushes tags with `GITHUB_TOKEN`. It is a false positive: that workflow checks out with the `RELEASE_TAG_DEPLOY_KEY` SSH key and pushes over SSH. It also skips the Claude GitHub App check, because GitHub hides a personal account's installations; check that at <https://github.com/settings/installations>.
 
 Dependabot ignores pre-release tags (`.github/dependabot.yml`), so every bump is manual until Agent-kit ships a stable tag.

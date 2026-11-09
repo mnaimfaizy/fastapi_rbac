@@ -14,7 +14,7 @@ Only these live in the repo; every other skill comes from the user-level install
 
 These files are copied from one pinned Agent-kit tag. They are an exception to "no vendoring". Never edit them by hand; re-copy them from a new tag instead. The full list, the pin and the upgrade steps are in [`docs/agents/agent-kit.md`](docs/agents/agent-kit.md).
 
-- `.claude/skills/{code-review,security-audit,security-finding-triage,security-response}` (in this repo, the kit's `code-review` replaces the user-level one)
+- `.claude/skills/{code-review,security-audit,security-finding-triage,security-response,explainer}` (in this repo, the kit's `code-review` replaces the user-level one)
 - `.github/{agent-runtime,agent-pipeline,security-audit}`
 
 ## Agent skills
