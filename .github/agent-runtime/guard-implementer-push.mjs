@@ -1,6 +1,8 @@
 #!/usr/bin/env node
-// PreToolUse hook: refuse an implementer push whose branch changes a workflow
-// file or a local action.
+// PreToolUse hook for the implementer's Bash calls. It refuses a push whose
+// branch changes a workflow file or a local action, and any command that could
+// put a file or a secret from the agent's environment into output the agent
+// can publish (see decideBash).
 //
 // Why before the push, not after the agent: the implementer pushes and opens
 // its draft PR inside its own session, and a same-repository PR runs the
@@ -80,6 +82,138 @@ export function decidePush(payload, listChanged) {
   return null;
 }
 
+// claude-code-action grants `git add`, `git commit`, and `git rm` by command
+// prefix, so any arguments pass the rule. These options read a file the caller
+// names into a commit message or an error message. git accepts any unambiguous
+// prefix of a long option, so a prefix of one of these counts too.
+const FILE_READING_LONG = ["file", "template", "pathspec-from-file"];
+const FILE_READING_SHORT = new Set(["F", "t"]);
+// Short options whose value follows, attached or as the next word.
+const VALUE_SHORT = new Set(["m", "C", "c", "S", "u"]);
+const VALUE_LONG = new Set([
+  "message",
+  "reuse-message",
+  "reedit-message",
+  "author",
+  "date",
+  "trailer",
+  "cleanup",
+  "fixup",
+  "squash",
+  "chmod",
+]);
+const JUDGED_SUBCOMMANDS = new Set(["add", "commit", "rm", "status"]);
+const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
+
+const EXPANSION =
+  "implementer Bash guard: refused shell expansion or input redirection ($, backticks, <) outside single-quoted text, which could put the job's secrets or a runner file into output. Quote commit messages in single quotes, and repeat -m for more paragraphs.";
+const UNPARSED = "implementer Bash guard: the command cannot be parsed (unclosed quote); refused";
+
+/**
+ * Split a command into segments of words, as the shell would before running
+ * it, or return a deny reason. `$`, backticks, and `<` are refused outside
+ * single quotes, where the shell would expand or redirect them; `>` is only
+ * output. `;`, `&`, `|`, newlines, and parentheses end a segment.
+ */
+function shellSegments(command) {
+  const segments = [];
+  let words = [];
+  let word = null;
+  const pushWord = () => {
+    if (word !== null) words.push(word);
+    word = null;
+  };
+  const endSegment = () => {
+    pushWord();
+    if (words.length > 0) segments.push(words);
+    words = [];
+  };
+  for (let i = 0; i < command.length; i++) {
+    const c = command[i];
+    if (c === "'") {
+      const close = command.indexOf("'", i + 1);
+      if (close < 0) return { reason: UNPARSED };
+      word = (word ?? "") + command.slice(i + 1, close);
+      i = close;
+    } else if (c === '"') {
+      let j = i + 1;
+      let text = "";
+      for (; j < command.length && command[j] !== '"'; j++) {
+        if (command[j] === "$" || command[j] === "`") return { reason: EXPANSION };
+        if (command[j] === "\\" && j + 1 < command.length) j++;
+        text += command[j];
+      }
+      if (j >= command.length) return { reason: UNPARSED };
+      word = (word ?? "") + text;
+      i = j;
+    } else if (c === "\\") {
+      if (i + 1 < command.length) word = (word ?? "") + command[++i];
+    } else if (c === "$" || c === "`" || c === "<") {
+      return { reason: EXPANSION };
+    } else if (";&|\n()".includes(c)) {
+      endSegment();
+    } else if (c === " " || c === "\t" || c === "\r" || c === ">") {
+      pushWord();
+    } else {
+      word = (word ?? "") + c;
+    }
+  }
+  endSegment();
+  return { segments };
+}
+
+/** The deny reason for a git invocation's words after `git`, or null. */
+function judgeGit(args) {
+  if (args.length === 0) return null;
+  if (args[0].startsWith("-")) {
+    return "implementer Bash guard: git global options (-c, -C, --git-dir, ...) are not allowed";
+  }
+  if (!JUDGED_SUBCOMMANDS.has(args[0])) return null;
+  const readsFile = `implementer Bash guard: \`git ${args[0]}\` with an option that reads a file is not allowed (-F/--file, -t/--template, --pathspec-from-file); use -m with single-quoted text`;
+  for (let i = 1; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "--") break; // the rest are paths
+    if (arg.startsWith("--")) {
+      const [name, value] = arg.slice(2).split(/=(.*)/s);
+      if (FILE_READING_LONG.some((option) => option.startsWith(name))) return readsFile;
+      if (value === undefined && VALUE_LONG.has(name)) i++;
+    } else if (arg.startsWith("-") && arg.length > 1) {
+      for (let k = 1; k < arg.length; k++) {
+        if (FILE_READING_SHORT.has(arg[k])) return readsFile;
+        if (VALUE_SHORT.has(arg[k])) {
+          // The value is the rest of this word, or the next word.
+          if (k === arg.length - 1 && "mCc".includes(arg[k])) i++;
+          break;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Decide on one Bash call, apart from the push check. Returns a deny reason,
+ * or null to allow. Every segment of the command is judged: a git invocation
+ * anywhere in it (after `{`, `!`, or a path to git) counts, and so does an
+ * environment assignment in front of one.
+ */
+export function decideBash(payload) {
+  if (payload?.tool_name !== "Bash") return null;
+  const command = String(payload?.tool_input?.command ?? "");
+  const parsed = shellSegments(command);
+  if (parsed.reason) return parsed.reason;
+  for (const words of parsed.segments) {
+    const at = words.findIndex((w) => w === "git" || w.endsWith("/git"));
+    if (at < 0) continue;
+    if (words.slice(0, at).some((w) => ASSIGNMENT.test(w))) {
+      return "implementer Bash guard: an environment assignment before git is not allowed";
+    }
+    const reason = judgeGit(words.slice(at + 1));
+    if (reason) return reason;
+  }
+  return null;
+}
+
 function workspace() {
   return process.env.GITHUB_WORKSPACE || process.cwd();
 }
@@ -141,11 +275,11 @@ async function main() {
     return; // unparseable input is not something we can judge — allow through
   }
 
-  const reason = decidePush(payload, listChanged);
+  const reason = decidePush(payload, listChanged) ?? decideBash(payload);
   if (reason) deny(reason);
 }
 
-// Only run when invoked as the hook, so the unit test can import `decidePush`.
+// Only run when invoked as the hook, so the unit tests can import the deciders.
 const invoked = process.argv[1];
 if (invoked && import.meta.url === pathToFileURL(invoked).href) {
   main();

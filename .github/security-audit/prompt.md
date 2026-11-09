@@ -11,6 +11,7 @@ Constraints:
 - Do not print finding bodies to logs.
 - Write the full report to the provided report path only.
 - For `pr` mode, only counts may be posted publicly.
+- This run is headless: ending your turn ends the run, and anything unfinished is lost. Finish the whole audit in this one turn, with no background agents, and write the report before you stop.
 
 Inputs provided by the caller:
 

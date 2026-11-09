@@ -9,7 +9,7 @@ name: Agent-kit security audit
 # AGENT_KIT_ADVISORIES_TOKEN secrets.
 #
 # The uses: pin and the files copied from Agent-kit (.claude/skills/{code-review,
-# security-audit,security-finding-triage,security-response},
+# security-audit,security-finding-triage,security-response,explainer},
 # .github/{agent-runtime,agent-pipeline,security-audit}) must be the same tag.
 # Upgrade them together, along with agent-kit-pipeline.yml:
 # docs/agents/agent-kit.md.
@@ -30,7 +30,7 @@ concurrency:
 
 jobs:
   audit:
-    uses: mnaimfaizy/agent-kit/.github/workflows/security-audit-reusable.yml@v1.0.0-alpha.9
+    uses: mnaimfaizy/agent-kit/.github/workflows/security-audit-reusable.yml@v1.0.0-beta.1
     with:
       mode: full
       kill_switch: ${{ vars.CLAUDE_SECURITY_AUDIT_ENABLED != 'true' }}
