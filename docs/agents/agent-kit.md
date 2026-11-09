@@ -179,14 +179,15 @@ Use the `@mnaimfaizy/agent-kit` CLI, at the same version as the new tag. It need
 2. From a clean branch, run `upgrade`. It replaces every Kit-owned path (delete, then copy), rewrites all four `uses:` pins, prints the `examples/` diff, and runs the `doctor --ci` checks. It commits nothing:
 
    ```bash
-   npx @mnaimfaizy/agent-kit@1.0.0-beta.1 upgrade --tag v1.0.0-beta.1
+   TAG=v1.0.0-beta.2   # the new tag; the CLI version is the tag without the leading v
+   npx "@mnaimfaizy/agent-kit@${TAG#v}" upgrade --tag "$TAG"
    ```
 
 3. Apply anything relevant from the printed `examples/` diff to the Callers by hand (new or renamed inputs), and update the pin above.
 4. Run the full check, then commit the pins and the Kit-owned paths **in the same commit**:
 
    ```bash
-   npx @mnaimfaizy/agent-kit@1.0.0-beta.1 doctor
+   npx "@mnaimfaizy/agent-kit@${TAG#v}" doctor
    ```
 
    `doctor` reports a warning that `release-tag-on-merge.yml` pushes tags with `GITHUB_TOKEN`. It is a false positive: that workflow checks out with the `RELEASE_TAG_DEPLOY_KEY` SSH key and pushes over SSH. It also skips the Claude GitHub App check, because GitHub hides a personal account's installations; check that at <https://github.com/settings/installations>.
