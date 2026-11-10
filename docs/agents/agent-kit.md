@@ -7,7 +7,7 @@ Agent-kit supplies reusable GitHub Actions workflows that run Claude Code in thi
 | Flow | Stage | Status here |
 | --- | --- | --- |
 | Security audit | 1 | Adopted; runs weekly while the Kill switch is `true` |
-| Plan → implement → review | 2 | Caller landed; off until the prerequisites below are done and its Kill switch is `true` |
+| Plan → implement → review | 2 | Adopted; runs on its Trigger labels while the Kill switch is `true` |
 
 For the kit's own terms (Caller, Kill switch, Trigger label, Verified plan, Threat pack), see the [Agent-kit glossary](https://github.com/mnaimfaizy/agent-kit/blob/main/GLOSSARY.md). They are tooling terms, not product terms, so they stay out of this repository's `CONTEXT.md`.
 
@@ -55,7 +55,7 @@ The reusable workflows (`*-reusable.yml`) are **not** copied.
 | Secret | `AGENT_KIT_ADVISORIES_TOKEN` | Fine-grained PAT, this repository only, **Repository security advisories: Read and write**. Track its expiry |
 | Secret | `RELEASE_TAG_DEPLOY_KEY` | Private half of the write deploy key `release-tag-on-merge.yml` pushes `v*` tags with (see the tag ruleset step). Not an Agent-kit secret, but the tag ruleset depends on it |
 | Variable | `CLAUDE_SECURITY_AUDIT_ENABLED` | Audit Kill switch. The audit runs only when this is exactly `true` |
-| Variable | `CLAUDE_PIPELINE_ENABLED` | Pipeline Kill switch. Unset until every step in "Turning the pipeline on" is done |
+| Variable | `CLAUDE_PIPELINE_ENABLED` | Pipeline Kill switch. The pipeline runs only when this is exactly `true` |
 | Variable | `CLAUDE_MODEL` | `claude-opus-5-5`. Per-flow overrides (`CLAUDE_MODEL_AUDIT`, …) are left unset |
 
 The optional extras are not used: the Dependabot alerts token (Dependabot alerts are off on this repository) and the SMTP email notice.
