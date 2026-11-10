@@ -6,6 +6,7 @@ import { renderWithProviders, mockUser, mockToken } from './test-utils';
 import ProtectedRoute from '../components/auth/ProtectedRoute';
 import ChangePasswordRequiredPage from '../features/auth/ChangePasswordRequiredPage';
 import authService from '../services/auth.service';
+import { markPasswordChangeRequired } from '../store/slices/authSlice';
 
 // A temporary password restricts the account until it is replaced (#273,
 // ADR 0014). The API refuses every other route; the SPA sends the user to one
@@ -113,6 +114,45 @@ describe('Temporary password', () => {
     expect(store.getState().auth.accessToken).toBe('new-access-token');
     expect(store.getState().auth.user?.needs_to_change_password).toBe(false);
     expect(store.getState().auth.isAuthenticated).toBe(true);
+  });
+
+  it('stays on the page with the error when the change is refused', async () => {
+    mockAuthService.changePassword.mockRejectedValue({
+      response: {
+        status: 400,
+        data: { status: 'error', message: 'Invalid Current Password' },
+      },
+    });
+    const user = userEvent.setup();
+    const { store } = renderAt('/change-password-required', flaggedUser);
+
+    await user.type(screen.getByLabelText('Current Password'), 'WrongPass!47');
+    await user.type(
+      screen.getByLabelText('New Password'),
+      'ReplacementPassword!42'
+    );
+    await user.type(
+      screen.getByLabelText('Confirm New Password'),
+      'ReplacementPassword!42'
+    );
+    await user.click(screen.getByRole('button', { name: 'Change Password' }));
+
+    expect(
+      await screen.findByText('Invalid Current Password')
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Dashboard page')).not.toBeInTheDocument();
+    expect(window.location.pathname).toBe('/change-password-required');
+    expect(store.getState().auth.user?.needs_to_change_password).toBe(true);
+  });
+
+  it('flags the stored user, and leaves a signed-out store alone', () => {
+    const { store } = renderAt('/login', mockUser);
+    store.dispatch(markPasswordChangeRequired());
+    expect(store.getState().auth.user?.needs_to_change_password).toBe(true);
+
+    const signedOut = renderAt('/login', null).store;
+    signedOut.dispatch(markPasswordChangeRequired());
+    expect(signedOut.getState().auth.user).toBeNull();
   });
 
   it('offers a logout', async () => {
