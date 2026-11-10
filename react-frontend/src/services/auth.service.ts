@@ -38,8 +38,10 @@ class AuthService {
    * Get current user profile information
    */
   async getCurrentUser(): Promise<User> {
-    // Specify User return type
-    const response = await api.get<SuccessResponse<User>>('/users'); // Use User type
+    // The caller's own profile. Not `/users`, the user list behind
+    // `users.read`: session restore needs a route every user can read,
+    // including one holding a temporary password (ADR 0014).
+    const response = await api.get<SuccessResponse<User>>('/users/me');
     return response.data.data;
   }
 
