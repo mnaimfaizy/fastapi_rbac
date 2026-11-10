@@ -49,6 +49,7 @@ The reusable workflows (`*-reusable.yml`) are **not** copied.
 | `.github/workflows/agent-kit-pipeline.yml` | Pipeline Caller: plan and implement on issue labels, review on PR labels, plus manual dispatch |
 | `.security/threat-model.md` | Threat pack: assets, trust boundaries, attack paths. Public |
 | `.security/findings-ledger.md` | Threat pack: concept-id fingerprints of known findings only. Public; never holds details |
+| `qa.config.yml` | Settings for `qa-plan` and `manual-qa`: the QA Stack commands and the QA Accounts roles. See [QA Accounts](../reference/qa-accounts.md) |
 
 ## Settings
 
