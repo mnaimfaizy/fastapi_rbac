@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+  <testsuite name="pytest" errors="1" failures="1" skipped="1" tests="5" time="0.12">
+    <testcase classname="tests.test_auth" name="test_login" time="0.01" />
+    <testcase classname="tests.test_auth" name="test_logout" time="0.01">
+      <failure message="assert 1 == 2">tests/test_auth.py:12: AssertionError</failure>
+    </testcase>
+    <testcase classname="tests.test_auth" name="test_reset" time="0.01">
+      <error message="fixture 'db' not found">E fixture 'db' not found</error>
+    </testcase>
+    <testcase classname="tests.test_auth" name="test_sso" time="0.00">
+      <skipped type="pytest.skip" message="needs a provider" />
+    </testcase>
+    <testcase classname="tests.test_auth" name="test_quote[a&amp;b &lt;c&gt; &#34;d&#x22;]" time="0.01">
+      <system-out><![CDATA[printed <testcase name="not-a-test"/> and </testsuite> here]]></system-out>
+    </testcase>
+  </testsuite>
+</testsuites>

@@ -1,0 +1,4 @@
+<testsuite name="vitest" tests="2">
+  <testcase classname="src/cart.test.ts" name="adds"/>
+  <testcase classname="src/cart.test.ts" name="adds"><failure/></testcase>
+</testsuite>

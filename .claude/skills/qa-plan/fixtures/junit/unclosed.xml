@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<testsuites>
+  <testsuite name="pytest">
+    <testcase classname="tests.test_a" name="test_one">
+  </testsuite>
+</testsuites>
