@@ -117,6 +117,32 @@ async def test_flagged_superuser_is_also_refused(client: AsyncClient, user_facto
     assert response.json() == PASSWORD_CHANGE_REQUIRED
 
 
+async def test_flagged_user_cannot_update_own_profile(client: AsyncClient, user_factory: Any) -> None:
+    """The one self-service route that writes the flag stays restricted."""
+    headers = await flagged_session(client, user_factory, is_superuser=True)
+
+    response = await client.put(url("/users/me"), json={"needs_to_change_password": False}, headers=headers)
+
+    assert response.status_code == 403, response.text
+    assert response.json() == PASSWORD_CHANGE_REQUIRED
+
+
+async def test_profile_update_never_writes_the_flag(client: AsyncClient, user_factory: Any) -> None:
+    """Only an administrator sets the flag, and only a password change clears it."""
+    headers = await admin_session(client, user_factory)
+
+    response = await client.put(
+        url("/users/me"),
+        json={"first_name": "Renamed", "needs_to_change_password": True},
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    data = response.json()["data"]
+    assert data["first_name"] == "Renamed"
+    assert data["needs_to_change_password"] is False
+
+
 @pytest.mark.parametrize("auto_verified", [True, False])
 async def test_admin_create_always_sets_a_temporary_password(
     client: AsyncClient, user_factory: Any, monkeypatch: pytest.MonkeyPatch, auto_verified: bool

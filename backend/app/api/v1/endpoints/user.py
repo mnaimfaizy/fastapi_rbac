@@ -199,8 +199,17 @@ async def update_my_profile(
     """
     # Only allow updating allowed fields (not roles, is_superuser, etc.)
     update_data = user_update.model_dump(exclude_unset=True)
-    # Remove forbidden fields if present
-    forbidden_fields = ["id", "roles", "is_superuser", "is_active", "email", "password"]
+    # Remove forbidden fields if present. The temporary-password flag is set
+    # only by an administrator and cleared only by a password change (ADR 0014).
+    forbidden_fields = [
+        "id",
+        "roles",
+        "is_superuser",
+        "is_active",
+        "email",
+        "password",
+        "needs_to_change_password",
+    ]
     for field in forbidden_fields:
         update_data.pop(field, None)
     for key, value in update_data.items():

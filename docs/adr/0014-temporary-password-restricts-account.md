@@ -24,7 +24,7 @@ Two smaller faults went with it. The `User` model defaulted the flag to `True`, 
 
 5. **Login is unchanged.** A flagged user authenticates and receives tokens. The `needs_to_change_password` field already in the login response is the signal.
 
-6. **Only an administrator sets the flag.** Admin create sets it to `True` whatever `ADMIN_CREATED_USERS_AUTO_VERIFIED` says: verification and password ownership are separate. Admin set turns it on. A self-service change or a reset clears it. The `User` model default is `False`.
+6. **Only an administrator sets the flag.** Admin create sets it to `True` whatever `ADMIN_CREATED_USERS_AUTO_VERIFIED` says: verification and password ownership are separate. Admin set turns it on. A self-service change or a reset clears it. `PUT /users/me` drops the field, so a profile update never writes it. The `User` model default is `False`.
 
 7. **The SPA routes a flagged user to one page.** `ProtectedRoute` sends an authenticated, flagged user from every protected route to `/change-password-required`, a standalone page under `AuthLayout` with the change-password form and a Logout button. The page sends an unflagged user to `/dashboard` and an unauthenticated one to `/login`. The axios interceptor turns a `password_change_required` 403 into a flag on the stored user, without logging out. A successful change stores the user and access token from the `change_password` response and goes to `/dashboard` without asking the user to log in again. Session restore loads the user from `GET /users/me`, the opted-in profile route, so a reload keeps a flagged user on the page.
 
