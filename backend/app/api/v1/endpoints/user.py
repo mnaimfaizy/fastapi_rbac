@@ -97,7 +97,7 @@ async def get_user_list_order_by_created_at(
 
 @router.get("/me")
 async def get_my_data(
-    current_user: User = Depends(deps.get_current_user()),
+    current_user: User = Depends(deps.get_current_user(allow_pending_password_change=True)),
 ) -> IGetResponseBase[IUserRead]:
     """
     Gets my user profile information
@@ -150,14 +150,17 @@ async def create_user(
         db_session=db_session,
     )
 
+    # The administrator chose this password, so it is temporary whatever the
+    # verification setting says: verification and password ownership are
+    # separate (#273, ADR 0014).
+    new_user.needs_to_change_password = True
+
     # Configure user verification based on settings
     if settings.ADMIN_CREATED_USERS_AUTO_VERIFIED:
         new_user.verified = True
-        new_user.needs_to_change_password = False
         message = "User created successfully and verified"
     else:
         new_user.verified = False
-        new_user.needs_to_change_password = True
         message = "User created successfully"
 
     # Create the user

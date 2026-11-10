@@ -39,6 +39,9 @@ vi.mock('../../store', () => ({
 vi.mock('../../store/slices/authSlice', () => ({
   refreshAccessToken: vi.fn(() => ({ type: 'auth/refreshToken' })),
   logout: vi.fn(() => ({ type: 'auth/logout' })),
+  markPasswordChangeRequired: vi.fn(() => ({
+    type: 'auth/markPasswordChangeRequired',
+  })),
 }));
 
 vi.mock('../../services/csrfService', () => ({
@@ -51,7 +54,12 @@ vi.mock('../../services/csrfService', () => ({
 
 // Importing the module registers the interceptors on the mocked instance.
 import '../../services/api';
-import { refreshAccessToken } from '../../store/slices/authSlice';
+import { store } from '../../store';
+import {
+  logout,
+  markPasswordChangeRequired,
+  refreshAccessToken,
+} from '../../store/slices/authSlice';
 
 const responseErrorHandler =
   mockAxiosInstance.interceptors.response.use.mock.calls[0][1];
@@ -264,5 +272,31 @@ describe('api error body normalisation', () => {
       message: 'An unexpected error occurred',
       errors: [{ message: 'An unexpected error occurred' }],
     });
+  });
+});
+
+describe('api 403 password_change_required', () => {
+  beforeEach(() => {
+    vi.mocked(store.dispatch).mockClear();
+  });
+
+  it('marks the user as flagged and does not log them out', async () => {
+    const error = {
+      response: {
+        status: 403,
+        data: {
+          detail: {
+            code: 'password_change_required',
+            message: 'Password change required.',
+          },
+        },
+      },
+      config: { url: '/dashboard', headers: {} },
+    };
+
+    await expect(responseErrorHandler(error)).rejects.toBeDefined();
+
+    expect(store.dispatch).toHaveBeenCalledWith(markPasswordChangeRequired());
+    expect(store.dispatch).not.toHaveBeenCalledWith(logout());
   });
 });

@@ -13,7 +13,8 @@ Related: [System Architecture — Authentication flow](../../reference/architect
    - Session restore hint → non-secret `localStorage` flag so a reload, a new tab, or a browser restart can attempt cookie refresh
 3. **Authenticated requests** — Axios client attaches `Authorization: Bearer <access_token>` and sends cookies (`withCredentials: true`).
 4. **Refresh** — on HTTP 401 (when a session hint exists), interceptor calls `POST /auth/new_access_token` with CSRF; cookie is sent automatically; retries the original request or logs out. A 401 from the refresh endpoint itself is excluded from this path so it cannot recurse.
-5. **Logout** — Sidebar and header **Logout** call `POST /auth/logout`, which ends this session only (allowlist entries for that session + cookie cleared server-side) and clears client memory/hint. Other devices stay signed in. **Log out everywhere** (same two surfaces, behind a confirmation) posts `POST /auth/logout/all`, then does the same local cleanup and sends the user to login. Cancelling the confirmation leaves the current session alone.
+5. **Temporary password** — a 403 whose `detail.code` is `password_change_required` means an administrator set the user's password. The interceptor marks the stored user `needs_to_change_password` and does **not** log out; `ProtectedRoute` then sends the user to `/change-password-required`. That page (under `AuthLayout`) offers only the change-password form and Logout. A successful change stores the user and access token from the response and goes to `/dashboard`. See [ADR 0014](../../adr/0014-temporary-password-restricts-account.md).
+6. **Logout** — Sidebar and header **Logout** call `POST /auth/logout`, which ends this session only (allowlist entries for that session + cookie cleared server-side) and clears client memory/hint. Other devices stay signed in. **Log out everywhere** (same two surfaces, behind a confirmation) posts `POST /auth/logout/all`, then does the same local cleanup and sends the user to login. Cancelling the confirmation leaves the current session alone.
 
 Backend session invalidation uses a Redis **allowlist** (`app/utils/token.py`), not a JWT `jti` blacklist. See [ADR 0001](../../adr/0001-pyjwt-sole-jwt-library.md) and [ADR 0006](../../adr/0006-httponly-refresh-token-cookies.md).
 
@@ -23,7 +24,7 @@ State-changing auth calls (login, refresh, logout, logout everywhere, password c
 
 ## Route and UI guards
 
-- **Route level** — `ProtectedRoute` (and layout wrappers) require authentication and optionally roles/permissions.
+- **Route level** — `ProtectedRoute` (and layout wrappers) require authentication and optionally roles/permissions. A user with `needs_to_change_password` is redirected to `/change-password-required` from every protected route.
 - **Component level** — `usePermissions` / `useAuth` gate buttons and panels (`user.create`, `role.read`, …).
 
 Keep permission **names** aligned with backend permission records.
@@ -41,6 +42,8 @@ Keep permission **names** aligned with backend permission records.
 | --- | --- |
 | Login / signup / password reset UI | `src/features/auth/` |
 | Auth Redux slice | `src/store/slices/authSlice.ts` (`logoutUser`, `logoutAllUser`) |
+| Change-password form (dashboard and temporary-password page) | `src/components/auth/ChangePasswordForm.tsx` |
+| Temporary-password page | `src/features/auth/ChangePasswordRequiredPage.tsx` |
 | Log out everywhere control | `src/components/auth/LogoutEverywhereControl.tsx` |
 | Axios + interceptors | `src/services/api.ts`, `authTokenManager.ts` |
 | Hooks | `src/hooks/useAuth.ts`, `usePermissions.ts` |

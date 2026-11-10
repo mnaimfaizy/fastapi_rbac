@@ -14,6 +14,7 @@ Related:
 - [ADR 0009](../adr/0009-celery-registration-single-entrypoint.md) — single Celery entrypoint; beat entries must name registered tasks
 - [ADR 0011](../adr/0011-session-security-model.md) — session security model
 - [ADR 0013](../adr/0013-user-deletion-foreign-keys.md) — user deletion foreign-key policy
+- [ADR 0014](../adr/0014-temporary-password-restricts-account.md) — a temporary password restricts the account
 
 ## High-level architecture
 
@@ -140,6 +141,8 @@ Session invalidation uses a Redis **allowlist** (`user:{id}:{token_type}` sorted
 2. **Authenticated requests** — client sends `Authorization: Bearer <access_token>` (and cookies via credentials); backend verifies signature/expiry and that the token remains allowlisted.
 3. **Refresh** — on 401, frontend calls `POST /api/v1/auth/new_access_token` with CSRF; backend reads the HttpOnly refresh cookie (optional JSON body fallback for non-browser clients), validates the allowlist, and returns a new access token. Failed refresh → logout. When `VALIDATE_TOKEN_IP` is on, the presenting client address is also compared with the one the session was established from, at IPv4 /24 or IPv6 /64: a different network revokes that one session and emits a `refresh_origin_network_mismatch` security event, answering with the ordinary refresh failure. Access tokens are never checked this way and the user's other sessions survive. (Refresh rotation is not implemented; see session-security follow-ups.)
 4. **Logout** — `POST /api/v1/auth/logout` ends the calling session (that refresh token and the access tokens that share its session id) and clears the refresh cookie; other sessions on the account stay usable. Session identity comes from the refresh cookie when present, otherwise from the access token's allowlist metadata. `POST /api/v1/auth/logout/all` revokes every session. The first-party SPA posts `POST /logout` from Logout and `POST /logout/all` from **Log out everywhere** (after confirmation). Frontend clears the in-memory access token and session hint.
+
+**Temporary password** — admin create and admin set mark the user `needs_to_change_password`. Login still succeeds, but `get_current_user` then refuses every route with 403 `password_change_required`, superusers included, except the four that opt in with `allow_pending_password_change=True`: change password, logout, logout all and `GET /users/me`. The check reads the user row, not a token claim. The SPA sends a flagged user to `/change-password-required`. See [ADR 0014](../adr/0014-temporary-password-restricts-account.md).
 
 **Pending accounts** — a registration whose email is never verified leaves a pending user row. Celery Beat sweeps those hourly (`app.worker.cleanup_unverified_users_task` → `app/utils/unverified_cleanup.py`), deleting active, non-superuser, unverified rows created longer ago than `UNVERIFIED_ACCOUNT_CLEANUP_HOURS` (default 72). The delete repeats the predicate, so a user who verifies while the sweep runs is kept. The sweep reads its work from the database rather than holding a timer, so a worker restart costs one tick rather than every pending row. Beat and the workers both boot from `app.celery_app`, which imports the task and schedule modules; see [ADR 0009](../adr/0009-celery-registration-single-entrypoint.md).
 

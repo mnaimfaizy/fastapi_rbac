@@ -27,6 +27,7 @@ import { RegistrationSuccessPage } from './features/auth/RegistrationSuccessPage
 import PasswordResetRequestPage from './features/auth/PasswordResetRequestPage';
 import PasswordResetPage from './features/auth/PasswordResetPage';
 import PasswordResetConfirmPage from './features/auth/PasswordResetConfirmPage';
+import ChangePasswordRequiredPage from './features/auth/ChangePasswordRequiredPage';
 import SignupPage from './features/auth/SignupPage';
 import DashboardOverview from './features/dashboard/DashboardOverview';
 import ProfileContent from './components/dashboard/ProfileContent';
@@ -119,6 +120,11 @@ function App() {
                   }
                 />
                 <Route path="/verify-email" element={<VerifyEmailPage />} />
+                {/* Temporary password: the only page the user can reach (ADR 0014) */}
+                <Route
+                  path="/change-password-required"
+                  element={<ChangePasswordRequiredPage />}
+                />
                 <Route
                   path="/resend-verification-email"
                   element={

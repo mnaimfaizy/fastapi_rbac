@@ -68,6 +68,10 @@ _Avoid_: Password validation, complexity check (when meaning the whole policy), 
 Replacing an existing user's password, for one of three reasons: self-service (the user knows the current password), reset (the user holds a live reset link) or admin set. Whatever the reason, it is one ordered operation: password policy, then stage the new hash and history row, then end every session in the allowlist, then commit, then audit. A partial failure leaves the user logged out with the old password intact, never the reverse. Admitting the first password of a new user (registration, admin create) is not a password change; only the complexity rules apply to it.
 _Avoid_: Password update, password reset (when meaning any change), set password
 
+**Temporary password**:
+A password an administrator chose for a user, through admin create or admin set. Until the user replaces it, they can only change their password, see their own profile, and log out. See ADR 0014.
+_Avoid_: Initial password, one-time password, forced reset
+
 **Role**:
 A named set of permissions assignable to users.
 _Avoid_: Group (when meaning a role)
