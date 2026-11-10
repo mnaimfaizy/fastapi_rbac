@@ -6,11 +6,16 @@ Run from ``backend/``::
     python -m app.qa_accounts seed [--account ID]
     python -m app.qa_accounts seed --restore --account ID
 
-The values below are public fixtures, not secrets. Each password is derived
-from the account id by code in this file, so it is the same on every machine
-and anyone with the repository can compute it. That is why ``seed`` writes
-only to a local database (see :func:`refusal`), and why nothing here reads a
-value from ``.env``.
+The accounts in ``accounts.py`` are public fixtures, not secrets. Each
+password is derived from the account id by code in ``accounts.py``, so it is
+the same on every machine and anyone with the repository can compute it. That
+is why ``seed`` writes only to a local database (see
+:func:`app.qa_accounts.accounts.refusal`), and why nothing here reads a value
+from ``.env``.
+
+Layout: ``accounts.py`` holds the list and the refusal rule and imports no
+database code; ``seeding.py`` does the database work; ``__main__.py`` is the
+command line.
 
 Emails use the ``.example`` TLD, which RFC 2606 reserves, so they cannot
 resolve or reach a real mailbox. The issue asked for ``.test``, but the

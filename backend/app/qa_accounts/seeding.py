@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Sequence
 
+from redis.asyncio import Redis
 from sqlmodel import delete
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -16,7 +17,13 @@ from app.models.user_model import User
 from app.qa_accounts.accounts import QAAccount, QAAccountsError
 from app.schemas.user_schema import IUserCreateFields
 from app.utils.accepted_password import AcceptedPassword
-from app.utils.password_policy import InitialPasswordReason, accept_initial_password
+from app.utils.password_policy import (
+    FixturePasswordReason,
+    InitialPasswordReason,
+    accept_initial_password,
+    restore_fixture_password,
+)
+from app.utils.token import revoke_all_user_tokens
 
 
 def _now() -> datetime:
@@ -109,8 +116,14 @@ async def _restore_profile(
         changes.append(f"deleted {count} password-history row{'s' if count != 1 else ''}")
 
 
-async def seed_account(account: QAAccount, db_session: AsyncSession, *, restore: bool = False) -> list[str]:
-    """Create ``account`` or repair its drift. Returns what changed; empty means nothing did."""
+async def seed_account(
+    account: QAAccount, db_session: AsyncSession, redis_client: Redis, *, restore: bool = False
+) -> list[str]:
+    """Create ``account`` or repair its drift. Returns what changed; empty means nothing did.
+
+    Any repair ends every session the account holds, so a token issued while
+    it had drifted (another password, other roles, disabled) stops working.
+    """
     role = await _role(account, db_session)
     user = await crud.user.get_by_email(email=account.email, db_session=db_session)
     if user is None:
@@ -118,20 +131,35 @@ async def seed_account(account: QAAccount, db_session: AsyncSession, *, restore:
         return ["created"]
 
     changes: list[str] = []
-    if not user.password or not PasswordValidator.verify_password(account.password, user.password):
-        user.password = (await _accept(account, db_session)).hash
-        changes.append("reset password")
     _repair_sign_in(user, role, changes)
+    if not user.password or not PasswordValidator.verify_password(account.password, user.password):
+        # Ends the sessions and commits the repairs staged above with it.
+        await restore_fixture_password(
+            user,
+            account.password,
+            reason=FixturePasswordReason.QA_ACCOUNT,
+            db_session=db_session,
+            redis_client=redis_client,
+        )
+        changes.insert(0, "reset password")
+        committed = len(changes)
+    else:
+        committed = 0
     if restore:
+        # After the password, so the history row that adds is deleted too.
         await _restore_profile(account, user, db_session, changes)
-    if changes:
+    if len(changes) > committed:
         db_session.add(user)
+        await revoke_all_user_tokens(redis_client, user.id)
         await db_session.commit()
         await db_session.refresh(user)
     return changes
 
 
 async def seed(
-    accounts: Sequence[QAAccount], db_session: AsyncSession, *, restore: bool = False
+    accounts: Sequence[QAAccount], db_session: AsyncSession, redis_client: Redis, *, restore: bool = False
 ) -> dict[str, list[str]]:
-    return {account.id: await seed_account(account, db_session, restore=restore) for account in accounts}
+    return {
+        account.id: await seed_account(account, db_session, redis_client, restore=restore)
+        for account in accounts
+    }

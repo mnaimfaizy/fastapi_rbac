@@ -181,7 +181,7 @@ npm test
 | **Deploy to production** | `.scripts\deployment\push-to-dockerhub.ps1`      | [Deployment](https://fastapi-rbac.mnfprofile.com/deployment/)                         |
 | **Troubleshoot CORS**    | `.scripts\docker\diagnose-cors.ps1`              | [CORS Guide](https://fastapi-rbac.mnfprofile.com/troubleshooting/common-issues/)      |
 | **Database migration**   | `.scripts\database\migrate-db.ps1`               | [DB Reference](https://fastapi-rbac.mnfprofile.com/reference/)                        |
-| **Seed QA Accounts**     | `cd backend && python -m app.qa_accounts seed`    | [QA Accounts](docs/reference/qa-accounts.md): public fixtures, local and test only    |
+| **Seed QA Accounts**     | `cd backend && python -m app.qa_accounts seed`    | [QA Accounts](https://fastapi-rbac.mnfprofile.com/reference/qa-accounts/)            |
 
 ## 🧪 Integration Testing Environments
 

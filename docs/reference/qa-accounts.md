@@ -16,7 +16,7 @@ Run them from `backend/`, or inside the dev container with `docker exec fastapi_
 | `python -m app.qa_accounts seed --restore --account <id>` | Returns one account to its default state, and says what it deleted. |
 | `--account <id>` | On any command, limits it to that account. |
 
-`seed` needs the roles that `app/initial_data.py` creates, so run that first. The dev container runs it on start.
+`seed` needs the roles that `app/initial_data.py` creates, so run that first. The dev container runs it on start. `seed` reports each account as soon as it is written, so a failure part way still says which accounts were already done.
 
 ## The accounts
 
@@ -53,3 +53,5 @@ Run on an existing account, `seed` puts back only what stops the account signing
 - role membership, which becomes exactly the account's role
 
 It leaves profile edits alone. `--restore` also resets the name, contact phone and verification code, and deletes the account's password history. It reports each thing it changed or deleted.
+
+Any repair ends every session the account holds, so a token issued while it had drifted stops working. That needs Redis, which the dev stack runs. A password goes back through `restore_fixture_password` in `app/utils/password_policy.py`. That applies the password rules, writes a history row, ends the sessions and records an audit event. It skips the reuse check on purpose: the fixture value was the account's first password, so it is nearly always in the history.

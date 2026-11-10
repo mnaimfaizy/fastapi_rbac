@@ -13,6 +13,9 @@ missed twice. Every path now calls one of two operations here instead:
   returns the :class:`~app.utils.accepted_password.AcceptedPassword` that
   ``crud.user.create`` and ``create_with_role`` require (#272), so no creation
   path can skip it.
+- :func:`restore_fixture_password` puts a QA Account's fixed, public password
+  back (#318). It is :func:`change_password` without the reuse check, because
+  returning to that one value is its purpose.
 
 A refusal is raised as :class:`PasswordRefused` and answered by one exception
 handler (``app.main``) as 400 with ``detail = {"message", "errors"}``, so the
@@ -33,6 +36,7 @@ reuse refusal there is reachable only by the holder of a live reset link
 """
 
 import logging
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, NoReturn, Optional
 
@@ -74,6 +78,13 @@ class InitialPasswordReason(Enum):
     SEED = "seed"
 
 
+class FixturePasswordReason(Enum):
+    """Why a fixture password is being put back on an existing user."""
+
+    # app.qa_accounts repairing a QA Account whose password drifted (#318).
+    QA_ACCOUNT = "qa_account"
+
+
 class PasswordRefusalKind(str, Enum):
     RULES = "rules"
     REUSE = "reuse"
@@ -108,6 +119,7 @@ _RULES_REFUSED_EVENT = {
     InitialPasswordReason.REGISTRATION: "registration_password_complexity_failed",
     InitialPasswordReason.ADMIN_CREATE: "admin_user_create_password_complexity_failed",
     InitialPasswordReason.SEED: "seed_user_password_complexity_failed",
+    FixturePasswordReason.QA_ACCOUNT: "qa_account_password_complexity_failed",
 }
 _REUSE_REFUSED_EVENT = {
     PasswordChangeReason.SELF: "password_change_reused_password",
@@ -118,6 +130,7 @@ _SUCCEEDED_EVENT = {
     PasswordChangeReason.SELF: "password_change_successful",
     PasswordChangeReason.RESET: "password_reset_successful",
     PasswordChangeReason.ADMIN: "admin_user_update_password_successful",
+    FixturePasswordReason.QA_ACCOUNT: "qa_account_password_restored",
 }
 
 
@@ -158,7 +171,7 @@ async def _refuse(
 async def _check_rules(
     password: str,
     *,
-    reason: PasswordChangeReason | InitialPasswordReason,
+    reason: PasswordChangeReason | InitialPasswordReason | FixturePasswordReason,
     user: Optional[User],
     details: dict[str, Any],
     db_session: AsyncSession,
@@ -246,6 +259,55 @@ async def change_password(
     try:
         # Every token of every type, a pending reset link included: the
         # password has changed hands. Awaited inline, never queued (#206).
+        await revoke_all_user_tokens(redis_client, user_id)
+        await db_session.commit()
+    except Exception:
+        await _discard_staged_change(user, db_session)
+        raise
+    await db_session.refresh(user)
+
+    await log_security_event(
+        background_tasks=BackgroundTasks(),
+        event_type=_SUCCEEDED_EVENT[reason],
+        user_id=user_id,
+        details=details,
+        db_session=db_session,
+    )
+    return user
+
+
+async def restore_fixture_password(
+    user: User,
+    password: str,
+    *,
+    reason: FixturePasswordReason,
+    db_session: AsyncSession,
+    redis_client: AsyncRedis,
+) -> User:
+    """Put a fixture account's fixed password back on ``user``, or raise :class:`PasswordRefused`.
+
+    :func:`change_password` minus the reuse check: rules, stage the hash and
+    the history row, end every session, commit, audit. Reuse is skipped on
+    purpose. The fixture value was this account's first password, so it is
+    nearly always in the history, and putting it back is the point (#318).
+
+    Account state other than the password is the caller's. Anything it staged
+    on ``user`` is committed here, after the sessions end.
+    """
+    user_id = user.id
+    details = _audit_details(email=user.email, actor=None, client_address=None)
+
+    await _check_rules(password, reason=reason, user=user, details=details, db_session=db_session)
+
+    if user.password:
+        await crud.user.add_password_to_history(
+            user_id=user.id, hashed_password=user.password, created_by_ip=None, db_session=db_session
+        )
+    user.password = PasswordValidator.get_password_hash(password)
+    user.last_changed_password_date = datetime.now(timezone.utc).replace(tzinfo=None)
+    db_session.add(user)
+
+    try:
         await revoke_all_user_tokens(redis_client, user_id)
         await db_session.commit()
     except Exception:

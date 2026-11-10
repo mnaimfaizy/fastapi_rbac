@@ -32,14 +32,36 @@ def _parse(argv: Sequence[str] | None) -> argparse.Namespace:
     return args
 
 
-async def _run_seed(accounts: Sequence[QAAccount], *, restore: bool) -> dict[str, list[str]]:
+def _report(account_id: str, changes: list[str]) -> None:
+    print(f"{account_id}: {'; '.join(changes) if changes else 'unchanged'}", flush=True)
+
+
+async def _run_seed(accounts: Sequence[QAAccount], *, restore: bool) -> None:
+    """Seed each account and report it as soon as it is written.
+
+    Each account commits on its own, so a failure part way says which
+    accounts were already written before it stops.
+    """
     # Imported here, after the refusal check, so nothing builds an engine or
     # opens a connection to a database the check refused.
     from app.db.session import SessionLocal
-    from app.qa_accounts.seeding import seed
+    from app.qa_accounts.seeding import seed_account
+    from app.utils.password_policy import PasswordRefused
+    from app.utils.redis_connection import RedisConnectionFactory
 
+    redis_client = await RedisConnectionFactory.get_client()
     async with SessionLocal() as db_session:
-        return await seed(accounts, db_session, restore=restore)
+        for account in accounts:
+            try:
+                changes = await seed_account(account, db_session, redis_client, restore=restore)
+            except PasswordRefused as refused:
+                raise QAAccountsError(
+                    f"{account.id}: the password policy refuses its fixture password: "
+                    + "; ".join(refused.errors)
+                ) from refused
+            except QAAccountsError as error:
+                raise QAAccountsError(f"{account.id}: {error}") from error
+            _report(account.id, changes)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -54,13 +76,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         reason = refusal(mode=settings.MODE, database_url=str(settings.ASYNC_DATABASE_URI))
         if reason is not None:
             raise QAAccountsError(f"refusing to seed: {reason}. QA Accounts go only into a local database.")
-        results = asyncio.run(_run_seed(accounts, restore=args.restore))
+        asyncio.run(_run_seed(accounts, restore=args.restore))
     except QAAccountsError as error:
         print(f"qa_accounts: {error}", file=sys.stderr)
         return 1
-
-    for account_id, changes in results.items():
-        print(f"{account_id}: {'; '.join(changes) if changes else 'unchanged'}")
     return 0
 
 

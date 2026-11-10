@@ -11,7 +11,7 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 import app.qa_accounts.__main__ as cli
-from app.core.config import ModeEnum
+from app.core.config import ModeEnum, settings
 from app.core.security import PasswordValidator
 from app.crud.role_crud import role_crud
 from app.crud.user_crud import user_crud
@@ -27,6 +27,8 @@ from app.qa_accounts.accounts import (
     select_accounts,
 )
 from app.qa_accounts.seeding import seed
+from app.schemas.common_schema import TokenType
+from app.utils.token import add_token_to_redis, get_valid_tokens
 
 PG = "postgresql+asyncpg://postgres:postgres@{host}:5432/fastapi_db"
 
@@ -171,10 +173,12 @@ async def _user(db: AsyncSession, account_id: str) -> User:
     return user
 
 
-async def test_seed_creates_verified_active_users_holding_their_role(db: AsyncSession) -> None:
+async def test_seed_creates_verified_active_users_holding_their_role(
+    db: AsyncSession, redis_mock: Any
+) -> None:
     await _roles(db)
 
-    results = await seed(ACCOUNTS, db)
+    results = await seed(ACCOUNTS, db, redis_mock)
 
     assert results == {a.id: ["created"] for a in ACCOUNTS}
     for account in ACCOUNTS:
@@ -188,26 +192,26 @@ async def test_seed_creates_verified_active_users_holding_their_role(db: AsyncSe
         assert PasswordValidator.verify_password(account.password, user.password)
 
 
-async def test_a_second_seed_changes_nothing(db: AsyncSession) -> None:
+async def test_a_second_seed_changes_nothing(db: AsyncSession, redis_mock: Any) -> None:
     await _roles(db)
-    await seed(ACCOUNTS, db)
+    await seed(ACCOUNTS, db, redis_mock)
     before = {a.id: (await _user(db, a.id)).model_dump() for a in ACCOUNTS}
 
-    results = await seed(ACCOUNTS, db)
+    results = await seed(ACCOUNTS, db, redis_mock)
 
     assert results == {a.id: [] for a in ACCOUNTS}
     assert {a.id: (await _user(db, a.id)).model_dump() for a in ACCOUNTS} == before
 
 
-async def test_account_limits_seed_to_one_account(db: AsyncSession) -> None:
+async def test_account_limits_seed_to_one_account(db: AsyncSession, redis_mock: Any) -> None:
     await _roles(db)
 
-    assert await seed(select_accounts("manager"), db) == {"manager": ["created"]}
+    assert await seed(select_accounts("manager"), db, redis_mock) == {"manager": ["created"]}
     assert await user_crud.get_by_email(email=f"admin@{EMAIL_DOMAIN}", db_session=db) is None
 
 
 async def test_seed_refuses_when_the_roles_are_missing(
-    db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    db: AsyncSession, redis_mock: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Roles come from init_db; without them there is nothing to hold.
     async def no_role(**kwargs: Any) -> None:
@@ -216,13 +220,13 @@ async def test_seed_refuses_when_the_roles_are_missing(
     monkeypatch.setattr(role_crud, "get_role_by_name", no_role)
 
     with pytest.raises(QAAccountsError, match="initial_data"):
-        await seed(select_accounts("admin"), db)
+        await seed(select_accounts("admin"), db, redis_mock)
     assert await user_crud.get_by_email(email=f"admin@{EMAIL_DOMAIN}", db_session=db) is None
 
 
-async def test_seed_puts_back_what_drifted(db: AsyncSession) -> None:
+async def test_seed_puts_back_what_drifted(db: AsyncSession, redis_mock: Any) -> None:
     roles = await _roles(db)
-    await seed(ACCOUNTS, db)
+    await seed(ACCOUNTS, db, redis_mock)
     user = await _user(db, "manager")
     user.password = PasswordValidator.get_password_hash("Someone-Else-9x")
     user.verified = False
@@ -233,7 +237,7 @@ async def test_seed_puts_back_what_drifted(db: AsyncSession) -> None:
     db.add(user)
     await db.commit()
 
-    results = await seed(ACCOUNTS, db)
+    results = await seed(ACCOUNTS, db, redis_mock)
 
     assert results["admin"] == []
     assert results["user"] == []
@@ -253,12 +257,12 @@ async def test_seed_puts_back_what_drifted(db: AsyncSession) -> None:
     assert not user.is_locked
     assert not user.needs_to_change_password
     assert [r.name for r in user.roles] == ["Manager"]
-    assert await seed(ACCOUNTS, db) == {a.id: [] for a in ACCOUNTS}
+    assert await seed(ACCOUNTS, db, redis_mock) == {a.id: [] for a in ACCOUNTS}
 
 
-async def test_seed_keeps_profile_edits_but_restore_puts_them_back(db: AsyncSession) -> None:
+async def test_seed_keeps_profile_edits_but_restore_puts_them_back(db: AsyncSession, redis_mock: Any) -> None:
     await _roles(db)
-    await seed(ACCOUNTS, db)
+    await seed(ACCOUNTS, db, redis_mock)
     user = await _user(db, "user")
     user.first_name = "Renamed"
     user.contact_phone = "+15550100"
@@ -267,12 +271,138 @@ async def test_seed_keeps_profile_edits_but_restore_puts_them_back(db: AsyncSess
     db.add(UserPasswordHistory(user_id=user.id, password_hash="old-two"))
     await db.commit()
 
-    assert (await seed(select_accounts("user"), db)) == {"user": []}
+    assert (await seed(select_accounts("user"), db, redis_mock)) == {"user": []}
 
-    results = await seed(select_accounts("user"), db, restore=True)
+    results = await seed(select_accounts("user"), db, redis_mock, restore=True)
 
     assert results == {"user": ["reset name", "cleared contact phone", "deleted 2 password-history rows"]}
     user = await _user(db, "user")
     assert (user.first_name, user.contact_phone) == ("QA", None)
     history = await db.exec(select(UserPasswordHistory).where(UserPasswordHistory.user_id == user.id))
     assert history.all() == []
+
+
+async def _sessions(redis_mock: Any, user: User) -> int:
+    total = 0
+    for token_type in (TokenType.ACCESS, TokenType.REFRESH, TokenType.RESET):
+        total += len(await get_valid_tokens(redis_mock, user.id, token_type))
+    return total
+
+
+async def _give_sessions(redis_mock: Any, user: User) -> None:
+    for token_type, token in ((TokenType.ACCESS, "drift-access"), (TokenType.REFRESH, "drift-refresh")):
+        await add_token_to_redis(redis_mock, user, token, token_type, 30)
+
+
+async def test_a_password_reset_goes_through_the_policy(db: AsyncSession, redis_mock: Any) -> None:
+    await _roles(db)
+    await seed(ACCOUNTS, db, redis_mock)
+    user = await _user(db, "admin")
+    drifted_hash = PasswordValidator.get_password_hash("Someone-Else-9x")
+    user.password = drifted_hash
+    db.add(user)
+    await db.commit()
+    await _give_sessions(redis_mock, user)
+
+    assert await seed(select_accounts("admin"), db, redis_mock) == {"admin": ["reset password"]}
+
+    user = await _user(db, "admin")
+    assert await _sessions(redis_mock, user) == 0
+    history = (await db.exec(select(UserPasswordHistory).where(UserPasswordHistory.user_id == user.id))).all()
+    assert [row.password_hash for row in history] == [drifted_hash]
+    # Unlike an admin set, putting a fixture back is not a temporary password.
+    assert not user.needs_to_change_password
+
+
+async def test_any_repair_ends_the_sessions(db: AsyncSession, redis_mock: Any) -> None:
+    roles = await _roles(db)
+    await seed(ACCOUNTS, db, redis_mock)
+    user = await _user(db, "user")
+    user.roles = [roles["Admin"]]
+    db.add(user)
+    await db.commit()
+    await _give_sessions(redis_mock, user)
+
+    results = await seed(select_accounts("user"), db, redis_mock)
+
+    assert results["user"][0].startswith("set roles to [User]")
+    assert await _sessions(redis_mock, await _user(db, "user")) == 0
+
+
+async def test_an_unchanged_account_keeps_its_sessions(db: AsyncSession, redis_mock: Any) -> None:
+    await _roles(db)
+    await seed(ACCOUNTS, db, redis_mock)
+    user = await _user(db, "manager")
+    await _give_sessions(redis_mock, user)
+
+    assert await seed(select_accounts("manager"), db, redis_mock) == {"manager": []}
+    assert await _sessions(redis_mock, user) == 2
+
+
+async def test_restore_after_a_password_drift_leaves_no_history(db: AsyncSession, redis_mock: Any) -> None:
+    await _roles(db)
+    await seed(ACCOUNTS, db, redis_mock)
+    user = await _user(db, "manager")
+    user.password = PasswordValidator.get_password_hash("Someone-Else-9x")
+    db.add(user)
+    await db.commit()
+
+    results = await seed(select_accounts("manager"), db, redis_mock, restore=True)
+
+    assert results == {"manager": ["reset password", "deleted 1 password-history row"]}
+    history = await db.exec(select(UserPasswordHistory).where(UserPasswordHistory.user_id == user.id))
+    assert history.all() == []
+
+
+# --- the command line reports each account as it goes ---------------------
+
+
+@pytest.fixture
+def _cli_on_test_db(monkeypatch: pytest.MonkeyPatch, db: AsyncSession, redis_mock: Any) -> None:
+    """Point ``_run_seed`` at the test session and Redis mock."""
+
+    class _Session:
+        async def __aenter__(self) -> AsyncSession:
+            return db
+
+        async def __aexit__(self, *exc: object) -> None:
+            return None
+
+    async def get_client() -> Any:
+        return redis_mock
+
+    monkeypatch.setattr("app.db.session.SessionLocal", _Session)
+    monkeypatch.setattr("app.utils.redis_connection.RedisConnectionFactory.get_client", get_client)
+
+
+@pytest.mark.usefixtures("_cli_on_test_db")
+async def test_a_partial_failure_says_what_was_already_written(
+    db: AsyncSession,
+    redis_mock: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    await _roles(db)
+    real = role_crud.get_role_by_name
+
+    async def no_manager(*, name: str, db_session: AsyncSession) -> Role | None:
+        return None if name == "Manager" else await real(name=name, db_session=db_session)
+
+    monkeypatch.setattr(role_crud, "get_role_by_name", no_manager)
+
+    with pytest.raises(QAAccountsError, match="^manager: role 'Manager' does not exist"):
+        await cli._run_seed(ACCOUNTS, restore=False)
+    assert capsys.readouterr().out.splitlines() == ["admin: created"]
+
+
+@pytest.mark.usefixtures("_cli_on_test_db")
+async def test_a_policy_refusal_is_a_message_not_a_traceback(
+    db: AsyncSession,
+    redis_mock: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _roles(db)
+    monkeypatch.setattr(settings, "PASSWORD_MIN_LENGTH", 40)
+
+    with pytest.raises(QAAccountsError, match="^admin: the password policy refuses its fixture password: "):
+        await cli._run_seed(select_accounts("admin"), restore=False)
