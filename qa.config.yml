@@ -1,0 +1,36 @@
+# qa.config.yml: settings for Agent-kit's qa-plan and manual-qa skills (#318).
+#
+# Consumer-owned (not Kit-owned): upgrades never touch it. Keys and rules:
+# .claude/skills/qa-plan/ADAPTER.md and .claude/skills/manual-qa/ADAPTER.md.
+# The skills read a YAML subset: no tabs, anchors or multi-line values.
+# Never put a password, token or hosted address in this file.
+#
+# There is no plan: section yet. qa-plan asks for base_ref and the suites the
+# first time it runs, and writes them here only if you agree.
+#
+# The QA Stack is the dev compose stack. migrate and seed run inside the
+# backend container, whose database host is fastapi_rbac_db_dev, one of the
+# hosts the seeder accepts as local. QA Accounts: docs/reference/qa-accounts.md
+
+working_dir: tmp/qa # gitignored
+
+run:
+  target: stack
+  surface: web
+  stack:
+    up: "docker network inspect fastapi_rbac_dev_network >/dev/null 2>&1 || docker network create fastapi_rbac_dev_network; docker compose -f backend/docker-compose.dev.yml up -d --wait fastapi_rbac_dev && docker compose -f react-frontend/docker-compose.dev.yml up -d --wait"
+    migrate: "docker exec fastapi_rbac_dev alembic upgrade head"
+    seed: "docker exec fastapi_rbac_dev python app/initial_data.py && docker exec fastapi_rbac_dev python -m app.qa_accounts seed"
+    down: "docker compose -f react-frontend/docker-compose.dev.yml down && docker compose -f backend/docker-compose.dev.yml down"
+  accounts:
+    print: "docker exec fastapi_rbac_dev python -m app.qa_accounts print"
+    restore: "docker exec fastapi_rbac_dev python -m app.qa_accounts seed --restore --account {id}"
+    roles:
+      - id: admin
+        purpose: "holds every permission: manages users, roles, permissions and their groups"
+      - id: manager
+        purpose: "creates, reads and updates users and content; can read roles and permissions only"
+      - id: user
+        purpose: "an ordinary user who manages only their own profile"
+  evidence:
+    upload: none
