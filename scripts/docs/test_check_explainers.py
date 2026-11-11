@@ -41,7 +41,7 @@ PAGE = """<!doctype html>
 </script>
 </head><body>
 <h2>Reference</h2>
-<p>The cap is set in <code>limits.py:1</code> and applied in (<code>limits.py:3-5</code>, <code>:7-8</code>).</p>
+<p>The cap is set in <code>limits.py:1</code> and applied in (<code title="backend/app/limits.py:3-5">limits.py:3-5</code>, <code>:7-8</code>).</p>
 <h3>Beat log</h3>
 <h4 class="bl-h">The cap evicts the oldest.</h4>
 <p>Six logins, five sessions.</p>
@@ -146,9 +146,23 @@ class CheckerTest(unittest.TestCase):
         self.assertEqual(code, 0, out)
         page = self.read("docs/explainers/demo.html")
         self.assertIn("<code>limits.py:3</code>", page)
-        self.assertIn("<code>limits.py:5-7</code>, <code>:9-10</code>", page)
+        self.assertIn('<code title="backend/app/limits.py:5-7">limits.py:5-7</code>, <code>:9-10</code>', page)
         self.assertIn('"backend/app/limits.py:5-7"', page)
         self.assertIn("P.lim + ':9-10'", page)
+
+    def test_code_that_moved_and_was_copied_needs_an_explicit_move(self) -> None:
+        self.stamp()
+        copy = "def evict(tokens):\n    overflow = len(tokens) - LIMIT\n    return tokens[:overflow]\n"
+        self.write("backend/app/limits.py", "# header\n" + copy + "\n" + SOURCE)
+        code, out = self.run_checker("--fix")
+        self.assertEqual(code, 1)
+        self.assertIn("now appears 2 times, at 2-4, 8-10", out)
+        self.assertIn("--move backend/app/limits.py:3-5=<first line>", out)
+        code, out = self.run_checker("--move", "backend/app/limits.py:3-5=99")
+        self.assertIn("NOT moved backend/app/limits.py:3-5", out)
+        code, out = self.run_checker("--move", "backend/app/limits.py:3-5=8")
+        self.assertEqual(code, 0, out)
+        self.assertIn(">limits.py:8-10</code>", self.read("docs/explainers/demo.html"))
 
     def test_manifest_value_must_match_the_code(self) -> None:
         self.stamp()

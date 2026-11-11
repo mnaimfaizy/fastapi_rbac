@@ -38,7 +38,15 @@ Read the report. Each problem says what changed, where the page uses it, and how
 python scripts/docs/check_explainers.py --fix
 ```
 
-This rewrites the line numbers everywhere the page prints them (markup, data block and script) and moves the anchors with them. Review the diff and commit it.
+This rewrites the line numbers everywhere the page prints them (text, tooltips, data block and script) and moves the anchors with them. Review the diff and commit it.
+
+Sometimes the code moved and was also copied, so the same lines now appear more than once. The report lists every copy, and `--fix` leaves the citation alone because it cannot tell which copy the page means. Check the code, then name the copy by its first line:
+
+```bash
+python scripts/docs/check_explainers.py --move backend/app/utils/password_policy.py:249=261
+```
+
+`--move` refuses if the code at that line is not the anchored code.
 
 **Cited code changed.** Someone edited code the page describes. This needs a person:
 

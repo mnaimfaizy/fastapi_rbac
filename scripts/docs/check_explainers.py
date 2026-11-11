@@ -144,6 +144,16 @@ class PageScanner(HTMLParser):
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         a = dict(attrs)
+        # Citations in attribute values (a title tooltip, an aria-label) are claims too.
+        raw_tag = self.get_starttag_text() or ""
+        if any(v and ":" in v for _, v in attrs):
+            base = self._offset()
+            assert self.raw[base : base + len(raw_tag)] == raw_tag, "offset bookkeeping drifted"
+            for m in FILE_CITATION.finditer(raw_tag):
+                if m.group(2):
+                    s, e = int(m.group(2)), int(m.group(3) or m.group(2))
+                    span = (base + m.start(2), base + m.end(3 if m.group(3) else 2))
+                    self._record(m.group(1), s, e, span, self.section)
         if tag == "script":
             self._script = a
         elif tag == "style":
@@ -548,7 +558,8 @@ def citation_state(page: Page, root: Path, base: str | None):
         if len(moves) == 1:
             yield key, occs, anchor, "moved", {"moves": moves}
         else:
-            yield key, occs, anchor, "changed", {"guess": guess_new_range(lines, anchor, start, end), "lines": lines}
+            guess = guess_new_range(lines, anchor, start, end)
+            yield key, occs, anchor, "changed", {"guess": guess, "lines": lines, "moves": moves}
     for key in sorted(set(anchors) - set(by_key)):
         yield key, [], anchors[key], "orphan", {}
 
@@ -665,6 +676,15 @@ def check_citations(page: Page, root: Path, base: str | None) -> list[Finding]:
                     f"run `{CHECKER} --fix` to move the line numbers to {lines_label(*guess)}, review what the "
                     f"page says against the new code, then `{CHECKER} --accept {rel}:{lines_label(*guess)}`"
                 )
+            copies = info.get("moves") or []
+            if len(copies) > 1:
+                n = anchor["n"]
+                places = ", ".join(lines_label(c, c + n - 1) for c in copies)
+                detail.insert(0, f"the cited code is unchanged but now appears {len(copies)} times, at {places}")
+                fix = (
+                    "the checker cannot tell which copy the page means: check the code, then run "
+                    f"`{CHECKER} --move {key}=<first line>` with the right one"
+                )
             out.append(
                 Finding(
                     page.path,
@@ -767,6 +787,40 @@ def do_fix(page: Page, root: Path) -> tuple[str, list[str]]:
         moved = load_page_from_raw(root, page.path, page.rules, raw)
         raw = write_anchors(moved, anchors, root)
     return raw, notes
+
+
+def do_move(page: Page, root: Path, specs: list[str]) -> tuple[str, list[str]]:
+    """Move named citations (``CITATION=FIRST_LINE``) whose code is unchanged at the new line.
+
+    For a move ``--fix`` cannot make alone: the same code now appears more than once."""
+    anchors = dict((page.block(ANCHORS_ID) or {"anchors": {}})["anchors"])
+    by_key: dict[str, list[Occurrence]] = {}
+    for occ in page.scan.occurrences:
+        by_key.setdefault(occ.key, []).append(occ)
+    edits, notes = [], []
+    for spec in specs:
+        key, _, target = spec.rpartition("=")
+        if key not in by_key or key not in anchors or not target.isdigit():
+            notes.append(f"NOT moved {spec}: expected CITATION=FIRST_LINE for an anchored citation on the page")
+            continue
+        anchor, occs = anchors[key], by_key[key]
+        new_start = int(target)
+        new_end = new_start + anchor["n"] - 1
+        lines = read_lines(root, occs[0].file) or []
+        if new_end > len(lines) or range_hash(lines[new_start - 1 : new_end]) != anchor["sha"]:
+            notes.append(
+                f"NOT moved {key}: the code at line {new_start} is not the anchored code; "
+                "review and use --accept instead"
+            )
+            continue
+        new_key = f"{occs[0].file}:{lines_label(new_start, new_end)}"
+        edits += [(occ.span, lines_label(new_start, new_end)) for occ in occs]
+        anchors[new_key] = anchors.pop(key)
+        notes.append(f"{key} -> {new_key} (moved)")
+    if not edits:
+        return page.raw, notes
+    raw = rewrite_numbers(page.raw, edits)
+    return write_anchors(load_page_from_raw(root, page.path, page.rules, raw), anchors, root), notes
 
 
 def load_page_from_raw(root: Path, rel: str, rules: dict, raw: str) -> Page:
@@ -936,6 +990,13 @@ def main(argv: list[str] | None = None) -> int:
         metavar="CITATION_OR_FILE",
         help="after review, re-anchor changed citations (a full citation, or a file to accept all in it)",
     )
+    ap.add_argument(
+        "--move",
+        nargs="+",
+        default=[],
+        metavar="CITATION=LINE",
+        help="move a citation whose unchanged code now appears more than once to the copy at LINE",
+    )
     ap.add_argument("--base", help="git ref to diff cited ranges against when reporting changes")
     ap.add_argument("--github", action="store_true", help="emit GitHub annotations and a job summary")
     args = ap.parse_args(argv)
@@ -944,11 +1005,15 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
     pages, findings = discover(root)
-    writing = args.fix or args.stamp or args.accept
+    writing = args.fix or args.stamp or args.accept or args.move
     for rel, rules in pages:
         page = load_page(root, rel, rules)
         if writing:
             original, raw, notes = page.raw, page.raw, []
+            if args.move:
+                raw, n = do_move(page, root, args.move)
+                notes += n
+                page = load_page_from_raw(root, rel, rules, raw)
             if args.fix:
                 raw, n = do_fix(page, root)
                 notes += n
