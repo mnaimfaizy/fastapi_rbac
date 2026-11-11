@@ -36,7 +36,6 @@ reuse refusal there is reachable only by the holder of a live reset link
 """
 
 import logging
-from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, NoReturn, Optional
 
@@ -301,13 +300,11 @@ async def restore_fixture_password(
 
     await _check_rules(password, reason=reason, user=user, details=details, db_session=db_session)
 
-    if user.password:
-        await crud.user.add_password_to_history(
-            user_id=user.id, hashed_password=user.password, created_by_ip=None, db_session=db_session
-        )
-    user.password = PasswordValidator.get_password_hash(password)
-    user.last_changed_password_date = datetime.now(timezone.utc).replace(tzinfo=None)
-    db_session.add(user)
+    # The same side effects as every password change (history row,
+    # last_changed_password_date), written in the one place they live.
+    await crud.user.update_password(
+        user=user, new_password=password, created_by_ip=None, db_session=db_session, check_reuse=False
+    )
 
     try:
         await revoke_all_user_tokens(redis_client, user_id)

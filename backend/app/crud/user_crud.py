@@ -492,9 +492,14 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         new_password: str,
         db_session: AsyncSession | None = None,
         created_by_ip: str | None = None,
+        check_reuse: bool = True,
     ) -> User:
         """
         Stage a new password for ``user``. Requires db_session to be provided explicitly.
+
+        ``check_reuse=False`` is for ``password_policy.restore_fixture_password``
+        only: a QA Account's fixed password is nearly always in its own history,
+        and putting it back is the point (#318). The side effects still apply.
 
         This is the single place the reuse policy is applied and the single place
         the password side effects happen (history append,
@@ -504,9 +509,9 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
         """
         if db_session is None:
             raise ValueError("db_session must be provided")
-        if self.matches_current_password(user=user, new_password=new_password):
+        if check_reuse and self.matches_current_password(user=user, new_password=new_password):
             raise PasswordReuseError("New password must be different from your current password.")
-        window = password_reuse_window()
+        window = password_reuse_window() if check_reuse else 0
         if window > 0 and await self.is_password_in_history(
             user_id=user.id, new_password=new_password, db_session=db_session
         ):
