@@ -1,0 +1,69 @@
+name: Docs Check
+
+# Runs on every pull request, not only docs changes: an explainer page goes stale when the code it
+# describes changes, so a backend or frontend change is exactly when this check must run.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  explainers:
+    name: Explainer pages match the code
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Full history, so a failure can show the diff inside each cited range.
+          fetch-depth: 0
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.10"
+
+      - name: Test the checker
+        run: python -m unittest discover -s scripts/docs -p "test_*.py"
+
+      - name: Check explainer pages against the code
+        env:
+          BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+        run: |
+          base=()
+          if [ -n "$BASE_REF" ] && ! [[ "$BASE_REF" =~ ^0+$ ]]; then base=(--base "$BASE_REF"); fi
+          python scripts/docs/check_explainers.py --github "${base[@]}"
+
+  build:
+    name: MkDocs build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: 3.x
+
+      - name: Install dependencies
+        run: pip install mkdocs-material
+
+      - name: Build docs
+        run: mkdocs build
+
+      - name: Explainer pages are in the build
+        run: |
+          missing=0
+          for page in docs/explainers/*.html; do
+            built="site/explainers/$(basename "$page")"
+            if [ ! -f "$built" ]; then
+              echo "::error file=$page::$page is not in the MkDocs build (expected $built)"
+              missing=1
+            fi
+          done
+          exit $missing
