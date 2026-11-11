@@ -72,6 +72,7 @@ nav:
   - "API Reference":
       - "Overview": "reference/index.md"
       - "System Architecture": "reference/architecture.md"
+      - "QA Accounts": "reference/qa-accounts.md"
       - "Authentication": "reference/api/auth.md"
       - "Users": "reference/api/users.md"
       - "Roles": "reference/api/roles.md"

@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-08-21",
+  "commit": "84b34321234567890abcdef1234567890abcdef",
+  "ecosystems": [
+    {
+      "lead": "nx",
+      "members": ["nx", "@nx/eslint"],
+      "baseline": "22.7.7",
+      "driftNotes": [],
+      "findings": [
+        {
+          "type": "mismatch",
+          "urgency": "deprecated",
+          "claim": "`nx dep-graph` and `nx affected:graph` do not exist — they are absent from the Nx CLI reference, so they no longer run.",
+          "evidence": "absent",
+          "source": {
+            "url": "https://nx.dev/docs/reference/nx-commands",
+            "quote": "The command list documents nx graph, nx affected -t <target>, and nx affected --graph.",
+            "pageVersion": "22.7.7"
+          },
+          "local": [
+            {
+              "file": "package.json",
+              "line": 3,
+              "text": "\"dep-graph\": \"nx dep-graph\""
+            }
+          ],
+          "disposition": "plan"
+        },
+        {
+          "type": "future-risk",
+          "urgency": "removal-scheduled",
+          "claim": "Nx v23 deprecates executor-based tooling in favour of inferred plugin targets, with removal in v24. This repo declares 54 explicit executor targets by hand across apps/*/project.json and libs/**/project.json, so the v24 migration is not the 22-target scope an earlier count reported.",
+          "evidence": "cited",
+          "source": {
+            "url": "https://nx.dev/blog/nx-23-release",
+            "quote": "Executor-based tooling is deprecated in favour of inferred plugin targets and will be removed in Nx 24.",
+            "pageVersion": "22.7.7"
+          },
+          "local": [
+            {
+              "file": "apps-example-nx-targets.json",
+              "line": 3,
+              "text": "\"lint\": { \"executor\": \"@nx/eslint:lint\" }"
+            }
+          ],
+          "disposition": "plan"
+        }
+      ],
+      "checkedAndClear": [],
+      "opportunities": [],
+      "incidental": [
+        {
+          "summary": "nx.json renames the inferred @nx/eslint/plugin target to \"eslint:lint\" — a local configuration choice no upstream statement grounds, confirmed with `git log -S'eslint:lint' -- nx.json`, which is not about anything Nx documents.",
+          "local": [
+            {
+              "file": "nx.json",
+              "line": 5,
+              "text": "\"options\": { \"targetName\": \"eslint:lint\" }"
+            }
+          ],
+          "owner": "Audit"
+        }
+      ]
+    }
+  ],
+  "scanned": ["package.json", "nx.json", "apps-example-nx-targets.json"],
+  "failedHops": []
+}

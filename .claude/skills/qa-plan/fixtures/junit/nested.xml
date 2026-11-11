@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- describe blocks nest test suites; a case with no classname takes its innermost suite's name -->
+<testsuites name="test run">
+  <testsuite name="cart">
+    <testsuite name="cart totals">
+      <testcase name="adds tax" />
+      <testcase name='rounds "half up"' />
+    </testsuite>
+    <testcase name="empties" />
+  </testsuite>
+</testsuites>

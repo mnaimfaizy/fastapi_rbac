@@ -1,6 +1,8 @@
 ---
 name: explainer
 description: "Explainer Page for a complex part of a system — a diagram, animated walkthrough, or reference page a reader can learn from or review a change against. Writes a brief that fixes the audience, the one question, and every fact (cited to source when the subject is code, from an interview when it is not), then hands it to a builder that produces a self-contained HTML page. Use when someone asks to explain, diagram, map, visualise, or walk through how something works."
+metadata:
+  agent-kit-scope: user
 ---
 
 # Explainer

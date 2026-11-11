@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-17",
+  "commit": "0123456789abcdef0123456789abcdef01234567",
+  "delta": {
+    "newFindings": ["`next` — the instruction file still teaches a synchronous `cookies()`"],
+    "resolved": ["`nx` — the 22.3.3 version literal removed from the instruction file"],
+    "stillPresent": ["`nx` — the executor list in the hygiene script is still hand-enumerated"]
+  },
+  "ecosystems": [
+    {
+      "lead": "next",
+      "members": ["next", "eslint-config-next"],
+      "baseline": "16.2.6",
+      "horizon": "16.3.1",
+      "driftNotes": [
+        "TECH_STACK.md records 16.1.0 while the lockfile pins 16.2.6 — a preflight note for the dependency-sync owner, not a plan item"
+      ],
+      "findings": [
+        {
+          "type": "mismatch",
+          "urgency": "broken-now",
+          "claim": "The instruction file teaches `await cookies()` as advice, but at this Baseline the call is asynchronous and omitting `await` throws.",
+          "evidence": "executed",
+          "source": {
+            "url": "https://nextjs.org/docs/app/api-reference/functions/cookies",
+            "quote": "cookies is an asynchronous function that returns a promise.",
+            "pageVersion": "16.2.6"
+          },
+          "local": [
+            {
+              "file": "instructions.md",
+              "line": 5,
+              "text": "Always `await cookies()` in a Server Component."
+            }
+          ],
+          "executed": {
+            "command": "node --input-type=module -e \"import('next/headers')\"",
+            "exitCode": 0
+          },
+          "disposition": "plan"
+        },
+        {
+          "type": "future-risk",
+          "urgency": "removal-scheduled",
+          "claim": "The hygiene script's default export shape is scheduled for removal in the release the Horizon names.",
+          "evidence": "cited",
+          "source": {
+            "url": "https://nextjs.org/blog/next-16-3",
+            "quote": "The legacy default export form will be removed in the next major release.",
+            "pageVersion": "16.3.1"
+          },
+          "local": [
+            {
+              "file": "hygiene.mjs",
+              "line": 2,
+              "text": "export const check = () => true;"
+            }
+          ],
+          "disposition": "plan"
+        },
+        {
+          "type": "missed-improvement",
+          "urgency": "advisory",
+          "claim": "Application code still reaches for the older data-fetching form the documentation now advises against.",
+          "evidence": "absent",
+          "source": {
+            "url": "https://nextjs.org/docs/app/getting-started/fetching-data",
+            "quote": "We recommend fetching data in Server Components.",
+            "pageVersion": "16.2.6"
+          },
+          "local": [],
+          "disposition": "follow-on"
+        }
+      ],
+      "checkedAndClear": [
+        {
+          "claim": "The instruction file's rule that `cookies()` is awaited matches the Baseline documentation.",
+          "source": {
+            "url": "https://nextjs.org/docs/app/api-reference/functions/cookies",
+            "quote": "cookies is an asynchronous function that returns a promise.",
+            "pageVersion": "16.2.6"
+          },
+          "local": [
+            {
+              "file": "instructions.md",
+              "line": 5,
+              "text": "Always `await cookies()` in a Server Component."
+            }
+          ],
+          "holdsFor": ">=15.0.0 <17.0.0"
+        }
+      ],
+      "opportunities": [
+        {
+          "technique": "Adopt the documented streaming metadata form for the dashboard routes.",
+          "source": {
+            "url": "https://nextjs.org/docs/app/api-reference/functions/generate-metadata",
+            "pageVersion": "16.3.1"
+          },
+          "benefitQuote": "Streaming metadata lets the page shell render before metadata resolves.",
+          "minVersion": "16.3.0",
+          "local": [
+            {
+              "file": "instructions.md",
+              "line": 7,
+              "text": "Style mobile components with `StyleSheet.create`."
+            }
+          ]
+        }
+      ],
+      "incidental": []
+    },
+    {
+      "lead": "nx",
+      "members": ["nx", "@nx/eslint-plugin"],
+      "baseline": "22.7.7",
+      "driftNotes": [],
+      "findings": [
+        {
+          "type": "mismatch",
+          "urgency": "deprecated",
+          "claim": "The instruction file teaches `npx nx affected -t test`, which the Baseline documentation marks deprecated in favour of the package-manager form.",
+          "evidence": "cited",
+          "source": {
+            "url": "https://nx.dev/nx-api/nx/documents/affected",
+            "quote": "Running Nx through npx is deprecated; use your package manager's runner.",
+            "pageVersion": "22.7.7"
+          },
+          "local": [
+            {
+              "file": "instructions.md",
+              "line": 3,
+              "text": "Run `npx nx affected -t test` before pushing."
+            }
+          ],
+          "disposition": "plan"
+        }
+      ],
+      "checkedAndClear": [],
+      "opportunities": [
+        {
+          "technique": "Let Nx infer the hygiene script's target instead of declaring it.",
+          "source": {
+            "url": "https://nx.dev/concepts/inferred-tasks",
+            "pageVersion": "22.7.7"
+          },
+          "benefitQuote": "Inferred tasks keep project configuration in step with the tools actually installed.",
+          "local": [
+            {
+              "file": "hygiene.mjs",
+              "line": 2,
+              "text": "export const check = () => true;"
+            }
+          ]
+        }
+      ],
+      "incidental": [
+        {
+          "summary": "The hygiene script has no contract suite, so nothing proves it fails on the drift its header claims to catch.",
+          "local": [
+            {
+              "file": "hygiene.mjs",
+              "line": 1,
+              "text": "// Example hygiene script, cited by the Upstream Brief fixture report."
+            }
+          ],
+          "owner": "ad-hoc-issue"
+        }
+      ]
+    }
+  ],
+  "scanned": ["instructions.md", "hygiene.mjs"],
+  "failedHops": [
+    {
+      "ecosystem": "react-native",
+      "reason": "the upstream release-notes page returned 503 three times; no Baseline document could be read"
+    }
+  ]
+}
