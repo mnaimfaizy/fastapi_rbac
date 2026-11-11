@@ -1,6 +1,8 @@
 ---
 name: code-review
 description: Review the changes since a fixed point (commit, branch, tag, or merge-base) along three axes — Standards (repo conventions), Spec (requested behavior), and Correctness (runtime behavior). Use when a user asks to review work-in-progress, a branch, or a PR.
+metadata:
+  agent-kit-scope: user
 ---
 
 # Code review

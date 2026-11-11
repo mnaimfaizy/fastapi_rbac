@@ -7,6 +7,7 @@ This section provides detailed documentation for the FastAPI RBAC project's API.
 ## Architecture
 
 - **[System Architecture](./architecture.md):** Layers, directory layout, domain model, and Redis allowlist authentication flow (canonical narrative for agents and humans).
+- **[QA Accounts](./qa-accounts.md):** Public fixture users, one per role, for local and test QA only.
 
 ---
 
