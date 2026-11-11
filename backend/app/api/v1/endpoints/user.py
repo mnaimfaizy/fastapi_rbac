@@ -97,7 +97,7 @@ async def get_user_list_order_by_created_at(
 
 @router.get("/me")
 async def get_my_data(
-    current_user: User = Depends(deps.get_current_user()),
+    current_user: User = Depends(deps.get_current_user(allow_pending_password_change=True)),
 ) -> IGetResponseBase[IUserRead]:
     """
     Gets my user profile information
@@ -150,14 +150,17 @@ async def create_user(
         db_session=db_session,
     )
 
+    # The administrator chose this password, so it is temporary whatever the
+    # verification setting says: verification and password ownership are
+    # separate (#273, ADR 0014).
+    new_user.needs_to_change_password = True
+
     # Configure user verification based on settings
     if settings.ADMIN_CREATED_USERS_AUTO_VERIFIED:
         new_user.verified = True
-        new_user.needs_to_change_password = False
         message = "User created successfully and verified"
     else:
         new_user.verified = False
-        new_user.needs_to_change_password = True
         message = "User created successfully"
 
     # Create the user
@@ -196,8 +199,17 @@ async def update_my_profile(
     """
     # Only allow updating allowed fields (not roles, is_superuser, etc.)
     update_data = user_update.model_dump(exclude_unset=True)
-    # Remove forbidden fields if present
-    forbidden_fields = ["id", "roles", "is_superuser", "is_active", "email", "password"]
+    # Remove forbidden fields if present. The temporary-password flag is set
+    # only by an administrator and cleared only by a password change (ADR 0014).
+    forbidden_fields = [
+        "id",
+        "roles",
+        "is_superuser",
+        "is_active",
+        "email",
+        "password",
+        "needs_to_change_password",
+    ]
     for field in forbidden_fields:
         update_data.pop(field, None)
     for key, value in update_data.items():

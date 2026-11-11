@@ -365,7 +365,7 @@ Get a CSRF token for use in state-changing operations (required for POST/PUT/DEL
 
 - 400 Bad Request: Invalid input, password complexity, invalid token
 - 401 Unauthorized: Missing or invalid token
-- 403 Forbidden: Not allowed
+- 403 Forbidden: Not allowed. A user holding a temporary password gets `{"detail": {"code": "password_change_required", "message": "Password change required."}}` from every authenticated route except change password, logout, logout all and `GET /users/me` ([ADR 0014](../../adr/0014-temporary-password-restricts-account.md))
 - 404 Not Found: User not found
 - 409 Conflict: Email already registered
 - 422 Unprocessable Entity: Validation errors, locked account, unverified email

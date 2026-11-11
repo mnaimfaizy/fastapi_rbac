@@ -121,6 +121,16 @@ repos:
           ]
         # If mypy needs dependencies from your project, add them here:
         additional_dependencies: ["types-bleach==6.2.0.20250514"]
+  # Explainer pages (docs/explainers/) cite source lines and state source values.
+  # Fail the commit when a change makes one of them wrong. See docs/explainers/README.md.
+  - repo: local
+    hooks:
+      - id: explainer-drift
+        name: explainer pages match the code
+        entry: python scripts/docs/check_explainers.py
+        language: python
+        pass_filenames: false
+        files: ^(backend/app/|react-frontend/src/|docs/explainers/|scripts/docs/)
   # Refresh the local graphify graph after commits and merges/pulls that touch
   # source. Runs in the background and never fails the git command. No-op for
   # anyone without graphify installed and a graph built. See docs/agents/graphify.md.

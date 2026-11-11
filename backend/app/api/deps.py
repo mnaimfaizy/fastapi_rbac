@@ -54,10 +54,28 @@ def get_settings_dependency() -> Settings:
 get_async_db = get_db
 
 
-# Modify the function signature and logic
+# The 403 body for a user holding a temporary password (#273, ADR 0014). The
+# SPA matches on ``code``. The message must not mention a token or CSRF: the
+# SPA's 403 handler reads those words as a CSRF retry or a logout.
+PASSWORD_CHANGE_REQUIRED_DETAIL = {
+    "code": "password_change_required",
+    "message": "Password change required.",
+}
+
+
 def get_current_user(
     required_permissions: Optional[list] = None,
+    allow_pending_password_change: bool = False,
 ) -> Callable[..., Coroutine[Any, Any, User]]:
+    """Authenticate the bearer token and authorize the caller.
+
+    A user whose ``needs_to_change_password`` is set (an administrator chose
+    their password) is refused with 403 ``password_change_required`` unless the
+    route passes ``allow_pending_password_change=True``. Restriction is the
+    default so a new route cannot forget it. Only change password, logout,
+    logout all and ``GET /users/me`` opt in (ADR 0014).
+    """
+
     async def current_user(
         request: Request,
         access_token: str = Depends(reusable_oauth2),
@@ -97,6 +115,14 @@ def get_current_user(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user.")
 
         remember_authenticated_identity(request, user_from_db.id)
+
+        # Before the superuser return: a temporary password restricts
+        # superusers too. Read from the row, never from a token claim.
+        if user_from_db.needs_to_change_password and not allow_pending_password_change:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=PASSWORD_CHANGE_REQUIRED_DETAIL,
+            )
 
         if hasattr(user_from_db, "is_superuser") and user_from_db.is_superuser:
             return user_from_db

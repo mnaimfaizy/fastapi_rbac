@@ -1,0 +1,179 @@
+{
+  "page": "docs/explainers/session-lifecycle.html",
+  "manifestId": "session-lifecycle-manifest",
+  "dataIds": ["session-lifecycle-scenes"],
+  "scriptPathMaps": ["P"],
+  "aliases": {
+    "api.ts": "react-frontend/src/services/api.ts",
+    "auth.py": "backend/app/api/v1/endpoints/auth.py",
+    "auth.service.ts": "react-frontend/src/services/auth.service.ts",
+    "authSlice.ts": "react-frontend/src/store/slices/authSlice.ts",
+    "auth_cookies.py": "backend/app/utils/auth_cookies.py",
+    "background_tasks.py": "backend/app/utils/background_tasks.py",
+    "client_address.py": "backend/app/utils/client_address.py",
+    "config.py": "backend/app/core/config.py",
+    "csrfService.ts": "react-frontend/src/services/csrfService.ts",
+    "deps.py": "backend/app/api/deps.py",
+    "main.py": "backend/app/main.py",
+    "origin_network.py": "backend/app/utils/origin_network.py",
+    "password_policy.py": "backend/app/utils/password_policy.py",
+    "rate_limit.py": "backend/app/core/rate_limit.py",
+    "security.py": "backend/app/core/security.py",
+    "token.py": "backend/app/utils/token.py",
+    "tokenStorage.ts": "react-frontend/src/lib/tokenStorage.ts",
+    "user_crud.py": "backend/app/crud/user_crud.py",
+    "user_model.py": "backend/app/models/user_model.py"
+  },
+  "manifest": {
+    "accessTokenExpireMinutesCodeDefault": {
+      "file": "backend/app/core/config.py",
+      "pattern": "^\\s*ACCESS_TOKEN_EXPIRE_MINUTES: int = ([0-9 *+]+?)\\s*(?:#|$)",
+      "type": "arith"
+    },
+    "refreshTokenExpireMinutesCodeDefault": {
+      "file": "backend/app/core/config.py",
+      "pattern": "^\\s*REFRESH_TOKEN_EXPIRE_MINUTES: int = ([0-9 *+]+?)\\s*(?:#|$)",
+      "type": "arith"
+    },
+    "refreshTokenExpireDaysCodeDefault": {
+      "file": "backend/app/core/config.py",
+      "pattern": "^\\s*REFRESH_TOKEN_EXPIRE_DAYS: int = (?:Field\\(default=)?(\\d+)",
+      "type": "int"
+    },
+    "concurrentSessionLimitCodeDefault": {
+      "file": "backend/app/core/config.py",
+      "pattern": "^\\s*CONCURRENT_SESSION_LIMIT: int = (?:Field\\(default=)?(\\d+)",
+      "type": "int"
+    },
+    "sessionLimitDisabledAtOrBelow": {
+      "file": "backend/app/utils/token.py",
+      "pattern": "limit = settings\\.CONCURRENT_SESSION_LIMIT\\s*\\n\\s*if limit <= (-?\\d+):",
+      "type": "int"
+    },
+    "validateTokenIpCodeDefault": {
+      "file": "backend/app/core/config.py",
+      "pattern": "^\\s*VALIDATE_TOKEN_IP: bool = (?:Field\\(default=)?(True|False)",
+      "type": "bool"
+    },
+    "originNetworkIpv4PrefixLen": {
+      "file": "backend/app/utils/origin_network.py",
+      "pattern": "^IPV4_NETWORK_PREFIX = (\\d+)",
+      "type": "int"
+    },
+    "originNetworkIpv6PrefixLen": {
+      "file": "backend/app/utils/origin_network.py",
+      "pattern": "^IPV6_NETWORK_PREFIX = (\\d+)",
+      "type": "int"
+    },
+    "refreshCookieNameCodeDefault": {
+      "file": "backend/app/core/config.py",
+      "pattern": "^\\s*REFRESH_TOKEN_COOKIE_NAME: str = \"([^\"]+)\""
+    },
+    "refreshCookieSameSiteCodeDefault": {
+      "file": "backend/app/core/config.py",
+      "pattern": "^\\s*REFRESH_COOKIE_SAMESITE: str = \"([^\"]+)\""
+    },
+    "refreshCookiePath": {
+      "type": "concat",
+      "parts": [
+        { "file": "backend/app/core/config.py", "pattern": "^\\s*API_V1_STR: str = f\"(/api/)\\{API_VERSION\\}\"" },
+        { "file": "backend/app/core/config.py", "pattern": "^\\s*API_VERSION: str = \"([^\"]+)\"" },
+        {
+          "file": "backend/app/utils/auth_cookies.py",
+          "pattern": "def refresh_cookie_path\\(\\).*?return f\"\\{settings\\.API_V1_STR\\}(/[^\"]*)\""
+        }
+      ]
+    },
+    "allowlistTokenTypeValues": {
+      "type": "map",
+      "keys": {
+        "file": "backend/app/utils/token.py",
+        "within": "^ALLOWLIST_TOKEN_TYPES = \\(([^)]*)\\)",
+        "pattern": "TokenType\\.(\\w+)",
+        "type": "list"
+      },
+      "table": {
+        "file": "backend/app/schemas/common_schema.py",
+        "within": "^class TokenType\\(str, Enum\\):\\n((?:[ \\t]+[^\\n]*\\n)+)",
+        "pattern": "^\\s+(\\w+) = \"([^\"]+)\"",
+        "type": "pairs"
+      }
+    },
+    "allowlistKeyPattern": {
+      "file": "backend/app/utils/token.py",
+      "pattern": "def _allowlist_key\\(.*?\\n\\s*return f\"([^\"]+)\""
+    },
+    "allowlistMetaKeyPattern": {
+      "type": "concat",
+      "parts": [
+        { "file": "backend/app/utils/token.py", "pattern": "def _allowlist_key\\(.*?\\n\\s*return f\"([^\"]+)\"" },
+        {
+          "file": "backend/app/utils/token.py",
+          "pattern": "def _allowlist_meta_key\\(.*?\\n\\s*return f\"\\{_allowlist_key\\(user_id, token_type\\)\\}([^\"]*)\""
+        }
+      ]
+    },
+    "allowlistMetaFields": {
+      "file": "backend/app/utils/token.py",
+      "within": "^def _metadata_payload\\(.*?json\\.dumps\\(\\s*\\{(.*?)\\}",
+      "pattern": "^\\s+\"(\\w+)\":",
+      "type": "list"
+    },
+    "sessionIdDerivation": {
+      "file": "backend/app/utils/token.py",
+      "pattern": "def session_id_for\\(refresh_token: str\\).*?return hashlib\\.sha256\\(refresh_token\\.encode\\(\"utf-8\"\\)\\)\\.hexdigest\\(\\)",
+      "type": "present",
+      "expect": "sha256(refresh_token).hexdigest()"
+    },
+    "loginRateLimit": {
+      "file": "backend/app/api/v1/endpoints/auth.py",
+      "pattern": "@router\\.post\\(\"/login\"\\)\\s*\\n@limiter\\.limit\\(\"([^\"]+)\"\\)"
+    },
+    "accessExpiredStatus": {
+      "file": "backend/app/core/security.py",
+      "pattern": "except ExpiredSignatureError[^\\n]*\\n(?:[^\\n]*\\n){0,3}?[^\\n]*status\\.HTTP_(\\d{3})_",
+      "type": "int"
+    },
+    "allowlistMissStatus": {
+      "file": "backend/app/api/deps.py",
+      "pattern": "if not token_is_allowlisted\\(valid_access_tokens, access_token\\):\\s*raise HTTPException\\(\\s*status_code=status\\.HTTP_(\\d{3})_",
+      "type": "int"
+    },
+    "logoutUnidentifiedStatus": {
+      "file": "backend/app/api/v1/endpoints/auth.py",
+      "pattern": "status_code=status\\.HTTP_(\\d{3})_[A-Z_]+,\\s*detail=\"Unable to identify the current session\\.\"",
+      "type": "int"
+    },
+    "refreshSuccessStatus": {
+      "file": "backend/app/api/v1/endpoints/auth.py",
+      "pattern": "@router\\.post\\(\"/new_access_token\", status_code=(\\d{3})\\)",
+      "type": "int"
+    },
+    "refreshOriginMismatchEvent": {
+      "file": "backend/app/api/v1/endpoints/auth.py",
+      "pattern": "event_type=\"(refresh_origin[a-z_]*)\""
+    },
+    "spaRefreshEndpoint": {
+      "file": "react-frontend/src/services/api.ts",
+      "pattern": "const REFRESH_ENDPOINT = '([^']+)'"
+    },
+    "spaSessionHintKey": {
+      "file": "react-frontend/src/lib/tokenStorage.ts",
+      "pattern": "const SESSION_HINT_KEY = '([^']+)'"
+    },
+    "csrfCookieName": {
+      "file": "backend/app/api/v1/endpoints/auth.py",
+      "pattern": "generate_csrf_tokens\\(\\).*?response\\.set_cookie\\(\\s*key=\"([^\"]+)\""
+    },
+    "csrfHeaderName": {
+      "file": "react-frontend/src/services/api.ts",
+      "pattern": "config\\.headers\\['([^']+)'\\] = csrfToken"
+    },
+    "rateLimiterStorage": {
+      "file": "backend/app/core/rate_limit.py",
+      "pattern": "def _storage_uri\\(\\).*?if _is_testing\\(\\):\\s*return \"memory://\"\\s*return service_settings\\.redis_url",
+      "type": "present",
+      "expect": "redis outside testing"
+    }
+  }
+}

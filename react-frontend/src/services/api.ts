@@ -5,7 +5,11 @@ import {
   setStoredAccessToken,
 } from '../lib/tokenStorage';
 import { store } from '../store';
-import { refreshAccessToken, logout } from '../store/slices/authSlice';
+import {
+  refreshAccessToken,
+  logout,
+  markPasswordChangeRequired,
+} from '../store/slices/authSlice';
 import csrfService from './csrfService';
 
 // Define error response interface to match backend format
@@ -43,6 +47,21 @@ const isPasswordComplexityDetail = (
     typeof candidate.message === 'string' &&
     Array.isArray(candidate.errors) &&
     candidate.errors.every((entry) => typeof entry === 'string')
+  );
+};
+
+/** 403 detail code for a user holding a temporary password (#273, ADR 0014). */
+export const PASSWORD_CHANGE_REQUIRED_CODE = 'password_change_required';
+
+const isPasswordChangeRequired = (
+  error: AxiosError<ErrorResponseData>
+): boolean => {
+  if (error.response?.status !== 403) return false;
+  const detail: unknown = error.response.data?.detail;
+  return (
+    typeof detail === 'object' &&
+    detail !== null &&
+    (detail as { code?: unknown }).code === PASSWORD_CHANGE_REQUIRED_CODE
   );
 };
 
@@ -105,6 +124,9 @@ api.interceptors.response.use(
     const originalRequest = error.config as typeof error.config & {
       _retry?: boolean;
     };
+
+    // Read before the body is normalised below, which drops `code`.
+    const passwordChangeRequired = isPasswordChangeRequired(error);
 
     // Transform error response to our standardized format
     if (error.response?.data) {
@@ -224,6 +246,13 @@ api.interceptors.response.use(
           return Promise.reject(error);
         }
       }
+    }
+
+    // A temporary password (ADR 0014): keep the session, flag the user, and let
+    // the route guard send them to the change-password-required page.
+    if (passwordChangeRequired) {
+      store.dispatch(markPasswordChangeRequired());
+      return Promise.reject(error);
     }
 
     // Handle 403 (Forbidden) - CSRF and Authorization errors

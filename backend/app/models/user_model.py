@@ -20,7 +20,8 @@ class UserBase(SQLModel):
     is_active: bool = True
     is_superuser: bool = False
     last_updated_by: int | None = None  # Assuming str or UUID, keeping as int for now.
-    needs_to_change_password: bool = True
+    # Only admin create and admin set turn this on (#273, ADR 0014).
+    needs_to_change_password: bool = False
     expiry_date: datetime | None = None
     contact_phone: str | None = None
     last_changed_password_date: datetime | None = None

@@ -222,6 +222,14 @@ const authSlice = createSlice({
       clearAuthTokens();
       return { ...initialState };
     },
+    // The API refused a request because the user holds a temporary password
+    // (403 password_change_required, ADR 0014). The session stays; the route
+    // guard sends the user to the change-password-required page.
+    markPasswordChangeRequired: (state) => {
+      if (state.user) {
+        state.user.needs_to_change_password = true;
+      }
+    },
     // Clear error state
     clearError: (state) => {
       state.error = null;
@@ -316,6 +324,10 @@ const authSlice = createSlice({
       .addCase(changePassword.fulfilled, (state, action) => {
         state.isLoading = false;
         state.passwordChangeSuccess = true;
+        // The response carries the user with needs_to_change_password cleared.
+        if (action.payload.user) {
+          state.user = action.payload.user;
+        }
 
         // Access token in memory; refresh cookie set by backend
         if (action.payload.access_token) {
@@ -369,6 +381,7 @@ const authSlice = createSlice({
 // Export actions and reducer
 export const {
   logout,
+  markPasswordChangeRequired,
   clearError,
   resetPasswordChangeSuccess,
   resetPasswordResetRequested,

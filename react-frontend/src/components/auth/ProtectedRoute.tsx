@@ -36,6 +36,12 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <Navigate to="/login" replace />;
   }
 
+  // A temporary password restricts the account to one page until it is
+  // replaced (ADR 0014). The API refuses the other routes anyway.
+  if (user.needs_to_change_password) {
+    return <Navigate to="/change-password-required" replace />;
+  }
+
   // Check for required roles if specified
   if (requiredRoles.length > 0) {
     const hasRequiredRole = requiredRoles.some((roleName) => hasRole(roleName));
