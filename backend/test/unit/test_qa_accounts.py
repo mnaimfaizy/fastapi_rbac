@@ -28,6 +28,7 @@ from app.qa_accounts.accounts import (
 )
 from app.qa_accounts.seeding import seed
 from app.schemas.common_schema import TokenType
+from app.utils.password_policy import PasswordRefused
 from app.utils.token import add_token_to_redis, get_valid_tokens
 
 PG = "postgresql+asyncpg://postgres:postgres@{host}:5432/fastapi_db"
@@ -406,3 +407,29 @@ async def test_a_policy_refusal_is_a_message_not_a_traceback(
 
     with pytest.raises(QAAccountsError, match="^admin: the password policy refuses its fixture password: "):
         await cli._run_seed(select_accounts("admin"), restore=False)
+
+
+async def test_a_refused_password_writes_no_other_repair(
+    db: AsyncSession, redis_mock: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A rules refusal commits its audit event. Nothing else may ride along with
+    # it: no repair is saved without the sessions it should have ended.
+    roles = await _roles(db)
+    await seed(ACCOUNTS, db, redis_mock)
+    user = await _user(db, "manager")
+    user.password = PasswordValidator.get_password_hash("Someone-Else-9x")
+    user.roles = [roles["Admin"]]
+    user.is_active = False
+    db.add(user)
+    await db.commit()
+    await _give_sessions(redis_mock, user)
+    monkeypatch.setattr(settings, "PASSWORD_MIN_LENGTH", 40)
+
+    with pytest.raises(PasswordRefused):
+        await seed(select_accounts("manager"), db, redis_mock)
+
+    db.expire_all()
+    user = await _user(db, "manager")
+    assert [r.name for r in user.roles] == ["Admin"]
+    assert not user.is_active
+    assert await _sessions(redis_mock, user) == 2

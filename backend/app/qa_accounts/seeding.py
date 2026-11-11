@@ -131,9 +131,10 @@ async def seed_account(
         return ["created"]
 
     changes: list[str] = []
-    _repair_sign_in(user, role, changes)
     if not user.password or not PasswordValidator.verify_password(account.password, user.password):
-        # Ends the sessions and commits the repairs staged above with it.
+        # First, with nothing else staged on the session: a rules refusal
+        # writes its audit event with a commit, which would otherwise save
+        # half a repair without ending the sessions.
         await restore_fixture_password(
             user,
             account.password,
@@ -141,10 +142,9 @@ async def seed_account(
             db_session=db_session,
             redis_client=redis_client,
         )
-        changes.insert(0, "reset password")
-        committed = len(changes)
-    else:
-        committed = 0
+        changes.append("reset password")
+    committed = len(changes)
+    _repair_sign_in(user, role, changes)
     if restore:
         # After the password, so the history row that adds is deleted too.
         await _restore_profile(account, user, db_session, changes)

@@ -4,7 +4,7 @@ Setting a password is an ordered policy: complexity rules, reuse/history, end
 every session, audit. Each of the six paths that set one used to re-assemble
 that sequence by hand, and every fix to it had to be re-applied "to every path
 that sets a password" (#192, #193, #196, #199, #233, #240). The admin path was
-missed twice. Every path now calls one of two operations here instead:
+missed twice. Every path now calls one of three operations here instead:
 
 - :func:`change_password` replaces the password of an existing user
   (self-service change, both reset-confirm endpoints, admin set).
@@ -291,8 +291,10 @@ async def restore_fixture_password(
     purpose. The fixture value was this account's first password, so it is
     nearly always in the history, and putting it back is the point (#318).
 
-    Account state other than the password is the caller's. Anything it staged
-    on ``user`` is committed here, after the sessions end.
+    Account state other than the password is the caller's, and the caller
+    stages it only after this returns. A rules refusal records its audit event
+    with a commit, so anything staged before the call would be saved without
+    the sessions ending.
     """
     user_id = user.id
     details = _audit_details(email=user.email, actor=None, client_address=None)
