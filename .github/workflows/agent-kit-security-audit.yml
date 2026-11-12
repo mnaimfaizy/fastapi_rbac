@@ -30,7 +30,7 @@ concurrency:
 
 jobs:
   audit:
-    uses: mnaimfaizy/agent-kit/.github/workflows/security-audit-reusable.yml@v1.0.0-beta.3
+    uses: mnaimfaizy/agent-kit/.github/workflows/security-audit-reusable.yml@v1.0.0-beta.4
     with:
       mode: full
       kill_switch: ${{ vars.CLAUDE_SECURITY_AUDIT_ENABLED != 'true' }}

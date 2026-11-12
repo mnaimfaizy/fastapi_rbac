@@ -60,6 +60,17 @@ Tabs, anchors, aliases, multi-line scalars, flow collections that span lines, es
 | `junit`    | no       | The JUnit XML file the command writes, relative to the repository root; deleted before each run. Without it, what the suite proves is read from its exit code alone, and tagged `[reconstructed]`.                                                                                                                                                           |
 | `surfaces` | no       | Globs of the paths it covers, so a changed path can be matched to the suites that test it.                                                                                                                                                                                                                                                                   |
 
+#### Which shell runs `command`
+
+`two-point.mjs` runs `command` in the platform's default shell, the one Node's `spawn` with `shell: true` picks: **`cmd.exe`** (`%ComSpec%`) on Windows, and **`/bin/sh`** on Linux and macOS. It never looks for `bash`, even where Git for Windows or WSL puts one on `PATH`. The command runs from the repository root at the head, and from the worktree's root at the merge-base.
+
+One `qa.config.yml` serves a team on Windows and on Linux CI only when every `command` reads the same in both shells:
+
+- Keep `command` to a program and its arguments, chained with `&&`, with forward-slash paths: `npm ci && npm test`, `uv run pytest --junitxml=reports/backend.xml`.
+- Put anything more (a conditional, a file copy, an environment variable, a glob) in a script in the repository that `command` calls, in an interpreter every platform on the team has: `node scripts/test-backend.mjs`. `if not exist … copy …` is `cmd.exe` only; `[ -f … ] || cp …` and `VAR=value command` are `sh` only.
+- Leave machine-specific paths, such as a local virtual environment's absolute path, out of a tracked config.
+- A POSIX-looking command that passes on Windows is not portable when it passes only because a Unix tool (Git for Windows' `test.exe`, say) is on that machine's `PATH`.
+
 ### `plan.publish` rules
 
 A list; the **first rule that matches wins**. Each rule has exactly one matcher and a target:
@@ -75,7 +86,9 @@ With no rule matching, or no `publish` key, the plan stays in the working copy. 
 
 ## Readiness check
 
-`node "<skill>/adapter.mjs" check --for plan` prints the config path, its problems, the effective values (defaults applied), and `readiness`: what compose still **needs** (asked for), and **notes** (said, and compose goes on). It needs `plan.base_ref` and at least one suite; a suite without `junit` is a note. The skill asks for what is missing, composes on the answers given in chat, and saves them only when the person says yes. `adapter.mjs render < answers.json` prints the new body of the config the lookup found, in its own dialect, or of a new `qa.config.yml` when there is none. The answers are merged in (`plan` and `run` key by key) and every other key is kept. Writing a second file instead would shadow the first or be shadowed by it. YAML comments are not kept, and a YAML body reads back with no problems. `render --write` writes it. Nothing is assumed.
+`node "<skill>/adapter.mjs" check --for plan` prints the config path, its problems, the effective values (defaults applied), and `readiness`: what compose still **needs** (asked for), and **notes** (said, and compose goes on). It needs `plan.base_ref` and at least one suite; a suite without `junit` is a note. The skill asks for what is missing, composes on the answers given in chat, and saves them only when the person says yes. `adapter.mjs render < answers.json` prints the new body of the config the lookup found, in its own dialect, or of a new `qa.config.yml` when there is none. The answers are merged in (`plan` and `run` key by key) and every other key is kept. Writing a second file instead would shadow the first or be shadowed by it. YAML comments are not kept, and a YAML body reads back with no problems. `render --write` writes it. Over a YAML config that has comments, `--write` writes nothing and exits 3, naming the comment lines; `--write --drop-comments` writes it anyway. It refuses rather than warns because the person's yes was to the printed body, which has no comments, and a warning printed while writing comes too late to change that answer. A JSON config, a new file and a YAML config with no comments are written with `--write` alone. Nothing is assumed.
+
+Answers the person did not save still reach `two-point.mjs`: `--answers <file>` reads the same JSON object `render` takes, from inside the effective `working_dir` (after the merge, since an answer may set `working_dir`). It merges the answers over the config the lookup found, or over none, exactly as `render` does, and checks the result as `render` checks the plan side. `--base` and `--suite` still win over the merged values. It writes no config file. A missing, non-JSON or non-object file, a file outside `working_dir`, or answers whose merged config has problems exit 2 before any suite runs.
 
 ## Hazard packs
 

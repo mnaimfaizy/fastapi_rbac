@@ -3,7 +3,9 @@
 // step 4, DESIGN.md "Observed and reconstructed").
 //
 // WHAT IT DOES
-//   1. Runs each `plan.suites` command in the checkout, at the head.
+//   1. Runs each `plan.suites` command in the checkout, at the head, in the
+//      platform's default shell (`suiteShell`): cmd.exe on Windows, /bin/sh
+//      elsewhere.
 //   2. Creates a detached worktree at the merge-base under `working_dir`,
 //      runs each command again there, and removes the worktree, on success
 //      and on failure alike. The head runs come first so that no suite run in
@@ -27,22 +29,27 @@
 //   earlier run is never read as this one's.
 //
 // CLI (run from the repository root; `--repo <dir>` points elsewhere)
-//   node two-point.mjs [--base <ref>] [--suite <name>]… [--timeout <seconds>] [--json]
+//   node two-point.mjs [--answers <file.json>] [--base <ref>] [--suite <name>]…
+//                      [--timeout <seconds>] [--json]
 //
-//   `--base` defaults to the config's `plan.base_ref`; the merge-base is
-//   `git merge-base <base> HEAD`. `--suite` runs only the named suites.
-//   `--timeout` bounds each suite run (default 1800 seconds).
+//   `--answers` lays the answers given in chat (the JSON object `adapter.mjs
+//   render` reads) over the config the lookup finds, or over none, with
+//   render's own merge (`mergeAnswers`). The file must be inside the
+//   effective `working_dir`; nothing is written for it, and no config file
+//   is created or changed. `--base` defaults to the config's `plan.base_ref`;
+//   the merge-base is `git merge-base <base> HEAD`. `--suite` runs only the
+//   named suites. `--timeout` bounds each suite run (default 1800 seconds).
 //
 //   Exit 0: no regression. Exit 1: a regression; the plan is not worth
 //   writing until it is fixed. Exit 2: usage, config or git trouble, or the
 //   run was interrupted; nothing was compared.
 
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync } from "node:fs";
-import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync } from "node:fs";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { effectiveConfig, readQaConfig } from "./adapter.mjs";
+import { configProblems, effectiveConfig, mergeAnswers, readQaConfig } from "./adapter.mjs";
 
 export const DEFAULT_TIMEOUT_SECONDS = 1800;
 
@@ -301,7 +308,7 @@ export function compareSuite(suite, head, base) {
 // ── Running ─────────────────────────────────────────────────────────────────
 
 /**
- * Stops `child` and everything it started. `shell: true` puts a shell between
+ * Stops `child` and everything it started. `suiteShell()` puts a shell between
  * us and the suite, and a suite often starts more processes (`npm ci && npm
  * test`, test workers); killing the shell alone leaves them running, holding
  * the output pipes open and working in a worktree about to be removed.
@@ -319,7 +326,23 @@ function killTree(child) {
 }
 
 /**
- * Runs `command` through the shell in `cwd`. Resolves with its exit code; a
+ * The shell a suite's `command` runs in: the platform's default, as Node's
+ * `spawn(command, { shell: true })` picks it. `cmd.exe` (`%ComSpec%`) on
+ * Windows, `/bin/sh` elsewhere. Named here, not left to `shell: true`, so
+ * the rule `ADAPTER.md` states is pinned by a test. A fixed `bash` was
+ * declined (#148): commands that both shells read keep one config working.
+ *
+ * @param {string} [platform] `process.platform`
+ * @param {Record<string, string | undefined>} [env] `process.env`
+ */
+export function suiteShell(platform = process.platform, env = process.env) {
+  if (platform === "win32") return env.ComSpec || "cmd.exe";
+  if (platform === "android") return "/system/bin/sh";
+  return "/bin/sh";
+}
+
+/**
+ * Runs `command` through `suiteShell()` in `cwd`. Resolves with its exit code; a
  * run past `timeoutMs` is killed, with every process it started, and reported
  * as timed out. On `signal` the same happens, and the promise rejects.
  *
@@ -331,7 +354,7 @@ export function shellExec(command, cwd, { timeoutMs, signal } = {}) {
     // On POSIX, a process group of its own, so the whole tree can be killed.
     const child = spawn(command, {
       cwd,
-      shell: true,
+      shell: suiteShell(),
       stdio: ["ignore", "pipe", "pipe"],
       detached: process.platform !== "win32",
       windowsHide: true,
@@ -579,7 +602,46 @@ function option(argv, name) {
 }
 
 const USAGE =
-  "usage: node two-point.mjs [--base <ref>] [--suite <name>]… [--timeout <seconds>] [--json] [--repo <dir>]\n";
+  "usage: node two-point.mjs [--answers <file.json>] [--base <ref>] [--suite <name>]… [--timeout <seconds>] [--json] [--repo <dir>]\n";
+
+/** Whether `path` is `dir` or inside it, compared as real paths (Windows ignores case). */
+function isInside(path, dir) {
+  const key = (p) => {
+    let full = resolve(p);
+    try {
+      full = realpathSync.native(full);
+    } catch {
+      // not there: compare as given
+    }
+    return process.platform === "win32" ? full.toLowerCase() : full;
+  };
+  const rel = relative(key(dir), key(path));
+  return rel === "" || (!isAbsolute(rel) && rel.split(/[\\/]/)[0] !== "..");
+}
+
+/**
+ * The answers given in chat, read from `file` (relative to `repo`): the JSON
+ * object `adapter.mjs render` takes. Throws a one-line message when the file
+ * is missing, is not JSON, or does not hold an object.
+ *
+ * @returns {{path: string, answers: Record<string, unknown>}}
+ */
+function readAnswers(repo, file) {
+  const path = resolve(repo, file);
+  if (!existsSync(path) || !statSync(path).isFile())
+    throw new TwoPointError(`no answers file at \`${file}\``);
+  let answers;
+  try {
+    answers = JSON.parse(readFileSync(path, "utf8"));
+  } catch (error) {
+    throw new TwoPointError(`the answers file \`${file}\` is not valid JSON (${error.message})`);
+  }
+  if (answers === null || typeof answers !== "object" || Array.isArray(answers))
+    throw new TwoPointError(
+      `the answers file \`${file}\` must hold a JSON object, the one \`adapter.mjs render\` takes`,
+    );
+  return { path, answers };
+}
 
 /**
  * @param {string[]} argv the arguments after the script
@@ -587,7 +649,7 @@ const USAGE =
  * @returns {Promise<{code: number, out: string}>}
  */
 export async function main(argv, io = {}) {
-  const known = new Set(["--base", "--suite", "--timeout", "--repo", "--json"]);
+  const known = new Set(["--answers", "--base", "--suite", "--timeout", "--repo", "--json"]);
   for (let n = 0; n < argv.length; n++) {
     if (!known.has(argv[n])) return { code: 2, out: USAGE };
     if (argv[n] === "--json") continue;
@@ -605,7 +667,36 @@ export async function main(argv, io = {}) {
       code: 2,
       out: `${loaded.path} has problems; fix each one first:\n${loaded.problems.map((p) => `- ${p}`).join("\n")}\n`,
     };
-  const config = effectiveConfig(loaded.config);
+  // The answers given in chat, laid over the config with `render`'s own
+  // merge, and checked as `render` checks the plan side. Nothing is written.
+  let merged = loaded.config;
+  let answersPath = null;
+  const answersFile = option(argv, "--answers")[0];
+  if (answersFile !== undefined) {
+    try {
+      const { path, answers } = readAnswers(repo, answersFile);
+      answersPath = path;
+      merged = mergeAnswers(loaded.config, answers);
+    } catch (error) {
+      if (error instanceof TwoPointError) return { code: 2, out: `two-point: ${error.message}\n` };
+      throw error;
+    }
+    const problems = configProblems(merged);
+    if (problems.length)
+      return {
+        code: 2,
+        out: `the answers have problems; fix each one first:\n${problems.map((p) => `- ${p}`).join("\n")}\n`,
+      };
+  }
+  const config = effectiveConfig(merged);
+  if (isAbsolute(config.working_dir) || config.working_dir.split(/[\\/]/).includes(".."))
+    return { code: 2, out: "`working_dir` must be a relative path inside the repository\n" };
+  // After the merge: an answer may set `working_dir` itself.
+  if (answersPath && !isInside(answersPath, resolve(repo, config.working_dir)))
+    return {
+      code: 2,
+      out: `two-point: the answers file must be inside \`working_dir\` (\`${config.working_dir}\`)\n`,
+    };
   const base = option(argv, "--base")[0] ?? config.plan.base_ref;
   if (!base)
     return {
@@ -628,8 +719,6 @@ export async function main(argv, io = {}) {
     return { code: 2, out: "no suites: add `plan.suites` to the config (ADAPTER.md)\n" };
   const seconds = Number(option(argv, "--timeout")[0] ?? DEFAULT_TIMEOUT_SECONDS);
   if (!Number.isFinite(seconds) || seconds <= 0) return { code: 2, out: USAGE };
-  if (isAbsolute(config.working_dir) || config.working_dir.split(/[\\/]/).includes(".."))
-    return { code: 2, out: "`working_dir` must be a relative path inside the repository\n" };
 
   try {
     const report = await runTwoPoint({

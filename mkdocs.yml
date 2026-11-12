@@ -52,6 +52,7 @@ nav:
       - "Dependency Upgrades": "development/DEPENDENCY_UPGRADES.md"
       - "Knowledge Graph (graphify)": "agents/graphify.md"
       - "Agent-kit integration": "agents/agent-kit.md"
+      - "Keeping explainer pages current": "development/explainer-pages.md"
   - "Deployment":
       - "Overview": "deployment/index.md"
       - "Hub runtime":
@@ -80,6 +81,9 @@ nav:
       - "Role Groups": "reference/api/role_groups.md"
       - "Permission Groups": "reference/api/permission_groups.md"
       - "Dashboard": "reference/api/dashboard.md"
+  - "Explainers":
+      - "Overview": "explainers/index.md"
+      - "Session lifecycle (interactive)": "explainers/session-lifecycle.html"
   - "Release Notes": "release-notes.md"
   - "Contributing": "contributing.md"
 

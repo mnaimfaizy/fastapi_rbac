@@ -234,6 +234,70 @@ test("the plan's Run brief fills target and surface; its roles must be declared"
   ]);
 });
 
+test("readiness never asks for a Scenario account, only for Run brief roles", () => {
+  const withAccount = GOOD_PLAN.replace(
+    "- **Signs in as:** `admin`\n",
+    "- **Signs in as:** `admin`\n- **Creates:** `temp-user`\n",
+  ).replace("- **Signs in as:** nobody\n", "- **Signs in as:** `temp-user` (created in S1)\n");
+  const { plan, problems } = validatePlan(withAccount);
+  assert.deepEqual(problems, []);
+  const config = (roles) =>
+    readQaConfig(
+      reader({
+        "qa.config.yml": [
+          "run:",
+          "  stack: { up: a, migrate: b, seed: c, down: d }",
+          "  accounts:",
+          "    print: p",
+          `    roles: [${roles}]`,
+        ].join("\n"),
+      }),
+    );
+  const both = runReadiness(config("{ id: admin, purpose: x }, { id: member, purpose: y }"), plan);
+  assert.deepEqual(both.needs, []);
+  const onlyAdmin = runReadiness(config("{ id: admin, purpose: x }"), plan);
+  assert.deepEqual(onlyAdmin.needs, [
+    "run.accounts.roles: the plan signs in as `member`, which the config does not declare",
+  ]);
+});
+
+test("readiness asks for every role a session signs in as, and never a Scenario account", () => {
+  // S1's sessions sign in as `member` and `admin`, and S1 creates `temp-user`; S2's
+  // sessions sign in as `temp-user` and `nobody`.
+  const text = GOOD_PLAN.replace(
+    "- **Signs in as:** `admin`\n- **Steps:**\n  1. Open **Members**.\n  2. Click **Invite member**",
+    "- **Sessions:** A = member, B = admin\n- **Creates:** `temp-user`\n- **Steps:**\n  1. In session A, open **Members**.\n  2. In session B, click **Invite member**",
+  ).replace(
+    "- **Signs in as:** nobody\n- **Steps:**\n  1. Open `/members` while signed out.",
+    "- **Sessions:** A = `temp-user`, B = nobody\n- **Steps:**\n  1. In session A, open `/members`.\n  2. In session B, open `/members` while signed out.",
+  );
+  const { plan, problems } = validatePlan(text);
+  assert.deepEqual(problems, []);
+  const config = (roles) =>
+    readQaConfig(
+      reader({
+        "qa.config.yml": [
+          "run:",
+          "  stack: { up: a, migrate: b, seed: c, down: d }",
+          "  accounts:",
+          "    print: p",
+          `    roles: [${roles}]`,
+        ].join("\n"),
+      }),
+    );
+  assert.deepEqual(
+    runReadiness(config("{ id: admin, purpose: x }, { id: member, purpose: y }"), plan).needs,
+    [],
+  );
+  const want = [
+    "run.accounts.roles: the plan signs in as `member`, which the config does not declare",
+  ];
+  assert.deepEqual(runReadiness(config("{ id: admin, purpose: x }"), plan).needs, want);
+  // A role named only in **Sessions:** is asked for even when the Run brief's list is short.
+  const onlySessions = { ...plan, brief: { ...plan.brief, roles: ["admin"] } };
+  assert.deepEqual(runReadiness(config("{ id: admin, purpose: x }"), onlySessions).needs, want);
+});
+
 test("a config that disagrees with the plan's Run brief is asked about", () => {
   const { plan } = validatePlan(GOOD_PLAN);
   const text = STACK_RUN.join("\n").replace("surface: web", "surface: api");
