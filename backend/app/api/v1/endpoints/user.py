@@ -37,7 +37,7 @@ router = APIRouter()
 async def read_users_list(
     params: Params = Depends(),
     db_session: AsyncSession = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_user(required_permissions=["users.read"])),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["user.read"])),
 ) -> IGetResponsePaginated[Any]:
     """
     Retrieve users. Requires admin or manager role
@@ -67,7 +67,7 @@ async def read_users_list(
 async def get_user_list_order_by_created_at(
     params: Params = Depends(),
     db_session: AsyncSession = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_user(required_permissions=["users.read"])),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["user.read"])),
 ) -> IGetResponsePaginated[Any]:
     """
     Gets a paginated list of users ordered by created datetime
@@ -108,7 +108,7 @@ async def get_my_data(
 @router.get("/{user_id}")
 async def get_user_by_id(
     user: User = Depends(user_deps.is_valid_user),
-    current_user: User = Depends(deps.get_current_user(required_permissions=["users.read"])),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["user.read"])),
 ) -> IGetResponseBase[IUserRead]:
     """
     Gets a user by his/her id
@@ -126,7 +126,7 @@ async def create_user(
     new_user: IUserCreate = Depends(user_deps.user_exists),
     db_session: AsyncSession = Depends(deps.get_db),
     redis_client: AsyncRedis = Depends(get_redis_client),
-    current_user: User = Depends(deps.get_current_user(required_permissions=["users.create"])),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["user.create"])),
 ) -> IPostResponseBase[IUserRead]:
     """
     Creates a new user
@@ -224,7 +224,7 @@ async def update_my_profile(
 async def bulk_update_users(
     bulk_update: dict = Body(...),
     db_session: AsyncSession = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_user(required_permissions=["users.update"])),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["user.update"])),
 ) -> JSONResponse:
     """
     Bulk update users. Accepts a dict with 'user_ids': List[UUID], 'updates': IUserUpdate fields.
@@ -261,7 +261,7 @@ async def update_user(
     user: User = Depends(user_deps.is_valid_user),
     db_session: AsyncSession = Depends(deps.get_db),
     redis_client: AsyncRedis = Depends(get_redis_client),
-    current_user: User = Depends(deps.get_current_user(required_permissions=["users.update"])),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["user.update"])),
 ) -> IPostResponseBase[IUserRead]:
     """
     Updates a user by id
@@ -303,7 +303,7 @@ async def update_user(
 async def remove_user(
     user_id: UUID = Depends(user_deps.is_valid_user_id),
     db_session: AsyncSession = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_user(required_permissions=["users.delete"])),
+    current_user: User = Depends(deps.get_current_user(required_permissions=["user.delete"])),
 ) -> IDeleteResponseBase[IUserRead]:
     """
     Deletes a user by his/her id
