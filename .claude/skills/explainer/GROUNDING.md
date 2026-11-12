@@ -41,27 +41,48 @@ ones get written.
 
 ## 3. Run the collision check — mandatory
 
-**For every constant name you intend to cite, search the repository for every definition of that
-name.**
+**For every constant you intend to cite, find every value the repository gives that quantity — by
+concept, not only by the exact name.** One quantity is often set under several names, so search
+three ways:
+
+1. **The exact name** — every definition of it.
+2. **Sibling names** — the cited constant's stem with other units or suffixes: `<STEM>_EXPIRE_*`,
+   `<STEM>_TTL*`, `<STEM>_TIMEOUT*`, `<STEM>_LIMIT*`, `<STEM>_MAX*`, `<STEM>_SIZE*`, and the like,
+   where `<STEM>` is the part that names the thing (`REFRESH_TOKEN` in
+   `REFRESH_TOKEN_EXPIRE_MINUTES`). Keep the stem: a bare `*_EXPIRE_*` pulls in other quantities.
+   Search case-insensitively, because code often reads the same setting under another spelling
+   (`settings.refresh_token_expire_days`, `refreshTokenTtl`). A literal value used inline for the
+   same quantity counts too.
+3. **Every call site that sets or overrides the quantity** — where the token, cookie, session, or
+   limit is actually issued or enforced, not only where the setting is defined.
 
 ```bash
 rg -n "CONSTANT_NAME" --glob '!node_modules'
+rg -n -i "refresh_?token_?(expire|ttl|timeout|lifetime)" --glob '!node_modules'
 ```
 
-For each name, write down every distinct value found and the scope it applies to.
+Together these give the **sibling set**: every name, literal, and call site that sets the quantity.
+Write down every distinct value in it and the scope that value applies to.
 
-This step exists because it has failed before. One export-size constant was defined three times —
-10 MB in a core library, 1 MB in both the web client and the backend service — with a fourth,
-separate 10 MB cap on another endpoint. A brief written from the first definition stated "10 MB
-hard limit" as a flat fact, and the page rendered it faithfully as a security reference.
+This step exists because it has failed before:
 
-Rules that follow:
+- One export-size constant was defined three times — 10 MB in a core library, 1 MB in both the web
+  client and the backend service — with a fourth, separate 10 MB cap on another endpoint. A brief
+  written from the first definition stated "10 MB hard limit" as a flat fact, and the page rendered
+  it faithfully as a security reference.
+- A search for `REFRESH_TOKEN_EXPIRE_MINUTES` found one value, 100 days. It missed
+  `REFRESH_TOKEN_EXPIRE_DAYS`, 7 days, which the change-password route uses to issue its session.
+  The page printed "default 100 days" for every refresh token. The exact-name search worked as
+  written; it was the wrong search.
 
-- A name with two values is **never** reported as one number. Report both, each with its scope.
+Rules that follow, across the whole sibling set:
+
+- A quantity with two values is **never** reported as one number, whether the values share a name
+  or not. Report each, with its scope.
 - If you cannot tell which value governs the path being drawn, trace the call chain until you can.
   "Probably the stricter one" is not a finding.
-- Duplicate constants with different values are worth surfacing to the user as a possible defect,
-  separately from the page.
+- Constants that set the same quantity to different values — duplicates or siblings — are worth
+  surfacing to the user as a possible defect, separately from the page.
 
 ## 4. Verify enumerations are complete
 
@@ -92,7 +113,8 @@ creates in code, it creates again in the manifest.
 
 - [ ] The implementation was read directly; no claim rests only on documentation.
 - [ ] Every number, identifier, and error code has a `file:line`.
-- [ ] Every constant name was searched repo-wide; every distinct value is recorded with its scope.
+- [ ] Every cited constant was searched repo-wide by exact name, sibling names, and the call sites
+      that set or override it; every distinct value in that set is recorded with its scope.
 - [ ] Every cited enumeration was compared against its canonical definition.
 - [ ] Execution order was read, not assumed.
 - [ ] Contradictions — doc vs source, or constant vs constant — were surfaced to the user.

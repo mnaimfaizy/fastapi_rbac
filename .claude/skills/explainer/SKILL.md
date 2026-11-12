@@ -57,7 +57,7 @@ unasked.
 
 ## Workflow
 
-### 1. Fix the audience and the one question
+### 1. Fix the audience, the one question and the page shape
 
 Write this sentence before anything else:
 
@@ -71,6 +71,22 @@ The reader is a variable, not a fixed audience. Onboarding is one use; reviewing
 against the page, and consulting it as a security or operations reference, are others. If you
 cannot write the sentence, you have a topic, not a brief — ask for the missing half. Every later
 decision is judged against this sentence.
+
+Then choose the **page shape** from the one question:
+
+- **System stage** — the question is about a sequence that crosses **two or more components** (a
+  lifecycle, a request flow, a pipeline across services). The stage is the hero, and the reference
+  sits below it on the same page.
+- **Scene stepper** — the sequence happens inside **one component** (a state machine, one
+  algorithm). It is the stage's single-zone variant.
+- **Static** — the subject is a structure, not a sequence (a map, a trust boundary, a dependency
+  graph).
+
+The rule: a question about a sequence is a stage when the sequence crosses two or more components,
+and a stepper when it stays inside one. A question about a structure is static. Write the choice in
+the brief as `Shape: system stage`, `Shape: scene stepper` or `Shape: static`. Only the user may
+override it; if they did, say so in the brief. The builder never changes it. For a stage or a
+stepper, read `STAGE.md` (beside this file) before you draft.
 
 ### 2. Choose the branch
 
@@ -120,7 +136,8 @@ Pick the first that applies:
 1. **The consumer named a `Builder agent`** — dispatch the brief to it.
 2. **Sub-agents are available** — spawn one with this prompt, filled in:
 
-   > Read `<this skill's directory>/BUILD.md` and follow it exactly. Consumer configuration:
+   > Read `<this skill's directory>/BUILD.md` and follow it exactly; for a system stage or a scene
+   > stepper, also read `STAGE.md` there. Consumer configuration:
    > `<contents of docs/agents/explainer.md, or "none — use BUILD.md defaults">`. Target path:
    > `<output dir>/<slug>.html`. The brief follows. ⟨brief⟩
 
@@ -135,16 +152,26 @@ that is wrong for these pages (see the tooltip rule in `BUILD.md`) ships unnotic
 ### 7. Read the builder's report
 
 Check its **Gate**, **Verified how**, **Contradictions found**, and **Left for the caller**
-sections. Relay contradictions and anything left open to the user. A report claiming a visual
-review the builder could not perform is a defect in the report — say so.
+sections. Relay contradictions and anything left open to the user. A contradiction marked as a
+brief error means a fact in your brief is wrong and the page renders source instead. Either fix the
+brief and rebuild, or accept the source rendering. Either way, tell the user which fact was wrong,
+what source says, and which you chose. A brief error against a platform rule (a browser, protocol
+or runtime rule, not a line of source) is handled the same way: fix the brief and rebuild, or accept
+the platform-correct rendering, and tell the user which fact was wrong, the rule it breaks with the
+builder's citation, and which you chose. A rule the builder marked **unverified** reaches the user
+as unverified, never as settled, and the page marks it unverified too; if you accept the rendering,
+that mark stays. A report claiming a visual review the builder could not
+perform is a defect in the report — say so.
 
 ## The brief anatomy
 
 In order. Cut any section that is empty; never invent filler.
 
-**What I want.** The page and its hard constraints. Default contract: one self-contained HTML file,
-no CDN, no external assets, no network at load, correct in light and dark. Interactivity has to
-earn its place; a static page is smaller and easier to keep true.
+**What I want.** The page, its shape from step 1 (`Shape: …`, and who chose it), and its hard
+constraints. Default contract: one self-contained HTML file, no CDN, no external assets, no network
+at load, correct in light and dark. On a static page, interactivity has to earn its place; a static
+page is smaller and easier to keep true. A system stage or scene stepper is interactive by shape,
+under the stage contract in `STAGE.md`.
 
 **Why this exists.** The concrete failure the page prevents, not the topic it covers. "An engineer
 adds a convenience endpoint and quietly moves plaintext across a line they could not see" produces
@@ -156,7 +183,32 @@ the right hero.
 **The hero.** What must be visually obvious above everything else, and why it is the spine rather
 than one element among many.
 
-**Supporting panels.** One idea each. Name what each panel settles.
+**Supporting panels.** One idea each. Name what each panel settles. On a system stage or scene
+stepper these are the reference panels below the story; see the readability rule under _Splitting
+one brief into two_.
+
+**The stage (system stage and scene stepper only).** On a stage, the hero is the stage itself.
+These sections give the builder everything it draws and plays. Every beat fact is cited like any
+other fact.
+
+- **Components (zones):** for each, an id, a label, a shape idea, the live state shown inside it,
+  and citations. A scene stepper has one.
+- **Edges:** which zones talk to which, and any edge a message must pass through (for example, SPA
+  to API always through the HTTP edge).
+- **Chapters**, in order: an id, a title, the question it settles, and its end state.
+- **Beats** for each chapter: `from` and `to` zone (or `in` for a local change), a caption of 15
+  words or fewer, the state delta, refs, and `derived: true` for a beat inferred from code rather
+  than read directly.
+- **Halts:** where the real process waits on a person or an outside action, and the gate action's
+  label.
+- **Inspector content:** what each message, state entry and record shows when opened.
+- **Expected state** at each chapter end, so the builder can assert it.
+- **Predict checkpoints** _(optional)_: only at decisive moments. Where, the question, three
+  choices, the correct one, and one line of why.
+- **Sandbox** _(optional)_: only when the rules are worth driving. The actions, the rule each
+  follows, and the disclaimer text, which the page must show.
+
+You decide whether there are checkpoints and a sandbox. The builder never invents them.
 
 **Visual guidance.** Only what carries meaning: what must be distinguishable from what, what must
 dominate, what must not rely on colour or motion alone. Do not art-direct.
@@ -195,11 +247,17 @@ glides through a blocking gate teaches the opposite of the truth.
 
 ## Splitting one brief into two
 
-A reference you consult and a story you watch once are different pages. Symptoms that one brief is
-carrying both: the hero needs a legend before it can be read; the page opens with a wall of
+A story on top and its reference below is **one** page: that is the system stage's shape. Split
+only when the story cannot be read without the reference first, or when the two answer different
+questions. Symptoms: the hero needs a legend before it can be read; the page opens with a wall of
 constants before any narrative; one column has to show two opposite directions of flow.
 
-Propose two pages and say which is which. Do not write one brief that tries to satisfy both.
+When you split, propose two pages and say which is which. Do not write one brief that tries to
+answer both questions.
+
+**Reference panels are for reading.** The story carries the narrative. Reference panels are
+bullets and tables, one claim per sentence, collapsed by default under one "Expand all", and
+printed expanded.
 
 ## Completion criteria
 
@@ -208,15 +266,27 @@ State the branch you took when handing over.
 Both branches:
 
 - [ ] The audience-and-one-question sentence is written and appears in the brief.
+- [ ] The brief states its shape (system stage, scene stepper or static), chosen by the step 1
+      rule or by the user, and says which.
 - [ ] Every anatomy section is present or deliberately cut.
 - [ ] Anti-goals are stated.
 - [ ] The brief specifies the page, not the aesthetics.
 
+System stage and scene stepper, additionally:
+
+- [ ] Zones, edges, chapters, beats, halts, inspector content and the expected state at each
+      chapter end are present.
+- [ ] Every beat has a route (`from`/`to` or `in`), a caption of 15 words or fewer, a state delta
+      and at least one ref, and every `from`/`to` pair is a listed edge.
+- [ ] Predict checkpoints and a sandbox are present only where you decided on them, and a sandbox
+      has its actions, their rules and the disclaimer text.
+- [ ] Reference panels follow the readability rule.
+
 Grounded, additionally:
 
 - [ ] Every number, identifier, and error code is traced to a `file:line`.
-- [ ] Every constant name was searched repo-wide, and each distinct value is reported with its
-      scope.
+- [ ] Every cited constant was searched repo-wide by exact name, sibling names, and the call sites
+      that set or override it, and each distinct value is reported with its scope.
 - [ ] Source was read directly; no claim rests only on documentation.
 - [ ] The drift-proofing requirement is included unless configured `off`, with scope-qualified key
       names.

@@ -8,7 +8,10 @@
 //
 //   1. `read`: reads a QA Report file (SKILL.md "The QA Report") into its
 //      anchors and one result per scenario, and says whether the run failed
-//      (a FAIL, or a run stopped on a blocking outcome).
+//      (a FAIL, or a run stopped on a blocking outcome). With `--plan`, it
+//      also checks the report against the plan it ran: the same anchors, one
+//      row per scenario, and each scenario that signs in as a Scenario
+//      account left for a person when the scenario creating it did not pass.
 //   2. `find`: from a pull request's comments, the one QA Report comment to
 //      update (its body's first line is exactly `<!-- qa-report -->`, and the
 //      person posting wrote it), so a re-run edits it and never posts a second; and the tracker issue the
@@ -30,7 +33,7 @@
 //   refused when one looks present.
 //
 // CLI (run from the repository root; `--repo <dir>` points elsewhere)
-//   node report.mjs read <report>
+//   node report.mjs read <report> [--plan <plan>]
 //   node report.mjs find --login <login> < comments.jsonl
 //   node report.mjs comment <report> [--link <path>=<url>]…
 //   node report.mjs tracker <report> --issue-body <file> [--link <path>=<url>]…
@@ -210,6 +213,72 @@ export function readReport(text) {
     if (!report.record) problems.push("the Execution record section is empty");
   }
   return { report, problems };
+}
+
+/**
+ * What a QA Report owes the plan it ran (SKILL.md step 8): it is that plan's
+ * report, with one row per scenario, in order; and each scenario with a session
+ * that signs in as a Scenario account is left for a person, saying why, when the
+ * scenario that creates the account did not pass. A dependent left for a person did not
+ * pass either, so the rule carries down a chain. A run stopped on a blocking
+ * outcome before a dependent may give it its stop note instead.
+ *
+ * @param {ReturnType<typeof readReport>["report"]} report
+ * @param {string} planText
+ * @returns {string[]}
+ */
+export function reportPlanProblems(report, planText) {
+  const planned = validatePlan(planText);
+  if (planned.problems.length)
+    return [
+      "the plan does not read cleanly: check it with `adapter.mjs plan`",
+      ...planned.problems,
+    ];
+  const { plan } = planned;
+  if (plan.subject !== report.subject || plan.pr !== report.pr || plan.anchors.head !== report.head)
+    return [
+      `the plan is for subject #${plan.subject}, pull request #${plan.pr}, head ${plan.anchors.head}; ` +
+        `the report is for subject #${report.subject}, pull request #${report.pr}, head ${report.head}`,
+    ];
+  const want = plan.scenarios.map((scenario) => scenario.id).join(" ");
+  const got = report.results.map((row) => row.id).join(" ");
+  if (want !== got)
+    return [
+      `the plan's scenarios are ${want}; the report's results are ${got || "none"}: ` +
+        "the report needs exactly one row per scenario, in order",
+    ];
+  const problems = [];
+  const creatorOf = new Map(
+    plan.scenarios.flatMap((scenario) => scenario.creates.map((id) => [id, scenario.id])),
+  );
+  const results = new Map(report.results.map((row) => [row.id, row]));
+  for (const { id, sessions } of plan.scenarios) {
+    // Every session whose Scenario account's creator did not pass: a note naming any one is the reason.
+    const blocked = sessions.filter((session) => {
+      const creator = creatorOf.get(session.id);
+      return creator !== undefined && results.get(creator).result !== "PASS";
+    });
+    if (!blocked.length) continue;
+    const row = results.get(id);
+    const said = blocked.some(({ id: account }) =>
+      new RegExp(`signs in as \`?${account}\`?, which ${creatorOf.get(account)} creates`, "i").test(
+        row.notes,
+      ),
+    );
+    // The reason asked for, when the note gives none: the first blocked session's.
+    const [{ name, id: account }] = blocked;
+    const creator = creatorOf.get(account);
+    const who = name === null ? "" : `session ${name} `;
+    const reason = `${who}signs in as \`${account}\`, which ${creator} creates, and ${creator} did not pass`;
+    // A stop note counts only on a scenario after the stop, which the run never reached.
+    const stop = /(?<![A-Za-z])the run stopped at S(\d+)/i.exec(row.notes);
+    const stoppedBefore = stop !== null && Number(stop[1]) < Number(id.slice(1));
+    if (row.result !== "left for a person" || !(said || stoppedBefore))
+      problems.push(
+        `${id} ${reason}: its result is _left for a person_, with the note _${reason}_`,
+      );
+  }
+  return problems;
 }
 
 /**
@@ -508,7 +577,7 @@ export function main(argv, io = {}) {
   const usage = {
     code: 2,
     out:
-      "usage: node report.mjs read <report> | find --login <login> < comments | " +
+      "usage: node report.mjs read <report> [--plan <plan>] | find --login <login> < comments | " +
       "comment <report> [--link p=url]… | " +
       "tracker <report> --issue-body <file> [--link p=url]… | evidence <report> [--pick <path>]… " +
       "[--visibility <v>] [--release missing|prerelease|release] [--github <owner/name>]   [--repo <dir>]\n",
@@ -526,6 +595,17 @@ export function main(argv, io = {}) {
 
   if (command === "read") {
     const result = readReport(text);
+    const planPath = option(argv, "--plan")[0];
+    if (argv.includes("--plan") && (planPath === undefined || planPath.startsWith("--")))
+      return usage;
+    if (planPath !== undefined && !result.problems.length) {
+      const planText = readFile(planPath);
+      result.problems.push(
+        ...(planText === null
+          ? [`${planPath}: no such file`]
+          : reportPlanProblems(result.report, planText)),
+      );
+    }
     return { code: result.problems.length ? 1 : 0, out: json(result) };
   }
   if (command === "comment" || command === "tracker") {

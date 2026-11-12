@@ -36,6 +36,64 @@ test("each scenario is PASS, FAIL or left for a person, and only a person passes
   assert.match(skill, /follow-up note/);
 });
 
+test("a Scenario account's dependents are left for a person when its creator did not pass", () => {
+  assert.match(
+    skill,
+    /When the creator's result is anything but PASS, leave the scenario for a person, with the note _signs in as `<id>`, which S<n> creates, and S<n> did not pass_/,
+  );
+  assert.match(skill, /the rule carries down a chain/);
+  assert.match(
+    skill,
+    /Only \*\*Signs in as:\*\* and \*\*Sessions:\*\* make a scenario depend on another/,
+  );
+  assert.match(skill, /report\.mjs" read "<report file>" --plan "<plan file>"/);
+});
+
+test("a multi-session scenario needs isolated sessions, else it is left for a person", () => {
+  assert.match(skill, /\*\*Sessions stay apart\.\*\*/);
+  assert.match(skill, /one isolated browser context per session/);
+  assert.match(skill, /a different browser for each session/);
+  assert.match(skill, /Tabs in one browser profile never count/);
+  assert.match(skill, /Nor does a second origin in front of the same API host/);
+  assert.match(
+    skill,
+    /With no such driver for every session, the scenario is \*\*left for a person\*\* \(_no driver here gives N isolated sessions_/,
+  );
+  assert.match(
+    skill,
+    /left for a person\*\* \(_no driver here gives N isolated sessions_[^\n]*the rest of the run still goes ahead/,
+  );
+  assert.match(
+    skill,
+    /The run has one address, checked once by `host` above\. Every session of every scenario signs in at that address/,
+  );
+  assert.match(skill, /each session's sign-in values follow the rules above/);
+  assert.match(
+    skill,
+    /leave the whole scenario, with the note _session <name> signs in as `<id>`, which S<n> creates, and S<n> did not pass_/,
+  );
+  assert.match(
+    skill,
+    /A multi-session result's note says which session saw what, by letter and id/,
+  );
+  assert.match(skill, /For each multi-session scenario, the driver of each session/);
+});
+
+test("a Scenario account's values stay in the conversation, and the report lists its id only", () => {
+  assert.match(skill, /\*\*A Scenario account's values stay in this conversation\.\*\*/);
+  assert.match(
+    skill,
+    /never go into the plan, the report, the evidence or any file this skill writes/,
+  );
+  assert.match(skill, /or a Scenario account its creating scenario made in this run/);
+  assert.match(skill, /or when the scenario's \*\*Creates:\*\* says so/);
+  assert.match(skill, /`accounts\.print` and `accounts\.restore` do not apply to it/);
+  assert.match(
+    skill,
+    /- \*\*Scenario accounts:\*\* each one this run created, by id .* Ids only, never values/,
+  );
+});
+
 test("the build check runs gh, then the version endpoint, then marks the report", () => {
   const gh = skill.indexOf("**With `gh` access:**");
   const endpoint = skill.indexOf("**Otherwise, with a version endpoint**");

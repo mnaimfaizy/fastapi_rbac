@@ -73,6 +73,70 @@ test("the Run brief names target, surface, build, roles, credentials and capture
   assert.match(brief, /accounts\.print/);
 });
 
+test("ANATOMY.md states how the checker reads Target, Surface and Signs in as", () => {
+  const shape = section("Shape");
+  assert.match(shape, /### First-word values/);
+  for (const label of ["Target:", "Surface:", "Signs in as:"])
+    assert.ok(shape.includes(`**${label}**`), `First-word values does not name **${label}**`);
+  assert.match(shape, /Backticks are dropped/);
+  assert.match(shape, /`\*` and `_` at either end of the word are dropped/);
+  assert.match(shape, /`team_admin` is read as `team_admin`/);
+  assert.match(shape, /space, comma, semicolon, colon or parenthesis/);
+  assert.match(shape, /Nothing else is stripped/);
+  assert.match(shape, /reads as `web\.` and fails/);
+  const brief = section("Run brief");
+  assert.match(
+    brief,
+    /\*\*Surface:\*\* exactly one of .*\[first-word value\]\(#first-word-values\)/,
+  );
+  const scenarios = section("Scenarios");
+  assert.match(
+    scenarios,
+    /\*\*Signs in as:\*\* a \[first-word value\]\(#first-word-values\): a role id the Run brief's \*\*Roles:\*\* names, or `nobody`/,
+  );
+  assert.match(scenarios, /first word `the`/);
+  assert.match(scenarios, /first word `manager\.`/);
+});
+
+test("a Scenario account is defined, with how a later scenario names it", () => {
+  const scenarios = section("Scenarios");
+  assert.match(scenarios, /### Scenario accounts/);
+  assert.match(
+    scenarios,
+    /or the id of a \[Scenario account\]\(#scenario-accounts\) an earlier scenario creates/,
+  );
+  assert.match(
+    scenarios,
+    /Each id is created by one scenario only, and is neither a Run brief role nor `nobody`/,
+  );
+  assert.match(scenarios, /`` `temp-user` \(created in S1\) ``/);
+  assert.match(scenarios, /Only a scenario after its creator may/);
+  assert.match(scenarios, /never the values/);
+  assert.match(scenarios, /`manual-qa` leaves S2 for a person when S1 does not pass/);
+  assert.match(
+    section("Shape"),
+    /each \[Scenario account\]\(#scenario-accounts\) an earlier scenario creates/,
+  );
+});
+
+test("Sessions are defined, with an example, as the alternative to Signs in as", () => {
+  const scenarios = section("Scenarios");
+  assert.match(scenarios, /### Sessions/);
+  assert.match(
+    scenarios,
+    /A \*\*Session\*\* is one signed-in identity, with cookies and storage no other session shares/,
+  );
+  assert.match(
+    scenarios,
+    /A scenario carries \*\*Signs in as:\*\* or \*\*Sessions:\*\*, never both and never neither/,
+  );
+  assert.match(scenarios, /The name is a single capital letter/);
+  assert.match(scenarios, /Every numbered step starts `In session <name>,` \(or `In <name>,`\)/);
+  assert.match(scenarios, /Tabs in one browser profile share cookies/);
+  assert.match(scenarios, /- \*\*Sessions:\*\* A = `user`, B = `admin`/);
+  assert.match(section("Shape"), /and each id in \*\*Sessions:\*\*/);
+});
+
 test("no credentials travel with a plan", () => {
   const brief = section("Run brief");
   assert.match(brief, /### No credentials travel with a plan/);
@@ -86,6 +150,7 @@ test("each scenario carries its fields, in order, numbered from S1", () => {
   const labels = [
     "Why only a human can prove it:",
     "Signs in as:",
+    "Creates:",
     "Steps:",
     "Expected result:",
     "A failure means:",
@@ -115,4 +180,13 @@ test("SKILL.md writes plans in this format and delivers by the same marker", () 
   assert.match(skill, /\[ANATOMY\.md\]\(ANATOMY\.md\)/);
   assert.match(skill, /`_Not run yet\._`/);
   assert.match(skill, /qa-plan format=1 subject=#<n>/);
+});
+
+test("SKILL.md composes a multi-session scenario when a promise needs two people at once", () => {
+  assert.match(
+    skill,
+    /When a promise needs two people signed in at once, compose a multi-session scenario/,
+  );
+  assert.match(skill, /\[ANATOMY\.md\]\(ANATOMY\.md#sessions\)/);
+  assert.match(skill, /Never fold the second person into a step's prose/);
 });
