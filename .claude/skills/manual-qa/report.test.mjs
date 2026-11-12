@@ -17,10 +17,12 @@ import {
   findComments,
   main,
   parseComments,
+  reportPlanProblems,
   readReport,
   reportComment,
   trackerBody,
 } from "./report.mjs";
+import { validatePlan } from "./adapter.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PLAN = readFileSync(join(HERE, "fixtures", "plans", "good.md"), "utf8");
@@ -114,6 +116,230 @@ test("the head is the full SHA: a short one is a problem, SHA-256 reads", () => 
 test("a result other than the three is a problem", () => {
   const { problems } = readReport(reportFor(["| S1: x | passed-ish | none | |"]));
   assert.match(problems[0], /S1's result is `passed-ish`/);
+});
+
+// --- The report against its plan: Scenario accounts ---
+
+/** good.md with S1 creating `temp-user` and S2 signing in as it. */
+const ACCOUNT_PLAN = PLAN.replace(
+  "- **Signs in as:** `admin`\n",
+  "- **Signs in as:** `admin`\n- **Creates:** `temp-user` (its values chosen when S1 creates it)\n",
+).replace("- **Signs in as:** nobody\n", "- **Signs in as:** `temp-user` (created in S1)\n");
+const S1_ROW = (result, note) =>
+  `| S1: An admin invites a new member | ${result} | none | ${note} |`;
+const S2_ROW = (result, note) =>
+  `| S2: A signed-out visitor cannot open the members page | ${result} | none | ${note} |`;
+const LEFT_NOTE = "signs in as `temp-user`, which S1 creates, and S1 did not pass";
+const againstPlan = (rows, plan = ACCOUNT_PLAN) =>
+  reportPlanProblems(readReport(reportFor(rows)).report, plan);
+
+test("a scenario whose Scenario account's creator did not pass is left for a person, saying why", () => {
+  assert.deepEqual(validatePlan(ACCOUNT_PLAN).problems, []);
+  // The creator failed, or was itself left for a person: the dependent is left, with the reason.
+  for (const creator of ["FAIL", "left for a person"])
+    assert.deepEqual(
+      againstPlan([S1_ROW(creator, "no invite appeared"), S2_ROW("left for a person", LEFT_NOTE)]),
+      [],
+    );
+  // A run stopped on a blocking outcome may give the dependent its stop note instead.
+  assert.deepEqual(
+    againstPlan([
+      S1_ROW("FAIL", "data loss"),
+      S2_ROW("left for a person", "_the run stopped at S1: data loss_"),
+    ]),
+    [],
+  );
+  // The creator passed: the dependent ran.
+  assert.deepEqual(againstPlan([S1_ROW("PASS", "invite sent"), S2_ROW("PASS", "signed in")]), []);
+});
+
+test("a dependent run or failed after its creator did not pass is a problem", () => {
+  const want = `S2 ${LEFT_NOTE}: its result is _left for a person_, with the note _${LEFT_NOTE}_`;
+  for (const rows of [
+    [S1_ROW("FAIL", "no invite appeared"), S2_ROW("PASS", "signed in")],
+    [S1_ROW("FAIL", "no invite appeared"), S2_ROW("FAIL", "could not sign in")],
+    // Left for a person, but without saying why.
+    [S1_ROW("FAIL", "no invite appeared"), S2_ROW("left for a person", "could not sign in")],
+  ])
+    assert.deepEqual(againstPlan(rows), [want]);
+  // The plain plan has no Scenario account: nothing depends on S1.
+  assert.deepEqual(
+    againstPlan([S1_ROW("FAIL", "no invite"), S2_ROW("PASS", "redirected")], PLAN),
+    [],
+  );
+});
+
+test("a stop note counts only on a dependent after the stop", () => {
+  const want = `S2 ${LEFT_NOTE}: its result is _left for a person_, with the note _${LEFT_NOTE}_`;
+  // The run stopped at S2 itself, or at a later S4: S2 was reached, so it owes the creator reason.
+  for (const stop of ["S2", "S4"])
+    assert.deepEqual(
+      againstPlan([
+        S1_ROW("FAIL", "no invite appeared"),
+        S2_ROW("left for a person", `_the run stopped at ${stop}: data loss_`),
+      ]),
+      [want],
+    );
+});
+
+test("the rule carries down a chain of Scenario accounts", () => {
+  const S3 = [
+    "### S3: The invitee signs in",
+    "",
+    "- **Why only a human can prove it:** the invite link is not driven by a suite.",
+    "- **Signs in as:** `invitee` (created in S2)",
+    "- **Steps:**",
+    "  1. Open **Members**.",
+    "- **Expected result:** the page shows **Welcome**.",
+    "- **A failure means:** the invite does not grant access.",
+    "",
+    "## Sign-off checklist",
+  ].join("\n");
+  const chain = ACCOUNT_PLAN.replace(
+    "- **Signs in as:** `temp-user` (created in S1)\n",
+    "- **Signs in as:** `temp-user` (created in S1)\n- **Creates:** `invitee`\n",
+  )
+    .replace("## Sign-off checklist", S3)
+    .replace(
+      "- [ ] S2: A signed-out visitor cannot open the members page",
+      "- [ ] S2: A signed-out visitor cannot open the members page\n- [ ] S3: The invitee signs in",
+    );
+  assert.deepEqual(validatePlan(chain).problems, []);
+  const S3_ROW = (result, note) => `| S3: The invitee signs in | ${result} | none | ${note} |`;
+  const S3_NOTE = "signs in as `invitee`, which S2 creates, and S2 did not pass";
+  // S1 failed, so S2 is left for a person, so S3 is left too.
+  assert.deepEqual(
+    againstPlan(
+      [
+        S1_ROW("FAIL", "no invite appeared"),
+        S2_ROW("left for a person", LEFT_NOTE),
+        S3_ROW("left for a person", S3_NOTE),
+      ],
+      chain,
+    ),
+    [],
+  );
+  assert.deepEqual(
+    againstPlan(
+      [
+        S1_ROW("FAIL", "no invite appeared"),
+        S2_ROW("left for a person", LEFT_NOTE),
+        S3_ROW("PASS", "signed in"),
+      ],
+      chain,
+    ),
+    [`S3 ${S3_NOTE}: its result is _left for a person_, with the note _${S3_NOTE}_`],
+  );
+});
+
+test("a multi-session scenario with a session whose account's creator did not pass is left for a person", () => {
+  // S2's session A signs in as `temp-user`, which S1 creates; session B is `admin`.
+  const sessions = ACCOUNT_PLAN.replace(
+    "- **Signs in as:** `temp-user` (created in S1)\n- **Steps:**\n  1. Open `/members` while signed out.",
+    "- **Sessions:** A = `temp-user`, B = admin (`temp-user` created in S1)\n- **Steps:**\n  1. In session A, open `/members`.\n  2. In session B, reset the password of `temp-user`.",
+  );
+  assert.deepEqual(validatePlan(sessions).problems, []);
+  const note = "session A signs in as `temp-user`, which S1 creates, and S1 did not pass";
+  assert.deepEqual(
+    againstPlan(
+      [S1_ROW("FAIL", "no invite appeared"), S2_ROW("left for a person", note)],
+      sessions,
+    ),
+    [],
+  );
+  assert.deepEqual(
+    againstPlan(
+      [S1_ROW("FAIL", "no invite appeared"), S2_ROW("PASS", "A was signed out")],
+      sessions,
+    ),
+    [`S2 ${note}: its result is _left for a person_, with the note _${note}_`],
+  );
+  assert.deepEqual(
+    againstPlan([S1_ROW("PASS", "invite sent"), S2_ROW("PASS", "A was signed out")], sessions),
+    [],
+  );
+});
+
+test("a note naming any blocked session is the reason", () => {
+  // S1 creates `temp-user`, S2 creates `other-user`, and S3's sessions sign in as both.
+  const S3 = [
+    "### S3: Each new user sees the other's change",
+    "",
+    "- **Why only a human can prove it:** no suite holds two signed-in browsers at once.",
+    "- **Sessions:** A = `temp-user`, B = `other-user`",
+    "- **Steps:**",
+    "  1. In session A, open **Members**.",
+    "  2. In session B, open **Members**.",
+    "- **Expected result:** both sessions show **Members**.",
+    "- **A failure means:** a new user cannot open the members page.",
+    "",
+    "## Sign-off checklist",
+  ].join("\n");
+  const plan = ACCOUNT_PLAN.replace(
+    "- **Signs in as:** `temp-user` (created in S1)\n",
+    "- **Signs in as:** `temp-user` (created in S1)\n- **Creates:** `other-user`\n",
+  )
+    .replace("## Sign-off checklist", S3)
+    .replace(
+      "- [ ] S2: A signed-out visitor cannot open the members page",
+      "- [ ] S2: A signed-out visitor cannot open the members page\n- [ ] S3: Each new user sees the other's change",
+    );
+  assert.deepEqual(validatePlan(plan).problems, []);
+  const S3_ROW = (result, note) =>
+    `| S3: Each new user sees the other's change | ${result} | none | ${note} |`;
+  const rows = (note) => [
+    S1_ROW("FAIL", "no invite appeared"),
+    S2_ROW("left for a person", LEFT_NOTE),
+    S3_ROW("left for a person", note),
+  ];
+  // Either blocked session's reason is enough.
+  for (const note of [
+    "session A signs in as `temp-user`, which S1 creates, and S1 did not pass",
+    "session B signs in as `other-user`, which S2 creates, and S2 did not pass",
+  ])
+    assert.deepEqual(againstPlan(rows(note), plan), [], note);
+  // With neither, the first blocked session's reason is asked for.
+  const want = "session A signs in as `temp-user`, which S1 creates, and S1 did not pass";
+  assert.deepEqual(againstPlan(rows("could not sign in"), plan), [
+    `S3 ${want}: its result is _left for a person_, with the note _${want}_`,
+  ]);
+});
+
+test("a report checked against a plan it did not run is a problem", () => {
+  assert.match(
+    againstPlan([S1_ROW("PASS", "ok")])[0],
+    /the plan's scenarios are S1 S2; the report's results are S1/,
+  );
+  assert.match(
+    againstPlan(
+      [S1_ROW("PASS", "ok"), S2_ROW("PASS", "ok")],
+      ACCOUNT_PLAN.replaceAll("2".repeat(40), "3".repeat(40)),
+    )[0],
+    /the plan is for subject #42, pull request #57, head 3{40}; the report is for .* head 2{40}/,
+  );
+  assert.match(againstPlan([S1_ROW("PASS", "ok")], "not a plan")[0], /does not read cleanly/);
+});
+
+test("`read --plan` checks the report against its plan, and exits 1 on a problem", () => {
+  const files = {
+    "plan.md": ACCOUNT_PLAN,
+    "good.md": reportFor([S1_ROW("FAIL", "no invite"), S2_ROW("left for a person", LEFT_NOTE)]),
+    "bad.md": reportFor([S1_ROW("FAIL", "no invite"), S2_ROW("PASS", "signed in")]),
+  };
+  const io = { readFile: (path) => files[path] ?? null };
+  assert.equal(main(["read", "good.md", "--plan", "plan.md"], io).code, 0);
+  const bad = main(["read", "bad.md", "--plan", "plan.md"], io);
+  assert.equal(bad.code, 1);
+  assert.match(JSON.parse(bad.out).problems[0], /^S2 signs in as `temp-user`, which S1 creates/);
+  // `--plan` with no file is a usage error, never a skipped check.
+  assert.equal(main(["read", "bad.md", "--plan"], io).code, 2);
+  assert.equal(main(["read", "bad.md", "--plan", "--repo", "."], io).code, 2);
+  // Without --plan, `read` checks the report's own shape only.
+  assert.equal(main(["read", "bad.md"], io).code, 0);
+  assert.match(
+    JSON.parse(main(["read", "good.md", "--plan", "nowhere.md"], io).out).problems[0],
+    /nowhere\.md: no such file/,
+  );
 });
 
 // --- The PR comment: one, updated, never duplicated ---

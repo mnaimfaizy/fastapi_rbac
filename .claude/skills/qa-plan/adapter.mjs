@@ -40,9 +40,10 @@
 //                                          whether a run may sign in at this address
 //   node adapter.mjs hazards < files.txt   Hazard packs matching the changed paths
 //   node adapter.mjs delivery [--label L]… where the plan goes, by `plan.publish`
-//   node adapter.mjs render [--write] < answers.json
+//   node adapter.mjs render [--write [--drop-comments]] < answers.json
 //                                          the config with the answers merged in
-//   Each prints JSON (render prints the new file body, or writes it with --write)
+//   Each prints JSON (render prints the new file body, or writes it with --write;
+//   --write over a commented YAML config exits 3 unless --drop-comments)
 //   and exits 1 on any problem, 2 on bad usage; `host` exits 0 when the run may
 //   sign in, 1 on a stop, 3 when the QA person must confirm the host in chat.
 
@@ -745,8 +746,9 @@ const STACK_NEEDS = {
  * said, and the run goes on.
  *
  * @param {{path: string | null, config: Record<string, any>, runProblems?: string[]}} read
- * @param {{brief: {target: string | null, surface: string | null, roles: string[]}} | null} [plan]
- *   a plan `validatePlan` read with no problems
+ * @param {{brief: {target: string | null, surface: string | null, roles: string[]}, scenarios?: {sessions?: {id: string}[], creates?: string[]}[]} | null} [plan]
+ *   a plan `validatePlan` read with no problems; every session id that is a role
+ *   must be declared, and a Scenario account need not be
  * @returns {{ready: boolean, needs: string[], notes: string[], run: {target: string | null, surface: string | null, roles: string[]}}}
  */
 export function runReadiness({ path, config, runProblems: problems = [] }, plan = null) {
@@ -792,7 +794,15 @@ export function runReadiness({ path, config, runProblems: problems = [] }, plan 
 
   if (!declared.length)
     needs.push("run.accounts.roles: each role a scenario signs in as, by `id` and `purpose`");
-  const missing = (brief?.roles ?? []).filter((id) => !declared.includes(id));
+  // Every role the plan names, and every session id that is not `nobody` or a Scenario
+  // account a scenario creates: those are made during the run, not declared.
+  const created = new Set((plan?.scenarios ?? []).flatMap((scenario) => scenario.creates ?? []));
+  const signedIn = (plan?.scenarios ?? []).flatMap((scenario) =>
+    (scenario.sessions ?? []).map((session) => session.id),
+  );
+  const missing = [...new Set([...(brief?.roles ?? []), ...signedIn])].filter(
+    (id) => id !== "nobody" && !created.has(id) && !declared.includes(id),
+  );
   if (declared.length && missing.length)
     needs.push(
       `run.accounts.roles: the plan signs in as ${missing.map((id) => `\`${id}\``).join(", ")}, ` +
@@ -1026,7 +1036,16 @@ export const SCENARIO_LABELS = /** @type {const} */ ([
   "Expected result",
   "A failure means",
 ]);
+/**
+ * The alternative to **Signs in as:**, in its position: a scenario with two or more
+ * Sessions names each one (`A = user, B = admin`). A scenario carries one of the two.
+ */
+export const SESSIONS = "Sessions";
+/** The optional field naming each Scenario account a scenario creates; it follows **Signs in as:**. */
+export const CREATES = "Creates";
 const RULE_OUT = "If this fails, first rule out";
+/** A role id, and a Scenario account id: letters, digits, `_` and `-`. */
+const ACCOUNT_ID = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 export const NOT_RUN = "_Not run yet._";
 
 const MARKER = /^<!-- qa-plan format=(\d+) subject=#(\d+) pr=#(\d+) -->$/;
@@ -1146,8 +1165,12 @@ export function credentialProblems(lines) {
 
 /**
  * Read a QA Plan against ANATOMY.md: the marker, the nine sections in order,
- * every label each section requires, the scenarios numbered from S1, and no
- * credentials. `manual-qa` runs nothing from a plan with a problem.
+ * every label each section requires, the scenarios numbered from S1, each
+ * scenario's one **Signs in as:** or its **Sessions:** (with each step naming
+ * its session), each Scenario account created once and signed in as only after
+ * it, and no credentials. Each parsed scenario lists its `sessions` as
+ * `{name, id}`: one with `name: null` for **Signs in as:**, else one per letter.
+ * `manual-qa` runs nothing from a plan with a problem.
  *
  * @param {string} text
  * @returns {{plan: Record<string, any>, problems: string[]}}
@@ -1235,11 +1258,92 @@ export function validatePlan(text) {
     });
     return found;
   };
+  /** A first-word value (ANATOMY.md, "First-word values"): `*` and `_` only around the word. */
   const plainWord = (value) =>
-    value
-      .replace(/[`*_]/g, "")
-      .trim()
-      .split(/[\s,;:()]+/)[0] ?? "";
+    (
+      value
+        .replace(/`/g, "")
+        .trim()
+        .split(/[\s,;:()]+/)[0] ?? ""
+    ).replace(/^[*_]+|[*_]+$/g, "");
+  /**
+   * The ids a **Creates:** line names (ANATOMY.md, "Scenario accounts"): first-word values
+   * joined by commas, with any spaces around each comma. Any other space, a semicolon, a
+   * colon or a parenthesis ends the list; the rest is prose. An empty id after a comma is
+   * kept as `""`, so the checker names it on this line.
+   */
+  const idList = (value) => {
+    const ids = [];
+    let rest = value.replace(/`/g, "").trim();
+    for (let first = true; ; first = false) {
+      const word = /^[^\s,;:()]*/.exec(rest)[0];
+      const id = word.replace(/^[*_]+|[*_]+$/g, "");
+      if (first && id === "") return ids;
+      ids.push(id);
+      rest = rest.slice(word.length);
+      const comma = /^\s*,\s*/.exec(rest);
+      if (!comma) return ids;
+      rest = rest.slice(comma[0].length);
+    }
+  };
+  /**
+   * The sessions a **Sessions:** line names (ANATOMY.md, "Sessions"): `<name> = <id>`
+   * entries joined by commas, with any spaces around each comma and each `=`. Each id is
+   * a first-word value, read as `plainWord` reads one. Any other space, a semicolon, a
+   * colon or a parenthesis after an id ends the list; the rest is prose. An entry with no
+   * `=` is kept with `id: null`, so the checker names it on this line.
+   */
+  const sessionList = (value) => {
+    const sessions = [];
+    let rest = value.replace(/`/g, "").trim();
+    for (;;) {
+      const entry = /^([^\s=,;:()]*)\s*=\s*([^\s,;:()]*)/.exec(rest);
+      if (!entry) {
+        sessions.push({ name: /^[^\s,;:()]*/.exec(rest)[0], id: null });
+        return sessions;
+      }
+      sessions.push({ name: plainWord(entry[1]), id: plainWord(entry[2]) });
+      rest = rest.slice(entry[0].length);
+      const comma = /^\s*,\s*/.exec(rest);
+      if (!comma) return sessions;
+      rest = rest.slice(comma[0].length);
+    }
+  };
+  /**
+   * In a multi-session scenario, each top-level numbered step in lines `from`–`to` starts
+   * `In session X,` or `In X,`, naming one of `names` (ANATOMY.md, "Sessions").
+   */
+  const stepSessions = (from, to, names, id) => {
+    const numbered = [];
+    for (let n = from; n < to; n += 1) {
+      const step = !fenced[n] && /^(\s*)(\d+)\.\s+(.*)$/.exec(lines[n]);
+      if (step)
+        numbered.push({
+          n,
+          indent: step[1].length,
+          column: lines[n].length - step[3].length,
+          number: step[2],
+          text: step[3],
+        });
+    }
+    // A step is top-level when it starts left of the first step's text; a list nested
+    // under a step starts at or past it (CommonMark lets siblings shift up to 3 spaces).
+    const column = numbered[0]?.column ?? 0;
+    for (const step of numbered) {
+      if (step.indent >= column) continue;
+      const session = /^In (?:session )?[`*_]*([A-Za-z])[`*_]*,/.exec(step.text)?.[1];
+      if (session === undefined)
+        at(
+          step.n,
+          `${id}: step ${step.number} names no session: in a multi-session scenario, each step starts \`In session <name>,\``,
+        );
+      else if (!names.has(session))
+        at(
+          step.n,
+          `${id}: step ${step.number} is in session ${session}, which **${SESSIONS}:** does not declare`,
+        );
+    }
+  };
 
   if (sections.Anchors) {
     const { n, from, to } = sections.Anchors;
@@ -1332,6 +1436,8 @@ export function validatePlan(text) {
   if (sections.Scenarios) {
     const { n, from, to } = sections.Scenarios;
     const heads = [];
+    /** Per scenario, beside `plan.scenarios`: the lines of its account fields, and the ids it names. */
+    const accountLines = [];
     for (let i = from; i < to; i += 1) {
       const match = !fenced[i] && /^### (.*)$/.exec(lines[i]);
       if (match) heads.push({ text: match[1].trim(), n: i });
@@ -1347,11 +1453,26 @@ export function validatePlan(text) {
       const found = labelsIn(head.n + 1, heads[i + 1]?.n ?? to);
       const position = (label) => found.findIndex((entry) => entry.label === label);
       const get = (label) => found[position(label)];
+      const named = position(SESSIONS) === -1 ? null : get(SESSIONS);
       for (const label of SCENARIO_LABELS) {
+        // **Sessions:** stands in for **Signs in as:** (ANATOMY.md, "Sessions").
+        if (label === "Signs in as" && named && position(label) === -1) continue;
         if (position(label) === -1) at(head.n, `${id} lacks **${label}:**`);
         else if (get(label).text === "") at(get(label).n, `${id}: **${label}:** is empty`);
       }
-      const positions = [...SCENARIO_LABELS, RULE_OUT].map(position).filter((p) => p !== -1);
+      if (named && position("Signs in as") !== -1)
+        at(
+          named.n,
+          `${id} has both **Signs in as:** and **Sessions:**: a scenario has one or the other`,
+        );
+      const order = [
+        ...SCENARIO_LABELS.slice(0, 2),
+        SESSIONS,
+        CREATES,
+        ...SCENARIO_LABELS.slice(2),
+        RULE_OUT,
+      ];
+      const positions = order.map(position).filter((p) => p !== -1);
       if (positions.some((p, k) => k > 0 && p < positions[k - 1]))
         at(head.n, `${id}: its fields are out of order (ANATOMY.md, "Scenarios")`);
       const steps = get("Steps");
@@ -1359,9 +1480,111 @@ export function validatePlan(text) {
         at(steps.n, `${id}: **Steps:** expected a numbered list`);
       const signs = get("Signs in as");
       const who = signs ? plainWord(signs.inline) : null;
-      if (signs && who && who !== "nobody" && !plan.brief.roles.includes(who))
-        at(signs.n, `${id} signs in as \`${who}\`, which the Run brief's **Roles:** does not name`);
-      plan.scenarios.push({ id, title: match[2].trim(), signsInAs: who || null });
+      /** @type {{name: string | null, id: string}[]} */
+      const sessions = [];
+      if (named && named.text === "") at(named.n, `${id}: **${SESSIONS}:** is empty`);
+      else if (named) {
+        const listed = sessionList(named.inline);
+        for (const { name, id: who } of listed) {
+          const what = `${id}: **${SESSIONS}:**`;
+          // An entry with no `=` is always the last one read: after a comma, or alone.
+          if (who === null && name === "" && listed.length > 1)
+            at(named.n, `${what} a comma with no session after it`);
+          else if (who === null)
+            at(
+              named.n,
+              `${what} expected \`<name> = <id>\` for each session, joined by commas` +
+                (name === "" ? "" : `, at \`${name}\``),
+            );
+          else if (name === "")
+            at(named.n, `${what} an entry has no name before \`=\`: a single capital letter`);
+          else if (!/^[A-Z]$/.test(name))
+            at(named.n, `${what} \`${name}\` is not a session name: a single capital letter`);
+          else if (sessions.some((session) => session.name === name))
+            at(named.n, `${what} session ${name} is named twice`);
+          else if (who === "") at(named.n, `${what} session ${name} has no id after \`=\``);
+          else sessions.push({ name, id: who });
+        }
+        if (listed.every((session) => session.id !== null) && listed.length < 2)
+          at(
+            named.n,
+            `${id}: **${SESSIONS}:** names one session: a scenario with one session uses **Signs in as:**`,
+          );
+        if (steps && steps.text !== "")
+          stepSessions(
+            steps.n + 1,
+            found[position("Steps") + 1]?.n ?? heads[i + 1]?.n ?? to,
+            new Set(listed.map((session) => session.name)),
+            id,
+          );
+      } else if (who) sessions.push({ name: null, id: who });
+      const creates = position(CREATES) === -1 ? null : get(CREATES);
+      const made = creates ? idList(creates.inline) : [];
+      if (creates && !made.length)
+        at(creates.n, `${id}: **Creates:** expected the id of each Scenario account it creates`);
+      plan.scenarios.push({
+        id,
+        title: match[2].trim(),
+        signsInAs: named ? null : who || null,
+        sessions,
+        creates: [...new Set(made.filter((made) => made !== ""))],
+      });
+      accountLines.push({ signs: (named ?? signs)?.n, creates: creates?.n, made });
+    });
+
+    // Scenario accounts (ANATOMY.md): each id has one creator, and only a later scenario
+    // signs in as it. Read after every scenario, so a reference forward can name its creator.
+    /** @type {Map<string, number>} each Scenario account id, by the index of its creator */
+    const creatorOf = new Map();
+    plan.scenarios.forEach((scenario, i) => {
+      const { creates: line, made: named } = accountLines[i];
+      const seen = new Set();
+      for (const made of named) {
+        const what = `${scenario.id}: **Creates:** \`${made}\``;
+        if (made === "")
+          at(line, `${scenario.id}: **Creates:** has an empty id: a comma with no id after it`);
+        else if (!ACCOUNT_ID.test(made))
+          at(line, `${what} is not an id: letters, digits, \`_\` and \`-\`, as a role id is`);
+        else if (made === "nobody")
+          at(line, `${what}: \`nobody\` means signed out, so a Scenario account needs another id`);
+        else if (plan.brief.roles.includes(made))
+          at(
+            line,
+            `${what} is a role the Run brief's **Roles:** names: a Scenario account needs its own id`,
+          );
+        else if (seen.has(made)) at(line, `${what} is named twice`);
+        else if (creatorOf.has(made))
+          at(
+            line,
+            `${what} is already created by ${plan.scenarios[creatorOf.get(made)].id}: each Scenario account has one creator`,
+          );
+        else creatorOf.set(made, i);
+        seen.add(made);
+      }
+    });
+    // Each session's id follows the rule **Signs in as:** does (ANATOMY.md, "Sessions").
+    plan.scenarios.forEach(({ id, sessions }, i) => {
+      for (const { name, id: who } of sessions) {
+        if (who === "nobody" || plan.brief.roles.includes(who)) continue;
+        const line = accountLines[i].signs;
+        const subject = name === null ? id : `${id}'s session ${name}`;
+        const creator = creatorOf.get(who);
+        if (creator === undefined)
+          at(
+            line,
+            `${subject} signs in as \`${who}\`, which is neither a role the Run brief's **Roles:** names nor a Scenario account an earlier scenario creates`,
+          );
+        else if (creator === i)
+          at(
+            line,
+            `${subject} signs in as \`${who}\`, which ${name === null ? "it" : id} creates itself: only a later scenario may sign in as it`,
+          );
+        else if (creator > i)
+          at(
+            line,
+            `${subject} signs in as \`${who}\`, which ${plan.scenarios[creator].id} creates later: only a scenario after its creator may sign in as it`,
+          );
+      }
     });
   }
 
@@ -1608,6 +1831,28 @@ export function renderConfigUpdate(loaded, answers) {
   return { path, body: renderConfigYaml(merged, check) };
 }
 
+/**
+ * The lines of a YAML config that hold a comment, which a rewrite drops: a
+ * full-line `#` comment, or a ` # comment` after a value. A quoted scalar is
+ * set aside first, so a `#` inside it is not one; as in `inlineValue`, a quote
+ * quotes only where a value opens (line start, after `- `, `: `, `[`, `{` or
+ * `,`), so an apostrophe in a plain value hides nothing. Erring towards a
+ * comment only costs a confirmation; erring away loses the person's notes.
+ *
+ * @param {string} text
+ * @returns {number[]} 1-based line numbers
+ */
+export function yamlCommentLines(text) {
+  const found = [];
+  String(text)
+    .split(/\r?\n/)
+    .forEach((raw, index) => {
+      const bare = raw.replace(/(^\s*(?:-\s+)?|:\s+|[[{,]\s*)(?:"[^"]*"|'[^']*')/g, '$1""');
+      if (/^\s*#/.test(bare) || /\s#/.test(bare)) found.push(index + 1);
+    });
+  return found;
+}
+
 // ── CLI ─────────────────────────────────────────────────────────────────────
 
 function repoReader(repo) {
@@ -1656,7 +1901,8 @@ export function main(argv, io = {}) {
       "usage: node adapter.mjs check --for plan | check --for run [--plan <file>] | " +
       "plan [<file>] < plan.md | host <url> [--target stack|url] [--confirmed <host>] | " +
       "hazards < changed-paths | " +
-      "delivery [--label <name>]… | render [--write] < answers.json   [--repo <dir>]\n",
+      "delivery [--label <name>]… | render [--write [--drop-comments]] < answers.json   " +
+      "[--repo <dir>]\n",
   };
   // A plan is the person's file, wherever they keep it: read from the working
   // directory, not from the repository root.
@@ -1697,6 +1943,19 @@ export function main(argv, io = {}) {
     try {
       const { path, body } = renderConfigUpdate(loaded, JSON.parse(stdin()));
       if (!argv.includes("--write")) return { code: 0, out: body };
+      // Rewriting a commented YAML config drops its comments. The person
+      // consented to the body, which has none, so `--write` refuses unless
+      // `--drop-comments` says they agreed to lose them too (ADAPTER.md).
+      const comments =
+        loaded.path !== null && !path.endsWith(".json") ? yamlCommentLines(read(path) ?? "") : [];
+      if (comments.length && !argv.includes("--drop-comments"))
+        return {
+          code: 3,
+          out:
+            `${path} has YAML comments (line ${comments.join(", ")}) that --write would drop; ` +
+            "nothing was written. Tell the person; only if they agree to lose them, " +
+            "run again with --write --drop-comments.\n",
+        };
       (io.write ?? ((p, text) => writeFileSync(join(repo, p), text)))(path, body);
       return { code: 0, out: `wrote ${path}\n` };
     } catch (error) {

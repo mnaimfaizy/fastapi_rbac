@@ -1,0 +1,1592 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Library holds, from kiosk to pickup (shape example)</title>
+<!--
+  SHAPE EXAMPLE for the explainer skill's system stage (STAGE.md).
+  The subject is fictional: every name, value and ref on this page is invented.
+  A builder reads this page for its shape, never for its facts.
+  The beat log, the static diagram and the sandbox rules are prerendered from the
+  holds-data block below; the stage, inspector and sandbox render from it at run time.
+-->
+<script>
+  (function () {
+    var root = document.documentElement;
+    root.classList.add('js');
+    try {
+      var saved = localStorage.getItem('explainer-example-theme');
+      if (saved === 'light' || saved === 'dark') root.setAttribute('data-theme', saved);
+    } catch (e) {
+      /* opaque origin: fall back to the system theme */
+    }
+  })();
+</script>
+<style>
+  :root {
+    --sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    --mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace;
+    --bg: #fbfaf7;
+    --ink: #1f2328;
+    --muted: #59606b;
+    --line: #c4c8ce;
+    --panel: #f1f0eb;
+    --cap: #ffffff;
+    --hover: rgba(31, 35, 40, 0.06);
+    --z1: #e1e9f3;
+    --z2: #e3eee4;
+    --z3: #f2eadb;
+    --now: #b93d0b;
+    --now-soft: #fbe3d3;
+    --ok: #1d6b40;
+    --bad: #9a3412;
+    --on-glyph: #ffffff;
+    --focus: #1d4ed8;
+    --hatch: #7d838c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      --bg: #15171a;
+      --ink: #e8e6e1;
+      --muted: #a4aab3;
+      --line: #474c54;
+      --panel: #1f2226;
+      --cap: #25282d;
+      --hover: rgba(232, 230, 225, 0.07);
+      --z1: #1f2a37;
+      --z2: #1f2c23;
+      --z3: #322a1d;
+      --now: #fb8a4c;
+      --now-soft: #47271a;
+      --ok: #5fd39a;
+      --bad: #fdba74;
+      --on-glyph: #15171a;
+      --focus: #93c5fd;
+      --hatch: #8b919a;
+    }
+  }
+  :root[data-theme='dark'] {
+    --bg: #15171a;
+    --ink: #e8e6e1;
+    --muted: #a4aab3;
+    --line: #474c54;
+    --panel: #1f2226;
+    --cap: #25282d;
+    --hover: rgba(232, 230, 225, 0.07);
+    --z1: #1f2a37;
+    --z2: #1f2c23;
+    --z3: #322a1d;
+    --now: #fb8a4c;
+    --now-soft: #47271a;
+    --ok: #5fd39a;
+    --bad: #fdba74;
+    --on-glyph: #15171a;
+    --focus: #93c5fd;
+    --hatch: #8b919a;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 var(--sans); }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 0 16px 48px; }
+  code, pre, .mono { font-family: var(--mono); font-size: 0.875em; }
+  a { color: inherit; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  html:not(.js) .js-only { display: none !important; }
+  .js .nojs-only { display: none; }
+
+  .top { padding: 16px 0 4px; }
+  .shape-label { margin: 0 0 6px; font-size: 13px; color: var(--muted); }
+  .shape-label strong { color: var(--now); font-weight: 600; }
+  .title-row { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: clamp(22px, 3.6vw, 30px); line-height: 1.2; }
+  .question { margin: 4px 0 0; color: var(--muted); }
+  h2 { font-size: 20px; margin: 40px 0 12px; }
+  h3 { font-size: 16px; margin: 20px 0 8px; }
+
+  button.t {
+    min-height: 40px; min-width: 40px; padding: 0 14px; border-radius: 8px;
+    border: 1px solid var(--line); background: transparent; color: var(--ink);
+    font: inherit; font-size: 14px; cursor: pointer;
+  }
+  button.t:hover:not(:disabled) { background: var(--hover); }
+  button.t:disabled { opacity: 0.45; cursor: not-allowed; }
+  button.t.primary { border-color: var(--now); color: var(--now); font-weight: 600; min-width: 84px; }
+  button.t[aria-pressed='true'] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+
+  .rail { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 6px; }
+  .chip {
+    min-height: 40px; padding: 0 14px; border-radius: 20px; border: 1px solid var(--line);
+    background: transparent; color: var(--ink); font: inherit; font-size: 14px; cursor: pointer;
+  }
+  .chip[aria-current='step'] { border-color: var(--now); box-shadow: inset 0 0 0 1px var(--now); }
+  .chapter-line { margin: 4px 0 8px; font-size: 14px; color: var(--muted); min-height: 21px; }
+  .chapter-line b { color: var(--ink); font-weight: 600; }
+
+  .stage-box { position: relative; width: 100%; }
+  svg.stage { display: block; width: 100%; height: auto; overflow: visible; }
+  svg.stage:focus { outline: none; }
+  svg.stage:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; }
+  .stage text { font-family: var(--sans); }
+  .zbg { stroke: transparent; stroke-width: 2; transition: stroke-width 0.25s ease-out; }
+  .zone-1 .zbg { fill: var(--z1); }
+  .zone-2 .zbg { fill: var(--z2); }
+  .zone-3 .zbg { fill: var(--z3); }
+  .zone.active .zbg { stroke: var(--now); }
+  .zone.land .zbg { stroke-width: 4.5; }
+  .zone.recede { opacity: 0.6; }
+  .zlabel { font: 600 15px var(--sans); fill: var(--ink); }
+  .zrole { font: 12px var(--sans); fill: var(--muted); }
+  .elabel, .eempty { font: 12px var(--mono); fill: var(--muted); }
+  .evalue, .estatus { font: 12px var(--mono); fill: var(--ink); }
+  .entry { cursor: pointer; }
+  .entry .hit { fill: transparent; }
+  .entry:hover .hit { fill: var(--hover); }
+  .entry.changed .hit { fill: var(--now-soft); }
+  .entry.same .hit { stroke: var(--now); stroke-width: 1.5; stroke-dasharray: 4 3; }
+  .entry:focus, .msg:focus { outline: none; }
+  .entry:focus-visible .hit, .msg:focus-visible .hit { stroke: var(--focus); stroke-width: 2; stroke-dasharray: none; }
+  .hatch { opacity: 0.4; }
+  .hatch-line { stroke: var(--hatch); stroke-width: 2; }
+  .edge { fill: none; stroke: var(--line); stroke-width: 2; }
+  .edge.now { stroke: var(--now); stroke-width: 2.5; }
+  .msg { cursor: pointer; }
+  .msg .hit { fill: transparent; }
+  .msg .mbody { fill: var(--cap); stroke: var(--now); stroke-width: 2; }
+  .msg .mtext { font: 12px var(--mono); fill: var(--ink); }
+  .msg .mglyph { fill: var(--ok); }
+  .msg.refused .mglyph { fill: var(--bad); }
+  .msg .gtext { font: bold 10px var(--sans); fill: var(--on-glyph); }
+  .caption .cbg { fill: var(--cap); }
+  .caption .cbar { fill: var(--now); }
+  .caption .ctext { font: 13px var(--sans); fill: var(--ink); }
+  .caption .ctext.small { font-size: 12px; }
+  .leader { stroke: var(--now); stroke-width: 1.25; stroke-dasharray: 3 3; }
+  .leader-dot { fill: var(--now); }
+
+  .prompt { margin: 10px 0 0; padding: 12px 14px; background: var(--panel); border-radius: 10px; }
+  .prompt p { margin: 0 0 8px; }
+  .prompt .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .prompt .why { margin-top: 8px; }
+  .choice.right { border-color: var(--ok); box-shadow: inset 0 0 0 1px var(--ok); }
+  .choice.picked:not(.right) { border-style: dashed; }
+  .muted { color: var(--muted); font-size: 14px; }
+
+  .transport {
+    position: sticky; bottom: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    margin-top: 10px; padding: 8px 0; background: var(--bg); border-top: 1px solid var(--line);
+  }
+  .speed { display: flex; gap: 4px; }
+  .speed .t { padding: 0 8px; }
+  .scrub { flex: 1 1 140px; display: flex; align-items: center; min-height: 40px; }
+  .scrub input { width: 100%; height: 40px; margin: 0; accent-color: var(--now); }
+  @media (max-width: 480px) {
+    .transport { gap: 6px; }
+    .transport .t { padding: 0 10px; }
+    .transport button.t.primary { min-width: 72px; }
+  }
+
+  .stage-fallback { display: none; margin: 16px 0 0; }
+  html:not(.js) .stage-fallback { display: block; }
+  .stage-fallback svg { display: block; width: 100%; max-width: 720px; height: auto; }
+  .stage-fallback figcaption { font-size: 14px; color: var(--muted); }
+  .fb-zone { stroke: var(--line); stroke-width: 1.5; }
+  .fb-z1 { fill: var(--z1); } .fb-z2 { fill: var(--z2); } .fb-z3 { fill: var(--z3); }
+  .fb-label { font: 600 15px var(--sans); fill: var(--ink); }
+  .fb-note { font: 12px var(--mono); fill: var(--muted); }
+
+  .sec-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 40px 0 8px; }
+  .sec-head h2 { margin: 0; }
+  .switch { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; font-size: 14px; cursor: pointer; }
+  .switch input { width: 20px; height: 20px; accent-color: var(--now); }
+  .log, .log ol { list-style: none; margin: 0; padding: 0; }
+  .log-ch { margin: 0 0 20px; }
+  .log-ch-title { margin: 12px 0 2px; }
+  .settles { margin: 0 0 8px; color: var(--muted); font-size: 14px; }
+  .log-beat, .log-halt, .log-cp { padding: 6px 10px; border-left: 3px solid transparent; border-radius: 4px; }
+  .log-beat.now, .log-ch.now > .log-ch-title { border-left-color: var(--now); background: var(--now-soft); }
+  .log-go { display: block; min-height: 40px; padding: 8px 0; text-decoration: none; color: inherit; }
+  .log-go:hover .cap { text-decoration: underline; }
+  .log-go .n { font-family: var(--mono); font-size: 13px; color: var(--muted); margin-right: 6px; }
+  .log-go .route { font-size: 14px; color: var(--muted); margin-right: 6px; }
+  .log-go code { margin-right: 6px; }
+  .log-halt, .log-cp { font-size: 15px; }
+  .detail { margin: 2px 0 6px; padding: 8px 12px; background: var(--panel); border-radius: 8px; font-size: 14px; }
+  .detail p { margin: 4px 0; }
+  .detail pre, .insp-body pre { margin: 4px 0; white-space: pre-wrap; word-break: break-word; }
+  .log-end { margin: 6px 0 0; font-size: 14px; }
+  @media screen {
+    .js .log:not(.details-open) .detail { display: none; }
+    .js .ref-body.collapsed { display: none; }
+  }
+
+  .disclaimer { padding: 10px 14px; border-left: 3px solid var(--now); background: var(--panel); border-radius: 4px; }
+  .sb-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+  .sb-rules { margin: 0 0 12px; font-size: 14px; }
+  .sb-rules dt { font-weight: 600; }
+  .sb-rules dd { margin: 0 0 6px; }
+  .sb-log { margin: 0; padding-left: 0; list-style: none; font-size: 14px; }
+  .sb-log li { padding: 4px 0; display: flex; gap: 8px; align-items: baseline; }
+  .glyph { display: inline-grid; place-items: center; width: 18px; height: 18px; flex: none; font: bold 11px var(--sans); color: var(--on-glyph); }
+  .glyph.ok { background: var(--ok); border-radius: 50%; }
+  .glyph.refused { background: var(--bad); clip-path: polygon(50% 0, 100% 100%, 0 100%); padding-top: 4px; }
+
+  .reading-test { padding: 10px 14px; background: var(--panel); border-radius: 8px; }
+  .ref-panel h3 { margin: 12px 0 4px; }
+  .ref-toggle {
+    display: flex; align-items: center; gap: 8px; width: 100%; min-height: 40px; padding: 0;
+    border: 0; background: none; color: inherit; font: inherit; font-weight: 600; text-align: left; cursor: pointer;
+  }
+  .ref-toggle::before { content: '▸'; color: var(--muted); }
+  .ref-toggle[aria-expanded='true']::before { content: '▾'; }
+  html:not(.js) .ref-toggle::before { content: ''; }
+  .ref-body ul { margin: 4px 0 8px; padding-left: 20px; }
+  .ref-body h4 { margin: 12px 0 4px; font-size: 15px; }
+  .records { margin: 0 0 8px; font-size: 14px; }
+  .records dt { font-weight: 600; margin-top: 8px; }
+  .records dd { margin: 2px 0 2px 16px; }
+  .table-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; font-size: 14px; min-width: 100%; }
+  th, td { text-align: left; padding: 6px 10px 6px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+
+  .inspector {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 20; width: min(420px, 100%);
+    padding: 16px; overflow: auto; background: var(--panel); border-left: 1px solid var(--line);
+    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.12);
+  }
+  .inspector[hidden] { display: none; }
+  /* On wide screens the page moves aside, so the stage stays in view beside the drawer. */
+  @media (min-width: 900px) {
+    .insp-open .wrap { margin: 0 436px 0 0; }
+  }
+  .insp-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .insp-head h2 { margin: 0; font-size: 18px; }
+  .insp-body { font-size: 14px; }
+  .insp-body .kind { color: var(--muted); margin: 8px 0 0; }
+  @media (max-width: 640px) {
+    .inspector {
+      top: auto; left: 0; width: auto; max-height: 70vh; border-left: 0; border-top: 1px solid var(--line);
+      border-radius: 14px 14px 0 0; box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.16);
+    }
+  }
+
+  @media print {
+    .js-only, .transport, .inspector, .switch { display: none !important; }
+    .stage-fallback { display: block !important; }
+    .log-go { min-height: 0; padding: 2px 0; }
+    body { background: #fff; color: #000; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .zbg { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <p class="shape-label"><strong>Shape example</strong> · fictional subject · read for shape, never for facts</p>
+    <div class="title-row">
+      <h1>Library holds, from kiosk to pickup</h1>
+      <button id="theme" class="t js-only" type="button">Theme: auto</button>
+    </div>
+    <p class="question">Where does a hold live, and what does the desk check before it hands the book over?</p>
+  </header>
+
+  <main>
+    <section id="story" class="explainer" aria-label="Story">
+      <div class="stage-live js-only">
+        <nav class="rail" id="rail" aria-label="Chapters"></nav>
+        <p class="chapter-line" id="chapter-line"></p>
+        <div class="stage-box">
+          <svg id="story-stage" class="stage" role="group" tabindex="0" aria-label="Stage: the kiosk, the desk and the ledger, with the current message" aria-describedby="story-desc"><desc id="story-desc">Three zones in a chain. The kiosk talks to the desk, and the desk talks to the ledger; the kiosk never talks to the ledger. Messages travel along these two edges, and each zone shows its current state. Arrow keys step through the story while focus is inside it.</desc></svg>
+        </div>
+        <div class="prompt" id="prompt" hidden></div>
+        <div class="transport" role="group" aria-label="Story controls">
+          <button id="back" class="t" type="button">Back</button>
+          <button id="play" class="t primary" type="button">Play</button>
+          <button id="next" class="t" type="button" aria-describedby="next-why">Next</button>
+          <button id="replay" class="t" type="button" aria-label="Replay chapter">↺ Replay</button>
+          <div class="speed" role="group" aria-label="Speed">
+            <button class="t sp" type="button" data-speed="0.5" aria-pressed="false">0.5×</button>
+            <button class="t sp" type="button" data-speed="1" aria-pressed="true">1×</button>
+            <button class="t sp" type="button" data-speed="2" aria-pressed="false">2×</button>
+          </div>
+          <label class="scrub"><span class="sr-only">Beat in this chapter</span><input id="scrub" type="range" min="0" max="1" step="1" value="0"></label>
+          <span id="next-why" class="sr-only"></span>
+        </div>
+        <p id="live" class="sr-only" aria-live="polite"></p>
+      </div>
+      <!-- fallback:start -->
+      <figure class="stage-fallback">
+        <svg viewBox="0 0 680 190" role="img" aria-label="Static diagram: kiosk, desk and ledger, with the beats on each edge" aria-describedby="fallback-desc"><desc id="fallback-desc">The kiosk connects to the desk and the desk connects to the ledger. Numbers are chapter.beat in the beat log.</desc>
+          <line x1="200" y1="60" x2="240" y2="60" class="edge"/>
+          <text x="220" y="135" text-anchor="middle" class="fb-note">1.1 1.4 2.3</text>
+          <text x="220" y="152" text-anchor="middle" class="fb-note">2.8</text>
+          <line x1="440" y1="60" x2="480" y2="60" class="edge"/>
+          <text x="460" y="135" text-anchor="middle" class="fb-note">1.2 1.3 2.2</text>
+          <text x="460" y="152" text-anchor="middle" class="fb-note">2.4 2.5 2.7</text>
+          <rect x="0" y="20" width="200" height="80" rx="10" class="fb-zone fb-z1"/>
+          <text x="16" y="52" class="fb-label">Kiosk</text>
+          <text x="16" y="76" class="fb-note">patron screen</text>
+          <rect x="240" y="20" width="200" height="80" rx="10" class="fb-zone fb-z2"/>
+          <text x="256" y="52" class="fb-label">Desk</text>
+          <text x="256" y="76" class="fb-note">service</text>
+          <text x="340" y="125" text-anchor="middle" class="fb-note">in: 2.1 2.6</text>
+          <rect x="480" y="20" width="200" height="80" rx="10" class="fb-zone fb-z3"/>
+          <text x="496" y="52" class="fb-label">Ledger</text>
+          <text x="496" y="76" class="fb-note">hold records</text>
+        </svg>
+        <figcaption>The stage without script: the zones, their two edges, and the beats that cross each one. The beat log below tells the story.</figcaption>
+      </figure>
+      <!-- fallback:end -->
+    </section>
+
+    <section id="log-section" aria-labelledby="log-h">
+      <div class="sec-head">
+        <h2 id="log-h">Beat log</h2>
+        <label class="switch js-only"><input type="checkbox" id="open-all"> Open all details</label>
+      </div>
+      <!-- log:start -->
+      <ol class="log" id="log">
+        <li class="log-ch" data-chapter="place">
+          <h3 class="log-ch-title"><a class="log-go" href="#story" data-go-chapter="place">1. Place a hold</a></h3>
+          <p class="settles">Settles: Where does a hold live once the kiosk says queued?</p>
+          <ol class="log-beats">
+            <li class="log-beat" data-beat="place-1">
+              <a class="log-go" href="#story" data-go-beat="place-1"><span class="n">1.1</span> <span class="route">Kiosk → Desk</span> <code>HOLD B7·C42</code> <span class="cap">The kiosk sends card C42 and book B7 to the desk.</span></a>
+              <div class="detail">
+                <pre>POST /holds
+{&quot;book&quot;: &quot;B7&quot;, &quot;card&quot;: &quot;C42&quot;}</pre>
+                <p>The kiosk keeps no hold of its own. It only asks.</p>
+                <p class="refs">Refs: <code>fictional/kiosk.js:21</code></p>
+              </div>
+            </li>
+            <li class="log-beat" data-beat="place-2">
+              <a class="log-go" href="#story" data-go-beat="place-2"><span class="n">1.2</span> <span class="route">Desk → Ledger</span> <code>INSERT H1</code> <span class="cap">The desk writes hold H1 to the ledger as waiting.</span></a>
+              <div class="detail">
+                <pre>INSERT INTO holds (id, book, card, status)
+VALUES ('H1', 'B7', 'C42', 'waiting')</pre>
+                <p class="refs">Refs: <code>fictional/desk.py:14</code></p>
+              </div>
+            </li>
+            <li class="log-beat" data-beat="place-3">
+              <a class="log-go" href="#story" data-go-beat="place-3"><span class="n">1.3</span> <span class="route">Ledger → Desk</span> <code>ok H1</code> <span class="cap">The ledger confirms; H1 is first in line for B7.</span></a>
+              <div class="detail">
+                <pre>1 row inserted · queue position 1</pre>
+                <p class="refs">Refs: <code>fictional/ledger.sql:9</code></p>
+              </div>
+            </li>
+            <li class="log-beat" data-beat="place-4">
+              <a class="log-go" href="#story" data-go-beat="place-4"><span class="n">1.4</span> <span class="route">Desk → Kiosk</span> <code>queued #1</code> <span class="cap">The kiosk shows the hold number and its place in the queue.</span></a>
+              <div class="detail">
+                <pre>201 Created
+{&quot;hold&quot;: &quot;H1&quot;, &quot;position&quot;: 1}</pre>
+                <p class="refs">Refs: <code>fictional/desk.py:19</code>, <code>fictional/kiosk.js:30</code></p>
+              </div>
+            </li>
+          </ol>
+          <p class="log-end"><strong>End state:</strong> Kiosk screen <code>H1 · queued #1</code>; Desk shelf <code>empty</code>; Ledger H1 <code>B7 · C42 / waiting</code>.</p>
+        </li>
+        <li class="log-ch" data-chapter="collect">
+          <h3 class="log-ch-title"><a class="log-go" href="#story" data-go-chapter="collect">2. Collect the book</a></h3>
+          <p class="settles">Settles: What does the desk check before it hands the book over?</p>
+          <ol class="log-beats">
+            <li class="log-halt"><span aria-hidden="true">✋</span> <strong>Halt.</strong> A librarian puts a returned copy of B7 on the hold shelf. Gate action: “Shelve the returned copy”.</li>
+            <li class="log-beat" data-beat="collect-1">
+              <a class="log-go" href="#story" data-go-beat="collect-1"><span class="n">2.1</span> <span class="route">in Desk</span> <span class="cap">A returned copy of B7 lands on the hold shelf for H1.</span></a>
+              <div class="detail">
+                <pre>shelf[1] = {copy: 'B7', hold: 'H1'}</pre>
+                <p class="refs">Refs: <code>fictional/desk.py:31</code></p>
+              </div>
+            </li>
+            <li class="log-beat" data-beat="collect-2">
+              <a class="log-go" href="#story" data-go-beat="collect-2"><span class="n">2.2</span> <span class="route">Desk → Ledger</span> <code>READY H1</code> <span class="cap">The desk marks H1 ready in the ledger.</span></a>
+              <div class="detail">
+                <pre>UPDATE holds SET status = 'ready' WHERE id = 'H1'</pre>
+                <p class="refs">Refs: <code>fictional/desk.py:34</code></p>
+              </div>
+            </li>
+            <li class="log-beat" data-beat="collect-3">
+              <a class="log-go" href="#story" data-go-beat="collect-3"><span class="n">2.3</span> <span class="route">Kiosk → Desk</span> <code>PICKUP C42</code> <span class="cap">The patron scans card C42 at the kiosk to collect the book.</span></a>
+              <div class="detail">
+                <pre>POST /pickups
+{&quot;card&quot;: &quot;C42&quot;}</pre>
+                <p class="refs">Refs: <code>fictional/kiosk.js:44</code></p>
+              </div>
+            </li>
+            <li class="log-cp"><strong>Predict.</strong> Card C42 reaches the desk. What does the desk look up? Choices: Book B7, whoever asked for it · A ready hold for card C42 · The first hold in B7's queue.
+              <div class="detail"><p>Answer: A ready hold for card C42. A hold belongs to a card: the desk hands over a ready hold for that card only.</p></div>
+            </li>
+            <li class="log-beat" data-beat="collect-4">
+              <a class="log-go" href="#story" data-go-beat="collect-4"><span class="n">2.4</span> <span class="route">Desk → Ledger</span> <code>FIND C42</code> <span class="cap">The desk asks the ledger for a ready hold on card C42.</span></a>
+              <div class="detail">
+                <pre>SELECT id FROM holds
+WHERE card = 'C42' AND status = 'ready'</pre>
+                <p class="refs">Refs: <code>fictional/desk.py:40</code></p>
+              </div>
+            </li>
+            <li class="log-beat" data-beat="collect-5">
+              <a class="log-go" href="#story" data-go-beat="collect-5"><span class="n">2.5</span> <span class="route">Ledger → Desk</span> <code>H1</code> <span class="cap">The ledger returns H1, matched on the same C42 the kiosk sent.</span></a>
+              <div class="detail">
+                <pre>1 row: H1</pre>
+                <p>The card id the kiosk scanned is the one the ledger stored in chapter 1.</p>
+                <p class="muted">Derived: inferred from code, not read directly.</p>
+                <p class="refs">Refs: <code>fictional/ledger.sql:17</code></p>
+              </div>
+            </li>
+            <li class="log-beat" data-beat="collect-6">
+              <a class="log-go" href="#story" data-go-beat="collect-6"><span class="n">2.6</span> <span class="route">in Desk</span> <span class="cap">The desk hands B7 over, and the shelf slot empties.</span></a>
+              <div class="detail">
+                <pre>shelf[1] = null</pre>
+                <p class="refs">Refs: <code>fictional/desk.py:46</code></p>
+              </div>
+            </li>
+            <li class="log-beat" data-beat="collect-7">
+              <a class="log-go" href="#story" data-go-beat="collect-7"><span class="n">2.7</span> <span class="route">Desk → Ledger</span> <code>DONE H1</code> <span class="cap">The desk marks H1 collected; the hold is finished.</span></a>
+              <div class="detail">
+                <pre>UPDATE holds SET status = 'collected' WHERE id = 'H1'</pre>
+                <p class="refs">Refs: <code>fictional/desk.py:52</code></p>
+              </div>
+            </li>
+            <li class="log-beat" data-beat="collect-8">
+              <a class="log-go" href="#story" data-go-beat="collect-8"><span class="n">2.8</span> <span class="route">Desk → Kiosk</span> <code>collect B7</code> <span class="cap">The kiosk tells the patron the book is theirs.</span></a>
+              <div class="detail">
+                <pre>200 OK
+{&quot;hold&quot;: &quot;H1&quot;, &quot;book&quot;: &quot;B7&quot;}</pre>
+                <p class="refs">Refs: <code>fictional/desk.py:58</code></p>
+              </div>
+            </li>
+          </ol>
+          <p class="log-end"><strong>End state:</strong> Kiosk screen <code>collect B7</code>; Desk shelf <code>empty</code>; Ledger H1 <code>B7 · C42 / collected</code>.</p>
+        </li>
+      </ol>
+      <!-- log:end -->
+    </section>
+
+    <section id="sandbox" aria-labelledby="sb-h">
+      <h2 id="sb-h">Sandbox: drive the rules</h2>
+      <!-- sandbox:start -->
+      <p class="disclaimer" id="sb-disclaimer">A model of the rules on this page, not the system: one book (B7), one hold-shelf slot, two cards, and no expiry.</p>
+      <dl class="sb-rules">
+        <dt>Place hold</dt>
+        <dd>A card may hold B7 once at a time. A new hold queues behind the others.</dd>
+        <dt>Shelve a returned copy</dt>
+        <dd>If the shelf slot is free, the oldest waiting hold becomes ready.</dd>
+        <dt>Pick up</dt>
+        <dd>The desk hands B7 over only for a ready hold on that card.</dd>
+      </dl>
+      <!-- sandbox:end -->
+      <div class="js-only">
+        <div class="sb-actions" id="sb-actions" role="group" aria-label="Sandbox actions"></div>
+        <div class="stage-box">
+          <svg id="sandbox-stage" class="stage" role="group" tabindex="0" aria-label="Sandbox stage: the kiosk, the desk and the ledger" aria-describedby="sb-desc"><desc id="sb-desc">The same three zones as the story. Each sandbox action plays its messages here, and the event log below says what happened.</desc></svg>
+        </div>
+        <h3>Event log</h3>
+        <ol class="sb-log" id="sb-log" aria-live="polite"></ol>
+      </div>
+      <p class="nojs-only muted">The sandbox needs script. Its rules are listed above.</p>
+    </section>
+
+    <section id="reference" aria-labelledby="ref-h">
+      <div class="sec-head">
+        <h2 id="ref-h">Reference</h2>
+        <button id="expand-all" class="t js-only" type="button" aria-expanded="false">Expand all</button>
+      </div>
+      <p class="reading-test"><strong>Reading test.</strong> If your change adds an edge from the kiosk to the ledger, it skips the desk's card check.</p>
+
+      <section class="ref-panel">
+        <h3><button class="ref-toggle" type="button" aria-expanded="false" aria-controls="ref-statuses">Hold statuses</button></h3>
+        <div class="ref-body" id="ref-statuses">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th scope="col">Status</th><th scope="col">Meaning</th><th scope="col">Set in beat</th><th scope="col">Ref</th></tr></thead>
+              <tbody>
+                <tr><td><code>waiting</code></td><td>The hold is queued. No copy is on the shelf for it.</td><td>1.2</td><td><code>fictional/desk.py:14</code></td></tr>
+                <tr><td><code>ready</code></td><td>A copy is on the hold shelf for this hold.</td><td>2.2</td><td><code>fictional/desk.py:34</code></td></tr>
+                <tr><td><code>✕ collected</code></td><td>Terminal. The patron has the book.</td><td>2.7</td><td><code>fictional/desk.py:52</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="ref-panel">
+        <h3><button class="ref-toggle" type="button" aria-expanded="false" aria-controls="ref-zones">What each zone holds</button></h3>
+        <div class="ref-body" id="ref-zones">
+          <ul>
+            <li>The kiosk holds the scanned card and the last line the desk sent back.</li>
+            <li>The desk holds one hold-shelf slot.</li>
+            <li>The ledger holds one record per hold: its id, book, card and status.</li>
+            <li>Only the desk writes to the ledger.</li>
+          </ul>
+          <!-- records:start -->
+          <h4>State records</h4>
+          <dl class="records">
+            <dt>Kiosk <span class="muted">(patron screen)</span></dt>
+            <dd>Refs: <code>fictional/kiosk.js:3</code></dd>
+            <dd><strong>Library card.</strong> <code class="shape">card id, scanned at the kiosk</code> Refs: <code>fictional/kiosk.js:12</code></dd>
+            <dd><strong>Kiosk screen.</strong> <code class="shape">the last line the desk sent back</code> Refs: <code>fictional/kiosk.js:30</code></dd>
+            <dt>Desk <span class="muted">(service)</span></dt>
+            <dd>Refs: <code>fictional/desk.py:3</code></dd>
+            <dd><strong>Hold-shelf slot.</strong> <code class="shape">one slot: a copy tagged with one hold id, or empty</code> Refs: <code>fictional/desk.py:31</code></dd>
+            <dt>Ledger <span class="muted">(hold records)</span></dt>
+            <dd>Refs: <code>fictional/ledger.sql:1</code></dd>
+            <dd><strong>Hold record.</strong> <code class="shape">holds(id, book, card, status)<br>status: waiting → ready → collected</code> Refs: <code>fictional/ledger.sql:3</code></dd>
+          </dl>
+          <!-- records:end -->
+        </div>
+      </section>
+
+      <section class="ref-panel">
+        <h3><button class="ref-toggle" type="button" aria-expanded="false" aria-controls="ref-simple">Simplifications</button></h3>
+        <div class="ref-body" id="ref-simple">
+          <ul>
+            <li>The subject is invented for this example.</li>
+            <li>There is one book, B7, and one hold-shelf slot.</li>
+            <li>Holds never expire.</li>
+            <li>The refs point at fictional files, so nothing here can be checked against a tree.</li>
+          </ul>
+        </div>
+      </section>
+    </section>
+  </main>
+</div>
+
+<aside id="inspector" class="inspector" role="dialog" aria-modal="false" aria-labelledby="insp-title" hidden>
+  <div class="insp-head">
+    <h2 id="insp-title">Details</h2>
+    <button id="insp-close" class="t" type="button">Close</button>
+  </div>
+  <div class="insp-body" id="insp-body"></div>
+</aside>
+
+<script type="application/json" id="holds-data">
+{
+  "about": "Shape example for the explainer skill. Fictional subject: every name, value and ref is invented.",
+  "zones": [
+    { "id": "kiosk", "label": "Kiosk", "role": "patron screen", "rows": 2, "refs": ["fictional/kiosk.js:3"] },
+    { "id": "desk", "label": "Desk", "role": "service", "rows": 1, "refs": ["fictional/desk.py:3"] },
+    { "id": "ledger", "label": "Ledger", "role": "hold records", "rows": 2, "empty": "no holds", "refs": ["fictional/ledger.sql:1"] }
+  ],
+  "edges": [
+    { "id": "kiosk-desk", "a": "kiosk", "b": "desk" },
+    { "id": "desk-ledger", "a": "desk", "b": "ledger" }
+  ],
+  "terminal": ["collected"],
+  "initial": {
+    "kiosk": [
+      { "key": "card", "label": "card", "value": "C42" },
+      { "key": "screen", "label": "screen", "value": "ready" }
+    ],
+    "desk": [{ "key": "shelf", "label": "hold shelf", "value": "empty" }],
+    "ledger": []
+  },
+  "chapters": [
+    {
+      "id": "place",
+      "title": "Place a hold",
+      "settles": "Where does a hold live once the kiosk says queued?",
+      "end": { "kiosk.screen": "H1 · queued #1", "desk.shelf": "empty", "ledger.H1": "B7 · C42 / waiting" },
+      "beats": [
+        {
+          "id": "place-1", "from": "kiosk", "to": "desk", "msg": "HOLD B7·C42",
+          "caption": "The kiosk sends card C42 and book B7 to the desk.",
+          "delta": [], "refs": ["fictional/kiosk.js:21"],
+          "detail": { "shape": "POST /holds\n{\"book\": \"B7\", \"card\": \"C42\"}", "note": "The kiosk keeps no hold of its own. It only asks." }
+        },
+        {
+          "id": "place-2", "from": "desk", "to": "ledger", "msg": "INSERT H1",
+          "caption": "The desk writes hold H1 to the ledger as waiting.",
+          "delta": [{ "zone": "ledger", "key": "H1", "label": "H1", "value": "B7 · C42", "status": "waiting", "kind": "hold" }],
+          "refs": ["fictional/desk.py:14"],
+          "detail": { "shape": "INSERT INTO holds (id, book, card, status)\nVALUES ('H1', 'B7', 'C42', 'waiting')" }
+        },
+        {
+          "id": "place-3", "from": "ledger", "to": "desk", "msg": "ok H1", "outcome": "ok",
+          "caption": "The ledger confirms; H1 is first in line for B7.",
+          "delta": [], "refs": ["fictional/ledger.sql:9"],
+          "detail": { "shape": "1 row inserted · queue position 1" }
+        },
+        {
+          "id": "place-4", "from": "desk", "to": "kiosk", "msg": "queued #1", "outcome": "ok",
+          "caption": "The kiosk shows the hold number and its place in the queue.",
+          "delta": [{ "zone": "kiosk", "key": "screen", "value": "H1 · queued #1" }],
+          "refs": ["fictional/desk.py:19", "fictional/kiosk.js:30"],
+          "detail": { "shape": "201 Created\n{\"hold\": \"H1\", \"position\": 1}" }
+        }
+      ]
+    },
+    {
+      "id": "collect",
+      "title": "Collect the book",
+      "settles": "What does the desk check before it hands the book over?",
+      "end": { "kiosk.screen": "collect B7", "desk.shelf": "empty", "ledger.H1": "B7 · C42 / collected" },
+      "beats": [
+        {
+          "id": "collect-1", "in": "desk",
+          "caption": "A returned copy of B7 lands on the hold shelf for H1.",
+          "delta": [{ "zone": "desk", "key": "shelf", "value": "B7 → H1" }],
+          "refs": ["fictional/desk.py:31"],
+          "detail": { "shape": "shelf[1] = {copy: 'B7', hold: 'H1'}" }
+        },
+        {
+          "id": "collect-2", "from": "desk", "to": "ledger", "msg": "READY H1",
+          "caption": "The desk marks H1 ready in the ledger.",
+          "delta": [{ "zone": "ledger", "key": "H1", "status": "ready" }],
+          "refs": ["fictional/desk.py:34"],
+          "detail": { "shape": "UPDATE holds SET status = 'ready' WHERE id = 'H1'" }
+        },
+        {
+          "id": "collect-3", "from": "kiosk", "to": "desk", "msg": "PICKUP C42",
+          "caption": "The patron scans card C42 at the kiosk to collect the book.",
+          "delta": [], "refs": ["fictional/kiosk.js:44"],
+          "detail": { "shape": "POST /pickups\n{\"card\": \"C42\"}" }
+        },
+        {
+          "id": "collect-4", "from": "desk", "to": "ledger", "msg": "FIND C42", "same": "C42",
+          "caption": "The desk asks the ledger for a ready hold on card C42.",
+          "delta": [], "refs": ["fictional/desk.py:40"],
+          "detail": { "shape": "SELECT id FROM holds\nWHERE card = 'C42' AND status = 'ready'" }
+        },
+        {
+          "id": "collect-5", "from": "ledger", "to": "desk", "msg": "H1", "outcome": "ok", "same": "C42", "derived": true,
+          "caption": "The ledger returns H1, matched on the same C42 the kiosk sent.",
+          "delta": [], "refs": ["fictional/ledger.sql:17"],
+          "detail": { "shape": "1 row: H1", "note": "The card id the kiosk scanned is the one the ledger stored in chapter 1." }
+        },
+        {
+          "id": "collect-6", "in": "desk",
+          "caption": "The desk hands B7 over, and the shelf slot empties.",
+          "delta": [{ "zone": "desk", "key": "shelf", "value": "empty" }],
+          "refs": ["fictional/desk.py:46"],
+          "detail": { "shape": "shelf[1] = null" }
+        },
+        {
+          "id": "collect-7", "from": "desk", "to": "ledger", "msg": "DONE H1",
+          "caption": "The desk marks H1 collected; the hold is finished.",
+          "delta": [{ "zone": "ledger", "key": "H1", "status": "collected" }],
+          "refs": ["fictional/desk.py:52"],
+          "detail": { "shape": "UPDATE holds SET status = 'collected' WHERE id = 'H1'" }
+        },
+        {
+          "id": "collect-8", "from": "desk", "to": "kiosk", "msg": "collect B7", "outcome": "ok",
+          "caption": "The kiosk tells the patron the book is theirs.",
+          "delta": [{ "zone": "kiosk", "key": "screen", "value": "collect B7" }],
+          "refs": ["fictional/desk.py:58"],
+          "detail": { "shape": "200 OK\n{\"hold\": \"H1\", \"book\": \"B7\"}" }
+        }
+      ]
+    }
+  ],
+  "checkpoints": [
+    {
+      "id": "cp-lookup", "before": "collect-4",
+      "question": "Card C42 reaches the desk. What does the desk look up?",
+      "choices": ["Book B7, whoever asked for it", "A ready hold for card C42", "The first hold in B7's queue"],
+      "correct": 1,
+      "why": "A hold belongs to a card: the desk hands over a ready hold for that card only."
+    }
+  ],
+  "halts": [
+    {
+      "id": "halt-shelve", "before": "collect-1",
+      "waitsOn": "A librarian puts a returned copy of B7 on the hold shelf.",
+      "gate": "Shelve the returned copy"
+    }
+  ],
+  "inspect": {
+    "kiosk:card": { "title": "Library card", "shape": "card id, scanned at the kiosk", "refs": ["fictional/kiosk.js:12"] },
+    "kiosk:screen": { "title": "Kiosk screen", "shape": "the last line the desk sent back", "refs": ["fictional/kiosk.js:30"] },
+    "desk:shelf": { "title": "Hold-shelf slot", "shape": "one slot: a copy tagged with one hold id, or empty", "refs": ["fictional/desk.py:31"] },
+    "ledger:hold": { "title": "Hold record", "shape": "holds(id, book, card, status)\nstatus: waiting → ready → collected", "refs": ["fictional/ledger.sql:3"] }
+  },
+  "sandbox": {
+    "disclaimer": "A model of the rules on this page, not the system: one book (B7), one hold-shelf slot, two cards, and no expiry.",
+    "actions": [
+      { "id": "place", "label": "Place hold", "cards": ["C42", "C57"], "rule": "A card may hold B7 once at a time. A new hold queues behind the others." },
+      { "id": "shelve", "label": "Shelve a returned copy", "rule": "If the shelf slot is free, the oldest waiting hold becomes ready." },
+      { "id": "pickup", "label": "Pick up", "cards": ["C42", "C57"], "rule": "The desk hands B7 over only for a ready hold on that card." }
+    ]
+  }
+}
+</script>
+<script type="application/json" id="citation-anchors">
+{
+  "note": "Fictional: these files do not exist. The block shows the shape of citation anchors only.",
+  "anchors": {
+    "fictional/kiosk.js:3": { "file": "fictional/kiosk.js", "start": "export function Kiosk(card) {" },
+    "fictional/kiosk.js:12": { "file": "fictional/kiosk.js", "start": "const card = scan();" },
+    "fictional/kiosk.js:21": { "file": "fictional/kiosk.js", "start": "post('/holds', { book, card })" },
+    "fictional/kiosk.js:30": { "file": "fictional/kiosk.js", "start": "screen.show(reply.line)" },
+    "fictional/kiosk.js:44": { "file": "fictional/kiosk.js", "start": "post('/pickups', { card })" },
+    "fictional/desk.py:3": { "file": "fictional/desk.py", "start": "class Desk:" },
+    "fictional/desk.py:14": { "file": "fictional/desk.py", "start": "ledger.insert_hold(book, card)" },
+    "fictional/desk.py:19": { "file": "fictional/desk.py", "start": "return Created(hold=h.id, position=h.position)" },
+    "fictional/desk.py:31": { "file": "fictional/desk.py", "start": "self.shelf = Slot(copy, hold)" },
+    "fictional/desk.py:34": { "file": "fictional/desk.py", "start": "ledger.mark(hold, 'ready')" },
+    "fictional/desk.py:40": { "file": "fictional/desk.py", "start": "ledger.find_ready(card)" },
+    "fictional/desk.py:46": { "file": "fictional/desk.py", "start": "self.shelf = None" },
+    "fictional/desk.py:52": { "file": "fictional/desk.py", "start": "ledger.mark(hold, 'collected')" },
+    "fictional/desk.py:58": { "file": "fictional/desk.py", "start": "return Ok(hold=hold, book=book)" },
+    "fictional/ledger.sql:1": { "file": "fictional/ledger.sql", "start": "CREATE TABLE holds (" },
+    "fictional/ledger.sql:3": { "file": "fictional/ledger.sql", "start": "status TEXT NOT NULL" },
+    "fictional/ledger.sql:9": { "file": "fictional/ledger.sql", "start": "RETURNING id, position" },
+    "fictional/ledger.sql:17": { "file": "fictional/ledger.sql", "start": "WHERE card = $1 AND status = 'ready'" }
+  }
+}
+</script>
+<script>
+(function () {
+  'use strict';
+
+  var DATA = JSON.parse(document.getElementById('holds-data').textContent);
+  var SVGNS = 'http://www.w3.org/2000/svg';
+  var css = getComputedStyle(document.documentElement);
+  var SANS = css.getPropertyValue('--sans').trim();
+  var MONO = css.getPropertyValue('--mono').trim();
+  var ENTRY_FONT = '12px ' + MONO;
+  var MSG_FONT = '12px ' + MONO;
+  var CAP_FONT = '13px ' + SANS;
+  var CAP_FONT_S = '12px ' + SANS;
+  var ROW = 40; // one state entry; also its touch target
+  var HEAD = 40;
+  var PADB = 8;
+  var CAPH = 26; // capsule height
+  var CAP_PAD = 8;
+  var reduceQ = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  var ZONE = {};
+  var EDGE = {};
+  DATA.zones.forEach(function (z, i) { z.index = i; ZONE[z.id] = z; });
+  DATA.edges.forEach(function (e) { EDGE[e.a + '>' + e.b] = e; EDGE[e.b + '>' + e.a] = e; });
+  var TERMINAL = DATA.terminal || [];
+
+  var measure = document.createElement('canvas').getContext('2d');
+  function textW(s, font) { measure.font = font; return measure.measureText(s).width; }
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  function el(name, attrs, parent) {
+    var n = document.createElementNS(SVGNS, name);
+    for (var k in attrs) if (attrs[k] !== undefined && attrs[k] !== null) n.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(n);
+    return n;
+  }
+  function txt(parent, cls, x, y, s, anchor) {
+    var t = el('text', { 'class': cls, x: x, y: y, 'text-anchor': anchor || null }, parent);
+    t.textContent = s;
+    return t;
+  }
+  function wrap(text, maxW, font) {
+    var lines = [];
+    var line = '';
+    text.split(' ').forEach(function (w) {
+      var t = line ? line + ' ' + w : w;
+      if (!line || textW(t, font) <= maxW) line = t;
+      else { lines.push(line); line = w; }
+    });
+    if (line) lines.push(line);
+    return lines;
+  }
+  function edgeFor(from, to) {
+    var e = EDGE[from + '>' + to];
+    if (!e) throw new Error('No drawn edge for ' + from + ' → ' + to);
+    return e;
+  }
+  function applyDelta(state, delta) {
+    (delta || []).forEach(function (d) {
+      var list = state[d.zone];
+      var i = list.findIndex(function (e) { return e.key === d.key; });
+      if (d.remove) { if (i >= 0) list.splice(i, 1); return; }
+      var entry = i >= 0 ? list[i] : { key: d.key };
+      ['label', 'value', 'status', 'kind'].forEach(function (f) { if (d[f] !== undefined) entry[f] = d[f]; });
+      if (i < 0) list.push(entry);
+    });
+  }
+  function zoneH(id) { return HEAD + ZONE[id].rows * ROW + PADB; }
+
+  // Layout, recomputed from the container width. Written for this page's three zones in a chain
+  // (A–B–C); a real page lays out its own zones the same way: one row, two rows, or stacked.
+  function layout(W, captions) {
+    var ids = DATA.zones.map(function (z) { return z.id; });
+    var A = ids[0], B = ids[1], C = ids[2];
+    var eAB = edgeFor(A, B).id, eBC = edgeFor(B, C).id;
+    var L = { W: W, zones: {}, edges: {}, inLane: {} };
+    function Z(id, x, y, w, h) { L.zones[id] = { x: x, y: y, w: w, h: h, cx: x + w / 2 }; return L.zones[id]; }
+    function hop(pts, t0, t1, lane) { return { pts: pts, t0: t0, t1: t1, lane: lane }; }
+    var hA = zoneH(A), hB = zoneH(B), hC = zoneH(C);
+
+    if (W >= 860) {
+      L.mode = 'row';
+      var g = Math.round(Math.max(24, W * 0.03));
+      var zw = (W - 2 * g) / 3;
+      var zh = Math.max(hA, hB, hC);
+      var a = Z(A, 0, 0, zw, zh), b = Z(B, zw + g, 0, zw, zh), c = Z(C, 2 * (zw + g), 0, zw, zh);
+      var cy = zh + 30, bl = b.x + zw * 0.3, br = b.x + zw * 0.7, laneY = zh + 60;
+      var wrapW = Math.min(320, zw + g - 16);
+      var below = function (tx, ty) { return { box: { x: 0, y: laneY, w: W, maxH: 72 }, wrap: wrapW, align: 'below', target: { x: tx, y: ty } }; };
+      L.edges[eAB] = hop([[a.cx, zh], [a.cx, cy], [bl, cy], [bl, zh]], 30, 30, below((a.cx + bl) / 2, cy + CAPH / 2 + 2));
+      L.edges[eBC] = hop([[br, zh], [br, cy], [c.cx, cy], [c.cx, zh]], 30, 30, below((br + c.cx) / 2, cy + CAPH / 2 + 2));
+      [a, b, c].forEach(function (z, i) { L.inLane[ids[i]] = below(z.cx, zh); });
+      L.H = captions ? laneY + 76 : zh + 60;
+    } else if (W >= 560) {
+      L.mode = 'two';
+      var g2 = 24, zw2 = (W - g2) / 2, top = Math.max(hA, hB), gap = 124;
+      var a2 = Z(A, 0, 0, zw2, top), b2 = Z(B, zw2 + g2, 0, zw2, top), c2 = Z(C, b2.x, top + gap, zw2, hC);
+      var cy2 = top + 30, bl2 = b2.x + zw2 * 0.3, br2 = b2.x + zw2 * 0.7;
+      var boxY = cy2 + CAPH / 2 + 12;
+      var left = function (tx, ty) {
+        return { box: { x: 0, y: boxY, w: zw2 - 12, maxH: c2.y + c2.h - boxY }, wrap: zw2 - 12 - 2 * CAP_PAD - 8, align: 'beside', target: { x: tx, y: ty } };
+      };
+      L.edges[eAB] = hop([[a2.cx, top], [a2.cx, cy2], [bl2, cy2], [bl2, top]], 30, 30, left((a2.cx + bl2) / 2, cy2 + CAPH / 2 + 2));
+      L.edges[eBC] = hop([[br2, top], [br2, c2.y]], CAPH / 2 + 6, CAPH / 2 + 6, left(br2, (top + c2.y) / 2 + 8));
+      L.inLane[A] = left(a2.cx, top);
+      L.inLane[B] = left(b2.x + 12, top);
+      L.inLane[C] = { box: { x: 0, y: c2.y, w: zw2 - 12, maxH: c2.h }, wrap: zw2 - 12 - 2 * CAP_PAD - 8, align: 'beside', target: { x: c2.x, y: c2.y + 20 } };
+      L.H = c2.y + c2.h + 4;
+    } else {
+      L.mode = 'stack';
+      var zw3 = Math.round(W * 0.64), gap3 = 84, chX = zw3 + (W - zw3) / 2;
+      var a3 = Z(A, 0, 0, zw3, hA), b3 = Z(B, 0, hA + gap3, zw3, hB), c3 = Z(C, 0, b3.y + hB + gap3, zw3, hC);
+      var y1 = a3.y + hA / 2, y2 = b3.y + 20, y3 = b3.y + hB - 20, y4 = c3.y + hC / 2;
+      var gapLane = function (zoneAbove, tx, ty) {
+        var top3 = zoneAbove.y + zoneAbove.h + 6;
+        return { box: { x: 0, y: top3, w: zw3 - 6, maxH: gap3 - 12 }, wrap: zw3 - 6 - 2 * CAP_PAD - 8, align: 'beside', target: { x: tx, y: ty } };
+      };
+      L.edges[eAB] = hop([[zw3, y1], [chX, y1], [chX, y2], [zw3, y2]], chX - zw3, chX - zw3, gapLane(a3, chX, a3.y + hA + gap3 / 2));
+      L.edges[eBC] = hop([[zw3, y3], [chX, y3], [chX, y4], [zw3, y4]], chX - zw3, chX - zw3, gapLane(b3, chX, b3.y + hB + gap3 / 2));
+      L.inLane[A] = gapLane(a3, a3.cx, a3.y + hA);
+      L.inLane[B] = gapLane(b3, b3.cx, b3.y + hB);
+      L.inLane[C] = gapLane(b3, c3.cx, c3.y);
+      L.H = c3.y + hC + 4;
+    }
+    return L;
+  }
+
+  function pointAt(p, f) {
+    var pts = p.pts, lens = [], total = 0;
+    for (var i = 1; i < pts.length; i++) {
+      var l = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+      lens.push(l); total += l;
+    }
+    var d = p.t0 + f * (total - p.t0 - p.t1);
+    for (var j = 0; j < lens.length; j++) {
+      if (d <= lens[j] || j === lens.length - 1) {
+        var k = lens[j] ? clamp(d / lens[j], 0, 1) : 0;
+        return [pts[j][0] + (pts[j + 1][0] - pts[j][0]) * k, pts[j][1] + (pts[j + 1][1] - pts[j][1]) * k];
+      }
+      d -= lens[j];
+    }
+    return pts[pts.length - 1];
+  }
+  function ease(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+
+  // ---- Stage: draws zones, edges, the current message and its caption from a state ----------
+  function Stage(svg, opts) {
+    this.svg = svg;
+    this.opts = opts;
+    this.uid = opts.uid;
+    this.state = clone(DATA.initial);
+    this.focus = null; this.edge = null; this.caption = null; this.msg = null;
+    this.changed = {}; this.same = null; this.landing = null; this.anim = null; this.landTimer = null;
+    var self = this;
+    this.width = Math.floor(svg.parentNode.clientWidth) || 343;
+    this.L = layout(this.width, opts.captions);
+    this.render();
+    new ResizeObserver(function () {
+      var w = Math.floor(svg.parentNode.clientWidth);
+      if (w && w !== self.width) { self.width = w; self.L = layout(w, self.opts.captions); self.render(); }
+    }).observe(svg.parentNode);
+  }
+  Stage.prototype.render = function () {
+    var svg = this.svg, L = this.L, self = this;
+    // A redraw replaces every node, so carry keyboard focus over to the same thing in the new drawing.
+    var had = svg.contains(document.activeElement) && document.activeElement !== svg ? document.activeElement : null;
+    var refocus = had && had.getAttribute('data-open')
+      ? '[data-open="' + had.getAttribute('data-open') + '"]' + (had.getAttribute('data-key') ? '[data-zone="' + had.getAttribute('data-zone') + '"][data-key="' + had.getAttribute('data-key') + '"]' : '')
+      : null;
+    Array.prototype.slice.call(svg.childNodes).forEach(function (n) { if (n.nodeName !== 'desc') svg.removeChild(n); });
+    svg.setAttribute('viewBox', '0 0 ' + L.W + ' ' + L.H);
+    svg.setAttribute('height', L.H);
+    var defs = el('defs', {}, svg);
+    var pat = el('pattern', { id: this.uid + '-hatch', width: 6, height: 6, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' }, defs);
+    el('line', { 'class': 'hatch-line', x1: 0, y1: 0, x2: 0, y2: 6 }, pat);
+    var gE = el('g', { 'class': 'edges' }, svg);
+    var gZ = el('g', { 'class': 'zones' }, svg);
+    var gC = el('g', { 'class': 'captions' }, svg);
+    var gM = el('g', { 'class': 'msgs' }, svg);
+    DATA.edges.forEach(function (e) {
+      var p = L.edges[e.id];
+      el('polyline', { 'class': 'edge' + (self.edge === e.id ? ' now' : ''), 'data-edge': e.id, points: p.pts.map(function (q) { return q.join(','); }).join(' ') }, gE);
+    });
+    DATA.zones.forEach(function (z) { self.drawZone(gZ, z); });
+    if (this.caption) this.drawCaption(gC);
+    if (this.msg) this.drawMsg(gM);
+    if (refocus) {
+      var again = svg.querySelector(refocus);
+      if (again) again.focus(); else svg.focus();
+    }
+  };
+  Stage.prototype.drawZone = function (layer, z) {
+    var r = this.L.zones[z.id], self = this, list = this.state[z.id] || [];
+    var cls = 'zone zone-' + (z.index + 1);
+    if (this.focus) cls += this.focus.indexOf(z.id) >= 0 ? ' active' : ' recede';
+    if (this.landing === z.id) cls += ' land';
+    var g = el('g', { 'class': cls, 'data-zone': z.id }, layer);
+    el('rect', { 'class': 'zbg', x: r.x, y: r.y, width: r.w, height: r.h, rx: 10 }, g);
+    txt(g, 'zlabel', r.x + 14, r.y + 26, z.label);
+    txt(g, 'zrole', r.x + r.w - 14, r.y + 26, z.role, 'end');
+    var col = 0;
+    list.forEach(function (e) { col = Math.max(col, textW(e.label, ENTRY_FONT)); });
+    col += 14;
+    if (!list.length) txt(g, 'eempty', r.x + 14, r.y + HEAD + ROW / 2 + 4, z.empty || 'empty');
+    list.forEach(function (e, i) {
+      var y = r.y + HEAD + i * ROW;
+      var term = TERMINAL.indexOf(e.status) >= 0;
+      var ecls = 'entry';
+      if (self.changed[z.id + ':' + e.key]) ecls += ' changed';
+      if (self.same && String(e.value).indexOf(self.same) >= 0) ecls += ' same';
+      if (term) ecls += ' terminal';
+      var eg = el('g', {
+        'class': ecls, role: 'button', tabindex: '0', 'data-open': 'entry', 'data-zone': z.id, 'data-key': e.key,
+        'aria-label': z.label + ', ' + e.label + ': ' + e.value + (e.status ? ', ' + e.status : '') + '. Open details.'
+      }, g);
+      el('rect', { 'class': 'hit', x: r.x + 6, y: y, width: r.w - 12, height: ROW, rx: 6 }, eg);
+      if (term) el('rect', { 'class': 'hatch', x: r.x + 6, y: y + 5, width: r.w - 12, height: ROW - 10, rx: 4, fill: 'url(#' + self.uid + '-hatch)' }, eg);
+      txt(eg, 'elabel', r.x + 14, y + ROW / 2 + 4, e.label);
+      txt(eg, 'evalue', r.x + 14 + col, y + ROW / 2 + 4, e.value);
+      if (e.status) txt(eg, 'estatus', r.x + r.w - 14, y + ROW / 2 + 4, (term ? '✕ ' : '') + e.status, 'end');
+    });
+  };
+  Stage.prototype.drawCaption = function (layer) {
+    var c = this.caption;
+    var lane = c.zone ? this.L.inLane[c.zone] : this.L.edges[c.edge].lane;
+    var box = lane.box, tgt = lane.target, font = CAP_FONT, lh = 17;
+    var lines = wrap(c.text, lane.wrap, font);
+    if (lines.length * lh + 2 * CAP_PAD > box.maxH) { font = CAP_FONT_S; lh = 15; lines = wrap(c.text, lane.wrap, font); }
+    var tw = 0;
+    lines.forEach(function (s) { tw = Math.max(tw, textW(s, font)); });
+    var w = Math.min(box.w, Math.ceil(tw) + 2 * CAP_PAD + 8);
+    var h = lines.length * lh + 2 * CAP_PAD - 2;
+    var x = lane.align === 'beside' ? box.x + box.w - w : clamp(tgt.x - w / 2, box.x, box.x + box.w - w);
+    var y = lane.align === 'beside' ? clamp(tgt.y - h / 2, box.y, box.y + box.maxH - h) : box.y;
+    var g = el('g', { 'class': 'caption', 'aria-hidden': 'true' }, layer);
+    var px = clamp(tgt.x, x, x + w), py = clamp(tgt.y, y, y + h);
+    el('line', { 'class': 'leader', x1: px, y1: py, x2: tgt.x, y2: tgt.y }, g);
+    el('circle', { 'class': 'leader-dot', cx: tgt.x, cy: tgt.y, r: 2.5 }, g);
+    el('rect', { 'class': 'cbg', x: x, y: y, width: w, height: h, rx: 6 }, g);
+    el('rect', { 'class': 'cbar', x: x, y: y, width: 3, height: h, rx: 1.5 }, g);
+    lines.forEach(function (s, i) {
+      var t = txt(g, 'ctext' + (font === CAP_FONT_S ? ' small' : ''), x + CAP_PAD + 6, y + CAP_PAD + 11 + i * lh, s);
+      return t;
+    });
+  };
+  Stage.prototype.path = function (beat) {
+    var e = edgeFor(beat.from, beat.to), p = this.L.edges[e.id];
+    if (e.a === beat.from) return p;
+    return { pts: p.pts.slice().reverse(), t0: p.t1, t1: p.t0 };
+  };
+  Stage.prototype.drawMsg = function (layer) {
+    var beat = this.msg.beat;
+    var gw = beat.outcome ? 18 : 0;
+    var w = Math.ceil(textW(beat.msg, MSG_FONT)) + 20 + gw;
+    var g = el('g', {
+      'class': 'msg' + (beat.outcome ? ' ' + beat.outcome : ''), role: 'button', tabindex: '0', 'data-open': 'msg',
+      'aria-label': 'Message ' + beat.msg + ', ' + ZONE[beat.from].label + ' to ' + ZONE[beat.to].label + '. Open details.'
+    }, layer);
+    el('rect', { 'class': 'hit', x: -w / 2, y: -20, width: w, height: 40, rx: 8 }, g);
+    el('rect', { 'class': 'mbody', x: -w / 2, y: -CAPH / 2, width: w, height: CAPH, rx: CAPH / 2 }, g);
+    var tx = -w / 2 + 10;
+    if (beat.outcome === 'ok') {
+      el('circle', { 'class': 'mglyph', cx: tx + 6, cy: 0, r: 7 }, g);
+      txt(g, 'gtext', tx + 6, 3.5, '✓', 'middle');
+    } else if (beat.outcome === 'refused') {
+      el('path', { 'class': 'mglyph', d: 'M' + (tx + 6) + ' -7 L' + (tx + 13.5) + ' 6.5 L' + (tx - 1.5) + ' 6.5 Z' }, g);
+      txt(g, 'gtext', tx + 6, 4.5, '!', 'middle');
+    }
+    txt(g, 'mtext', tx + gw, 4, beat.msg);
+    this.msgG = g;
+    this.placeMsg();
+  };
+  Stage.prototype.placeMsg = function () {
+    if (!this.msgG || !this.msg) return;
+    var pt = pointAt(this.path(this.msg.beat), this.msg.f);
+    this.msgG.setAttribute('transform', 'translate(' + pt[0].toFixed(1) + ',' + pt[1].toFixed(1) + ')');
+  };
+  Stage.prototype.setBeat = function (beat) {
+    this.focus = beat.in ? [beat.in] : [beat.from, beat.to];
+    this.edge = beat.in ? null : edgeFor(beat.from, beat.to).id;
+    this.caption = this.opts.captions && beat.caption ? { text: beat.caption, zone: beat.in || null, edge: this.edge } : null;
+    this.same = beat.same || null;
+  };
+  Stage.prototype.mark = function (beat) {
+    var self = this;
+    (beat.delta || []).forEach(function (d) { self.changed[d.zone + ':' + d.key] = true; });
+    (beat.marks || []).forEach(function (k) { self.changed[k] = true; });
+  };
+  Stage.prototype.cancel = function () {
+    if (this.anim) cancelAnimationFrame(this.anim);
+    this.anim = null;
+    if (this.landTimer) clearTimeout(this.landTimer);
+    this.landTimer = null;
+  };
+  Stage.prototype.show = function (state, beat) {
+    this.cancel();
+    this.state = state; this.landing = null; this.changed = {};
+    if (beat) { this.setBeat(beat); this.mark(beat); this.msg = beat.in ? null : { beat: beat, f: 1 }; }
+    else { this.focus = null; this.edge = null; this.caption = null; this.msg = null; this.same = null; }
+    this.render();
+  };
+  Stage.prototype.land = function (beat, done) {
+    var self = this;
+    applyDelta(this.state, beat.delta);
+    if (beat.land) beat.land();
+    this.mark(beat);
+    this.landing = beat.in || beat.to;
+    if (this.msg) this.msg.f = 1;
+    this.render();
+    var zone = this.landing;
+    this.landTimer = setTimeout(function () {
+      self.landTimer = null;
+      if (self.landing !== zone) return;
+      self.landing = null;
+      var zg = self.svg.querySelector('.zone[data-zone="' + zone + '"]');
+      if (zg) zg.classList.remove('land');
+    }, 650);
+    if (done) done();
+  };
+  Stage.prototype.playBeat = function (beat, ms, done) {
+    var self = this;
+    this.cancel();
+    this.changed = {};
+    this.setBeat(beat);
+    if (beat.in) { this.msg = null; this.land(beat, done); return; }
+    this.msg = { beat: beat, f: 0 };
+    this.render();
+    if (!(ms > 0)) { this.land(beat, done); return; }
+    var start = null;
+    var frame = function (ts) {
+      if (start === null) start = ts;
+      var t = Math.min(1, (ts - start) / ms);
+      self.msg.f = ease(t);
+      self.placeMsg();
+      if (t < 1) self.anim = requestAnimationFrame(frame);
+      else { self.anim = null; self.land(beat, done); }
+    };
+    this.anim = requestAnimationFrame(frame);
+  };
+
+  // ---- Inspector -------------------------------------------------------------------------------
+  var insp = document.getElementById('inspector');
+  var inspTitle = document.getElementById('insp-title');
+  var inspBody = document.getElementById('insp-body');
+  var inspClose = document.getElementById('insp-close');
+  var opener = null;
+  function node(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  }
+  function refsNode(refs) {
+    var p = node('p', 'refs', 'Refs: ');
+    (refs || []).forEach(function (r, i) { if (i) p.appendChild(document.createTextNode(', ')); p.appendChild(node('code', null, r)); });
+    return p;
+  }
+  function openInspector(title, parts, resolveOpener) {
+    inspTitle.textContent = title;
+    inspBody.textContent = '';
+    parts.forEach(function (p) { if (p) inspBody.appendChild(p); });
+    opener = resolveOpener;
+    insp.hidden = false;
+    document.body.classList.add('insp-open');
+    inspClose.focus();
+  }
+  function closeInspector() {
+    if (insp.hidden) return;
+    insp.hidden = true;
+    document.body.classList.remove('insp-open');
+    var find = opener;
+    opener = null;
+    var target = find && find();
+    if (target) target.focus();
+  }
+  inspClose.addEventListener('click', closeInspector);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !insp.hidden) { e.preventDefault(); e.stopPropagation(); closeInspector(); }
+  }, true);
+  function inspectMessage(beat, resolve) {
+    var d = beat.detail || {};
+    openInspector('Message · ' + beat.msg, [
+      node('p', 'kind', ZONE[beat.from].label + ' → ' + ZONE[beat.to].label),
+      d.shape ? node('pre', null, d.shape) : null,
+      d.note ? node('p', null, d.note) : null,
+      beat.derived ? node('p', 'muted', 'Derived: inferred from code, not read directly.') : null,
+      beat.refs ? refsNode(beat.refs) : null
+    ], resolve);
+  }
+  function inspectEntry(stage, zone, key, resolve) {
+    var entry = (stage.state[zone] || []).find(function (e) { return e.key === key; });
+    if (!entry) return;
+    var rec = DATA.inspect[zone + ':' + (entry.kind || entry.key)] || { title: entry.label, shape: '', refs: [] };
+    openInspector(rec.title + ' · ' + entry.label, [
+      node('p', 'kind', ZONE[zone].label + ' state'),
+      node('p', null, 'Now: ' + entry.value + (entry.status ? ' · ' + entry.status : '')),
+      rec.shape ? node('pre', null, rec.shape) : null,
+      refsNode(rec.refs)
+    ], resolve);
+  }
+  function wireStage(stage) {
+    function act(target) {
+      var t = target.closest ? target.closest('[data-open]') : null;
+      if (!t || !stage.svg.contains(t)) return false;
+      if (t.getAttribute('data-open') === 'msg') {
+        if (stage.msg) inspectMessage(stage.msg.beat, function () { return stage.svg.querySelector('[data-open="msg"]'); });
+      } else {
+        var zone = t.getAttribute('data-zone'), key = t.getAttribute('data-key');
+        inspectEntry(stage, zone, key, function () {
+          return stage.svg.querySelector('[data-open="entry"][data-zone="' + zone + '"][data-key="' + key + '"]');
+        });
+      }
+      return true;
+    }
+    stage.svg.addEventListener('click', function (e) { act(e.target); });
+    stage.svg.addEventListener('keydown', function (e) {
+      if ((e.key === 'Enter' || e.key === ' ') && act(e.target)) { e.preventDefault(); e.stopPropagation(); }
+    });
+  }
+
+  // ---- Story -----------------------------------------------------------------------------------
+  var story = new Stage(document.getElementById('story-stage'), { uid: 'st', captions: true });
+  wireStage(story);
+  var positions = [];
+  DATA.chapters.forEach(function (ch, ci) {
+    positions.push({ ci: ci, beat: null, n: 0 });
+    ch.beats.forEach(function (b, bi) { positions.push({ ci: ci, beat: b, n: bi + 1 }); });
+  });
+  var chStart = DATA.chapters.map(function (ch, ci) { return positions.findIndex(function (p) { return p.ci === ci; }); });
+  var posOfBeat = {};
+  positions.forEach(function (p, i) { if (p.beat) posOfBeat[p.beat.id] = i; });
+  var LAST = positions.length - 1;
+  var cur = 0, playing = false, busy = false, timer = null, speed = 1;
+  var gates = {}, answers = {};
+
+  function haltAfter(p) {
+    var n = positions[p + 1];
+    if (!n || !n.beat) return null;
+    return DATA.halts.find(function (h) { return h.before === n.beat.id; }) || null;
+  }
+  function checkpointAfter(p) {
+    var n = positions[p + 1];
+    if (!n || !n.beat) return null;
+    return DATA.checkpoints.find(function (c) { return c.before === n.beat.id; }) || null;
+  }
+  function blocked(p) { var h = haltAfter(p); return h && !gates[h.id] ? h : null; }
+  function pendingCp(p) { var c = checkpointAfter(p); return c && !answers[c.id] ? c : null; }
+  function reach(p) { for (var i = 0; i < p; i++) if (blocked(i)) return i; return p; }
+  function canGo() { return cur < LAST && !blocked(cur); }
+  function stateAt(p) {
+    var s = clone(DATA.initial);
+    for (var i = 0; i <= p; i++) if (positions[i].beat) applyDelta(s, positions[i].beat.delta);
+    return s;
+  }
+  function travelMs() { return reduceQ.matches ? 0 : 600 / speed; }
+  function dwellMs() { return 1400 / speed; }
+
+  var rail = document.getElementById('rail');
+  var chapterLine = document.getElementById('chapter-line');
+  var promptBox = document.getElementById('prompt');
+  var backBtn = document.getElementById('back');
+  var playBtn = document.getElementById('play');
+  var nextBtn = document.getElementById('next');
+  var nextWhy = document.getElementById('next-why');
+  var scrub = document.getElementById('scrub');
+  var replayBtn = document.getElementById('replay');
+  var live = document.getElementById('live');
+  var speedBtns = Array.prototype.slice.call(document.querySelectorAll('.sp'));
+  var logEl = document.getElementById('log');
+
+  var chips = DATA.chapters.map(function (ch, ci) {
+    var b = node('button', 'chip');
+    b.type = 'button';
+    var halted = DATA.halts.some(function (h) { return ch.beats.some(function (bt) { return bt.id === h.before; }); });
+    b.textContent = (ci + 1) + ' · ' + ch.title + (halted ? ' ✋' : '');
+    if (halted) b.setAttribute('aria-label', 'Chapter ' + (ci + 1) + ': ' + ch.title + ' (has a halt)');
+    b.addEventListener('click', function () { jump(chStart[ci]); });
+    rail.appendChild(b);
+    return b;
+  });
+
+  function say(s) { live.textContent = ''; setTimeout(function () { live.textContent = s; }, 30); }
+  function announce() {
+    var pos = positions[cur], ch = DATA.chapters[pos.ci];
+    if (!pos.beat) { say('Chapter ' + (pos.ci + 1) + ': ' + ch.title + '. ' + ch.settles); return; }
+    var b = pos.beat;
+    var route = b.in ? 'In the ' + ZONE[b.in].label : ZONE[b.from].label + ' to ' + ZONE[b.to].label;
+    say('Beat ' + pos.n + ' of ' + ch.beats.length + '. ' + route + ': ' + b.caption);
+  }
+
+  var promptKey = '';
+  function renderPrompt() {
+    var h = blocked(cur), cp = checkpointAfter(cur), key = '';
+    if (h) key = 'halt:' + h.id;
+    else if (cp && cur === posOfBeat[cp.before] - 1) key = 'cp:' + cp.id + ':' + (answers[cp.id] ? 'done' : 'open');
+    else if (cur === LAST) key = 'end';
+    if (key === promptKey) return;
+    promptKey = key;
+    promptBox.textContent = '';
+    promptBox.hidden = !key;
+    if (!key) return;
+    if (h) {
+      promptBox.appendChild(node('p', null, '✋ The real process waits here. ' + h.waitsOn));
+      var row = node('div', 'row');
+      var gate = node('button', 't primary', h.gate);
+      gate.type = 'button';
+      gate.addEventListener('click', function () {
+        gates[h.id] = true;
+        promptKey = '';
+        // A checkpoint on the same beat is shown next, never skipped unseen.
+        if (pendingCp(cur)) { update(); var first = promptBox.querySelector('.choice'); if (first) first.focus(); }
+        else stepForward();
+      });
+      row.appendChild(gate);
+      row.appendChild(node('span', 'muted', 'Next stays off until the gate opens.'));
+      promptBox.appendChild(row);
+    } else if (cp) {
+      var done = answers[cp.id];
+      var q = node('p');
+      q.appendChild(node('strong', null, 'Predict. '));
+      q.appendChild(document.createTextNode(cp.question));
+      promptBox.appendChild(q);
+      var choices = node('div', 'row');
+      choices.setAttribute('role', 'group');
+      choices.setAttribute('aria-label', 'Choices');
+      cp.choices.forEach(function (c, i) {
+        var label = c;
+        if (done && !done.skipped && i === cp.correct) label = '✓ ' + c;
+        var b = node('button', 't choice', label);
+        b.type = 'button';
+        if (done) {
+          b.disabled = true;
+          if (i === cp.correct) b.classList.add('right');
+          if (done.choice === i) b.classList.add('picked');
+        }
+        b.addEventListener('click', function () {
+          answers[cp.id] = { choice: i };
+          promptKey = '';
+          renderPrompt();
+          say((i === cp.correct ? 'Right. ' : 'Not quite. The answer is: ' + cp.choices[cp.correct] + '. ') + cp.why);
+          var cont = promptBox.querySelector('.continue');
+          if (cont) cont.focus();
+        });
+        choices.appendChild(b);
+      });
+      promptBox.appendChild(choices);
+      if (done) {
+        var why = node('p', 'why');
+        why.appendChild(node('strong', null, done.skipped ? 'Answer: ' : done.choice === cp.correct ? 'Right. ' : 'The answer: '));
+        why.appendChild(document.createTextNode((done.choice === cp.correct ? '' : cp.choices[cp.correct] + '. ') + cp.why));
+        promptBox.appendChild(why);
+        var cont = node('button', 't primary continue', 'Continue');
+        cont.type = 'button';
+        cont.addEventListener('click', function () { stepForward(); });
+        promptBox.appendChild(cont);
+      } else {
+        var skip = node('button', 't', 'Skip');
+        skip.type = 'button';
+        skip.addEventListener('click', function () { answers[cp.id] = { skipped: true }; promptKey = ''; stepForward(); });
+        choices.appendChild(skip);
+      }
+    } else {
+      var end = node('p', null, 'End of the story. ');
+      var a = node('a', null, 'Drive the same rules in the sandbox.');
+      a.href = '#sandbox';
+      end.appendChild(a);
+      promptBox.appendChild(end);
+    }
+  }
+
+  function update() {
+    var pos = positions[cur], ch = DATA.chapters[pos.ci];
+    chips.forEach(function (b, i) { b.setAttribute('aria-current', i === pos.ci ? 'step' : 'false'); });
+    chapterLine.textContent = '';
+    chapterLine.appendChild(node('b', null, 'Chapter ' + (pos.ci + 1) + ' · ' + ch.title));
+    chapterLine.appendChild(document.createTextNode(' — settles: ' + ch.settles));
+    backBtn.disabled = cur === 0;
+    var h = blocked(cur);
+    nextBtn.disabled = !canGo();
+    nextBtn.textContent = h ? 'Next ✋' : 'Next';
+    nextWhy.textContent = h ? 'Next is off: the process waits at the halt. Use the gate button first.' : '';
+    playBtn.textContent = playing ? 'Pause' : 'Play';
+    playBtn.disabled = !playing && !canGo();
+    scrub.max = String(ch.beats.length);
+    scrub.value = String(cur - chStart[pos.ci]);
+    scrub.setAttribute('aria-valuetext', pos.beat ? 'Beat ' + pos.n + ' of ' + ch.beats.length : 'Chapter start');
+    var mark = pos.beat ? logEl.querySelector('[data-beat="' + pos.beat.id + '"]') : logEl.querySelector('[data-chapter="' + ch.id + '"]');
+    Array.prototype.forEach.call(logEl.querySelectorAll('.now'), function (n) { n.classList.remove('now'); n.removeAttribute('aria-current'); });
+    if (mark) { mark.classList.add('now'); mark.setAttribute('aria-current', 'step'); }
+    renderPrompt();
+  }
+
+  function show(p) {
+    story.cancel();
+    busy = false;
+    cur = p;
+    story.show(stateAt(p), positions[p].beat);
+    update();
+    announce();
+  }
+  function pause() {
+    playing = false;
+    if (timer) { clearTimeout(timer); timer = null; }
+    update();
+  }
+  function jump(p) {
+    pause();
+    var target = clamp(p, 0, LAST), r = reach(target);
+    show(r);
+    if (r < target) say('The real process waits at the halt first. Use the gate button to go on.');
+  }
+  function stepForward() {
+    if (busy || !canGo()) return false;
+    var cp = pendingCp(cur);
+    if (cp) answers[cp.id] = { skipped: true };
+    busy = true;
+    cur += 1;
+    var pos = positions[cur];
+    update();
+    if (!pos.beat) {
+      story.show(stateAt(cur), null);
+      busy = false;
+      announce();
+      update();
+      landed();
+      return true;
+    }
+    announce();
+    story.playBeat(pos.beat, travelMs(), function () { busy = false; update(); landed(); });
+    return true;
+  }
+  function landed() {
+    if (!playing) return;
+    var cp = pendingCp(cur);
+    if (cur >= LAST || blocked(cur) || cp) {
+      playing = false;
+      update();
+      if (cp) say('Predict: ' + cp.question);
+      return;
+    }
+    timer = setTimeout(function () { timer = null; if (playing) stepForward(); }, dwellMs());
+  }
+  function togglePlay() {
+    if (playing) { pause(); return; }
+    if (!canGo()) return;
+    playing = true;
+    update();
+    if (!busy) stepForward();
+  }
+  function back() { pause(); if (cur > 0) show(cur - 1); }
+  function chapterStep(dir) {
+    var ci = positions[cur].ci;
+    if (dir > 0) { if (ci + 1 < chStart.length) jump(chStart[ci + 1]); }
+    else jump(cur > chStart[ci] ? chStart[ci] : chStart[Math.max(0, ci - 1)]);
+  }
+
+  backBtn.addEventListener('click', back);
+  playBtn.addEventListener('click', togglePlay);
+  nextBtn.addEventListener('click', function () { pause(); stepForward(); });
+  replayBtn.addEventListener('click', function () { jump(chStart[positions[cur].ci]); togglePlay(); });
+  scrub.addEventListener('input', function () { jump(chStart[positions[cur].ci] + Number(scrub.value)); });
+  speedBtns.forEach(function (b) {
+    b.addEventListener('click', function () {
+      speed = Number(b.getAttribute('data-speed'));
+      speedBtns.forEach(function (o) { o.setAttribute('aria-pressed', String(o === b)); });
+    });
+  });
+  document.getElementById('story').addEventListener('keydown', function (e) {
+    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+    var t = e.target, tag = t.tagName;
+    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+    if (e.key === 'ArrowRight') { e.preventDefault(); if (e.shiftKey) chapterStep(1); else { pause(); stepForward(); } }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); if (e.shiftKey) chapterStep(-1); else back(); }
+    else if (e.key === ' ') {
+      if (tag === 'BUTTON' || tag === 'A' || t.getAttribute('role') === 'button') return;
+      e.preventDefault();
+      togglePlay();
+    }
+  });
+  Array.prototype.forEach.call(logEl.querySelectorAll('.log-go'), function (a) {
+    a.addEventListener('click', function (e) {
+      e.preventDefault();
+      var beat = a.getAttribute('data-go-beat'), ch = a.getAttribute('data-go-chapter');
+      var p = beat ? posOfBeat[beat] : chStart[DATA.chapters.findIndex(function (c) { return c.id === ch; })];
+      jump(p);
+      var box = story.svg.getBoundingClientRect();
+      if (box.bottom < 0 || box.top > window.innerHeight) story.svg.scrollIntoView({ block: 'center', behavior: reduceQ.matches ? 'auto' : 'smooth' });
+    });
+  });
+  document.getElementById('open-all').addEventListener('change', function (e) { logEl.classList.toggle('details-open', e.target.checked); });
+
+  show(0);
+
+  // ---- Sandbox ---------------------------------------------------------------------------------
+  var sbStage = new Stage(document.getElementById('sandbox-stage'), { uid: 'sb', captions: false });
+  wireStage(sbStage);
+  var sbLog = document.getElementById('sb-log');
+  var sbButtons = [];
+  var sb, sbBusy = false;
+  function sbReset() {
+    sb = { holds: [], shelf: null, n: 0, card: 'C42', screen: 'ready' };
+    sbStage.show(sbEntries(), null);
+    sbLog.textContent = '';
+  }
+  function sbEntries() {
+    return {
+      kiosk: [{ key: 'card', label: 'card', value: sb.card }, { key: 'screen', label: 'screen', value: sb.screen }],
+      desk: [{ key: 'shelf', label: 'hold shelf', value: sb.shelf ? 'B7 → ' + sb.shelf : 'empty' }],
+      ledger: sb.holds.map(function (h) { return { key: h.id, label: h.id, value: 'B7 · ' + h.card, status: h.status, kind: 'hold' }; })
+    };
+  }
+  function sbHop(from, to, msg, outcome, mutate, marks, shape) {
+    return {
+      from: from, to: to, msg: msg, outcome: outcome, marks: marks || [], detail: { shape: shape },
+      land: function () { if (mutate) mutate(); sbStage.state = sbEntries(); }
+    };
+  }
+  function sbLocal(zone, mutate, marks) {
+    return { 'in': zone, marks: marks || [], land: function () { if (mutate) mutate(); sbStage.state = sbEntries(); } };
+  }
+  var RULES = {
+    place: function (card) {
+      var hops = [sbHop('kiosk', 'desk', 'HOLD B7·' + card, null, null, [], 'POST /holds\n{"book": "B7", "card": "' + card + '"}')];
+      var active = sb.holds.find(function (h) { return h.card === card && h.status !== 'collected'; });
+      if (active) {
+        hops.push(sbHop('desk', 'kiosk', 'held', 'refused', function () { sb.screen = 'holds ' + active.id; }, ['kiosk:screen'], '409 Conflict\n{"hold": "' + active.id + '"}'));
+        return { hops: hops, ok: false, text: 'Place hold · ' + card + ': refused, ' + card + ' already holds ' + active.id + '.' };
+      }
+      var id = 'H' + (sb.n += 1);
+      var place = sb.holds.filter(function (h) { return h.card !== card && h.status !== 'collected'; }).length + 1;
+      hops.push(sbHop('desk', 'ledger', 'INSERT ' + id, null, function () {
+        sb.holds = sb.holds.filter(function (h) { return h.card !== card; });
+        sb.holds.push({ id: id, card: card, status: 'waiting' });
+      }, ['ledger:' + id], "INSERT INTO holds VALUES ('" + id + "', 'B7', '" + card + "', 'waiting')"));
+      hops.push(sbHop('ledger', 'desk', 'ok ' + id, 'ok', null, [], '1 row inserted'));
+      hops.push(sbHop('desk', 'kiosk', 'queued #' + place, 'ok', function () { sb.screen = id + ' · queued #' + place; }, ['kiosk:screen'], '201 Created'));
+      return { hops: hops, ok: true, text: 'Place hold · ' + card + ': ' + id + ' queued #' + place + '.' };
+    },
+    shelve: function () {
+      if (sb.shelf) return { hops: [sbLocal('desk', null, ['desk:shelf'])], ok: false, text: 'Shelve: refused, the slot already holds B7 for ' + sb.shelf + '.' };
+      var next = sb.holds.find(function (h) { return h.status === 'waiting'; });
+      if (!next) return { hops: [sbLocal('desk', null, [])], ok: true, text: 'Shelve: no hold is waiting, so the copy goes back to the stacks.' };
+      return {
+        hops: [
+          sbLocal('desk', function () { sb.shelf = next.id; }, ['desk:shelf']),
+          sbHop('desk', 'ledger', 'READY ' + next.id, null, function () { next.status = 'ready'; }, ['ledger:' + next.id], "UPDATE holds SET status = 'ready' WHERE id = '" + next.id + "'")
+        ],
+        ok: true, text: 'Shelve: B7 is on the shelf for ' + next.id + ', now ready.'
+      };
+    },
+    pickup: function (card) {
+      var hops = [
+        sbHop('kiosk', 'desk', 'PICKUP ' + card, null, null, [], 'POST /pickups\n{"card": "' + card + '"}'),
+        sbHop('desk', 'ledger', 'FIND ' + card, null, null, [], "SELECT id FROM holds WHERE card = '" + card + "' AND status = 'ready'")
+      ];
+      var ready = sb.holds.find(function (h) { return h.card === card && h.status === 'ready'; });
+      if (!ready) {
+        hops.push(sbHop('ledger', 'desk', 'none', 'refused', null, [], '0 rows'));
+        hops.push(sbHop('desk', 'kiosk', 'no hold', 'refused', function () { sb.screen = 'no ready hold'; }, ['kiosk:screen'], '404 Not Found'));
+        return { hops: hops, ok: false, text: 'Pick up · ' + card + ': refused, no ready hold for ' + card + '.' };
+      }
+      hops.push(sbHop('ledger', 'desk', ready.id, 'ok', null, [], '1 row: ' + ready.id));
+      hops.push(sbLocal('desk', function () { sb.shelf = null; }, ['desk:shelf']));
+      hops.push(sbHop('desk', 'ledger', 'DONE ' + ready.id, null, function () { ready.status = 'collected'; }, ['ledger:' + ready.id], "UPDATE holds SET status = 'collected' WHERE id = '" + ready.id + "'"));
+      hops.push(sbHop('desk', 'kiosk', 'collect B7', 'ok', function () { sb.screen = 'collect B7'; }, ['kiosk:screen'], '200 OK'));
+      return { hops: hops, ok: true, text: 'Pick up · ' + card + ': ' + ready.id + ' collected.' };
+    }
+  };
+  function sbRun(action, card) {
+    if (sbBusy) return;
+    sbBusy = true;
+    sbButtons.forEach(function (b) { b.disabled = true; });
+    if (card) { sb.card = card; sbStage.state = sbEntries(); }
+    var plan = RULES[action](card);
+    var i = 0;
+    var ms = reduceQ.matches ? 0 : 260;
+    (function nextHop() {
+      if (i >= plan.hops.length) {
+        var li = node('li');
+        var g = node('span', 'glyph ' + (plan.ok ? 'ok' : 'refused'), plan.ok ? '✓' : '!');
+        g.setAttribute('aria-hidden', 'true');
+        li.appendChild(g);
+        li.appendChild(node('span', null, (plan.ok ? '' : 'Refused. ') + plan.text));
+        sbLog.appendChild(li);
+        sbBusy = false;
+        sbButtons.forEach(function (b) { b.disabled = false; });
+        return;
+      }
+      var hop = plan.hops[i++];
+      sbStage.playBeat(hop, ms, function () { setTimeout(nextHop, ms ? 120 : 0); });
+    })();
+  }
+  var sbActions = document.getElementById('sb-actions');
+  DATA.sandbox.actions.forEach(function (a) {
+    (a.cards || [null]).forEach(function (card) {
+      var b = node('button', 't', a.label + (card ? ' · ' + card : ''));
+      b.type = 'button';
+      b.setAttribute('data-action', a.id);
+      if (card) b.setAttribute('data-card', card);
+      b.addEventListener('click', function () { sbRun(a.id, card); });
+      sbActions.appendChild(b);
+      sbButtons.push(b);
+    });
+  });
+  var resetBtn = node('button', 't', 'Reset');
+  resetBtn.type = 'button';
+  resetBtn.addEventListener('click', function () { if (!sbBusy) sbReset(); });
+  sbActions.appendChild(resetBtn);
+  sbReset();
+
+  // ---- Reference panels and theme --------------------------------------------------------------
+  var toggles = Array.prototype.slice.call(document.querySelectorAll('.ref-toggle'));
+  var expandAll = document.getElementById('expand-all');
+  function setPanel(btn, open) {
+    btn.setAttribute('aria-expanded', String(open));
+    document.getElementById(btn.getAttribute('aria-controls')).classList.toggle('collapsed', !open);
+  }
+  function syncExpandAll() {
+    var all = toggles.every(function (b) { return b.getAttribute('aria-expanded') === 'true'; });
+    expandAll.textContent = all ? 'Collapse all' : 'Expand all';
+    expandAll.setAttribute('aria-expanded', String(all));
+  }
+  toggles.forEach(function (b) {
+    setPanel(b, false);
+    b.addEventListener('click', function () { setPanel(b, b.getAttribute('aria-expanded') !== 'true'); syncExpandAll(); });
+  });
+  expandAll.addEventListener('click', function () {
+    var open = expandAll.getAttribute('aria-expanded') !== 'true';
+    toggles.forEach(function (b) { setPanel(b, open); });
+    syncExpandAll();
+  });
+
+  var themeBtn = document.getElementById('theme');
+  var MODES = ['auto', 'light', 'dark'];
+  function themeNow() { return document.documentElement.getAttribute('data-theme') || 'auto'; }
+  function paintTheme() { themeBtn.textContent = 'Theme: ' + themeNow(); }
+  themeBtn.addEventListener('click', function () {
+    var next = MODES[(MODES.indexOf(themeNow()) + 1) % MODES.length];
+    if (next === 'auto') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', next);
+    try {
+      if (next === 'auto') localStorage.removeItem('explainer-example-theme');
+      else localStorage.setItem('explainer-example-theme', next);
+    } catch (e) {
+      /* opaque origin: the choice lasts for this visit */
+    }
+    paintTheme();
+  });
+  paintTheme();
+})();
+</script>
+</body>
+</html>

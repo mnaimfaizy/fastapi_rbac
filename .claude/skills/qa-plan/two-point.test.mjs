@@ -3,8 +3,10 @@
  * JUnit XML is read test by test; each test is classed against the
  * merge-base exactly as SKILL.md step 4 and the runner's table say
  * (regression, red herring, new test); a suite with no JUnit, or a
- * merge-base that will not build, degrades to exit codes and says why; and
- * the merge-base worktree is removed on success and on failure.
+ * merge-base that will not build, degrades to exit codes and says why; the
+ * merge-base worktree is removed on success and on failure; and answers given
+ * in chat (`--answers`) are merged over the config as `render` merges them,
+ * with no config file needed and nothing written outside `working_dir`.
  */
 
 import assert from "node:assert/strict";
@@ -16,13 +18,15 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, sep } from "node:path";
 import { after, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { CONFIG_FILES, main as adapterMain } from "./adapter.mjs";
 import {
   compareSuite,
   main,
@@ -30,6 +34,7 @@ import {
   parseJUnit,
   renderReport,
   shellExec,
+  suiteShell,
 } from "./two-point.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -300,17 +305,19 @@ process.exit(spec.exit);
 /**
  * A repository with `main` at the merge-base and `feature` checked out at the
  * head, one commit on. `base` and `head` are `results.json` at each; `head`
- * may be null to leave out `emit.mjs`'s inputs entirely.
+ * may be null to leave out `emit.mjs`'s inputs entirely. `config: false`
+ * commits no config file at all.
  */
-function makeRepo(name, suites, base, head, { baseEmit = EMIT } = {}) {
+function makeRepo(name, suites, base, head, { baseEmit = EMIT, config = true } = {}) {
   const repo = join(scratch, name);
   mkdirSync(repo);
   sh(repo, "init", "-q", "-b", "main");
   writeFileSync(join(repo, ".gitignore"), "tmp/\nreports/\n");
-  writeFileSync(
-    join(repo, "qa.config.json"),
-    JSON.stringify({ working_dir: "tmp/qa", plan: { base_ref: "main", suites } }),
-  );
+  if (config)
+    writeFileSync(
+      join(repo, "qa.config.json"),
+      JSON.stringify({ working_dir: "tmp/qa", plan: { base_ref: "main", suites } }),
+    );
   writeFileSync(join(repo, "emit.mjs"), baseEmit);
   writeFileSync(join(repo, "results.json"), JSON.stringify(base));
   sh(repo, "add", "-A");
@@ -543,14 +550,188 @@ test("a folder already at the worktree's path is left alone, and the run exits 2
   assert.ok(existsSync(join(occupied, "keep.txt")));
 });
 
+// ── Answers given in chat (`--answers`) ─────────────────────────────────────
+
+const LINT = { name: "lint", command: "node emit.mjs lint" };
+
+/** Writes `answers` (JSON, or raw text) to `file` in `repo`, making its folders. */
+function writeAnswers(repo, file, answers) {
+  mkdirSync(dirname(join(repo, file)), { recursive: true });
+  writeFileSync(join(repo, file), typeof answers === "string" ? answers : JSON.stringify(answers));
+}
+
+/** Every file in `repo`, outside `.git` and `working_dir`, with its content. */
+function filesOutside(repo, workingDir) {
+  const skip = [".git", workingDir.replaceAll("/", sep)];
+  const out = {};
+  for (const path of readdirSync(repo, { recursive: true })) {
+    if (skip.some((dir) => path === dir || path.startsWith(`${dir}${sep}`))) continue;
+    const full = join(repo, path);
+    if (statSync(full).isFile()) out[path] = readFileSync(full, "utf8");
+  }
+  return out;
+}
+
+test("with no config file, the answers in working_dir name the suites and the base, and no config is written", async () => {
+  const repo = makeRepo(
+    "answers-no-config",
+    [],
+    { unit: { junit: "reports/unit.xml", exit: 1, tests: { a: "pass", b: "pass" } } },
+    { unit: { junit: "reports/unit.xml", exit: 1, tests: { a: "pass", b: "fail", d: "pass" } } },
+    { config: false },
+  );
+  const without = await run(repo);
+  assert.equal(without.code, 2, without.out);
+  writeAnswers(repo, "tmp/qa/answers.json", { plan: { base_ref: "main", suites: [UNIT] } });
+  const { code, out } = await run(repo, "--answers", "tmp/qa/answers.json");
+  assert.equal(code, 1, out);
+  assert.equal(JSON.parse(out).mergeBase, sh(repo, "rev-parse", "main"));
+  assert.deepEqual(rowsOf(out), {
+    "unit 1 tests": "covered [observed]",
+    "unit t::b": "regression [observed]",
+    "unit t::d": "covered (new) [observed]",
+  });
+  for (const path of CONFIG_FILES) assert.ok(!existsSync(join(repo, path)), path);
+  assert.deepEqual(readdirSync(join(repo, "tmp", "qa")), ["answers.json"]);
+});
+
+test("a run from answers writes nothing outside working_dir", async () => {
+  // No `junit`, so the suite itself writes nothing: anything new is the runner's.
+  const results = { lint: { exit: 0 } };
+  const repo = makeRepo("answers-writes", [], results, results, { config: false });
+  writeAnswers(repo, "tmp/chat/answers.json", {
+    working_dir: "tmp/chat",
+    plan: { suites: [LINT] },
+  });
+  const before = filesOutside(repo, "tmp/chat");
+  const { code, out } = await run(repo, "--answers", "tmp/chat/answers.json", "--base", "main");
+  assert.equal(code, 0, out);
+  assert.deepEqual(filesOutside(repo, "tmp/chat"), before);
+  assert.deepEqual(readdirSync(join(repo, "tmp")), ["chat"]);
+  assert.deepEqual(readdirSync(join(repo, "tmp", "chat")), ["answers.json"]);
+});
+
+test("answers replace a config key by key, as `adapter.mjs render` merges them", async () => {
+  const repo = makeRepo(
+    "answers-merge",
+    [UNIT],
+    { lint: { exit: 0 }, unit: { junit: "reports/unit.xml", exit: 0, tests: { a: "pass" } } },
+    { lint: { exit: 0 }, unit: { junit: "reports/unit.xml", exit: 0, tests: { a: "pass" } } },
+  );
+  sh(repo, "branch", "other", "HEAD");
+  const answers = { plan: { suites: [LINT] } };
+  writeAnswers(repo, "tmp/qa/answers.json", answers);
+  // What `render` would write for the same answers: only `plan.suites` changes.
+  const rendered = adapterMain(["render", "--repo", repo], {
+    stdin: () => JSON.stringify(answers),
+  });
+  assert.equal(rendered.code, 0, rendered.out);
+  const expected = JSON.parse(rendered.out);
+  assert.equal(expected.plan.base_ref, "main");
+  assert.deepEqual(expected.plan.suites, [LINT]);
+
+  const { code, out } = await run(repo, "--answers", "tmp/qa/answers.json");
+  assert.equal(code, 0, out);
+  const report = JSON.parse(out);
+  assert.deepEqual(
+    report.suites.map((suite) => suite.name),
+    expected.plan.suites.map((suite) => suite.name),
+  );
+  assert.equal(report.mergeBase, sh(repo, "rev-parse", expected.plan.base_ref));
+  // `--base` still wins over the merged config.
+  const overridden = JSON.parse(
+    (await run(repo, "--answers", "tmp/qa/answers.json", "--base", "other")).out,
+  );
+  assert.equal(overridden.mergeBase, sh(repo, "rev-parse", "other"));
+  assert.deepEqual(JSON.parse(readFileSync(join(repo, "qa.config.json"), "utf8")).plan.suites, [
+    UNIT,
+  ]);
+});
+
+test("bad answers exit 2 with one message and run no suite", async () => {
+  const repo = makeRepo("answers-errors", [UNIT], {}, {});
+  const ran = [];
+  const exec = async (command) => {
+    ran.push(command);
+    return { code: 0, timedOut: false, output: "" };
+  };
+  const attempt = (file) => main(["--repo", repo, "--answers", file], { exec });
+  const cases = [
+    ["tmp/qa/missing.json", null, /no answers file at `tmp\/qa\/missing\.json`/],
+    ["tmp/qa/broken.json", "{ plan: ", /is not valid JSON/],
+    ["tmp/qa/list.json", "[]", /must hold a JSON object/],
+    ["tmp/qa/null.json", "null", /must hold a JSON object/],
+    // A folder is not an answers file (the cases above made `tmp/qa`).
+    ["tmp/qa", null, /^two-point: no answers file at `tmp\/qa`\n$/],
+    ["answers.json", { plan: { suites: [LINT] } }, /must be inside `working_dir` \(`tmp\/qa`\)/],
+    // An answer may move `working_dir`: the file must be inside the new one.
+    [
+      "tmp/qa/moved.json",
+      { working_dir: "tmp/chat", plan: { suites: [LINT] } },
+      /must be inside `working_dir` \(`tmp\/chat`\)/,
+    ],
+    [
+      "tmp/qa/colour.json",
+      { plan: { colour: "blue" } },
+      /the answers have problems; fix each one first:\n- .*plan\.colour/,
+    ],
+  ];
+  for (const [file, content, message] of cases) {
+    if (content !== null) writeAnswers(repo, file, content);
+    const { code, out } = await attempt(file);
+    assert.equal(code, 2, `${file}: ${out}`);
+    assert.match(out, message, file);
+  }
+  // A config with problems of its own is reported as now, before any merge.
+  writeFileSync(join(repo, "qa.config.json"), JSON.stringify({ plan: { colour: "blue" } }));
+  writeAnswers(repo, "tmp/qa/good.json", { plan: { base_ref: "main", suites: [LINT] } });
+  const bad = await attempt("tmp/qa/good.json");
+  assert.equal(bad.code, 2);
+  assert.match(bad.out, /^qa\.config\.json has problems/);
+  assert.deepEqual(ran, []);
+});
+
 test("value flags need a value", async () => {
   const repo = makeRepo("flags", [UNIT], {}, {});
-  for (const argv of [["--base", "--json"], ["--suite", "--json"], ["--base"], ["--timeout"]]) {
+  for (const argv of [
+    ["--base", "--json"],
+    ["--suite", "--json"],
+    ["--base"],
+    ["--timeout"],
+    ["--answers"],
+  ]) {
     const result = await main(["--repo", repo, ...argv]);
     assert.equal(result.code, 2, argv.join(" "));
     assert.match(result.out, /^usage:/, argv.join(" "));
   }
   assertNoWorktreeLeft(repo);
+});
+
+// The shell is the platform's default, the rule ADAPTER.md states (#148).
+test("a suite command runs in cmd.exe (%ComSpec%) on Windows and /bin/sh elsewhere", () => {
+  const comspec = String.raw`C:\Windows\System32\cmd.exe`;
+  assert.equal(suiteShell("win32", { ComSpec: comspec }), comspec);
+  assert.equal(suiteShell("win32", {}), "cmd.exe");
+  // Never bash, even when Git for Windows or WSL puts one on PATH.
+  assert.equal(
+    suiteShell("win32", { ComSpec: comspec, PATH: String.raw`C:\Program Files\Git\bin` }),
+    comspec,
+  );
+  for (const platform of ["linux", "darwin", "freebsd"])
+    assert.equal(
+      suiteShell(platform, { ComSpec: comspec, SHELL: "/bin/zsh" }),
+      "/bin/sh",
+      platform,
+    );
+});
+
+test("a suite command really runs in that shell on this platform", async () => {
+  // `%OS%` expands only in cmd.exe, and `$((…))` only in sh.
+  const windows = process.platform === "win32";
+  const command = windows ? "echo shell=%OS%" : 'echo "shell=$((40 + 2))"';
+  const result = await shellExec(command, scratch, { timeoutMs: 20000 });
+  assert.equal(result.code, 0, result.output);
+  assert.match(result.output, windows ? /shell=Windows_NT/ : /shell=42/);
 });
 
 // A shell that starts a grandchild which outlives it and holds the output

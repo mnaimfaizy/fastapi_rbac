@@ -17,7 +17,7 @@ Agent-kit calls the list of GitHub logins allowed to trigger a run its "Allowlis
 
 ## Pinned tag
 
-Current pin: **`v1.0.0-beta.3`** (commit `a02dfa8e7a2c191ad23ccaa037f70e6719f9fa52`).
+Current pin: **`v1.0.0-beta.4`** (commit `4c7ad8e00baed7a80945fe843fdb54558d9e29d7`).
 
 Agent-kit uses a split contract: the reusable workflows are referenced remotely (`uses: …@<tag>`), and the files below are copied in **from the same tag**. Never mix tags.
 
@@ -183,7 +183,7 @@ Use the `@mnaimfaizy/agent-kit` CLI, at the same version as the new tag. It need
 2. From a clean branch, run `upgrade`. It replaces every Kit-owned path (delete, then copy), rewrites all four `uses:` pins, prints the `examples/` diff, and runs the `doctor --ci` checks. It commits nothing:
 
    ```bash
-   TAG=v1.0.0-beta.4   # the new tag; the CLI version is the tag without the leading v
+   TAG=v1.0.0-beta.5   # the new tag; the CLI version is the tag without the leading v
    npx "@mnaimfaizy/agent-kit@${TAG#v}" upgrade --tag "$TAG"
    ```
 
@@ -194,6 +194,6 @@ Use the `@mnaimfaizy/agent-kit` CLI, at the same version as the new tag. It need
    npx "@mnaimfaizy/agent-kit@${TAG#v}" doctor
    ```
 
-   `doctor` reports a warning that `release-tag-on-merge.yml` pushes tags with `GITHUB_TOKEN`. It is a false positive: that workflow checks out with the `RELEASE_TAG_DEPLOY_KEY` SSH key and pushes over SSH. It also skips the Claude GitHub App check, because GitHub hides a personal account's installations; check that at <https://github.com/settings/installations>.
+   `doctor` skips the Claude GitHub App check, because GitHub hides a personal account's installations; check that at <https://github.com/settings/installations>.
 
 Dependabot ignores pre-release tags (`.github/dependabot.yml`), so every bump is manual until Agent-kit ships a stable tag.

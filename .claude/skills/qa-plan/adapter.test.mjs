@@ -22,6 +22,7 @@ import {
   planReadiness,
   readQaConfig,
   renderConfigYaml,
+  yamlCommentLines,
 } from "./adapter.mjs";
 
 const yaml = (...lines) => parseConfig("qa.config.yml", lines.join("\n"));
@@ -637,6 +638,77 @@ test("render merges the answers into the config found, and keeps its dialect", (
     write: (p, t) => (fresh[p] = t),
   });
   assert.deepEqual(Object.keys(fresh), ["qa.config.yml"]);
+});
+
+test("render --write refuses to drop YAML comments unless --drop-comments", () => {
+  const yml =
+    "# QA settings for this repo\nworking_dir: tmp/qa # gitignored\nplan:\n  tracker: github\n";
+  const answers = JSON.stringify({ plan: { base_ref: "origin/main" } });
+  const run = (argv, files) => {
+    const written = {};
+    const result = main(argv, {
+      read: reader(files),
+      stdin: () => answers,
+      write: (path, text) => (written[path] = text),
+    });
+    return { ...result, written };
+  };
+
+  // Commented YAML: refused with exit 3, nothing written, the agent told why.
+  const refused = run(["render", "--write"], { "qa.config.yml": yml });
+  assert.equal(refused.code, 3);
+  assert.deepEqual(refused.written, {});
+  assert.match(refused.out, /qa\.config\.yml has YAML comments \(line 1, 2\)/);
+  assert.match(refused.out, /nothing was written/);
+  assert.match(refused.out, /--write --drop-comments/);
+
+  // Confirmed: written as before, comments gone.
+  const confirmed = run(["render", "--write", "--drop-comments"], { "qa.config.yml": yml });
+  assert.equal(confirmed.code, 0);
+  assert.equal(confirmed.out, "wrote qa.config.yml\n");
+  assert.doesNotMatch(confirmed.written["qa.config.yml"], /#/);
+
+  // No --write: the preview is unchanged, comment or not.
+  const preview = run(["render"], { "qa.config.yml": yml });
+  assert.equal(preview.code, 0);
+  assert.equal(preview.out, run(["render"], { "qa.config.yml": yml.replace(/ ?#.*/g, "") }).out);
+  assert.deepEqual(preview.written, {});
+
+  // Uncommented YAML (a `#` inside quotes is not a comment), JSON, a new file:
+  // written with --write alone, as before.
+  const plain = run(["render", "--write"], {
+    "qa.config.yml": "working_dir: 'tmp/#qa'\nplan:\n  tracker: github\n",
+  });
+  assert.equal(plain.code, 0);
+  assert.deepEqual(Object.keys(plain.written), ["qa.config.yml"]);
+  const json = run(["render", "--write"], { "qa.config.json": '{"working_dir": "tmp/qa"}' });
+  assert.equal(json.code, 0);
+  assert.deepEqual(Object.keys(json.written), ["qa.config.json"]);
+  const fresh = run(["render", "--write"], {});
+  assert.equal(fresh.code, 0);
+  assert.deepEqual(Object.keys(fresh.written), ["qa.config.yml"]);
+});
+
+test("yamlCommentLines finds full-line and trailing comments, not `#` in a value", () => {
+  assert.deepEqual(
+    yamlCommentLines(
+      [
+        "# top",
+        "a: b # trailing",
+        'c: "x # y"',
+        "d: 'p #q' # real",
+        "e: f#g",
+        "  # indented",
+        "h: [i, j] # flow",
+        "      purpose: the reviewer's account # don't reuse it",
+        "p: o'neil's # it's",
+        'size: 12" screen # the "big" one',
+        "- 'q #r'",
+        "k: ['s #t', \"u #v\"]",
+      ].join("\n"),
+    ),
+    [1, 2, 4, 6, 7, 8, 9, 10],
+  );
 });
 
 test("render refuses over a config with problems", () => {
