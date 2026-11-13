@@ -10,6 +10,10 @@ These are tripwires. The first catches the fields coming back on Settings;
 the second guards the operator path -- a stale .env that still lists the old
 keys must not break a deploy; the third keeps example env files from
 reproducing the original problem for the next person who copies one.
+
+The last test covers a fifth deleted setting, ``REFRESH_TOKEN_EXPIRE_DAYS``
+(#274). It was implemented, but as a second refresh lifetime, and an
+environment that still sets it must be ignored the same way.
 """
 
 from pathlib import Path
@@ -91,3 +95,16 @@ def test_example_env_files_do_not_advertise_the_four_settings() -> None:
                 offenders.append(f"{path.name}:{name}")
 
     assert offenders == []
+
+
+def test_a_stale_refresh_token_expire_days_is_silently_ignored(monkeypatch: pytest.MonkeyPatch) -> None:
+    """#274's breaking change: the old 7-day setting loads, and nothing can read it.
+
+    Every refresh token's lifetime comes from REFRESH_TOKEN_EXPIRE_MINUTES now.
+    """
+    monkeypatch.setenv("REFRESH_TOKEN_EXPIRE_DAYS", "7")
+
+    settings = Settings()  # type: ignore[call-arg]
+
+    assert "REFRESH_TOKEN_EXPIRE_DAYS" not in Settings.model_fields
+    assert getattr(settings, "REFRESH_TOKEN_EXPIRE_DAYS", None) is None
