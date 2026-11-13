@@ -9,6 +9,13 @@ import sys
 # Must run before pytest_plugins import app.main (via fixtures_app).
 os.environ["MODE"] = "testing"
 
+# bcrypt's minimum work factor. Production keeps the configured 12, which
+# costs ~0.2s per hash; the suite hashes on seeding, in factories and on every
+# login, and at 12 that was a measurable share of each test's runtime.
+# Verification reads the cost from the stored hash, so fixed hashes made at 12
+# still verify. setdefault so a run can opt back in to the real cost.
+os.environ.setdefault("PASSWORD_HASHING_ITERATIONS", "4")
+
 # Add the project root directory to Python's path
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
