@@ -1,10 +1,10 @@
 """Every route that opens a session issues the same refresh lifetime (#274).
 
 ``/login`` built its refresh token from ``REFRESH_TOKEN_EXPIRE_MINUTES`` (100
-days by default) while change-password used a second setting,
-``REFRESH_TOKEN_EXPIRE_DAYS`` (7 days). A password change therefore silently
-shortened the session it handed back. There is now one setting, and both the
-token's ``exp`` and the refresh cookie's ``Max-Age`` come from it.
+days by default) while change-password used a second, 7-day setting. A
+password change therefore silently shortened the session it handed back.
+There is now one setting, and both the token's ``exp`` and the refresh
+cookie's ``Max-Age`` come from it.
 
 In ``test/api/`` because these boot the app in-process: see
 [ADR 0012](../../../docs/adr/0012-test-suites-split-by-environment.md).
