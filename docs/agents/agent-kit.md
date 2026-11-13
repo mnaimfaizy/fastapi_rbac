@@ -17,7 +17,7 @@ Agent-kit calls the list of GitHub logins allowed to trigger a run its "Allowlis
 
 ## Pinned tag
 
-Current pin: **`v1.0.0-beta.4`** (commit `4c7ad8e00baed7a80945fe843fdb54558d9e29d7`).
+Current pin: **`v1.0.0-beta.5`** (commit `2dfcd39dcec12c74b6a91a593a2e930128811c1d`).
 
 Agent-kit uses a split contract: the reusable workflows are referenced remotely (`uses: …@<tag>`), and the files below are copied in **from the same tag**. Never mix tags.
 
@@ -35,6 +35,8 @@ These files are copied from the pinned tag and committed. They are an explicit e
 | `.claude/skills/instruction-drift-audit/` | optional: comparing repo-owned instructions to upstream docs by hand; no flow uses it |
 | `.claude/skills/qa-plan/` | by hand (`/qa-plan` on an open pull request): writes a QA Plan of the manual checks CI does not prove. Reads `qa.config.yml` |
 | `.claude/skills/manual-qa/` | by hand (`/manual-qa` on a QA Plan): runs it against a QA Stack or a hosted test environment. Reads `qa.config.yml` and the QA Accounts seeder |
+| `.claude/skills/plain-prose/` | optional: `/plain-prose` on a file or pasted text rewrites prose a person reads (PR bodies, READMEs, ADRs) into plain sentences; no flow uses it |
+| `.claude/skills/orchestrate/` | optional: `/orchestrate #12 #34` runs a set of issues through other agent sessions; reads `orchestrate.config.yml` (not yet added here, so it asks in chat); no flow uses it |
 | `.github/agent-runtime/` | every flow: hooks that confine agent reads to the workspace and, for implement, writes to the working tree; implement's git-config and push guards |
 | `.github/agent-pipeline/` | plan and implement (prompts, draft-PR fallback) |
 | `.github/security-audit/` | audit (prompt, advisory publisher, email notifier) |
@@ -183,7 +185,7 @@ Use the `@mnaimfaizy/agent-kit` CLI, at the same version as the new tag. It need
 2. From a clean branch, run `upgrade`. It replaces every Kit-owned path (delete, then copy), rewrites all four `uses:` pins, prints the `examples/` diff, and runs the `doctor --ci` checks. It commits nothing:
 
    ```bash
-   TAG=v1.0.0-beta.5   # the new tag; the CLI version is the tag without the leading v
+   TAG=v1.0.0-beta.6   # the new tag; the CLI version is the tag without the leading v
    npx "@mnaimfaizy/agent-kit@${TAG#v}" upgrade --tag "$TAG"
    ```
 
