@@ -316,10 +316,6 @@ class TestAuthenticationSecurity:
     """Test security features of authentication."""
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        strict=True,
-        reason="#275: the attempt that locks the account answers 500 (lockout background task TypeError)",
-    )
     async def test_account_lockout_after_failed_attempts(self, client: AsyncClient) -> None:
         """
         After MAX_LOGIN_ATTEMPTS wrong passwords the account is locked, and even

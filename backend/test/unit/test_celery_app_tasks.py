@@ -13,7 +13,15 @@ def test_celery_app_imports_worker_tasks() -> None:
     registered = set(celery_app.tasks.keys())
     assert "app.worker.log_security_event_task" in registered
     assert "app.worker.send_email_task" in registered
-    assert "app.worker.process_account_lockout_task" in registered
+
+
+def test_account_lockout_has_no_celery_task() -> None:
+    """The lock is applied once, by increment_failed_attempts (#275).
+
+    A queued lockout task only ever overwrote that window with a wrong one.
+    """
+    registered = set(celery_app.tasks.keys())
+    assert not [name for name in registered if "lockout" in name]
 
 
 def test_log_security_event_task_is_a_registered_noop() -> None:

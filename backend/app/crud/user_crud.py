@@ -346,9 +346,13 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
             return None
         if user.password is None:
             return None
-        if user.is_locked and user.locked_until and user.locked_until > datetime.now(timezone.utc):
-            return None
-        if user.is_locked and user.locked_until and user.locked_until <= datetime.now(timezone.utc):
+        # locked_until is stored naive UTC (increment_failed_attempts); compare it as UTC.
+        locked_until = user.locked_until
+        if locked_until is not None and locked_until.tzinfo is None:
+            locked_until = locked_until.replace(tzinfo=timezone.utc)
+        if user.is_locked and locked_until is not None:
+            if locked_until > datetime.now(timezone.utc):
+                return None
             await self.unlock_account(user=user, db_session=db_session)
         # Removed is_active check here; let endpoint handle it
         from app.core.security import PasswordValidator
