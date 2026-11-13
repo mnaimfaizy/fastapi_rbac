@@ -4,7 +4,6 @@ Background tasks module for FastAPI RBAC system.
 This module provides utility functions for common background tasks such as:
 - Sending email notifications
 - Logging security audit events (in-process AuditLog writes; see log_security_event)
-- Managing user account states
 
 Email sending still supports both FastAPI BackgroundTasks and Celery.
 Security events are persisted immediately by log_security_event so a
@@ -12,17 +11,15 @@ subsequent HTTPException cannot drop the write.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
 from fastapi import BackgroundTasks
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app import crud
 from app.core.config import settings
 from app.models.audit_log_model import AuditLog
-from app.models.user_model import User
 from app.utils.duration import humanize_minutes
 from app.utils.email import send_email_with_template
 
@@ -32,16 +29,12 @@ SECURITY_EVENT_RESOURCE_TYPE = "security_event"
 
 # Import Celery tasks if available
 try:
-    from app.worker import (
-        process_account_lockout_task,
-        send_email_task,
-    )
+    from app.worker import send_email_task
 
     CELERY_AVAILABLE = True
 except ImportError:
     CELERY_AVAILABLE = False
     send_email_task = None
-    process_account_lockout_task = None
 
 
 async def send_password_reset_email(
@@ -233,55 +226,3 @@ async def log_security_event(
                 await db_session.rollback()
             except Exception:
                 logger.exception("Failed to roll back session after audit write failure")
-
-
-async def process_account_lockout(
-    background_tasks: BackgroundTasks,
-    user: User,
-    lock_duration_hours: int = 24,
-    db_session: Optional[AsyncSession] = None,
-) -> None:
-    """
-    Process account lockout in the background.
-
-    Args:
-        background_tasks: BackgroundTasks instance
-        user: User object to lock out
-        lock_duration_hours: Duration of lockout in hours
-        db_session: Optional database session to use
-    """
-    # Use Celery for account lockout if available
-    # and in production, otherwise use BackgroundTasks
-    if CELERY_AVAILABLE and settings.MODE == "production":
-        # Send via Celery task
-        process_account_lockout_task.delay(str(user.id), lock_duration_hours)
-    else:
-        # Use FastAPI background tasks
-        background_tasks.add_task(
-            _process_account_lockout_task,
-            user,
-            lock_duration_hours,
-            db_session,
-        )
-
-
-async def _process_account_lockout_task(
-    user: User, lock_duration_hours: int = 24, db_session: Optional[AsyncSession] = None
-) -> None:
-    """
-    The actual task that processes an account lockout.
-    """  # Set account as locked
-    user.is_locked = True
-    user.locked_until = (datetime.now(timezone.utc) + timedelta(hours=lock_duration_hours)).replace(
-        tzinfo=None
-    )
-
-    # Save to database
-    if db_session is None:
-        from app.db.session import get_async_session
-
-        async for session in get_async_session():
-            db_session = session
-            break
-
-    await crud.user.update(db_obj=user, db_session=db_session)

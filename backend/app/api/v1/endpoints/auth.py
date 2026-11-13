@@ -45,7 +45,6 @@ from app.utils.account_token_responses import (
 from app.utils.auth_cookies import clear_refresh_token_cookie, set_refresh_token_cookie
 from app.utils.background_tasks import (
     log_security_event,
-    process_account_lockout,
     send_password_reset_email,
 )
 from app.utils.client_address import get_client_ip
@@ -219,30 +218,20 @@ async def login(
                         "attempt_number": updated_user.number_of_failed_attempts,
                     },
                 )
-                if updated_user.is_locked and updated_user.locked_until:
-                    # settings.ACCOUNT_LOCKOUT_MINUTES is in minutes, convert to hours
-                    lockout_duration_in_hours = settings.ACCOUNT_LOCKOUT_MINUTES / 60
-                    await process_account_lockout(
-                        background_tasks=background_tasks,
-                        user=updated_user,
-                        lock_duration_hours=int(lockout_duration_in_hours),
-                    )
-                    if updated_user.locked_until:
-                        remaining_time = updated_user.locked_until - datetime.now(timezone.utc)
-                        remaining_hours = remaining_time.total_seconds() // 3600
-                        remaining_minutes = (remaining_time.total_seconds() % 3600) // 60
-                        lock_message = "Account locked due to too many failed attempts. "
-                        if remaining_hours > 0:
-                            lock_message += (
-                                f"Try again in {int(remaining_hours)} hours and "
-                                f"{int(remaining_minutes)} minutes."
-                            )
-                        else:
-                            lock_message += f"Try again in {int(remaining_minutes)} minutes."
-                    else:
-                        lock_message = (
-                            "Account locked due to too many failed attempts. " "Please contact support."
+                locked_until_utc = ensure_utc(updated_user.locked_until)
+                if updated_user.is_locked and locked_until_utc is not None:
+                    # increment_failed_attempts set and stored the lock window.
+                    remaining_time = locked_until_utc - datetime.now(timezone.utc)
+                    remaining_hours = remaining_time.total_seconds() // 3600
+                    remaining_minutes = (remaining_time.total_seconds() % 3600) // 60
+                    lock_message = "Account locked due to too many failed attempts. "
+                    if remaining_hours > 0:
+                        lock_message += (
+                            f"Try again in {int(remaining_hours)} hours and "
+                            f"{int(remaining_minutes)} minutes."
                         )
+                    else:
+                        lock_message += f"Try again in {int(remaining_minutes)} minutes."
                     raise HTTPException(
                         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                         detail={
@@ -1146,39 +1135,39 @@ async def login_access_token(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"field_name": "email", "message": "Incorrect email or password"},
         )  # Check for locked account before attempting authentication
+    locked_until_utc = ensure_utc(user_record.locked_until)
     if (
         user_record.is_locked
         and user_record.locked_until
-        and user_record.locked_until > datetime.now(timezone.utc)
+        and locked_until_utc is not None
+        and locked_until_utc > datetime.now(timezone.utc)
     ):
         # Calculate remaining lock time
-        locked_until_utc = ensure_utc(user_record.locked_until)
-        if locked_until_utc is not None:
-            remaining_time = locked_until_utc - datetime.now(timezone.utc)
-            remaining_hours = remaining_time.total_seconds() // 3600
-            remaining_minutes = (remaining_time.total_seconds() % 3600) // 60
-            # Log locked account login attempt as a background task
-            await log_security_event(
-                background_tasks=background_tasks,
-                db_session=db_session,
-                event_type="oauth2_locked_account_attempt",
-                user_id=user_record.id,
-                details={
-                    "email": form_data.username,
-                    "locked_until": user_record.locked_until.isoformat(),
-                },
+        remaining_time = locked_until_utc - datetime.now(timezone.utc)
+        remaining_hours = remaining_time.total_seconds() // 3600
+        remaining_minutes = (remaining_time.total_seconds() % 3600) // 60
+        # Log locked account login attempt as a background task
+        await log_security_event(
+            background_tasks=background_tasks,
+            db_session=db_session,
+            event_type="oauth2_locked_account_attempt",
+            user_id=user_record.id,
+            details={
+                "email": form_data.username,
+                "locked_until": user_record.locked_until.isoformat(),
+            },
+        )
+        lock_message = "Account is locked due to multiple failed login attempts. "
+        if remaining_hours > 0:
+            lock_message += (
+                f"Try again in {int(remaining_hours)} hours and " f"{int(remaining_minutes)} minutes."
             )
-            lock_message = "Account is locked due to multiple failed login attempts. "
-            if remaining_hours > 0:
-                lock_message += (
-                    f"Try again in {int(remaining_hours)} hours and " f"{int(remaining_minutes)} minutes."
-                )
-            else:
-                lock_message += f"Try again in {int(remaining_minutes)} minutes."
-            raise HTTPException(
-                status_code=400,
-                detail={"field_name": "email", "message": lock_message},
-            )
+        else:
+            lock_message += f"Try again in {int(remaining_minutes)} minutes."
+        raise HTTPException(
+            status_code=400,
+            detail={"field_name": "email", "message": lock_message},
+        )
     # Check if this is the user's last attempt before locking
     warning_message = None
     attempts_count = (
@@ -1221,14 +1210,10 @@ async def login_access_token(
                 "attempt_number": updated_user.number_of_failed_attempts,
             },
         )
-        if updated_user.is_locked and updated_user.locked_until:
-            # Account was just locked - process the lockout as a background task
-            await process_account_lockout(
-                background_tasks=background_tasks,
-                user=updated_user,
-                lock_duration_hours=24,
-            )  # Calculate message for user
-            remaining_time = updated_user.locked_until - datetime.now(timezone.utc)
+        failed_locked_until = ensure_utc(updated_user.locked_until)
+        if updated_user.is_locked and failed_locked_until is not None:
+            # increment_failed_attempts set and stored the lock window.
+            remaining_time = failed_locked_until - datetime.now(timezone.utc)
             remaining_hours = remaining_time.total_seconds() // 3600
             remaining_minutes = (remaining_time.total_seconds() % 3600) // 60
             lock_message = "Your account has been locked due to too many failed login attempts. "
