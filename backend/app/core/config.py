@@ -92,7 +92,6 @@ class Settings(BaseSettings):
     # Token Settings
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 1  # 1 hour
     REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 100  # 100 days
-    REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7)
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = Field(default=30)
     # Single source of truth for how long a verification link works: the Redis
     # TTL that /verify-email enforces, the JWT exp, and the duration stated in

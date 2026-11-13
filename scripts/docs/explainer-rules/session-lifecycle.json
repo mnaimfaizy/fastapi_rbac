@@ -35,11 +35,6 @@
       "pattern": "^\\s*REFRESH_TOKEN_EXPIRE_MINUTES: int = ([0-9 *+]+?)\\s*(?:#|$)",
       "type": "arith"
     },
-    "refreshTokenExpireDaysCodeDefault": {
-      "file": "backend/app/core/config.py",
-      "pattern": "^\\s*REFRESH_TOKEN_EXPIRE_DAYS: int = (?:Field\\(default=)?(\\d+)",
-      "type": "int"
-    },
     "concurrentSessionLimitCodeDefault": {
       "file": "backend/app/core/config.py",
       "pattern": "^\\s*CONCURRENT_SESSION_LIMIT: int = (?:Field\\(default=)?(\\d+)",
