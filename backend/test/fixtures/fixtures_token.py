@@ -46,7 +46,7 @@ async def token_factory() -> Callable[..., str]:
         if expires_delta is not None:
             expires = datetime.now(timezone.utc) + expires_delta
         elif refresh:
-            expires = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_MINUTES)
+            expires = datetime.now(timezone.utc) + timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES)
         else:
             expires = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
 
