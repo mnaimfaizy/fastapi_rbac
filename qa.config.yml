@@ -5,23 +5,50 @@
 # The skills read a YAML subset: no tabs, anchors or multi-line values.
 # Never put a password, token or hosted address in this file.
 #
-# There is no plan: section yet. qa-plan asks for base_ref and the suites the
-# first time it runs, and writes them here only if you agree.
+# plan.suites mirror CI's Backend Test and Frontend Unit Tests jobs. qa-plan
+# runs each at the head and in a tracked-files-only worktree at the merge-base,
+# in cmd.exe on Windows and /bin/sh elsewhere, so each command installs what it
+# needs and reads the same in both shells. The backend suite loads the
+# throwaway test settings from the tracked backend/.env.test.example through
+# python-dotenv's CLI, the parser the app itself uses (uv's --env-file misreads
+# BACKEND_CORS_ORIGINS=["*"]); tests use in-memory SQLite.
 #
-# The QA Stack is the dev compose stack. migrate and seed run inside the
-# backend container, whose database host is fastapi_rbac_db_dev, one of the
-# hosts the seeder accepts as local. QA Accounts: docs/reference/qa-accounts.md
+# The QA Plan and the QA Report both go on the pull request as one comment
+# each, and only after the person running the skill says yes.
+#
+# The QA Stack is the dev compose stack plus backend/docker-compose.qa.yml
+# (ACCOUNT_LOCKOUT_MINUTES=5, MAX_LOGIN_ATTEMPTS=3). scripts/qa/prepare-stack.mjs
+# copies missing dev env files from the main checkout and creates the network.
+# migrate and seed run inside the backend container, whose database host is
+# fastapi_rbac_db_dev, one of the hosts the seeder accepts as local.
+# QA Stack and QA Accounts: docs/reference/qa-accounts.md
 
 working_dir: tmp/qa # gitignored
+
+plan:
+  base_ref: origin/main
+  suites:
+    - name: backend
+      command: 'cd backend && uv run --no-project --python 3.10 --with-requirements requirements.txt --with "python-dotenv[cli]" dotenv -f .env.test.example run -- pytest test/unit/ test/api/ -q -p no:cacheprovider --junitxml=../tmp/qa/junit/backend.xml'
+      junit: tmp/qa/junit/backend.xml
+      surfaces: ["backend/**"]
+    - name: frontend
+      command: "cd react-frontend && npm ci --no-audit --no-fund && npx vitest run --reporter=junit --outputFile=../tmp/qa/junit/frontend.xml"
+      junit: tmp/qa/junit/frontend.xml
+      surfaces: ["react-frontend/**"]
+  publish:
+    - default: true
+      to: pr-comment
+  tracker: github
 
 run:
   target: stack
   surface: web
   stack:
-    up: "docker network inspect fastapi_rbac_dev_network >/dev/null 2>&1 || docker network create fastapi_rbac_dev_network; docker compose -f backend/docker-compose.dev.yml up -d --wait fastapi_rbac_dev && docker compose -f react-frontend/docker-compose.dev.yml up -d --wait"
+    up: "node scripts/qa/prepare-stack.mjs && docker compose -f backend/docker-compose.dev.yml -f backend/docker-compose.qa.yml up -d --wait fastapi_rbac_dev && docker compose -f react-frontend/docker-compose.dev.yml up -d --wait"
     migrate: "docker exec fastapi_rbac_dev alembic upgrade head"
     seed: "docker exec fastapi_rbac_dev python app/initial_data.py && docker exec fastapi_rbac_dev python -m app.qa_accounts seed"
-    down: "docker compose -f react-frontend/docker-compose.dev.yml down && docker compose -f backend/docker-compose.dev.yml down"
+    down: "docker compose -f react-frontend/docker-compose.dev.yml down && docker compose -f backend/docker-compose.dev.yml -f backend/docker-compose.qa.yml down"
   accounts:
     print: "docker exec fastapi_rbac_dev python -m app.qa_accounts print"
     restore: "docker exec fastapi_rbac_dev python -m app.qa_accounts seed --restore --account {id}"
