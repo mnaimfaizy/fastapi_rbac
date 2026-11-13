@@ -850,7 +850,7 @@ async def change_password(
         # Issuing the fresh session stays here: it belongs to this caller, not
         # to the policy.
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-        refresh_token_expires = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+        refresh_token_expires = timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES)
         access_token = security.create_access_token(
             current_user.id, current_user.email, expires_delta=access_token_expires
         )

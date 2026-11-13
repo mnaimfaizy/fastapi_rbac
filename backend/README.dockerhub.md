@@ -45,7 +45,7 @@ docker run -d \
   -e REDIS_PASSWORD=your_redis_password \
   -e SECRET_KEY=a_very_strong_and_unique_secret_key \
   -e ACCESS_TOKEN_EXPIRE_MINUTES=30 \
-  -e REFRESH_TOKEN_EXPIRE_DAYS=7 \
+  -e REFRESH_TOKEN_EXPIRE_MINUTES=144000 \
   -e FIRST_SUPERUSER_EMAIL=admin@example.com \
   -e FIRST_SUPERUSER_PASSWORD='Your-Strong-Admin-Pw!47' \
   # Add other necessary environment variables as per backend/.env.example
@@ -65,7 +65,7 @@ This image is configured using environment variables. For a comprehensive list a
 - **Security & JWT:**
   - `SECRET_KEY`: **Critical for security.** A strong, unique key for signing JWTs.
   - `ACCESS_TOKEN_EXPIRE_MINUTES`
-  - `REFRESH_TOKEN_EXPIRE_DAYS`
+  - `REFRESH_TOKEN_EXPIRE_MINUTES`
 - **Initial Superuser:**
   - `FIRST_SUPERUSER_EMAIL`
   - `FIRST_SUPERUSER_PASSWORD`
