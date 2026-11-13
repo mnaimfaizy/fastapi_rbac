@@ -6055,7 +6055,7 @@ logoutAllUser … finally dispatch(logout())   // local state cleared even if th
     if (kind === 'cookie') {
       var dv = st.devices[arg];
       var rt = dv.cookie ? findTok(st, dv.cookie) : null;
-      h += '<pre>refresh_token=eyJ…·' + esc(dv.cookie || '') + '\nHttpOnly; Path=/api/v1/auth; SameSite=lax (default)\nSecure: REFRESH_COOKIE_SECURE, else only when MODE == production\nMax-Age: ' + (dv.cookieDays ? dv.cookieDays + ' days (set by /auth/change_password)' : 'REFRESH_TOKEN_EXPIRE_MINUTES × 60') + '</pre>';
+      h += '<pre>refresh_token=eyJ…·' + esc(dv.cookie || '') + '\nHttpOnly; Path=/api/v1/auth; SameSite=lax (default)\nSecure: REFRESH_COOKIE_SECURE, else only when MODE == production\nMax-Age: ' + (dv.cookieDays ? dv.cookieDays + ' days' : 'REFRESH_TOKEN_EXPIRE_MINUTES × 60') + '</pre>';
       h += '<p>Path-scoped: the browser sends it only to <code>/api/v1/auth</code> routes, never with ordinary API requests. Only <code>/logout</code> and <code>/logout/all</code> clear it.</p>';
       h += '<p>Its value now: ' + (rt && rt.st === 'live' ? '<b>live</b> in the allowlist' : '<b>stale</b>: ' + esc(dv.cookie) + ' is ' + (rt ? esc(rt.st) : 'not in the allowlist')) + '.</p>';
       h += refList([P.cookies + ':12-14', P.cookies + ':31-60']);
