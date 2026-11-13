@@ -8,19 +8,22 @@ was almost all of Backend CI's runtime. Each test is isolated instead by the
 teardown, and app code that commits only releases a SAVEPOINT inside it.
 
 That isolation is checked rather than assumed. After every test that used
-``db``, the row count of every table is compared with the counts the seed
-produced. A test that leaves rows behind fails its teardown with the
-difference, and the seed is rebuilt so the leak cannot spill into later tests.
+``db``, every table is fingerprinted (row count plus a hash of its rows in
+primary-key order) and compared with the fingerprint the seed produced. Rows
+added, removed or changed all show up, including an UPDATE to a seeded row
+such as the superuser's password. A test that leaks fails its teardown naming
+the tables, and the seed is rebuilt so the leak cannot spill into later tests.
 """
 
 import asyncio
+import hashlib
 import os
 from collections.abc import AsyncGenerator, Coroutine
 from typing import Any, TypeVar
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import func, select, text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, async_sessionmaker, create_async_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -55,7 +58,8 @@ if "sqlite" in TEST_SQLALCHEMY_DATABASE_URI:
 
 IS_POSTGRES = TEST_SQLALCHEMY_DATABASE_URI.startswith("postgresql")
 
-RowCounts = dict[str, int]
+# Per table: (row count, sha256 of its rows in primary-key order)
+Fingerprint = dict[str, tuple[int, str]]
 T = TypeVar("T")
 
 
@@ -77,16 +81,24 @@ async def _drop_schema(conn: AsyncConnection) -> None:
         await conn.run_sync(SQLModel.metadata.drop_all)
 
 
-async def _row_counts(engine: AsyncEngine) -> RowCounts:
+async def _fingerprint(engine: AsyncEngine) -> Fingerprint:
+    """Fingerprint every table's contents, so an UPDATE is caught as well as an INSERT or DELETE.
+
+    The seed is a few dozen rows, so hashing all of them costs milliseconds.
+    """
+    result: Fingerprint = {}
     async with engine.connect() as conn:
-        return {
-            table.name: (await conn.execute(select(func.count()).select_from(table))).scalar_one()
-            for table in SQLModel.metadata.sorted_tables
-        }
+        for table in SQLModel.metadata.sorted_tables:
+            rows = (await conn.execute(select(table).order_by(*table.primary_key.columns))).all()
+            digest = hashlib.sha256()
+            for row in rows:
+                digest.update(repr(tuple(row)).encode())
+            result[table.name] = (len(rows), digest.hexdigest())
+    return result
 
 
-async def _build_seeded_database() -> RowCounts:
-    """Drop whatever is there, create the schema, seed it, return row counts."""
+async def _build_seeded_database() -> Fingerprint:
+    """Drop whatever is there, create the schema, seed it, return its fingerprint."""
     engine = _new_engine()
     try:
         # Dropping first matters: the SQLite file outlives the run, so a run
@@ -97,7 +109,7 @@ async def _build_seeded_database() -> RowCounts:
         session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with session_factory() as session:
             await init_db(session)
-        return await _row_counts(engine)
+        return await _fingerprint(engine)
     finally:
         await engine.dispose()
 
@@ -124,13 +136,13 @@ def _run_on_private_loop(coro: Coroutine[Any, Any, T]) -> T:
 
 @pytest.fixture(scope="session")
 def seeded_database() -> Any:
-    """Build the schema and init_db seed once; yield the seed's row counts.
+    """Build the schema and init_db seed once; yield the seed's fingerprint.
 
     Synchronous on purpose: a session-scoped async fixture would need a
     session-scoped event loop, while every test runs on its own function loop.
     """
-    counts = {"value": _run_on_private_loop(_build_seeded_database())}
-    yield counts
+    seed = {"value": _run_on_private_loop(_build_seeded_database())}
+    yield seed
     _run_on_private_loop(_drop_database())
 
 
@@ -147,10 +159,14 @@ async def db_engine(seeded_database: Any) -> AsyncGenerator[AsyncEngine, None]:
     await engine.dispose()
 
 
-def _describe_leak(seeded: RowCounts, now: RowCounts) -> str:
-    changed = [
-        f"{name}: {seeded.get(name)} -> {count}" for name, count in now.items() if seeded.get(name) != count
-    ]
+def _describe_leak(seeded: Fingerprint, now: Fingerprint) -> str:
+    changed = []
+    for name, (count, digest) in now.items():
+        seeded_count, seeded_digest = seeded.get(name, (None, None))
+        if seeded_count != count:
+            changed.append(f"{name}: {seeded_count} -> {count} rows")
+        elif seeded_digest != digest:
+            changed.append(f"{name}: row contents changed")
     return ", ".join(changed)
 
 
@@ -174,11 +190,11 @@ async def db(db_engine: AsyncEngine, seeded_database: Any) -> AsyncGenerator[Asy
             await session.flush()
             await session.rollback()
 
-    now = await _row_counts(db_engine)
+    now = await _fingerprint(db_engine)
     if now != seeded_database["value"]:
         leak = _describe_leak(seeded_database["value"], now)
         seeded_database["value"] = await _build_seeded_database()
         pytest.fail(
-            f"Rows survived this test's rollback, so it is not isolated ({leak}). "
+            f"Writes survived this test's rollback, so it is not isolated ({leak}). "
             "The seed was rebuilt so later tests are unaffected."
         )
