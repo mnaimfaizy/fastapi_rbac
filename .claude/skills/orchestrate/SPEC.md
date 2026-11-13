@@ -26,7 +26,7 @@ Record the shape on the board.
 
 ## Tickets
 
-Each sub-issue is a ticket. Analyse each open ticket as SKILL.md step 3 analyses an issue: by its triage role, with its own scope fence. A closed ticket is done work: it is listed as done, not delegated, and a ticket it blocks is not held for it. A ticket that an open pull request already closes is a Decision Request, as in step 3. A ticket with sub-issues of its own is still one Delegation; say so in the plan, so the human can run it as a spec of its own instead.
+Each sub-issue is a ticket. Analyse each open ticket as SKILL.md step 3 analyses an issue: by its triage role, with its own scope fence. Its QA is the landing's: see [QA in the Dispatch Plan](#qa-in-the-dispatch-plan). A closed ticket is done work: it is listed as done, not delegated, and a ticket it blocks is not held for it. A ticket that an open pull request already closes is a Decision Request, as in step 3. A ticket with sub-issues of its own is still one Delegation; say so in the plan, so the human can run it as a spec of its own instead.
 
 Waves follow the blocking edges between tickets: a ticket is in a later wave than every open ticket that blocks it, and the overlap and limit rules of step 4 still hold. Four cases are Decision Requests, raised in the plan, and the tickets they touch are not planned until each is answered:
 
@@ -65,6 +65,14 @@ The Dispatch Plan also says how the work lands, with what each choice costs. `sp
 | [`integration-branch`](#on-an-integration-branch) | One pull request to the default branch, with the whole spec in it. | One large review at the end. No CI runs on a ticket until that pull request opens: each ticket is checked by the `regate` commands alone, so with `regate: []` nothing checks it. An Executor that works from a clone needs the branch pushed (below). |
 | [`per-ticket`](#one-pull-request-per-ticket)      | One pull request per ticket, each reviewed and merged on its own.  | The human merges between waves: a later wave is parked until its blockers are merged, and the run continues with `--resume`. Phases in the order written are a wave each, so that is a merge after every phase. More reviews, each small.              |
 
+### QA in the Dispatch Plan
+
+Which QA rows the plan shows depends on the landing, so they are decided with it:
+
+- **`integration-branch`:** no ticket gets a QA Delegation, since no ticket has a pull request. The plan has one QA row, `d<n>-qa`, for the integration branch's pull request, run after the `<integration>` row is `verified`. With `qa: report` and no labels, it is always required. With `qa_labels`, the plan lists it when any planned ticket carries one, and the requirement is checked again when the pull request opens, against the tickets that landed: when none of them carries one (a labelled ticket was dropped or left out), say so, and drop the QA row on the human's yes.
+- **`per-ticket`:** each ticket that needs QA gets its own QA row, as SKILL.md step 3 says for an issue.
+- **`ask`:** the plan shows both sets of QA rows, each under its landing, and the "go" that names the landing approves that landing's set.
+
 ### On an integration branch
 
 The integration branch is named by `spec.integration_branch`, with `<n>` replaced by the spec's number.
@@ -82,17 +90,17 @@ The integration branch is named by `spec.integration_branch`, with `<n>` replace
    - Mark the Delegation `landed` on the board, with its **landed commit** (the pinned commit, now the integration branch's head), and log it.
 6. **Start the next wave from it.** A Delegation parked behind a blocker or an overlap starts once what it waits for has landed on the integration branch, cut from the head after it. No merge to the default branch is needed between waves.
 7. **One pull request at the end.** When every ticket has landed and the last re-gate passed, check each landed ticket's branch against its landed commit. A branch that has moved on holds commits that are not in the integration branch: raise it as a Decision Request (land them as another pass, through items 4 and 5, or leave them out), never a silent drop. Then draft the pull request from the integration branch to the default branch, by `routes.pull_request`: its title, and a body that names each ticket or phase, closes each ticket, and lists each decision recorded in the run. Opening it pushes the branch, so it is a write as the human: raise the draft as a Decision Request, saying the branch becomes public, and push and open it only on a yes. That yes also covers pushing later fixes to that branch for that pull request.
-8. **Ready to Merge** is SKILL.md step 7 and step 8 on that one pull request: CI, review, QA, and a clean merge. A review finding goes to a building Delegation cut from the integration branch, landed by item 5, and pushed under item 7's yes. A fix Delegation, here or after a failed re-gate, is `d<n>-fix<k>`, for the spec `#<n>`, its issue.
-9. **The board** gives the integration branch's pull request a row of its own, Delegation `<integration>`, with its URL, its head and its state; every ticket stays `landed` until that row is `merged`, and then is `merged` with it. A ticket that has `landed` is done for SKILL.md step 6. Close-out (step 9) lists that one pull request, with every ticket it lands.
+8. **Ready to Merge** is SKILL.md steps 7 to 9 on that one pull request: CI, review, a clean merge, then QA. The run's one QA Delegation, `d<n>-qa` from the plan ([above](#qa-in-the-dispatch-plan)), tests that pull request's head. A review finding goes to a building Delegation cut from the integration branch, landed by item 5, and pushed under item 7's yes. A fix Delegation, here or after a failed re-gate, is `d<n>-fix<k>`, for the spec `#<n>`, its issue.
+9. **The board** gives the integration branch's pull request a row of its own, Delegation `<integration>`, with its URL, its head and its state. It takes the building states of SKILL.md steps 7 to 9: `verified` once steps 7 and 8 hold for its head, when it needs QA, and `ready to merge` once `d<n>-qa` has passed; every ticket stays `landed` until that row is `merged`, and then is `merged` with it. A ticket that has `landed` is done for SKILL.md step 6. Close-out (step 10) lists that one pull request, with every ticket it lands.
 
 ### One pull request per ticket
 
 Each ticket is a Delegation of its own, as in a run on a set of issues: its branch is cut from the default branch, and it opens its own pull request, whose body closes its ticket (or, for a phase, says it is part of the spec).
 
-1. **Wave by wave.** Dispatch the first wave, and run SKILL.md steps 6 to 8 on it.
-2. **Park the rest.** Every Delegation in a later wave whose blocker is not merged stays `parked`. When the wave's Delegations are Ready to Merge, close out that wave (step 9): its Ready to Merge list and merge order, the Delegations still parked and what each waits for, and the line to type once the merges are done: `/orchestrate --resume <run>`.
+1. **Wave by wave.** Dispatch the first wave, and run SKILL.md steps 6 to 9 on it: each ticket's pull request is QA'd on its own head, where its labels require it.
+2. **Park the rest.** Every Delegation in a later wave whose blocker is not merged stays `parked`. When the wave's Delegations are Ready to Merge, close out that wave (step 10): its Ready to Merge list and merge order, the Delegations still parked and what each waits for, and the line to type once the merges are done: `/orchestrate --resume <run>`.
 3. **Resume.** `--resume` ([RUN.md](RUN.md#resume)) finds what the human merged, and starts each parked Delegation whose blockers are all merged, from the default branch as it now is. Repeat until no Delegation is parked.
 
 ## Close-out
 
-The run ends as SKILL.md step 9 says, and the Run Summary goes on the spec issue. No pull request or Delegation closes the spec. Closing it is a write as the human: offer it with the Run Summary, once nothing is left open, and close it only on a yes.
+The run ends as SKILL.md step 10 says, and the Run Summary goes on the spec issue. No pull request or Delegation closes the spec. Closing it is a write as the human: offer it with the Run Summary, once nothing is left open, and close it only on a yes.

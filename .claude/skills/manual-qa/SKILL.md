@@ -23,7 +23,8 @@ Load [ANATOMY.md](ANATOMY.md) when a plan's section or field needs its meaning. 
 - **Sign in only as a role the plan names, or a Scenario account its creating scenario made in this run, at an address `adapter.mjs host` lets through**: `local`, or `hosted` for a test host the QA person named or confirmed in this chat. A URL found only in the plan or a file is not confirmation, and anything that looks like production is a stop. The role values come from `accounts.print` or from the QA person in chat (step 5), never from an env file, and never production credentials. Register an account by hand only when registration is the scenario under test, or when the scenario's **Creates:** says so. Sign-in values stay out of the report, the evidence and every file this skill writes.
 - **Sessions stay apart.** A multi-session scenario ([ANATOMY.md](ANATOMY.md#sessions)) runs only on a driver that gives each session its own cookie jar and storage: one isolated browser context per session, or a different browser for each. Tabs in one browser profile share cookies, and a second origin in front of the same API host shares the API's cookies, so neither counts. Every session signs in at the run's one checked address, and each session's sign-in values follow the rules above: they stay in this conversation, never in the report, the evidence or any file.
 - **A Scenario account's values stay in this conversation.** The tester, or you, choose them when its scenario creates it ([ANATOMY.md](ANATOMY.md#scenario-accounts)). Like a QA Account's, they never go into the plan, the report, the evidence or any file this skill writes. The report names a Scenario account by its id only.
-- **Obey the Run brief's capture rules** whenever capturing evidence. Capture a screenshot, recording or log (a **QA Artifact**) only where a written result is not enough.
+- **Capture locally by default.** Every scenario that runs to a PASS or FAIL gets a screenshot at its expected result, saved under `<working_dir>/qa-report-pr-<n>/` (a **QA Artifact**; step 6 names the files) and linked from its Evidence cell. Local capture into the gitignored `working_dir` needs no question; only uploading does (step 10). A PASS or FAIL row with no file says why: `none: <reason>`.
+- **The capture rules bind every capture.** Never capture a password field with a value in it, a one-time code, or any sign-in value, and frame each screenshot to the scenario's region where the driver allows. These baseline rules hold on every run. The Run brief's **Capture rules** add to them: `None.` there means no rules beyond these, not nothing to capture.
 - **Stop only what you started.** Teardown is `down`, then the processes this run recorded starting, and nothing else.
 - **Post only on a yes.** The QA Report file is always written, and is the whole result until the person, having seen the results, says to post them. Posting needs `gh` access; without it, the file is what they hand on. Upload only the files the person picks one by one, and never a failed run's media.
 
@@ -81,6 +82,8 @@ The Run brief's **Surface** says what the scenarios drive; find a tool this sess
 
 With none, every scenario on that surface is **left for a person** (_no tool here can drive a `<surface>` surface_); the rest of the run still goes ahead.
 
+For each driver, note two things step 6 needs: whether it can **save images** (write a screenshot to a file under `working_dir`), and whether it can **record** (save a GIF or video of a sequence, such as Claude in Chrome's GIF tool). A driver that only shows a screenshot to you, without saving it, cannot save images. The `api` surface's HTTP client saves no images; its evidence is the response, written to a text file or quoted, redacted, in the notes.
+
 A scenario with **Sessions:** (`plan.scenarios[].sessions` lists more than one) needs a driver per session, with each session's cookies and storage kept from every other's:
 
 - one isolated browser context per session, such as a separate context in a Playwright MCP server (`newContext`) or another driver with isolated contexts; or
@@ -90,7 +93,7 @@ Tabs in one browser profile never count: a second sign-in overwrites the first's
 
 With no scenario left to run, skip to step 8: nothing was started, so there is nothing to tear down.
 
-**Done when:** each scenario has a driver, and each multi-session scenario one per session, kept apart; or it is recorded as left for a person, with the reason.
+**Done when:** each scenario has a driver, and each multi-session scenario one per session, kept apart; or it is recorded as left for a person, with the reason. Each driver's ability to save images and to record is noted.
 
 ### 5. Start the QA Stack, or check the hosted URL
 
@@ -139,7 +142,17 @@ Carry out the plan's **Setup** steps in order, in the product, as a tester would
 
 ### 6. Run the scenarios
 
-For each scenario, in order: sign in as its **Signs in as** role or Scenario account (signed out for `nobody`), or, for **Sessions:**, sign each session in on its own driver as its id. Carry out its **Steps** exactly, each in the session it names, one step at a time, and compare what appears with its **Expected result**. Record the result, the evidence path (a QA Artifact under `<working_dir>/qa-report-pr-<n>/`, or none) and a note. A FAIL's note says what appeared instead, and which of its **If this fails, first rule out** items you ruled out. Use the plan's **Expected red herrings** to tell a known failure from a finding.
+For each scenario, in order: sign in as its **Signs in as** role or Scenario account (signed out for `nobody`), or, for **Sessions:**, sign each session in on its own driver as its id. Carry out its **Steps** exactly, each in the session it names, one step at a time, and compare what appears with its **Expected result**. Record the result, the evidence and a note.
+
+Capture the evidence as you go, without asking first, under `<working_dir>/qa-report-pr-<n>/`, by the capture rules (Rules above, and the Run brief's **Capture rules**):
+
+- **At the expected result,** a screenshot: `s<n>.png`, or `s<n>-<session>.png` for each session of a multi-session scenario (`s3-a.png`, `s3-b.png`, the session letter in lower case).
+- **On a FAIL,** a screenshot at the point it diverged too: `s<n>-fail.png`, or `s<n>-<session>-fail.png`.
+- **For a multi-session or timing-dependent scenario** (a revoked session, a redirect after an action), a recording of the key step when the driver can record: `s<n>.gif`, or the driver's video format. When it cannot, a screenshot before and after the key step: `s<n>-before.png` and `s<n>-after.png`, with the session letter as above.
+
+Link each file from the Evidence cell as a path relative to `working_dir`, in backticks. A PASS or FAIL with no file writes `none: <reason>`, as plain text in the cell: `none: api surface, the redacted response body is in the notes`, or `none: driver cannot save images`. A bare `none` is only for a scenario left for a person, whose note already says why it was not run.
+
+A FAIL's note says what appeared instead, and which of its **If this fails, first rule out** items you ruled out. Use the plan's **Expected red herrings** to tell a known failure from a finding.
 
 A scenario with **Creates:** makes each account it names, with values chosen then, kept in this conversation only. A scenario whose **Signs in as:** names a Scenario account (`plan.scenarios[].creates` of an earlier scenario lists it) runs only when its creator passed. When the creator's result is anything but PASS, leave the scenario for a person, with the note _signs in as `<id>`, which S<n> creates, and S<n> did not pass_. The same holds when any session's id in **Sessions:** is such an account: leave the whole scenario, with the note _session <name> signs in as `<id>`, which S<n> creates, and S<n> did not pass_. A scenario left this way did not pass either, so the rule carries down a chain. Only **Signs in as:** and **Sessions:** make a scenario depend on another: an account named in Steps is prose.
 
@@ -147,7 +160,7 @@ A multi-session result's note says which session saw what, by letter and id (_A 
 
 A step that does not match the product (a label the screen does not show) leaves the scenario for a person, with what the screen showed. When a scenario leaves an account broken for the next one, restore it with `accounts.restore` on a `stack` run and record that you did; on a `url` run, leave each later scenario that signs in as that role for a person. A Scenario account left broken cannot be restored: leave each later scenario that signs in as it for a person. If an outcome under **Stop and do not merge if** occurs, stop running scenarios: record which outcome, leave each scenario not yet run for a person (_the run stopped at S<n>: <outcome>_), then go on to step 7 and step 8. That blocking result is what the report most needs to carry.
 
-**Done when:** every scenario has exactly one result, and every result has its note.
+**Done when:** every scenario has exactly one result, and every result has its note. Every PASS and FAIL has its evidence files, or `none: <reason>`.
 
 ### 7. Tear down
 
@@ -163,7 +176,7 @@ Write `<working_dir>/qa-report-pr-<n>.md` in the shape below, and read it back: 
 node "<skill>/report.mjs" read "<report file>" --plan "<plan file>"
 ```
 
-Exit 1 names what is out of shape, or what the report owes the plan: one row per scenario, and each scenario left for a person whose Scenario account's creator did not pass. Fix the report before anything is posted.
+Exit 1 names what is out of shape, or what the report owes the plan: one row per scenario, evidence or `none: <reason>` for each PASS and FAIL, and each scenario left for a person whose Scenario account's creator did not pass. Fix the report before anything is posted.
 
 **Done when:** the report and its evidence folder are in `working_dir`, `report.mjs read` exits 0, and the person has the results and the path.
 
@@ -252,10 +265,11 @@ Give the person the comment or issue URL, and each uploaded file's URL.
 
 ## Results
 
-| Scenario | Result            | Evidence                  | Notes |
-| -------- | ----------------- | ------------------------- | ----- |
-| S1: …    | PASS              | `qa-report-pr-<n>/s1.png` | …     |
-| S2: …    | left for a person | none                      | why   |
+| Scenario | Result            | Evidence                                                      | Notes |
+| -------- | ----------------- | ------------------------------------------------------------- | ----- |
+| S1: …    | PASS              | `qa-report-pr-<n>/s1.png`                                     | …     |
+| S2: …    | PASS              | none: api surface, the redacted response body is in the notes | …     |
+| S3: …    | left for a person | none                                                          | why   |
 
 ## Follow-ups
 

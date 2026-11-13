@@ -51,7 +51,12 @@ const EXAMPLE = {
   regate: ["uv run pytest", "npm test"],
   skills: { implement: "tdd", triage: "triage", review: "code-review" },
   triage_labels: "docs/agents/triage-labels.md",
-  models: { analysis: "claude-sonnet-5-5", build: "claude-opus-5-5", review: "claude-opus-5-5" },
+  models: {
+    analysis: "claude-sonnet-5-5",
+    build: "claude-opus-5-5",
+    review: "claude-opus-5-5",
+    qa: "claude-sonnet-5-5",
+  },
   limits: { building: "3", shared: ["database migrations", "port 5432"] },
   decisions: { to: "pull-request" },
   ready_to_merge: { review: "settled", qa: "report", qa_labels: ["ui"] },
@@ -87,7 +92,7 @@ test("the first file present wins, and the others are not read or merged", () =>
 
 test("no config file is not a problem: the run asks for what it needs", () => {
   const read = readConfig(reader({}));
-  assert.deepEqual(read, { path: null, config: {}, problems: [], answers: null });
+  assert.deepEqual(read, { path: null, config: {}, problems: [], answers: null, qaConfig: null });
   const ready = readiness(read);
   assert.equal(ready.ready, false);
   assert.deepEqual(
@@ -135,7 +140,7 @@ test("each key's default, with an empty config", () => {
       document: null,
       labels: Object.fromEntries(TRIAGE_ROLES.map((role) => [role, role])),
     },
-    models: { analysis: null, build: null, review: null },
+    models: { analysis: null, build: null, review: null, qa: null },
     limits: { building: 3, shared: [] },
     decisions: { to: "pull-request", marker: null },
     ready_to_merge: { review: "settled", qa: "none", qa_labels: [] },
@@ -211,6 +216,7 @@ test("a complete config is ready, and says each unset optional key", () => {
     "models.analysis",
     "models.build",
     "models.review",
+    "models.qa",
     "triage_labels",
   ])
     assert.ok(
@@ -218,6 +224,91 @@ test("a complete config is ready, and says each unset optional key", () => {
       `${key} is noted: ${ready.notes.join(" | ")}`,
     );
   assert.ok(ready.notes.some((note) => note.startsWith("no re-gate commands")));
+});
+
+const READY_BASE = [
+  "read_first: []",
+  "routes: { commit: git commit, pull_request: gh pr create }",
+  "regate: []",
+];
+
+test("a QA config with `ready_to_merge.qa` never set is asked about, in each spelling", () => {
+  for (const qaFile of ["qa.config.yml", "qa.config.yaml", "qa.config.json"]) {
+    const read = readConfig(
+      reader({ "orchestrate.config.yml": READY_BASE.join("\n"), [qaFile]: "working_dir: tmp\n" }),
+    );
+    assert.equal(read.qaConfig, qaFile);
+    const ready = readiness(read);
+    assert.equal(ready.ready, false);
+    assert.equal(ready.needs.length, 1, ready.needs.join(" | "));
+    assert.match(ready.needs[0], /^ready_to_merge\.qa: /);
+    assert.ok(ready.needs[0].includes(`\`${qaFile}\``));
+  }
+});
+
+test("a QA config is asked about even when `ready_to_merge` sets other keys", () => {
+  const read = readConfig(
+    reader({
+      "orchestrate.config.yml": [...READY_BASE, "ready_to_merge:", "  review: approved"].join("\n"),
+      "qa.config.yml": "working_dir: tmp\n",
+    }),
+  );
+  assert.ok(readiness(read).needs.some((need) => need.startsWith("ready_to_merge.qa: ")));
+});
+
+test("a QA config with `qa: none` set is a note, and the run is ready", () => {
+  const read = readConfig(
+    reader({
+      "orchestrate.config.yml": [...READY_BASE, "ready_to_merge:", "  qa: none"].join("\n"),
+      "qa.config.yml": "working_dir: tmp\n",
+    }),
+  );
+  const ready = readiness(read);
+  assert.equal(ready.ready, true);
+  assert.ok(
+    ready.notes.some((note) =>
+      note.includes("`qa.config.yml` is here, but `ready_to_merge.qa` is `none`"),
+    ),
+    ready.notes.join(" | "),
+  );
+});
+
+test("a QA config with `qa: report` set is neither asked about nor noted", () => {
+  const read = readConfig(
+    reader({
+      "orchestrate.config.yml": [...READY_BASE, "ready_to_merge:", "  qa: report"].join("\n"),
+      "qa.config.yml": "working_dir: tmp\n",
+    }),
+  );
+  const ready = readiness(read);
+  assert.equal(ready.ready, true);
+  assert.ok(!ready.notes.some((note) => note.includes("qa.config")), ready.notes.join(" | "));
+});
+
+test("`ready_to_merge.qa` answered in chat settles the QA question", () => {
+  const files = {
+    "orchestrate.config.yml": READY_BASE.join("\n"),
+    "qa.config.yml": "working_dir: tmp\n",
+    "tmp/orchestrate/r/answers.json": JSON.stringify({ ready_to_merge: { qa: "report" } }),
+  };
+  const { code, out } = main(["check", "--answers", "tmp/orchestrate/r/answers.json"], {
+    read: reader(files),
+    exists: (path) => Object.hasOwn(files, path),
+    cwd: "/repo",
+  });
+  const result = JSON.parse(out);
+  assert.equal(code, 0, out);
+  assert.equal(result.qa_config, "qa.config.yml");
+  assert.deepEqual(result.readiness.needs, []);
+  assert.equal(result.effective.ready_to_merge.qa, "report");
+});
+
+test("no QA config: `ready_to_merge.qa` left unset is neither asked about nor noted", () => {
+  const read = readConfig(reader({ "orchestrate.config.yml": READY_BASE.join("\n") }));
+  assert.equal(read.qaConfig, null);
+  const ready = readiness(read);
+  assert.equal(ready.ready, true);
+  assert.ok(!ready.notes.some((note) => note.includes("ready_to_merge.qa")));
 });
 
 test("a config with problems is never ready", () => {
@@ -347,7 +438,7 @@ const YAML_PROBLEMS = [
     ["triage_labels:", '  wontfix: ""'],
     /^line 2: `triage_labels\.wontfix`: expected a label name/,
   ],
-  ["an unknown model kind", ["models:", "  qa: x"], /^line 2: `models\.qa`: unknown key/],
+  ["an unknown model kind", ["models:", "  deploy: x"], /^line 2: `models\.deploy`: unknown key/],
   ["models not a mapping", ["models: opus"], /^line 1: `models`: expected a mapping/],
   ["limits not a mapping", ["limits: 3"], /^line 1: `limits`: expected a mapping/],
   [
@@ -694,7 +785,7 @@ const JSON_PROBLEMS = [
     "triage_labels.wontfix",
     /expected a label name/,
   ],
-  ["an unknown model kind", { models: { qa: "x" } }, "models.qa", /unknown key/],
+  ["an unknown model kind", { models: { deploy: "x" } }, "models.deploy", /unknown key/],
   ["models not a mapping", { models: "opus" }, "models", /expected a mapping/],
   ["limits not a mapping", { limits: 3 }, "limits", /expected a mapping/],
   [

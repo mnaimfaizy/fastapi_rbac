@@ -57,13 +57,23 @@ export const TRIAGE_ROLES = /** @type {const} */ ([
 
 export const ROUTE_KEYS = /** @type {const} */ (["commit", "pull_request", "merge"]);
 export const SKILL_KEYS = /** @type {const} */ (["implement", "triage", "review"]);
-export const MODEL_KEYS = /** @type {const} */ (["analysis", "build", "review"]);
+export const MODEL_KEYS = /** @type {const} */ (["analysis", "build", "review", "qa"]);
 export const LIMIT_KEYS = /** @type {const} */ (["building", "shared"]);
 export const DECISION_KEYS = /** @type {const} */ (["to", "marker"]);
 export const DECISION_TARGETS = /** @type {const} */ (["pull-request", "issue-comment"]);
 export const READY_KEYS = /** @type {const} */ (["review", "qa", "qa_labels"]);
 export const REVIEW_RULES = /** @type {const} */ (["settled", "approved"]);
 export const QA_RULES = /** @type {const} */ (["none", "report"]);
+/**
+ * The QA config the `qa-plan` and `manual-qa` skills read, in their lookup
+ * order. Its presence is a sign the repository runs QA, so `readiness` asks
+ * about `ready_to_merge.qa` when it is there and that key was never set.
+ */
+export const QA_CONFIG_FILES = /** @type {const} */ ([
+  "qa.config.yml",
+  "qa.config.yaml",
+  "qa.config.json",
+]);
 export const SPEC_KEYS = /** @type {const} */ (["landing", "integration_branch"]);
 export const LANDINGS = /** @type {const} */ (["ask", "integration-branch", "per-ticket"]);
 
@@ -711,7 +721,7 @@ export function parseConfig(path, text) {
  * @param {{answers?: {path: string, text: string} | null, exists?: (path: string) => boolean}} [options]
  *   `answers`: the answers given in chat, as a JSON object, laid over the
  *   config; `exists`: whether a repository path (file or folder) is there.
- * @returns {{path: string | null, config: Record<string, any>, problems: string[], answers: string | null}}
+ * @returns {{path: string | null, config: Record<string, any>, problems: string[], answers: string | null, qaConfig: string | null}}
  *   `path` is null when the repository has no config: not an error, the
  *   readiness check says what to ask for.
  */
@@ -763,7 +773,7 @@ export function readConfig(read, { answers = null, exists } = {}) {
   const shape = configProblems(config, where);
   problems.push(...shape);
   if (!shape.length && exists) problems.push(...missingPaths(config, where, exists));
-  return { path, config, problems, answers: answers?.path ?? null };
+  return { path, config, problems, answers: answers?.path ?? null, qaConfig: qaConfig(read) };
 }
 
 /**
@@ -782,6 +792,25 @@ export function mergeAnswers(config, answers) {
       isMapping(config[key]) && isMapping(value) ? { ...config[key], ...value } : value,
     );
   return merged;
+}
+
+/**
+ * The first QA config at the repository root, found the way the config itself
+ * is: by reading it. A file that is there but cannot be read still counts.
+ *
+ * @param {(path: string) => string | null} read
+ * @returns {string | null}
+ */
+function qaConfig(read) {
+  const present = (path) => {
+    try {
+      const text = read(path);
+      return text !== null && text !== undefined;
+    } catch {
+      return true;
+    }
+  };
+  return QA_CONFIG_FILES.find(present) ?? null;
 }
 
 /** A document a brief sends every Delegation to must be there. */
@@ -856,10 +885,10 @@ function triageLabels(value) {
  * What the run still needs before analysis. `needs` are asked for, in one
  * message; a `note` is said, and the run goes on.
  *
- * @param {{path: string | null, config: Record<string, any>, problems: string[]}} read
+ * @param {{path: string | null, config: Record<string, any>, problems: string[], qaConfig?: string | null}} read
  * @returns {{ready: boolean, needs: string[], notes: string[]}}
  */
-export function readiness({ path, config, problems }) {
+export function readiness({ path, config, problems, qaConfig = null }) {
   if (problems.length)
     return { ready: false, needs: ["a config with no problems: fix each one listed"], notes: [] };
   const needs = [];
@@ -886,6 +915,19 @@ export function readiness({ path, config, problems }) {
   for (const key of MODEL_KEYS)
     if (effective.models[key] === null)
       notes.push(`no \`models.${key}\`: that work runs on the harness's default model`);
+  if (qaConfig !== null) {
+    const qaSet = isMapping(config.ready_to_merge) && config.ready_to_merge.qa !== undefined;
+    if (!qaSet)
+      needs.push(
+        `ready_to_merge.qa: \`${qaConfig}\` is here, so the repository may run QA; ` +
+          "`report` to require a QA Report on each pull request's head before Ready to Merge " +
+          "(with `qa_labels` to limit it to some issues), or `none`",
+      );
+    else if (effective.ready_to_merge.qa === "none")
+      notes.push(
+        `\`${qaConfig}\` is here, but \`ready_to_merge.qa\` is \`none\`: the run plans no QA`,
+      );
+  }
   if (effective.triage_labels.from === "default")
     notes.push("no `triage_labels`: each triage role's label is taken to be the role's own name");
   if (effective.triage_labels.from === "document")
@@ -976,6 +1018,7 @@ export function main(argv, io = {}) {
     answers: loaded.answers,
     problems: loaded.problems,
     effective: loaded.problems.length ? null : effectiveConfig(loaded.config),
+    qa_config: loaded.qaConfig,
     readiness: readiness(loaded),
   };
   return { code: loaded.problems.length ? 1 : 0, out: `${JSON.stringify(result, null, 2)}\n` };

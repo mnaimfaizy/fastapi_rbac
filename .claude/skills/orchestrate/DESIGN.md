@@ -8,7 +8,7 @@ These are word for word the definitions in Agent-kit's root glossary, where a co
 
 **Chief of Staff**: The session that runs `orchestrate`: it analyses the work, proposes the Dispatch Plan, hands out each Delegation, relays every Decision Request and verifies every report, and never builds a Delegation's work or merges.
 
-**Delegation**: One piece of a run, an issue to build or an issue to analyse, handed to one Executor with one brief.
+**Delegation**: One piece of a run, an issue to build, an issue to analyse, or a pull request head to QA, handed to one Executor with one brief.
 
 **Executor**: What carries out a Delegation: a Live Session, a headless run, or a sub-agent in the Chief of Staff's own session.
 
@@ -24,7 +24,7 @@ These are word for word the definitions in Agent-kit's root glossary, where a co
 
 **Run Summary**: The account of a finished run, offered after the human merges, for the issue that groups the run's work.
 
-**Ready to Merge**: A Delegation whose CI is green, whose review is settled, whose QA requirement is met and whose branch merges cleanly; the only Delegations the closing list names.
+**Ready to Merge**: A Delegation whose CI is green, whose review is settled, whose QA requirement is met on its current head and whose branch merges cleanly; the only Delegations the closing list names.
 
 ## A core plus a config
 
@@ -71,6 +71,22 @@ A Delegation that has stopped making progress looks the same as one doing slow w
 ## Conflicts before the merge order
 
 Two branches can each merge cleanly into the default branch and still conflict with each other. A merge order found only by merging would leave the human mid-sequence with a conflict to resolve. So the Chief of Staff test-merges the finished branches in the proposed order, without touching any checkout, and changes the order, or has one branch merge the default branch after the other lands, before it hands the order over. A merge, not a rebase: rebasing a pushed branch needs a force-push.
+
+## QA on the head that merges
+
+The first real run of this skill reached "almost Ready to Merge" with no QA at all: the readiness check only asked whether a QA Report existed, and nothing in the run made one. So QA is a stage of the run, not a precondition someone else meets.
+
+It comes last, after review is settled, CI is green and the branch merges cleanly, because each of those can move the head, and a QA result is about one commit. A review fix that lands after QA leaves a report about code that will not merge. So any push voids the result, and the new head is QA'd again. Conflicts are found before QA for the same reason: the merge commit that resolves one is a new head.
+
+QA is a Delegation of its own, not the building Delegation's last phase. A session that built a change has a reason to believe it works, as the Chief of Staff would about work it built itself. A separate Executor, in a working copy detached at the verified head, tests what the pull request holds, not what the builder's worktree holds. The QA skills (`qa-plan` and `manual-qa`) are named by the core, not the config, because the core reads what they produce: the plan's Head and the report's rows. A different skill would produce something the core cannot check.
+
+Those skills are invoked only by a person, and stay so: their rules ("the person has seen the draft", "post only on a yes") assume one, and making them model-invocable would undo that for every user, not only in a run. So a QA Delegation's session is sent each skill as a message where the harness runs that as the user's own invocation, and otherwise the human types it there, as the Dispatch Plan says up front. The QA Plan's delivery is always a Decision Request carrying the draft, because the plan is a judgement about what CI does not prove, and the human is the one to agree with it before anyone runs it. Posting the report can be approved once for the run, because by then the judgement has been made and the report only records it.
+
+A FAIL goes to the human, never straight back to the builder: a FAIL can be the QA Stack, not the change, which is why QA Plans list red herrings. A scenario left for a person stays the human's to pass, because only a person can pass one. The QA Stack is one per machine, with fixed names and ports, so it has one holder at a time whether or not the config names it.
+
+## The scope fence binds every change
+
+In the first run, a fix for a review finding, relayed by an automated fixer, was committed outside the Delegation's scope fence without a question, and was found only by diffing the new head. A fence that holds for the Delegation's own plan but not for what a reviewer asks for is no fence: reviewers ask for exactly the changes nobody planned. So the fence covers every change on the branch, and step 7 checks the diff against it.
 
 ## Ready to Merge, and no further
 

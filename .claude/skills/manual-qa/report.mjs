@@ -8,7 +8,9 @@
 //
 //   1. `read`: reads a QA Report file (SKILL.md "The QA Report") into its
 //      anchors and one result per scenario, and says whether the run failed
-//      (a FAIL, or a run stopped on a blocking outcome). With `--plan`, it
+//      (a FAIL, or a run stopped on a blocking outcome). A PASS or FAIL row
+//      links its evidence in backticks, or says `none: <reason>`; a row left
+//      for a person may say a bare `none`. With `--plan`, it
 //      also checks the report against the plan it ran: the same anchors, one
 //      row per scenario, and each scenario that signs in as a Scenario
 //      account left for a person when the scenario creating it did not pass.
@@ -61,6 +63,8 @@ export const MEDIA =
   /\.(?:png|jpe?g|gif|webp|bmp|tiff?|avif|heic|svg|mp4|m4v|mov|webm|mkv|avi|wmv|mp3|wav|ogg|m4a)$/i;
 /** Plain-text evidence: the only kind whose contents are scanned for sign-in values. */
 export const TEXT = /\.(?:log|txt|har|json|jsonl|ndjson|md|csv|tsv|xml|html?|ya?ml)$/i;
+/** The Evidence cell of a PASS or FAIL row that links no QA Artifact: `none: <reason>`. */
+export const NO_EVIDENCE = /^none:\s*\S/;
 
 const NO_UPLOAD_FROM_FAILED =
   "media from a failed run is never uploaded: its screen is the one most likely to show " +
@@ -188,11 +192,21 @@ export function readReport(text) {
         problems.push(
           `line ${n + 1}: ${id}'s result is \`${result}\`; expected PASS, FAIL or left for a person`,
         );
+      // `none: <reason>`, bare or wrapped whole in backticks, links no file, even
+      // when its reason quotes an endpoint or a role in backticks.
+      const reason = NO_EVIDENCE.test(evidence.replace(/^`([^`]*)`$/, "$1"));
+      const paths = reason ? [] : [...evidence.matchAll(/`([^`]+)`/g)].map((m) => m[1]);
+      // A scenario that ran is captured by default: no path needs a stated reason.
+      if ((result === "PASS" || result === "FAIL") && !paths.length && !reason)
+        problems.push(
+          `line ${n + 1}: ${id} is a ${result} with no evidence path: link its QA Artifact ` +
+            "in backticks, or write `none: <reason>`",
+        );
       report.results.push({
         id,
         scenario,
         result,
-        evidence: [...evidence.matchAll(/`([^`]+)`/g)].map((m) => m[1]),
+        evidence: paths,
         notes: notes.join("|").trim(),
       });
     }

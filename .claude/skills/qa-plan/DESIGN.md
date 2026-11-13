@@ -22,7 +22,7 @@ These are word for word the definitions in Agent-kit's root glossary, where a co
 
 **Execution record**: A QA Plan's last section, empty after compose, where whoever runs the plan records each scenario's result.
 
-**QA Artifact**: A screenshot, recording or log captured during a QA run, only where a written result is not enough; private by default.
+**QA Artifact**: A screenshot, recording or log captured during a QA run, saved locally by default at each scenario's expected result; private until the person picks it for upload.
 
 **QA Report**: The self-contained Markdown file `manual-qa` writes for one run of one QA Plan: the build it checked, one row per scenario (PASS, FAIL, or left for a person), and the evidence.
 
