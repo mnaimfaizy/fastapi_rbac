@@ -37,7 +37,7 @@ The first file present is the config: `qa.config.yml`, then `qa.config.yaml`, th
 
 A formatter such as Prettier wraps a long flow mapping across lines, which takes it outside the subset: write long entries in block style, as `suites` is written above.
 
-Tabs, anchors, aliases, multi-line scalars, flow collections that span lines, escapes inside quotes, duplicate keys, unknown keys at any level, and values of the wrong shape are **problems**. A problem is never a silent default: `adapter.mjs` names each one with its line (with its key path in JSON) and exits 1, and the skill stops until it is fixed.
+Tabs, anchors, aliases, multi-line scalars, flow collections that span lines, escapes inside quotes, a ` #` comment inside a flow collection (`{ name: api # note }`), a `: ` inside an unquoted value (`command: npm test: unit`, `[x: y]`: quote the value), duplicate keys, unknown keys at any level, and values of the wrong shape are **problems**. A list item that is only a comment (`- # disabled`) is an item with no value, as in real YAML, so where a string or mapping is expected it is a value of the wrong shape. A problem is never a silent default: `adapter.mjs` names each one with its line (with its key path in JSON) and exits 1, and the skill stops until it is fixed.
 
 ## Keys
 

@@ -22,7 +22,7 @@ These are word for word the definitions in Agent-kit's root glossary, where a co
 
 **Execution record**: A QA Plan's last section, empty after compose, where whoever runs the plan records each scenario's result.
 
-**QA Artifact**: A screenshot, recording or log captured during a QA run, only where a written result is not enough; private by default.
+**QA Artifact**: A screenshot, recording or log captured during a QA run, saved locally by default at each scenario's expected result; private until the person picks it for upload.
 
 **QA Report**: The self-contained Markdown file `manual-qa` writes for one run of one QA Plan: the build it checked, one row per scenario (PASS, FAIL, or left for a person), and the evidence.
 
@@ -64,6 +64,10 @@ QA Accounts have public values derived from tracked source, and a seeder that re
 
 The report is a self-contained Markdown file in a gitignored folder, ready to post anywhere, and it is always written: a team on another tracker, or a person with no `gh` access, still has the whole result. Posting it to GitHub is outward-facing, so it waits until the person has seen the results and said yes. It goes where the plan went, so the people who read the plan find its results beside it. On a pull request it is one comment found by its `<!-- qa-report -->` marker and edited on each re-run: a second comment would leave readers to work out which run is current.
 
+## Capture is the default
+
+A written result says what the tester saw; a screenshot lets the person who reads the report see it too. The pilot run that left capture to the runner's judgement ("only where a written result is not enough") produced a report with no evidence at all, even for two-session scenarios whose result was the hardest to take on trust. So a scenario that runs is captured at its expected result, and a row with no file must say why (`none: <reason>`), which `report.mjs read` checks. Capture writes only into the gitignored `working_dir`, on the tester's own machine, so it needs no question: what to guard against is a file leaving the machine, which the next section covers. The baseline capture rules (no filled password field, no one-time code, no sign-in value) bind every capture, since a local file can still be picked for upload later; a Run brief's `Capture rules: None.` adds nothing to them and takes nothing away.
+
 ## Evidence stays local unless picked
 
-A QA Artifact can show more than the scenario needed: another account's row, a notification, a stack trace. So nothing is uploaded by default, and with a release configured only the files the person picks, one at a time, go; "upload all" would carry the one nobody looked at. A failed run's media is never uploaded: a failure is when the screen most often shows what it must not, and the written result says what went wrong. Uploads go to a prerelease, never a full release that people download as the software, and a public repository gets a warning first, since anyone can download what is uploaded there.
+The risk this section guards is upload, not capture. A QA Artifact can show more than the scenario needed: another account's row, a notification, a stack trace. So nothing is uploaded by default, and with a release configured only the files the person picks, one at a time, go; "upload all" would carry the one nobody looked at. A failed run's media is never uploaded: a failure is when the screen most often shows what it must not, and the written result says what went wrong. Uploads go to a prerelease, never a full release that people download as the software, and a public repository gets a warning first, since anyone can download what is uploaded there.

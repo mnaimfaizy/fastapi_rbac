@@ -28,6 +28,7 @@ The harness can start a separate session the human can open, read and talk to wh
 - `await`: end the turn. The app continues the Chief of Staff when a started session ends a turn, quoting the start of its latest report. Never poll.
 - `report`: the session's report file, and its final message.
 - A sub-agent, for an analysis Delegation: the in-session agent tool. Its result returns to the Chief of Staff when it finishes. **Check before use:** whether a sub-agent can be sent a follow-up message after it finishes.
+- A user-invoked skill in a Live Session, for a QA Delegation: start the session on its brief, and once its first phase has stopped, `message` it `/qa-plan <n>`; later, `/manual-qa <plan file>`. **Check before use:** whether the app runs a slash command sent this way as the user's own invocation. In the first run of `orchestrate` (2026-11-13) it was not tried: the QA session could not invoke `qa-plan` itself, and the human typed `/qa-plan <n>` there. So try it, and if the session does not run it, the human types it; record which happened in the Activity Log, and correct this line.
 
 A tier 1 harness may also run tier 2 Executors, and a Live Session is preferred for a building Delegation: the human can open it to watch or steer.
 
@@ -39,6 +40,7 @@ The harness can start a headless run in the background and resume it later, but 
 
 - `spawn`: `claude -p "<brief>" --model <model> --output-format json` as a background process, started in the Delegation's worktree, with its output written to `delegations/<id>/output.json` by its absolute path in the Chief of Staff's run folder. The handle is the session id in that output, with the process id. **Check before use:** the permission mode a headless run needs to commit and push without asking (`--permission-mode`), which is the human's choice to approve in the Dispatch Plan.
 - `message`: `claude -p "<text>" --resume <session-id>` in the same worktree, once the earlier run has ended. A message cannot reach a run while it is still working: it waits for that run's end.
+- A user-invoked skill, for a QA Delegation: `spawn` on the brief, then `/qa-plan <n>` as the text of a `message` once its first phase has stopped, and `/manual-qa <plan file>` as a later one. **Check before use:** whether `-p` runs a slash command as the user's own invocation, and whether a headless run can drive the browser `manual-qa` needs. Try it; if either fails, the QA Delegation falls back to a session the human starts, as on tier 3. That fallback is part of the Executor the Dispatch Plan names for the QA row ("headless run; else a session you start"), so the switch needs no new plan. Record which happened in the Activity Log.
 - `await`: wait on the background processes; on an end, read its output and the report file. Check a long-running one's Activity Log at an interval matched to its work, not more often.
 - `report`: the report file, and the `result` in the output.
 - A sub-agent: the in-session agent tool, as in tier 1.
@@ -58,9 +60,12 @@ The Chief of Staff still never does a Delegation's work itself, here least of al
 
 ## Choosing an Executor
 
-| Delegation | Tier 1                                 | Tier 2                         | Tier 3                     |
-| ---------- | -------------------------------------- | ------------------------------ | -------------------------- |
-| building   | A Live Session                         | A headless run                 | A session the human starts |
-| analysis   | A sub-agent, or a Live Session if long | A sub-agent, or a headless run | A session the human starts |
+| Delegation | Tier 1                                 | Tier 2                                          | Tier 3                     |
+| ---------- | -------------------------------------- | ----------------------------------------------- | -------------------------- |
+| building   | A Live Session                         | A headless run                                  | A session the human starts |
+| analysis   | A sub-agent, or a Live Session if long | A sub-agent, or a headless run                  | A session the human starts |
+| QA         | A Live Session                         | A headless run; else a session the human starts | A session the human starts |
 
 The Dispatch Plan names the Executor for every Delegation, and the human's "go" approves it.
+
+A QA Delegation is never a sub-agent, on any tier: a sub-agent cannot take a user-invoked skill, and QA needs a working copy and a browser of its own. On every tier, the QA Delegation's session starts on its brief, never on a skill command, so the head is pinned before `qa-plan` runs. Where the way a QA skill starts is still **check before use**, the Dispatch Plan says the human may be asked to type `/qa-plan <n>`, and later `/manual-qa <plan file>`, in that session.

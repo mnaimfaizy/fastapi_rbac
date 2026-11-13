@@ -176,6 +176,18 @@ function parseFlow(text, i, problem, stops = ",]}") {
   while (j < text.length && !stops.includes(text[j])) j += 1;
   const value = text.slice(i, j).trim();
   plainProblems(value, problem);
+  // Real YAML ends the line at ` #`, leaving the collection unclosed; this
+  // subset would otherwise keep the comment as part of the value.
+  if (/(?:^|\s)#/.test(value))
+    problem(
+      "a `#` comment inside a flow collection is outside the YAML subset ADAPTER.md documents",
+    );
+  // A key stops at `:` already. In a value, real YAML refuses `{ a: b: c }`
+  // and reads `[a: b]` as a mapping, so other tools would read it otherwise.
+  if (!stops.includes(":") && /:(?:\s|$)/.test(value))
+    problem(
+      "a `: ` inside an unquoted value is outside the YAML subset ADAPTER.md documents — quote the value",
+    );
   if (value === "") problem("an empty value inside a flow collection");
   return [value, j];
 }
@@ -197,6 +209,11 @@ function inlineValue(raw, problem) {
   }
   const value = text.replace(/\s+#.*$/, "").trim();
   plainProblems(value, problem);
+  // Real YAML refuses `key: a: b` ("mapping values are not allowed here").
+  if (/:(?:\s|$)/.test(value))
+    problem(
+      "a `: ` inside an unquoted value is outside the YAML subset ADAPTER.md documents — quote the value",
+    );
   return value;
 }
 
@@ -289,7 +306,8 @@ export function parseYamlSubset(text) {
       pos += 1;
       const itemPath = `${path}[${items.length}]`;
       where.set(itemPath, line.no);
-      const content = body.replace(/^-[ \t]*/, "");
+      // `- # note` is an item with no value, as in real YAML, never the text `# note`.
+      const content = body.replace(/^-[ \t]*/, "").replace(/^#.*$/, "");
       if (content === "") {
         const next = lines[pos];
         items.push(next && indentOf(next) > indent ? parseBlock(indentOf(next), itemPath) : null);

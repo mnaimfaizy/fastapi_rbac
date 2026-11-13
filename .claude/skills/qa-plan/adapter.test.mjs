@@ -755,3 +755,77 @@ test("labels match without regard to case", () => {
   const { config } = yaml(...SPEC_EXAMPLE);
   assert.equal(pickDelivery(config, { labels: ["PRD"] }).to, "tracker-issue");
 });
+
+// ── Out-of-subset inputs read silently before (#174) ────────────────────────
+
+const QUOTE =
+  /^line 1: a `: ` inside an unquoted value is outside the YAML subset ADAPTER.md documents — quote the value$/;
+const FLOW_COMMENT =
+  "line 1: a `#` comment inside a flow collection is outside the YAML subset ADAPTER.md documents";
+
+test("a list item that is only a comment has no value, never the comment's text", () => {
+  for (const text of ["suites:\n  - # disabled\n", "suites:\n  -  # disabled\n"]) {
+    const { value, problems } = parseYamlSubset(text);
+    assert.deepEqual(value, { suites: [null] });
+    assert.deepEqual(problems, []);
+  }
+  assert.deepEqual(yaml("hazards:", "  - # disabled").problems, [
+    "line 2: `hazards[0]`: expected a mapping with a `pack` path",
+  ]);
+  assert.deepEqual(yaml("plan:", "  suites:", "    - # disabled").problems, [
+    "line 3: `plan.suites[0]`: expected a mapping",
+  ]);
+});
+
+test("a ` #` inside a one-line flow collection is a problem; inside quotes it is not", () => {
+  assert.deepEqual(parseYamlSubset("a: { name: api # note }\n").problems, [FLOW_COMMENT]);
+  assert.deepEqual(parseYamlSubset("a: [x # note]\n").problems, [FLOW_COMMENT]);
+  assert.deepEqual(parseYamlSubset('a: { name: "api # note" }\n').problems, []);
+  assert.deepEqual(parseYamlSubset("a: ['x # note']\n").problems, []);
+});
+
+test("a `: ` inside an unquoted value is a problem that says to quote it", () => {
+  for (const text of ["command: npm test: unit\n", "a: [x: y]\n", "a: { k: a: b }\n"]) {
+    const { problems } = parseYamlSubset(text);
+    assert.equal(problems.length, 1, text);
+    assert.match(problems[0], QUOTE, text);
+  }
+});
+
+test("quoted `: ` and `#`, a colon with no space, and a trailing comment still read clean", () => {
+  const clean = {
+    'command: "npm test: unit"': { command: "npm test: unit" },
+    "a: ['x: y']": { a: ["x: y"] },
+    "url: http://localhost:3000": { url: "http://localhost:3000" },
+    "a: a:b": { a: "a:b" },
+    'a: { name: "api # note" }': { a: { name: "api # note" } },
+    "key: value # trailing comment": { key: "value" },
+  };
+  for (const [text, value] of Object.entries(clean))
+    assert.deepEqual(parseYamlSubset(`${text}\n`), {
+      value,
+      problems: [],
+      lines: new Map([[Object.keys(value)[0], 1]]),
+    });
+});
+
+test("check exits 1 and names the line for each out-of-subset input", () => {
+  const bad = {
+    "hazards:\n  - # disabled\n": /^line 2: `hazards\[0\]`: expected a mapping/,
+    "run: { name: api # note }\n": /^line 1: a `#` comment inside a flow collection/,
+    "run: [x # note]\n": /^line 1: a `#` comment inside a flow collection/,
+    "working_dir: npm test: unit\n": QUOTE,
+    "run: [x: y]\n": QUOTE,
+    "run: { k: a: b }\n": QUOTE,
+  };
+  for (const [text, problem] of Object.entries(bad)) {
+    const { code, out } = main(["check", "--for", "plan"], {
+      read: reader({ "qa.config.yml": text }),
+    });
+    assert.equal(code, 1, text);
+    assert.ok(
+      JSON.parse(out).problems.some((p) => problem.test(p)),
+      text,
+    );
+  }
+});

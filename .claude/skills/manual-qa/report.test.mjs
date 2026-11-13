@@ -118,6 +118,94 @@ test("a result other than the three is a problem", () => {
   assert.match(problems[0], /S1's result is `passed-ish`/);
 });
 
+// --- Evidence: captured by default, `none` only with a reason ---
+
+const S2_LEFT =
+  "| S2: A signed-out visitor cannot open the members page | left for a person | none | no driver here can drive a `web` surface |";
+const readCli = (report) => main(["read", "r.md"], { readFile: () => report });
+
+test("`read` exits 1 for a PASS or FAIL row with a bare `none`, an empty `none:` or no path", () => {
+  for (const result of ["PASS", "FAIL"])
+    for (const evidence of ["none", "none:", "none:   ", "", "see the notes", "None: x"]) {
+      const report = reportFor([
+        `| S1: An admin invites a new member | ${result} | ${evidence} | invite sent |`,
+        S2_LEFT,
+      ]);
+      const { code, out } = readCli(report);
+      assert.equal(code, 1, `${result} with \`${evidence}\``);
+      assert.deepEqual(JSON.parse(out).problems, [
+        `line 13: S1 is a ${result} with no evidence path: link its QA Artifact in backticks, ` +
+          "or write `none: <reason>`",
+      ]);
+    }
+});
+
+test("`read` exits 0 for `none: <reason>`, a backticked path, and a bare `none` left for a person", () => {
+  for (const evidence of [
+    "none: api surface, the redacted response body is in the notes",
+    "none: driver cannot save images",
+    "`qa-report-pr-57/s1.png`",
+  ])
+    for (const result of ["PASS", "FAIL"]) {
+      const report = reportFor([
+        `| S1: An admin invites a new member | ${result} | ${evidence} | invite sent |`,
+        S2_LEFT,
+      ]);
+      assert.equal(readCli(report).code, 0, `${result} with \`${evidence}\``);
+    }
+  // A reason does not become an evidence path: what upload reads is unchanged.
+  const reason = readReport(
+    reportFor([S1_ROW("PASS", "invite sent"), S2_ROW("left for a person", "not run")]),
+  );
+  assert.deepEqual(reason.problems, []);
+  assert.deepEqual(
+    reason.report.results.map((row) => row.evidence),
+    [[], []],
+  );
+  // A reason that quotes an endpoint or a role, or a cell wrapped whole in
+  // backticks, is still a reason: nothing in it becomes a pickable file.
+  for (const evidence of [
+    "none: the response for `GET /members` is in the notes, signed in as `admin`",
+    "`none: driver cannot save images`",
+  ]) {
+    const read = readReport(
+      reportFor([
+        `| S1: An admin invites a new member | PASS | ${evidence} | invite sent |`,
+        S2_LEFT,
+      ]),
+    );
+    assert.deepEqual(read.problems, [], evidence);
+    assert.deepEqual(read.report.results[0].evidence, [], evidence);
+  }
+});
+
+test("a report that links local media per session, and a recording, reads against its plan", () => {
+  // S2 becomes a two-session scenario: an admin signs a member out while the member watches.
+  const plan = PLAN.replace(
+    "- **Signs in as:** nobody\n- **Steps:**\n  1. Open `/members` while signed out.",
+    "- **Sessions:** A = `member`, B = `admin`\n- **Steps:**\n  1. In session A, open **Members**.\n  2. In session B, click **Sign out everywhere** for the member.\n  3. In session A, reload **Members**.",
+  );
+  assert.deepEqual(validatePlan(plan).problems, []);
+  const media = [
+    "qa-report-pr-57/s2-a.png",
+    "qa-report-pr-57/s2-b.png",
+    "qa-report-pr-57/s2-a-before.png",
+    "qa-report-pr-57/s2.gif",
+  ];
+  const report = reportFor([
+    "| S1: An admin invites a new member | PASS | `qa-report-pr-57/s1.png` | invite sent |",
+    `| S2: A signed-out visitor cannot open the members page | PASS | ${media
+      .map((file) => `\`${file}\``)
+      .join(" ")} | A (\`member\`) was sent to **Sign in**; B (\`admin\`) stayed on **Members** |`,
+  ]);
+  const files = { "report.md": report, "plan.md": plan };
+  const { code, out } = main(["read", "report.md", "--plan", "plan.md"], {
+    readFile: (path) => files[path] ?? null,
+  });
+  assert.equal(code, 0, out);
+  assert.deepEqual(JSON.parse(out).report.results[1].evidence, media);
+});
+
 // --- The report against its plan: Scenario accounts ---
 
 /** good.md with S1 creating `temp-user` and S2 signing in as it. */
@@ -125,10 +213,13 @@ const ACCOUNT_PLAN = PLAN.replace(
   "- **Signs in as:** `admin`\n",
   "- **Signs in as:** `admin`\n- **Creates:** `temp-user` (its values chosen when S1 creates it)\n",
 ).replace("- **Signs in as:** nobody\n", "- **Signs in as:** `temp-user` (created in S1)\n");
+/** A row with no QA Artifact: a reason when it ran, a bare `none` when it was left. */
+const noEvidence = (result) =>
+  result === "left for a person" ? "none" : "none: api surface, the response is in the notes";
 const S1_ROW = (result, note) =>
-  `| S1: An admin invites a new member | ${result} | none | ${note} |`;
+  `| S1: An admin invites a new member | ${result} | ${noEvidence(result)} | ${note} |`;
 const S2_ROW = (result, note) =>
-  `| S2: A signed-out visitor cannot open the members page | ${result} | none | ${note} |`;
+  `| S2: A signed-out visitor cannot open the members page | ${result} | ${noEvidence(result)} | ${note} |`;
 const LEFT_NOTE = "signs in as `temp-user`, which S1 creates, and S1 did not pass";
 const againstPlan = (rows, plan = ACCOUNT_PLAN) =>
   reportPlanProblems(readReport(reportFor(rows)).report, plan);
@@ -205,7 +296,8 @@ test("the rule carries down a chain of Scenario accounts", () => {
       "- [ ] S2: A signed-out visitor cannot open the members page\n- [ ] S3: The invitee signs in",
     );
   assert.deepEqual(validatePlan(chain).problems, []);
-  const S3_ROW = (result, note) => `| S3: The invitee signs in | ${result} | none | ${note} |`;
+  const S3_ROW = (result, note) =>
+    `| S3: The invitee signs in | ${result} | ${noEvidence(result)} | ${note} |`;
   const S3_NOTE = "signs in as `invitee`, which S2 creates, and S2 did not pass";
   // S1 failed, so S2 is left for a person, so S3 is left too.
   assert.deepEqual(
@@ -286,7 +378,7 @@ test("a note naming any blocked session is the reason", () => {
     );
   assert.deepEqual(validatePlan(plan).problems, []);
   const S3_ROW = (result, note) =>
-    `| S3: Each new user sees the other's change | ${result} | none | ${note} |`;
+    `| S3: Each new user sees the other's change | ${result} | ${noEvidence(result)} | ${note} |`;
   const rows = (note) => [
     S1_ROW("FAIL", "no invite appeared"),
     S2_ROW("left for a person", LEFT_NOTE),
@@ -472,7 +564,7 @@ test("a tracker issue for another pull request or a revised head is not touched"
 });
 
 test("a tracker issue whose report misses a plan scenario is not touched", () => {
-  const partial = reportFor(["| S1: An admin invites a new member | PASS | none | invite sent |"]);
+  const partial = reportFor([S1_ROW("PASS", "invite sent")]);
   const { body, problems } = trackerBody(trackerBody(PLAN, PASSED).body, partial);
   assert.equal(body, null);
   assert.match(problems[0], /the plan's scenarios are S1 S2; the report's results are S1/);

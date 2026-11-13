@@ -18,6 +18,7 @@ models:
   analysis: claude-sonnet-5-5
   build: claude-opus-5-5
   review: claude-opus-5-5
+  qa: claude-sonnet-5-5
 limits:
   building: 3
   shared: [database migrations, "port 5432"]
@@ -104,6 +105,7 @@ The roles are `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`
 | `analysis` | Analysis Delegations, and the Chief of Staff's own analysis.                                    |
 | `build`    | Building Delegations.                                                                           |
 | `review`   | The code-review phase of a building brief, where the harness lets a phase run on its own model. |
+| `qa`       | QA Delegations: composing a QA Plan and running it.                                             |
 
 Each value is a model name the Executor's harness accepts, passed as written. Unset, that work runs on the harness's default model.
 
@@ -111,8 +113,10 @@ Each value is a model name the Executor's harness accepts, passed as written. Un
 
 | Key        | Default | Meaning                                                                                                                                                                                              |
 | ---------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `building` | `3`     | The most building Delegations running at once. A whole number of 1 or more. Analysis Delegations do not count.                                                                                       |
+| `building` | `3`     | The most building Delegations running at once. A whole number of 1 or more. Analysis and QA Delegations do not count.                                                                                |
 | `shared`   | `[]`    | Named resources only one Delegation may hold at a time, such as a database its migrations change or a port its tests bind. A Delegation that holds one is planned into a wave no other holder is in. |
+
+The **QA Stack** is a shared resource whether or not `shared` names it: every QA Delegation whose QA config runs against a `stack` holds it, so two never run at once. The skill cannot know which ports or containers that stack uses. When a building Delegation's tests use the same ones, name them in `shared` and say so in the scope fence, so the building Delegation is kept apart from QA.
 
 ### `decisions`
 
@@ -128,7 +132,7 @@ A Delegation is Ready to Merge only when every check on its head has passed and 
 | Key         | Default   | Meaning                                                                                                                |
 | ----------- | --------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `review`    | `settled` | `settled`: every review comment is fixed or answered. `approved`: that, and an approving review.                       |
-| `qa`        | `none`    | `report`: a QA Report exists for the pull request's head.                                                              |
+| `qa`        | `none`    | `report`: each pull request's head is QA'd by a QA Delegation, and Ready to Merge needs its result for that head.      |
 | `qa_labels` | `[]`      | With `qa: report`, the report is required only for an issue carrying one of these labels. Any other `qa` is a problem. |
 
 ### `spec`
@@ -142,7 +146,7 @@ Read only by a spec run ([SPEC.md](SPEC.md#the-landing)).
 
 ## Readiness check
 
-`node "<skill>/config.mjs" check` prints JSON: the config's `path` (null when there is none), its `problems`, the `effective` values with every default applied, and `readiness`: what the run still **needs** (asked for, in one message) and **notes** (said, and the run goes on). It needs `read_first`, `routes.commit`, `routes.pull_request` and `regate`. It exits 1 on any problem and 2 on bad usage; `--repo <dir>` reads another repository.
+`node "<skill>/config.mjs" check` prints JSON: the config's `path` (null when there is none), its `problems`, the `effective` values with every default applied, and `readiness`: what the run still **needs** (asked for, in one message) and **notes** (said, and the run goes on). It needs `read_first`, `routes.commit`, `routes.pull_request` and `regate`, and `ready_to_merge.qa` when a QA config (`qa.config.yml`, `qa.config.yaml` or `qa.config.json`) is at the repository root and the config does not set it. With a QA config and `qa: none` set, it notes that the run plans no QA. `qa_config` in the output is that file's name, or null. It exits 1 on any problem and 2 on bad usage; `--repo <dir>` reads another repository.
 
 ### Answers given in chat
 

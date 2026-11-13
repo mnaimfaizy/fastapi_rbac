@@ -28,7 +28,7 @@ run:
 
 The first file present is the config: `qa.config.yml`, then `qa.config.yaml`, then `qa.config.json`. A key it does not carry takes its default, never another file's value.
 
-**JSON** is read whole. **YAML** is read in a subset only: block mappings and sequences indented with spaces; plain, single- or double-quoted scalars; flow lists and mappings that open and close on one line; full-line and trailing `#` comments. Every scalar is a string. Tabs, anchors, aliases, multi-line scalars, flow collections spanning lines, escapes inside double quotes, duplicate keys, unknown keys at any level and values of the wrong shape are **problems**: `adapter.mjs` names each with its line (its key path in JSON) and exits 1, and the skill stops until it is fixed. Write long entries in block style, as `roles` is written above: a formatter wraps a long flow mapping out of the subset.
+**JSON** is read whole. **YAML** is read in a subset only: block mappings and sequences indented with spaces; plain, single- or double-quoted scalars; flow lists and mappings that open and close on one line; full-line and trailing `#` comments. Every scalar is a string. Tabs, anchors, aliases, multi-line scalars, flow collections spanning lines, escapes inside double quotes, a ` #` comment inside a flow collection (`{ name: api # note }`), a `: ` inside an unquoted value (`command: npm test: unit`, `[x: y]`: quote the value), duplicate keys, unknown keys at any level and values of the wrong shape are **problems**: `adapter.mjs` names each with its line (its key path in JSON) and exits 1, and the skill stops until it is fixed. A list item that is only a comment (`- # disabled`) is an item with no value, as in real YAML, so where a string or mapping is expected it is a value of the wrong shape. Write long entries in block style, as `roles` is written above: a formatter wraps a long flow mapping out of the subset.
 
 ## Keys
 
@@ -107,6 +107,8 @@ The QA Report file in `working_dir` is always written, and is the whole result u
 - **`pr-comment`:** one comment on the pull request, whose first line is exactly `<!-- qa-report -->`, written by the person posting. A re-run edits it; a second is never posted. A marker comment anyone else wrote is never edited: they could change it after the run.
 - **`tracker-issue`:** the plan's issue, found by the pull request's `<!-- qa-plan-link -->` comment. Each scenario's Sign-off box is ticked when it passed and cleared otherwise, and its Execution record becomes the report's, with links to the uploaded evidence.
 
+Capture is the default and needs no question: every scenario that runs to a PASS or FAIL gets a screenshot at its expected result in `<working_dir>/qa-report-pr-<n>/`, by the file names in SKILL.md step 6. A PASS or FAIL row with no file says why in its Evidence cell, as `none: <reason>`, and `report.mjs read` refuses one that does not; a row left for a person may say a bare `none`. Only upload asks.
+
 **`run.evidence.upload`** decides whether any QA Artifact leaves `working_dir`:
 
 - **`none`** (the default): none does.
@@ -116,4 +118,4 @@ The QA Report file in `working_dir` is always written, and is the whole result u
 
 ## Capture rules
 
-A QA Plan's Run brief inlines the _Capture rules_ of every Hazard pack that matched the change (`qa-plan` copies them in). `manual-qa` obeys them while it captures evidence, without opening the packs: the plan alone is enough.
+A QA Plan's Run brief inlines the _Capture rules_ of every Hazard pack that matched the change (`qa-plan` copies them in). `manual-qa` obeys them while it captures evidence, without opening the packs: the plan alone is enough. They add to the baseline rules that bind every capture: never a password field with a value in it, a one-time code, or any sign-in value. A Run brief whose **Capture rules** are `None.` means those baseline rules only, not that nothing is captured.

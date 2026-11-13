@@ -228,6 +228,55 @@ test("uploads are picked one by one, refuse a failed run's media, and warn on a 
   assert.match(skill, /Never upload to a release that is not a prerelease/);
 });
 
+test("evidence is captured locally by default, without a question; only upload asks", () => {
+  const flat = skill.replace(/\s+/g, " ");
+  assert.doesNotMatch(flat, /only where a written result is not enough/);
+  assert.match(
+    flat,
+    /\*\*Capture locally by default\.\*\* Every scenario that runs to a PASS or FAIL gets a screenshot at its expected result/,
+  );
+  assert.match(
+    flat,
+    /Local capture into the gitignored `working_dir` needs no question; only uploading does/,
+  );
+  assert.match(flat, /Capture the evidence as you go, without asking first/);
+  // File naming: one per scenario, one per session, a FAIL's divergence.
+  assert.match(
+    flat,
+    /`s<n>\.png`, or `s<n>-<session>\.png` for each session of a multi-session scenario/,
+  );
+  assert.match(flat, /\*\*On a FAIL,\*\* a screenshot at the point it diverged too/);
+  // A recording when the driver can, else before and after the key step.
+  assert.match(
+    flat,
+    /\*\*For a multi-session or timing-dependent scenario\*\*.*a recording of the key step when the driver can record/,
+  );
+  assert.match(flat, /When it cannot, a screenshot before and after the key step/);
+  // `none` needs a reason, except when left for a person.
+  assert.match(flat, /A PASS or FAIL with no file writes `none: <reason>`/);
+  assert.match(flat, /A bare `none` is only for a scenario left for a person/);
+  assert.match(flat, /\| PASS \| none: api surface, the redacted response body is in the notes \|/);
+});
+
+test("finding a driver notes whether it can save images and record", () => {
+  const flat = skill.replace(/\s+/g, " ");
+  assert.match(flat, /whether it can \*\*save images\*\*.*and whether it can \*\*record\*\*/);
+  assert.match(
+    flat,
+    /A driver that only shows a screenshot to you, without saving it, cannot save images/,
+  );
+});
+
+test("the baseline capture rules bind every capture, and `None.` means only those", () => {
+  const flat = skill.replace(/\s+/g, " ");
+  assert.match(
+    flat,
+    /Never capture a password field with a value in it, a one-time code, or any sign-in value/,
+  );
+  assert.match(flat, /These baseline rules hold on every run/);
+  assert.match(flat, /`None\.` there means no rules beyond these, not nothing to capture/);
+});
+
 test("every report.mjs command SKILL.md names is one report.mjs accepts", () => {
   const commands = [...skill.matchAll(/report\.mjs" (\w+)/g)].map((m) => m[1]);
   assert.deepEqual([...new Set(commands)].sort(), [
