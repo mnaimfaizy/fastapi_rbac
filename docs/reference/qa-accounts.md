@@ -55,3 +55,12 @@ Run on an existing account, `seed` puts back only what stops the account signing
 It leaves profile edits alone. `--restore` also resets the name, contact phone and verification code, and deletes the account's password history. It reports each thing it changed or deleted.
 
 Any repair ends every session the account holds, so a token issued while it had drifted stops working. That needs Redis, which the dev stack runs. A password goes back through `restore_fixture_password` in `app/utils/password_policy.py`. That applies the password rules, writes a history row, ends the sessions and records an audit event. It skips the reuse check on purpose: the fixture value was the account's first password, so it is nearly always in the history.
+
+## The QA Stack
+
+`manual-qa` runs a QA Plan against the QA Stack: the dev compose stack, started and stopped by the commands in `qa.config.yml`'s `run.stack`. It differs from plain dev use in two ways.
+
+- **A short account lock.** `backend/docker-compose.qa.yml` sets `ACCOUNT_LOCKOUT_MINUTES=5` and `MAX_LOGIN_ATTEMPTS=3` on `fastapi_rbac_dev`. A run can lock an account in three failed sign-ins and see the lock expire within one sitting. QA Plans that touch sign-in should expect these values. `up` and `down` both pass the file, so `down` stops what `up` started.
+- **Env files in a worktree.** `backend/.env.development` and `react-frontend/.env.development` are gitignored, so a git worktree starts without them. `up` first runs `node scripts/qa/prepare-stack.mjs`. It copies each missing file from the main checkout, never overwriting one that exists, and creates the `fastapi_rbac_dev_network` network if needed. When the main checkout has no copy either, it stops and names the file.
+
+`qa-plan` posts the QA Plan, and `manual-qa` posts the QA Report, as one comment each on the pull request, and only after the person running the skill says yes (`plan.publish`, `plan.tracker`).

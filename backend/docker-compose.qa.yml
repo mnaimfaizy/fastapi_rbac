@@ -1,0 +1,11 @@
+# QA Stack override for docker-compose.dev.yml. qa.config.yml's run.stack.up
+# and run.stack.down add it with a second -f; plain dev use never reads it.
+#
+# A short lock lets a manual QA run lock an account and see the lock expire
+# within one sitting. `environment` wins over the dev env file.
+# See docs/reference/qa-accounts.md#the-qa-stack.
+services:
+  fastapi_rbac_dev:
+    environment:
+      ACCOUNT_LOCKOUT_MINUTES: "5"
+      MAX_LOGIN_ATTEMPTS: "3"
