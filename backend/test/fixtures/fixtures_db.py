@@ -18,7 +18,7 @@ the tables, and the seed is rebuilt so the leak cannot spill into later tests.
 import asyncio
 import hashlib
 import os
-from collections.abc import AsyncGenerator, Coroutine
+from collections.abc import AsyncGenerator, Coroutine, Iterator
 from typing import Any, TypeVar
 
 import pytest
@@ -60,6 +60,8 @@ IS_POSTGRES = TEST_SQLALCHEMY_DATABASE_URI.startswith("postgresql")
 
 # Per table: (row count, sha256 of its rows in primary-key order)
 Fingerprint = dict[str, tuple[int, str]]
+# Mutable holder so a leak can swap in the rebuilt seed's fingerprint
+SeedHolder = dict[str, Fingerprint]
 T = TypeVar("T")
 
 
@@ -135,19 +137,19 @@ def _run_on_private_loop(coro: Coroutine[Any, Any, T]) -> T:
 
 
 @pytest.fixture(scope="session")
-def seeded_database() -> Any:
+def seeded_database() -> Iterator[SeedHolder]:
     """Build the schema and init_db seed once; yield the seed's fingerprint.
 
     Synchronous on purpose: a session-scoped async fixture would need a
     session-scoped event loop, while every test runs on its own function loop.
     """
-    seed = {"value": _run_on_private_loop(_build_seeded_database())}
+    seed: SeedHolder = {"value": _run_on_private_loop(_build_seeded_database())}
     yield seed
     _run_on_private_loop(_drop_database())
 
 
 @pytest_asyncio.fixture(scope="function")
-async def db_engine(seeded_database: Any) -> AsyncGenerator[AsyncEngine, None]:
+async def db_engine(seeded_database: SeedHolder) -> AsyncGenerator[AsyncEngine, None]:
     """Return an engine on the seeded test database.
 
     Function-scoped because pooled connections belong to the event loop that
@@ -171,7 +173,7 @@ def _describe_leak(seeded: Fingerprint, now: Fingerprint) -> str:
 
 
 @pytest_asyncio.fixture(scope="function")
-async def db(db_engine: AsyncEngine, seeded_database: Any) -> AsyncGenerator[AsyncSession, None]:
+async def db(db_engine: AsyncEngine, seeded_database: SeedHolder) -> AsyncGenerator[AsyncSession, None]:
     """Provide a database session whose writes are rolled back after the test."""
     async with db_engine.connect() as connection:
         await connection.begin()
