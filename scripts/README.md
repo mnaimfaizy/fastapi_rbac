@@ -14,6 +14,10 @@ Scripts for local development environment:
 - `graphify/Build-Graph.ps1` / `graphify/build-graph.sh` - Build the local knowledge graph from scratch (see `docs/agents/graphify.md`)
 - `graphify/graphify-refresh.sh` - Post-commit/post-merge/post-rewrite graph refresh, run by pre-commit hooks
 
+### QA Scripts (`qa/`)
+
+- `prepare-stack.mjs` - Prepare the QA Stack for `qa.config.yml`'s `run.stack.up`: copy missing dev env files from the main checkout and create the dev network (see `docs/reference/qa-accounts.md`)
+
 ### Docker Scripts (`docker/`)
 
 Docker environment management:
