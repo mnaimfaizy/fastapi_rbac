@@ -1,98 +1,162 @@
 """
 Database-related test fixtures.
+
+The schema and the init_db seed are built once per test session (per xdist
+worker). Rebuilding them for every test cost ~2.7s of setup per test, which
+was almost all of Backend CI's runtime. Each test is isolated instead by the
+``db`` fixture: it runs inside an outer transaction that is rolled back at
+teardown, and app code that commits only releases a SAVEPOINT inside it.
+
+That isolation is checked rather than assumed. After every test that used
+``db``, the row count of every table is compared with the counts the seed
+produced. A test that leaves rows behind fails its teardown with the
+difference, and the seed is rebuilt so the leak cannot spill into later tests.
 """
 
+import asyncio
 import os
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Coroutine
+from typing import Any, TypeVar
 
+import pytest
 import pytest_asyncio
-from sqlalchemy import Connection, text
-from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
+from sqlalchemy import func, select, text
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, async_sessionmaker, create_async_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.db.init_db import init_db
 
-# Set test database URI to use DATABASE_URL if provided, else fallback to shared in-memory SQLite database
+# Import every model so SQLModel.metadata knows all tables before create_all.
+from app.models.audit_log_model import AuditLog  # noqa: F401
+from app.models.base_uuid_model import SQLModel
+from app.models.password_history_model import UserPasswordHistory  # noqa: F401
+from app.models.permission_group_model import PermissionGroup  # noqa: F401
+from app.models.permission_model import Permission  # noqa: F401
+from app.models.role_group_map_model import RoleGroupMap  # noqa: F401
+from app.models.role_group_model import RoleGroup  # noqa: F401
+from app.models.role_model import Role  # noqa: F401
+from app.models.role_permission_model import RolePermission  # noqa: F401
+from app.models.user_model import User  # noqa: F401
+from app.models.user_role_model import UserRole  # noqa: F401
+
+# DATABASE_URL when provided (the Docker integration runner sets a Postgres
+# URL), else a SQLite file. Despite the name it is a file on disk, not an
+# in-memory database: the URI has no mode=memory. The files are git-ignored.
 TEST_SQLALCHEMY_DATABASE_URI = os.getenv(
     "DATABASE_URL", "sqlite+aiosqlite:///file:memory_test_db?cache=shared&uri=true"
 )
 
-# Patch: Make SQLite DB file unique per pytest-xdist worker for parallel safety
+# Make the SQLite file unique per pytest-xdist worker for parallel safety
 worker_id = os.environ.get("PYTEST_XDIST_WORKER", "default")
 if "sqlite" in TEST_SQLALCHEMY_DATABASE_URI:
     TEST_SQLALCHEMY_DATABASE_URI = TEST_SQLALCHEMY_DATABASE_URI.replace(
         "memory_test_db", f"memory_test_db_{worker_id}"
     )
 
-print(f"DEBUG: Using TEST_SQLALCHEMY_DATABASE_URI = {TEST_SQLALCHEMY_DATABASE_URI}")
+IS_POSTGRES = TEST_SQLALCHEMY_DATABASE_URI.startswith("postgresql")
+
+RowCounts = dict[str, int]
+T = TypeVar("T")
 
 
-# Use pytest-asyncio's built-in event_loop fixture instead of defining our own
-# The session-scoped loop is configured through the pytest.ini or markers
+def _new_engine() -> AsyncEngine:
+    if TEST_SQLALCHEMY_DATABASE_URI.startswith("sqlite"):
+        # timeout reduces flaky "database is locked" under shared-cache aiosqlite on Windows
+        connect_args: dict[str, Any] = {"check_same_thread": False, "timeout": 30}
+    else:
+        connect_args = {}
+    return create_async_engine(TEST_SQLALCHEMY_DATABASE_URI, echo=False, connect_args=connect_args)
+
+
+async def _drop_schema(conn: AsyncConnection) -> None:
+    if IS_POSTGRES:
+        # CASCADE also drops objects create_all does not know about
+        await conn.execute(text("DROP SCHEMA public CASCADE;"))
+        await conn.execute(text("CREATE SCHEMA public;"))
+    else:
+        await conn.run_sync(SQLModel.metadata.drop_all)
+
+
+async def _row_counts(engine: AsyncEngine) -> RowCounts:
+    async with engine.connect() as conn:
+        return {
+            table.name: (await conn.execute(select(func.count()).select_from(table))).scalar_one()
+            for table in SQLModel.metadata.sorted_tables
+        }
+
+
+async def _build_seeded_database() -> RowCounts:
+    """Drop whatever is there, create the schema, seed it, return row counts."""
+    engine = _new_engine()
+    try:
+        # Dropping first matters: the SQLite file outlives the run, so a run
+        # that was killed mid-way leaves its rows behind for the next one.
+        async with engine.begin() as conn:
+            await _drop_schema(conn)
+            await conn.run_sync(SQLModel.metadata.create_all)
+        session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with session_factory() as session:
+            await init_db(session)
+        return await _row_counts(engine)
+    finally:
+        await engine.dispose()
+
+
+async def _drop_database() -> None:
+    engine = _new_engine()
+    try:
+        async with engine.begin() as conn:
+            await _drop_schema(conn)
+    finally:
+        await engine.dispose()
+
+
+def _run_on_private_loop(coro: Coroutine[Any, Any, T]) -> T:
+    # Not asyncio.run(): it ends by clearing the thread's current event loop,
+    # which would pull the loop out from under pytest-asyncio. The engines
+    # used here are disposed inside the coroutine, so nothing outlives the loop.
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
+
+
+@pytest.fixture(scope="session")
+def seeded_database() -> Any:
+    """Build the schema and init_db seed once; yield the seed's row counts.
+
+    Synchronous on purpose: a session-scoped async fixture would need a
+    session-scoped event loop, while every test runs on its own function loop.
+    """
+    counts = {"value": _run_on_private_loop(_build_seeded_database())}
+    yield counts
+    _run_on_private_loop(_drop_database())
 
 
 @pytest_asyncio.fixture(scope="function")
-async def db_engine() -> AsyncGenerator[AsyncEngine, None]:
-    """Create test database tables and return engine."""
-    # Determine connect_args based on driver
-    if TEST_SQLALCHEMY_DATABASE_URI.startswith("sqlite"):
-        # timeout reduces flaky "database is locked" under shared-cache aiosqlite on Windows
-        connect_args = {"check_same_thread": False, "timeout": 30}
-    else:
-        connect_args = {}
-    engine = create_async_engine(TEST_SQLALCHEMY_DATABASE_URI, echo=False, connect_args=connect_args)
-    # Import all models to ensure they are registered with SQLAlchemy
-    from app.models.audit_log_model import AuditLog  # noqa: F401
-    from app.models.base_uuid_model import SQLModel
-    from app.models.password_history_model import UserPasswordHistory  # noqa: F401
-    from app.models.permission_group_model import PermissionGroup  # noqa: F401
-    from app.models.permission_model import Permission  # noqa: F401
-    from app.models.role_group_map_model import RoleGroupMap  # noqa: F401
-    from app.models.role_group_model import RoleGroup  # noqa: F401
-    from app.models.role_model import Role  # noqa: F401
-    from app.models.role_permission_model import RolePermission  # noqa: F401
-    from app.models.user_model import User  # noqa: F401
-    from app.models.user_role_model import UserRole  # noqa: F401
+async def db_engine(seeded_database: Any) -> AsyncGenerator[AsyncEngine, None]:
+    """Return an engine on the seeded test database.
 
-    async with engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.create_all)
-
-        # Debug info for table creation
-        def get_debug_info(sync_conn_: Connection) -> tuple[list[str], list[str]]:
-            from sqlalchemy import inspect
-
-            inspector = inspect(sync_conn_)
-            db_tables_ = inspector.get_table_names()
-            metadata_tables_ = list(SQLModel.metadata.tables.keys())
-            return db_tables_, metadata_tables_
-
-        db_tables_actual, metadata_tables_known = await conn.run_sync(get_debug_info)
-        print(f"DEBUG CONTEXT: Tables physically in DB after create_all: {db_tables_actual}")
-        print(f"DEBUG CONTEXT: Tables known to SQLModel.metadata: {metadata_tables_known}")
-
-    # Initialize database with test data
-    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    async with session_factory() as session:
-        await init_db(session)
-
+    Function-scoped because pooled connections belong to the event loop that
+    opened them, and each test has its own loop. Creating an engine is cheap;
+    it was the schema build and the seed that were not.
+    """
+    engine = _new_engine()
     yield engine
-
-    # Cleanup - drop all tables
-    async with engine.begin() as conn:
-        if TEST_SQLALCHEMY_DATABASE_URI.startswith("postgresql"):
-            # Use CASCADE for PostgreSQL to drop dependent objects
-            await conn.execute(text("DROP SCHEMA public CASCADE;"))
-            await conn.execute(text("CREATE SCHEMA public;"))
-        else:
-            from app.models.base_uuid_model import SQLModel
-
-            await conn.run_sync(SQLModel.metadata.drop_all)
     await engine.dispose()
 
 
+def _describe_leak(seeded: RowCounts, now: RowCounts) -> str:
+    changed = [
+        f"{name}: {seeded.get(name)} -> {count}" for name, count in now.items() if seeded.get(name) != count
+    ]
+    return ", ".join(changed)
+
+
 @pytest_asyncio.fixture(scope="function")
-async def db(db_engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
-    """Provide a database session for tests."""
+async def db(db_engine: AsyncEngine, seeded_database: Any) -> AsyncGenerator[AsyncSession, None]:
+    """Provide a database session whose writes are rolled back after the test."""
     async with db_engine.connect() as connection:
         await connection.begin()
         await connection.begin_nested()
@@ -110,25 +174,11 @@ async def db(db_engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
             await session.flush()
             await session.rollback()
 
-
-@pytest_asyncio.fixture(autouse=True)
-async def initialize_db(db_engine: AsyncEngine) -> AsyncGenerator[None, None]:
-    """Initialize the database for the test session."""
-    # Import all models to ensure they are registered
-    from app.models.audit_log_model import AuditLog  # noqa: F401
-    from app.models.base_uuid_model import SQLModel
-    from app.models.password_history_model import UserPasswordHistory  # noqa: F401
-    from app.models.permission_group_model import PermissionGroup  # noqa: F401
-    from app.models.permission_model import Permission  # noqa: F401
-    from app.models.role_group_map_model import RoleGroupMap  # noqa: F401
-    from app.models.role_group_model import RoleGroup  # noqa: F401
-    from app.models.role_model import Role  # noqa: F401
-    from app.models.role_permission_model import RolePermission  # noqa: F401
-    from app.models.user_model import User  # noqa: F401
-    from app.models.user_role_model import UserRole  # noqa: F401
-
-    async with db_engine.begin() as conn:
-        print("DEBUG CONTEXT: Initializing database - creating all tables...")
-        await conn.run_sync(SQLModel.metadata.create_all)
-        print("DEBUG CONTEXT: Database initialized.")
-    yield
+    now = await _row_counts(db_engine)
+    if now != seeded_database["value"]:
+        leak = _describe_leak(seeded_database["value"], now)
+        seeded_database["value"] = await _build_seeded_database()
+        pytest.fail(
+            f"Rows survived this test's rollback, so it is not isolated ({leak}). "
+            "The seed was rebuilt so later tests are unaffected."
+        )

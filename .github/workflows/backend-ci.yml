@@ -60,15 +60,15 @@ jobs:
   test:
     name: Backend Test
     runs-on: ubuntu-latest
-    # Set from the observed distribution, not a small sample: successful runs
-    # range from 12 to 34 minutes. The first value here was 30, taken from six
-    # runs whose maximum was 21, and it killed a healthy run on main at 90%
-    # complete. 60 leaves real headroom over the worst observed run while still
-    # catching a genuine hang six times sooner than GitHub's 360-minute default.
+    # The pytest step used to take ~22 minutes because every test rebuilt the
+    # schema and re-ran the init_db seed (~2.7s of setup each). The fixtures
+    # now build them once per session and isolate tests by rollback (see
+    # test/fixtures/fixtures_db.py), and conftest.py lowers the bcrypt work
+    # factor for the run. A local run of the same suite takes ~2.5 minutes.
     #
-    # The suite is slow because the in-process API tests in test/api/ boot the
-    # app and do real database work per test. #212 gave them their own
-    # directory so that cost is visible; it did not make them faster.
+    # Left at 60 on purpose. An earlier value of 30 was taken from a small
+    # sample and killed a healthy run on main at 90% complete. Tighten it only
+    # once the new runtime has a real distribution behind it.
     timeout-minutes: 60
     services:
       postgres:
