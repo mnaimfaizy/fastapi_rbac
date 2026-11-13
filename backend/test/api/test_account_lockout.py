@@ -142,3 +142,48 @@ async def test_locked_response_reports_time_left_on_the_stored_lock(
     stored = await stored_user(db, user.id)
     assert stored.locked_until is not None
     assert abs(as_utc(stored.locked_until) - locked_until) < TOLERANCE
+
+
+@pytest.mark.parametrize("attempt", [json_login, form_login], ids=["json-login", "access-token"])
+async def test_expired_lock_lets_the_right_password_in(
+    client: AsyncClient, db: AsyncSession, user_factory: Any, attempt: Attempt
+) -> None:
+    """Once locked_until passes, authenticate unlocks the account and the login succeeds."""
+    user = await user_factory.create(
+        password=PASSWORD,
+        verified=True,
+        is_active=True,
+        is_locked=True,
+        number_of_failed_attempts=settings.MAX_LOGIN_ATTEMPTS,
+        locked_until=(datetime.now(timezone.utc) - timedelta(minutes=1)).replace(tzinfo=None),
+    )
+
+    response = await attempt(client, user.email, PASSWORD)
+
+    assert response.status_code == 200, response.json()
+    stored = await stored_user(db, user.id)
+    assert stored.is_locked is False
+    assert stored.locked_until is None
+    assert stored.number_of_failed_attempts == 0
+
+
+@pytest.mark.parametrize("attempt", [json_login, form_login], ids=["json-login", "access-token"])
+async def test_expired_lock_counts_a_wrong_password_from_zero(
+    client: AsyncClient, db: AsyncSession, user_factory: Any, attempt: Attempt
+) -> None:
+    """A wrong password after expiry is an ordinary first failure, not a new lock."""
+    user = await user_factory.create(
+        password=PASSWORD,
+        verified=True,
+        is_active=True,
+        is_locked=True,
+        number_of_failed_attempts=settings.MAX_LOGIN_ATTEMPTS,
+        locked_until=(datetime.now(timezone.utc) - timedelta(minutes=1)).replace(tzinfo=None),
+    )
+
+    response = await attempt(client, user.email, WRONG_PASSWORD)
+
+    assert response.status_code == 422, response.json()
+    stored = await stored_user(db, user.id)
+    assert stored.is_locked is False
+    assert stored.number_of_failed_attempts == 1
