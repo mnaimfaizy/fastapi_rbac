@@ -13,7 +13,7 @@ In ``test/api/`` because they boot the app in-process: see
 
 import re
 from datetime import datetime, timedelta, timezone
-from test.utils import get_csrf_token
+from test.utils import STRONG_TEST_PASSWORD, get_csrf_token
 from typing import Any, Awaitable, Callable
 
 import pytest
@@ -25,8 +25,8 @@ from app.core.config import settings
 from app.models.audit_log_model import AuditLog
 from app.models.user_model import User
 
-PASSWORD = "TestPassw0rd!47"
-WRONG_PASSWORD = "incorrect"
+PASSWORD = STRONG_TEST_PASSWORD
+WRONG_PASSWORD = PASSWORD[::-1]
 LOCKOUT_MINUTES = 5
 TOLERANCE = timedelta(seconds=30)
 REMAINING_TIME = re.compile(r"Try again in (?:(\d+) hours and )?(\d+) minutes\.")
