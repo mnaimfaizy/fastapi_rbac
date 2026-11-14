@@ -505,3 +505,58 @@ async def test_password_reset_database_lookup_error_persists_an_audit_row(
     assert row.resource_type == "security_event"
     assert row.resource_id == ""
     assert row.details["token_subject"] == user.email
+
+
+@pytest.mark.parametrize(
+    ("path", "event_name"),
+    [
+        ("/password-reset/confirm", "password_reset_confirm_unexpected_error_runtimeerror"),
+        ("/reset_password", "reset_password_unexpected_error_runtimeerror"),
+    ],
+)
+async def test_password_reset_rollback_failure_keeps_the_500(
+    client: AsyncClient,
+    db: AsyncSession,
+    user_factory: Any,
+    redis_mock: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    path: str,
+    event_name: str,
+) -> None:
+    """A rollback that fails on the unexpected-error path still returns 500 (#278).
+
+    The lookup error stays the audit event. The rollback error does not replace it.
+    """
+    monkeypatch.setattr(settings, "UNIFORM_ACCOUNT_RESPONSE_FLOOR_SECONDS", 0)
+    user = await user_factory.create(password=PASSWORD, verified=True, is_active=True)
+    token = security.create_reset_token(user.email)
+    await add_token_to_redis(
+        redis_mock, user, token, TokenType.RESET, settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
+    )
+
+    async def raise_lookup(*_args: Any, **_kwargs: Any) -> None:
+        raise RuntimeError("lookup failed")
+
+    original_rollback = db.rollback
+
+    async def fail_rollback_once(*_args: Any, **_kwargs: Any) -> None:
+        monkeypatch.setattr(db, "rollback", original_rollback)
+        raise RuntimeError("rollback failed")
+
+    monkeypatch.setattr("app.api.v1.endpoints.auth.crud.user.get_by_email", raise_lookup)
+    monkeypatch.setattr(db, "rollback", fail_rollback_once)
+
+    response = await client.post(
+        auth_url(path),
+        json={"token": token, "new_password": PASSWORD},
+        headers=await csrf_headers(client),
+    )
+
+    assert response.status_code == 500, response.text
+    assert response.json()["detail"] == "An unexpected error occurred. Please try again later."
+    rows = await events_named(db, event_name)
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.actor_id is None
+    assert row.details["token_subject"] == user.email
+    assert row.details["error"] == "lookup failed"
