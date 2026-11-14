@@ -1634,6 +1634,13 @@ async def confirm_password_reset(
                 f"(ID: {user_id_for_log}) from IP {ip_address}: {str(e)}",
                 exc_info=True,
             )
+            # A database error aborts this transaction. Roll it back before the
+            # audit insert, or that insert is lost with the request (#278).
+            # A rollback that itself fails must not replace the 500.
+            try:
+                await db_session.rollback()
+            except Exception:
+                logger.exception("Failed to roll back the session before recording the password reset error")
             await log_security_event(
                 background_tasks=background_tasks,
                 db_session=db_session,
@@ -1773,6 +1780,13 @@ async def reset_password(
                 f"(ID: {user_id_for_log}) from IP {ip_address}: {str(e)}",
                 exc_info=True,
             )
+            # A database error aborts this transaction. Roll it back before the
+            # audit insert, or that insert is lost with the request (#278).
+            # A rollback that itself fails must not replace the 500.
+            try:
+                await db_session.rollback()
+            except Exception:
+                logger.exception("Failed to roll back the session before recording the password reset error")
             await log_security_event(
                 background_tasks=background_tasks,
                 db_session=db_session,
