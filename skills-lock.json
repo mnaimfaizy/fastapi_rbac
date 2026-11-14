@@ -1,0 +1,85 @@
+{
+  "version": 3,
+  "skills": {
+    "code-review": {
+      "source": "mnaimfaizy/agent-kit",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mnaimfaizy/agent-kit.git",
+      "ref": "v1.0.0-beta.6",
+      "skillPath": ".claude/skills/code-review/SKILL.md",
+      "skillFolderHash": "bd22eca2a0b236444a3a9a64d7761b4d5e1c90fa"
+    },
+    "security-audit": {
+      "source": "mnaimfaizy/agent-kit",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mnaimfaizy/agent-kit.git",
+      "ref": "v1.0.0-beta.6",
+      "skillPath": ".claude/skills/security-audit/SKILL.md",
+      "skillFolderHash": "d8d040b24a8c008d9bee812574076823ba2c1035"
+    },
+    "security-finding-triage": {
+      "source": "mnaimfaizy/agent-kit",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mnaimfaizy/agent-kit.git",
+      "ref": "v1.0.0-beta.6",
+      "skillPath": ".claude/skills/security-finding-triage/SKILL.md",
+      "skillFolderHash": "2a42bbe9a1ccd8e3b7533b4f02dbbd055764d53b"
+    },
+    "security-response": {
+      "source": "mnaimfaizy/agent-kit",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mnaimfaizy/agent-kit.git",
+      "ref": "v1.0.0-beta.6",
+      "skillPath": ".claude/skills/security-response/SKILL.md",
+      "skillFolderHash": "c56ec432b3f41a3826c7019afc79085354016280"
+    },
+    "explainer": {
+      "source": "mnaimfaizy/agent-kit",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mnaimfaizy/agent-kit.git",
+      "ref": "v1.0.0-beta.6",
+      "skillPath": ".claude/skills/explainer/SKILL.md",
+      "skillFolderHash": "c67041d30aacc45c158118df23758a160eabc2b6"
+    },
+    "instruction-drift-audit": {
+      "source": "mnaimfaizy/agent-kit",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mnaimfaizy/agent-kit.git",
+      "ref": "v1.0.0-beta.6",
+      "skillPath": ".claude/skills/instruction-drift-audit/SKILL.md",
+      "skillFolderHash": "fcfdc46dee8038dcabc231dd139389e30f9c22a6"
+    },
+    "qa-plan": {
+      "source": "mnaimfaizy/agent-kit",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mnaimfaizy/agent-kit.git",
+      "ref": "v1.0.0-beta.6",
+      "skillPath": ".claude/skills/qa-plan/SKILL.md",
+      "skillFolderHash": "e84c9f67bd11a1091507137378e81e726b635cb0"
+    },
+    "manual-qa": {
+      "source": "mnaimfaizy/agent-kit",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mnaimfaizy/agent-kit.git",
+      "ref": "v1.0.0-beta.6",
+      "skillPath": ".claude/skills/manual-qa/SKILL.md",
+      "skillFolderHash": "355e9bcb00fb888228dac4caa81c5f4aa0b29242"
+    },
+    "plain-prose": {
+      "source": "mnaimfaizy/agent-kit",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mnaimfaizy/agent-kit.git",
+      "ref": "v1.0.0-beta.6",
+      "skillPath": ".claude/skills/plain-prose/SKILL.md",
+      "skillFolderHash": "6a0b5ff4a0186b44b67eef21c46ef4893c5a0baa"
+    },
+    "orchestrate": {
+      "source": "mnaimfaizy/agent-kit",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mnaimfaizy/agent-kit.git",
+      "ref": "v1.0.0-beta.6",
+      "skillPath": ".claude/skills/orchestrate/SKILL.md",
+      "skillFolderHash": "c83dc2f8bd6d79df22eaaa005445b61ba7d79031"
+    }
+  }
+}
