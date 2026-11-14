@@ -62,7 +62,10 @@ function installWebStorage(name: 'localStorage' | 'sessionStorage') {
   const onWindow =
     typeof window !== 'undefined' ? readStorage(window, name) : undefined;
   const storage = onWindow ?? readStorage(globalThis, name) ?? memoryStorage();
-  for (const target of [globalThis, window]) {
+  for (const target of [
+    globalThis,
+    typeof window !== 'undefined' ? window : undefined,
+  ]) {
     if (!target) {
       continue;
     }
