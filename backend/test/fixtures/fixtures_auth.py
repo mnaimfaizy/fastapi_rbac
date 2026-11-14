@@ -30,6 +30,7 @@ async def superuser_token_headers(client: AsyncClient, db: AsyncSession) -> Dict
                 email=settings.FIRST_SUPERUSER_EMAIL,
                 is_active=True,
                 is_superuser=True,
+                verified=True,
                 first_name="Super",
                 last_name="User",
                 role_id=[],
@@ -54,7 +55,7 @@ async def superuser_token_headers(client: AsyncClient, db: AsyncSession) -> Dict
                     """
                     UPDATE "User"
                     SET created_at=:timestamp, updated_at=:timestamp,
-                        is_active=true, is_superuser=true
+                        is_active=true, is_superuser=true, verified=true
                     WHERE email=:email
                     """
                 ),
@@ -66,8 +67,8 @@ async def superuser_token_headers(client: AsyncClient, db: AsyncSession) -> Dict
                 text(
                     """
                     INSERT INTO "User" (id, email, password, is_superuser, is_active,
-                                      first_name, last_name, created_at, updated_at)
-                    SELECT :id, :email, :password, true, true, 'Super', 'User',
+                                      verified, first_name, last_name, created_at, updated_at)
+                    SELECT :id, :email, :password, true, true, true, 'Super', 'User',
                            :timestamp, :timestamp
                     WHERE NOT EXISTS (
                         SELECT 1 FROM "User" WHERE email = :email
@@ -128,6 +129,7 @@ async def normal_user_token_headers(client: AsyncClient, db: AsyncSession) -> Di
     user_in = IUserCreateFields(
         email=email,
         is_active=True,
+        verified=True,
     )
     await user_crud.create(
         obj_in=user_in, password=await accepted_password(db, password, email=email), db_session=db
