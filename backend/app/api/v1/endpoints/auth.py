@@ -1627,7 +1627,7 @@ async def confirm_password_reset(
             raise
         except Exception as e:
             error_type = type(e).__name__
-            user_id_for_log = user.id if user else (payload["sub"] if payload else None)
+            user_id_for_log = user.id if user else None
             email_for_log = user.email if user else "N/A"
             logger.error(
                 f"Unexpected error in confirm_password_reset for user {email_for_log} "
@@ -1766,7 +1766,7 @@ async def reset_password(
             raise
         except Exception as e:
             error_type = type(e).__name__
-            user_id_for_log = user.id if user else (payload["sub"] if payload else None)
+            user_id_for_log = user.id if user else None
             email_for_log = user.email if user else "N/A"
             logger.error(
                 f"Unexpected error in reset_password for user {email_for_log} "
@@ -1776,7 +1776,7 @@ async def reset_password(
             await log_security_event(
                 background_tasks=background_tasks,
                 db_session=db_session,
-                event_type=f"password_reset_confirm_unexpected_error_{error_type.lower()}",
+                event_type=f"reset_password_unexpected_error_{error_type.lower()}",
                 user_id=user_id_for_log,
                 details={
                     "email": email_for_log,
