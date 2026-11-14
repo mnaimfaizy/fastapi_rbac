@@ -1627,13 +1627,20 @@ async def confirm_password_reset(
             raise
         except Exception as e:
             error_type = type(e).__name__
-            user_id_for_log = user.id if user else (payload["sub"] if payload else None)
+            user_id_for_log = user.id if user else None
             email_for_log = user.email if user else "N/A"
             logger.error(
                 f"Unexpected error in confirm_password_reset for user {email_for_log} "
                 f"(ID: {user_id_for_log}) from IP {ip_address}: {str(e)}",
                 exc_info=True,
             )
+            # A database error aborts this transaction. Roll it back before the
+            # audit insert, or that insert is lost with the request (#278).
+            # A rollback that itself fails must not replace the 500.
+            try:
+                await db_session.rollback()
+            except Exception:
+                logger.exception("Failed to roll back the session before recording the password reset error")
             await log_security_event(
                 background_tasks=background_tasks,
                 db_session=db_session,
@@ -1766,17 +1773,24 @@ async def reset_password(
             raise
         except Exception as e:
             error_type = type(e).__name__
-            user_id_for_log = user.id if user else (payload["sub"] if payload else None)
+            user_id_for_log = user.id if user else None
             email_for_log = user.email if user else "N/A"
             logger.error(
                 f"Unexpected error in reset_password for user {email_for_log} "
                 f"(ID: {user_id_for_log}) from IP {ip_address}: {str(e)}",
                 exc_info=True,
             )
+            # A database error aborts this transaction. Roll it back before the
+            # audit insert, or that insert is lost with the request (#278).
+            # A rollback that itself fails must not replace the 500.
+            try:
+                await db_session.rollback()
+            except Exception:
+                logger.exception("Failed to roll back the session before recording the password reset error")
             await log_security_event(
                 background_tasks=background_tasks,
                 db_session=db_session,
-                event_type=f"password_reset_confirm_unexpected_error_{error_type.lower()}",
+                event_type=f"reset_password_unexpected_error_{error_type.lower()}",
                 user_id=user_id_for_log,
                 details={
                     "email": email_for_log,

@@ -16,11 +16,13 @@ from httpx import AsyncClient
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.core import security
 from app.core.config import settings
 from app.models.audit_log_model import AuditLog
+from app.models.user_model import User
 from app.schemas.common_schema import TokenType
 from app.utils.account_email_dispatch import ACCOUNT_EMAIL_UNIFORM_MESSAGE
-from app.utils.token import get_valid_tokens
+from app.utils.token import add_token_to_redis, get_valid_tokens
 
 PASSWORD = "TestPassw0rd!47"
 UNKNOWN_EMAIL = "no-such-login@example.com"
@@ -400,3 +402,161 @@ async def test_account_email_budget_exhaustion_writes_an_audit_row(
     rows = matching(await events_named(db, "account_email_budget_exhausted"), email)
     assert len(rows) == 1
     assert rows[0].actor_id is None
+
+
+@pytest.mark.parametrize(
+    ("path", "event_name"),
+    [
+        ("/password-reset/confirm", "password_reset_confirm_unexpected_error_runtimeerror"),
+        ("/reset_password", "reset_password_unexpected_error_runtimeerror"),
+    ],
+)
+async def test_password_reset_lookup_error_persists_an_audit_row(
+    client: AsyncClient,
+    db: AsyncSession,
+    user_factory: Any,
+    redis_mock: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    path: str,
+    event_name: str,
+) -> None:
+    """A lookup failure on a live reset token returns 500 and keeps one audit row (#278).
+
+    The token subject is the user's email. It stays in details and is not the actor.
+    """
+    monkeypatch.setattr(settings, "UNIFORM_ACCOUNT_RESPONSE_FLOOR_SECONDS", 0)
+    user = await user_factory.create(password=PASSWORD, verified=True, is_active=True)
+    token = security.create_reset_token(user.email)
+    await add_token_to_redis(
+        redis_mock, user, token, TokenType.RESET, settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
+    )
+
+    async def raise_lookup(*_args: Any, **_kwargs: Any) -> None:
+        raise RuntimeError("lookup failed")
+
+    monkeypatch.setattr("app.api.v1.endpoints.auth.crud.user.get_by_email", raise_lookup)
+
+    response = await client.post(
+        auth_url(path),
+        json={"token": token, "new_password": PASSWORD},
+        headers=await csrf_headers(client),
+    )
+
+    assert response.status_code == 500, response.text
+    assert response.json()["detail"] == "An unexpected error occurred. Please try again later."
+    rows = await events_named(db, event_name)
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.actor_id is None
+    assert row.resource_type == "security_event"
+    assert row.resource_id == ""
+    assert row.details["token_subject"] == user.email
+
+
+@pytest.mark.parametrize(
+    ("path", "event_name"),
+    [
+        ("/password-reset/confirm", "password_reset_confirm_unexpected_error_integrityerror"),
+        ("/reset_password", "reset_password_unexpected_error_integrityerror"),
+    ],
+)
+async def test_password_reset_database_lookup_error_persists_an_audit_row(
+    client: AsyncClient,
+    db: AsyncSession,
+    user_factory: Any,
+    redis_mock: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    path: str,
+    event_name: str,
+) -> None:
+    """A lookup that fails inside the database session returns 500 and keeps one audit row.
+
+    The patched lookup flushes a second user for the same email. That constraint
+    error aborts the request session, which a RuntimeError raised before any SQL
+    does not. The actor is empty and the token subject stays in details (#278).
+    """
+    monkeypatch.setattr(settings, "UNIFORM_ACCOUNT_RESPONSE_FLOOR_SECONDS", 0)
+    user = await user_factory.create(password=PASSWORD, verified=True, is_active=True)
+    token = security.create_reset_token(user.email)
+    await add_token_to_redis(
+        redis_mock, user, token, TokenType.RESET, settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
+    )
+
+    async def abort_lookup_in_database(
+        *_args: Any, email: str, db_session: AsyncSession, **_kwargs: Any
+    ) -> None:
+        db_session.add(User(email=email, password="x"))
+        await db_session.flush()
+
+    monkeypatch.setattr("app.api.v1.endpoints.auth.crud.user.get_by_email", abort_lookup_in_database)
+
+    response = await client.post(
+        auth_url(path),
+        json={"token": token, "new_password": PASSWORD},
+        headers=await csrf_headers(client),
+    )
+
+    assert response.status_code == 500, response.text
+    assert response.json()["detail"] == "An unexpected error occurred. Please try again later."
+    rows = await events_named(db, event_name)
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.actor_id is None
+    assert row.resource_type == "security_event"
+    assert row.resource_id == ""
+    assert row.details["token_subject"] == user.email
+
+
+@pytest.mark.parametrize(
+    ("path", "event_name"),
+    [
+        ("/password-reset/confirm", "password_reset_confirm_unexpected_error_runtimeerror"),
+        ("/reset_password", "reset_password_unexpected_error_runtimeerror"),
+    ],
+)
+async def test_password_reset_rollback_failure_keeps_the_500(
+    client: AsyncClient,
+    db: AsyncSession,
+    user_factory: Any,
+    redis_mock: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    path: str,
+    event_name: str,
+) -> None:
+    """A rollback that fails on the unexpected-error path still returns 500 (#278).
+
+    The lookup error stays the audit event. The rollback error does not replace it.
+    """
+    monkeypatch.setattr(settings, "UNIFORM_ACCOUNT_RESPONSE_FLOOR_SECONDS", 0)
+    user = await user_factory.create(password=PASSWORD, verified=True, is_active=True)
+    token = security.create_reset_token(user.email)
+    await add_token_to_redis(
+        redis_mock, user, token, TokenType.RESET, settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
+    )
+
+    async def raise_lookup(*_args: Any, **_kwargs: Any) -> None:
+        raise RuntimeError("lookup failed")
+
+    original_rollback = db.rollback
+
+    async def fail_rollback_once(*_args: Any, **_kwargs: Any) -> None:
+        monkeypatch.setattr(db, "rollback", original_rollback)
+        raise RuntimeError("rollback failed")
+
+    monkeypatch.setattr("app.api.v1.endpoints.auth.crud.user.get_by_email", raise_lookup)
+    monkeypatch.setattr(db, "rollback", fail_rollback_once)
+
+    response = await client.post(
+        auth_url(path),
+        json={"token": token, "new_password": PASSWORD},
+        headers=await csrf_headers(client),
+    )
+
+    assert response.status_code == 500, response.text
+    assert response.json()["detail"] == "An unexpected error occurred. Please try again later."
+    rows = await events_named(db, event_name)
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.actor_id is None
+    assert row.details["token_subject"] == user.email
+    assert row.details["error"] == "lookup failed"
