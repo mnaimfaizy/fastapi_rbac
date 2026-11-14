@@ -18,7 +18,9 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import settings
 from app.models.audit_log_model import AuditLog
+from app.schemas.common_schema import TokenType
 from app.utils.account_email_dispatch import ACCOUNT_EMAIL_UNIFORM_MESSAGE
+from app.utils.token import get_valid_tokens
 
 PASSWORD = "TestPassw0rd!47"
 UNKNOWN_EMAIL = "no-such-login@example.com"
@@ -207,8 +209,27 @@ async def test_oauth2_successful_login_writes_an_audit_row(
     assert rows[0].actor_id == user.id
 
 
+async def test_oauth2_unverified_user_writes_an_audit_row(
+    client: AsyncClient, db: AsyncSession, user_factory: Any, redis_mock: Any
+) -> None:
+    user = await user_factory.create(password=PASSWORD, verified=False, is_active=True)
+
+    response = await client.post(
+        auth_url("/access-token"),
+        data={"username": user.email, "password": PASSWORD},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == {"field_name": "email", "message": "Email is not verified."}
+    rows = matching(await events_named(db, "unverified_login_attempt"), user.email)
+    assert len(rows) == 1
+    assert rows[0].actor_id == user.id
+    assert await get_valid_tokens(redis_mock, user.id, TokenType.ACCESS) == set()
+    assert await get_valid_tokens(redis_mock, user.id, TokenType.REFRESH) == set()
+
+
 async def test_oauth2_inactive_user_writes_an_audit_row(
-    client: AsyncClient, db: AsyncSession, user_factory: Any
+    client: AsyncClient, db: AsyncSession, user_factory: Any, redis_mock: Any
 ) -> None:
     user = await user_factory.create(password=PASSWORD, verified=True, is_active=False)
 
@@ -217,10 +238,13 @@ async def test_oauth2_inactive_user_writes_an_audit_row(
         data={"username": user.email, "password": PASSWORD},
     )
 
-    assert response.status_code == 400
-    rows = matching(await events_named(db, "oauth2_inactive_user_attempt"), user.email)
+    assert response.status_code == 403
+    assert response.json()["detail"] == {"field_name": "email", "message": "Inactive user"}
+    rows = matching(await events_named(db, "inactive_user_login_attempt"), user.email)
     assert len(rows) == 1
     assert rows[0].actor_id == user.id
+    assert await get_valid_tokens(redis_mock, user.id, TokenType.ACCESS) == set()
+    assert await get_valid_tokens(redis_mock, user.id, TokenType.REFRESH) == set()
 
 
 async def test_password_change_with_wrong_current_password_writes_an_audit_row(

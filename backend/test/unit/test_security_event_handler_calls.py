@@ -357,11 +357,37 @@ async def test_oauth2_wrong_password_emits_failed_login(
 
 
 @pytest.mark.asyncio
-async def test_oauth2_inactive_user_emits_event(monkeypatch: pytest.MonkeyPatch, recorded: list[str]) -> None:
-    user = _user(is_active=False, email="oauth@example.com")
-    with pytest.raises(HTTPException):
+async def test_oauth2_unverified_user_emits_event(
+    monkeypatch: pytest.MonkeyPatch, recorded: list[str]
+) -> None:
+    user = _user(verified=False, is_active=True, email="oauth@example.com")
+    with pytest.raises(HTTPException) as raised:
         await _oauth2(monkeypatch, user=user, authenticated=user)
-    assert "oauth2_inactive_user_attempt" in recorded
+    assert raised.value.status_code == 422
+    assert raised.value.detail == {"field_name": "email", "message": "Email is not verified."}
+    assert "unverified_login_attempt" in recorded
+
+
+@pytest.mark.asyncio
+async def test_oauth2_unverified_inactive_user_is_refused_as_unverified(
+    monkeypatch: pytest.MonkeyPatch, recorded: list[str]
+) -> None:
+    user = _user(verified=False, is_active=False, email="oauth@example.com")
+    with pytest.raises(HTTPException) as raised:
+        await _oauth2(monkeypatch, user=user, authenticated=user)
+    assert raised.value.status_code == 422
+    assert "unverified_login_attempt" in recorded
+    assert "inactive_user_login_attempt" not in recorded
+
+
+@pytest.mark.asyncio
+async def test_oauth2_inactive_user_emits_event(monkeypatch: pytest.MonkeyPatch, recorded: list[str]) -> None:
+    user = _user(is_active=False, verified=True, email="oauth@example.com")
+    with pytest.raises(HTTPException) as raised:
+        await _oauth2(monkeypatch, user=user, authenticated=user)
+    assert raised.value.status_code == 403
+    assert raised.value.detail == {"field_name": "email", "message": "Inactive user"}
+    assert "inactive_user_login_attempt" in recorded
 
 
 @pytest.mark.asyncio

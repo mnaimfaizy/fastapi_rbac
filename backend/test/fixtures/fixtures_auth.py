@@ -128,6 +128,7 @@ async def normal_user_token_headers(client: AsyncClient, db: AsyncSession) -> Di
     user_in = IUserCreateFields(
         email=email,
         is_active=True,
+        verified=True,
     )
     await user_crud.create(
         obj_in=user_in, password=await accepted_password(db, password, email=email), db_session=db

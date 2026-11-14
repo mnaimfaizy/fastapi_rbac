@@ -1246,17 +1246,28 @@ async def login_access_token(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail={"field_name": "email", "message": message},
             )
-    if not user.is_active:
-        # Log inactive user login attempt
+    if not crud.user.has_verified(user):
         await log_security_event(
             background_tasks=background_tasks,
             db_session=db_session,
-            event_type="oauth2_inactive_user_attempt",
+            event_type="unverified_login_attempt",
             user_id=user.id,
             details={"email": form_data.username},
         )
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"field_name": "email", "message": "Email is not verified."},
+        )
+    if not user.is_active:
+        await log_security_event(
+            background_tasks=background_tasks,
+            db_session=db_session,
+            event_type="inactive_user_login_attempt",
+            user_id=user.id,
+            details={"email": form_data.username},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
             detail={"field_name": "email", "message": "Inactive user"},
         )
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
