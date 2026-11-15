@@ -31,13 +31,12 @@ from typing import Any, Dict
 import pytest
 from httpx import AsyncClient, Response
 
-from app.core import security
 from app.core.config import settings
 from app.core.security import PasswordValidator
 from app.crud.user_crud import password_reuse_window, user_crud
 from app.models.user_model import User
-from app.schemas.common_schema import TokenType
-from app.utils.token import add_token_to_redis
+from app.utils import emailed_links
+from app.utils.emailed_links import LinkKind
 
 # Every one of these satisfies the complexity policy, so a rejection can only
 # come from the reuse rule under test and never from #192's complexity branch.
@@ -68,14 +67,7 @@ async def post_reset_confirm(client: AsyncClient, path: str, token: str, new_pas
 
 
 async def issue_reset_token(redis_mock: Any, user: User) -> str:
-    token = security.create_reset_token(user.email)
-    await add_token_to_redis(
-        redis_mock,
-        user,
-        token,
-        TokenType.RESET,
-        settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES,
-    )
+    token = await emailed_links.issue(LinkKind.PASSWORD_RESET, user, redis=redis_mock)
     return token
 
 

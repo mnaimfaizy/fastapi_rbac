@@ -285,7 +285,7 @@ async def test_seed_keeps_profile_edits_but_restore_puts_them_back(db: AsyncSess
 
 async def _sessions(redis_mock: Any, user: User) -> int:
     total = 0
-    for token_type in (TokenType.ACCESS, TokenType.REFRESH, TokenType.RESET):
+    for token_type in (TokenType.ACCESS, TokenType.REFRESH):
         total += len(await get_valid_tokens(redis_mock, user.id, token_type))
     return total
 

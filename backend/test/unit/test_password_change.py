@@ -22,7 +22,9 @@ from app.models.audit_log_model import AuditLog
 from app.models.password_history_model import UserPasswordHistory
 from app.models.user_model import User
 from app.schemas.common_schema import TokenType
+from app.utils import emailed_links
 from app.utils.accepted_password import AcceptedPassword
+from app.utils.emailed_links import LinkKind
 from app.utils.password_policy import (
     PASSWORD_COMPLEXITY_FAILURE_MESSAGE,
     InitialPasswordReason,
@@ -88,9 +90,9 @@ async def _locked_user_with_sessions(
     for token_type, token in (
         (TokenType.ACCESS, "prior-access"),
         (TokenType.REFRESH, "prior-refresh"),
-        (TokenType.RESET, "prior-reset"),
     ):
         await add_token_to_redis(redis_mock, user, token, token_type, 30)
+    await emailed_links.issue(LinkKind.PASSWORD_RESET, user, redis=redis_mock)  # type: ignore[arg-type]
     return user
 
 
@@ -131,9 +133,11 @@ async def _reload(db: AsyncSession, user_id: Any) -> User:
 
 async def _session_count(redis_mock: MockRedisClient, user_id: Any) -> int:
     total = 0
-    for token_type in (TokenType.ACCESS, TokenType.REFRESH, TokenType.RESET):
+    for token_type in (TokenType.ACCESS, TokenType.REFRESH):
         total += len(await get_valid_tokens(redis_mock, user_id, token_type))
-    return total
+    # The allowlist uses sorted sets and hashes; the one plain value stored is
+    # the pending reset link.
+    return total + len(redis_mock._storage)
 
 
 async def _assert_nothing_changed(

@@ -70,8 +70,8 @@ def handlers_in(path: Path) -> dict:
     ("module", "handler"),
     [
         ("auth.py", "change_password"),
-        ("auth.py", "confirm_password_reset"),
-        ("auth.py", "reset_password"),
+        # The one body both reset-confirm routes share (#283).
+        ("auth.py", "_reset_password_with_link"),
         ("user.py", "update_user"),
     ],
 )
@@ -99,3 +99,5 @@ def test_the_policy_module_revokes_prior_sessions() -> None:
     handlers = handlers_in(APP_DIR / "utils" / "password_policy.py")
 
     assert calls_named(handlers["change_password"], "revoke_all_user_tokens")
+    # Reset links left the allowlist (#283), so ending a pending one is its own call.
+    assert calls_named(handlers["change_password"], "revoke")

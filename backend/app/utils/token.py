@@ -11,11 +11,10 @@ from app.models.user_model import User
 from app.schemas.common_schema import TokenType
 from app.utils.origin_network import is_different_network
 
-# The types the allowlist actually holds under ``user:{id}:{token_type}``.
-# TokenType.VERIFICATION is deliberately absent: email verification stores a
-# single token under ``verification_token:{id}``, a different key shape that
-# these helpers do not reach.
-ALLOWLIST_TOKEN_TYPES = (TokenType.ACCESS, TokenType.REFRESH, TokenType.RESET)
+# The types the allowlist actually holds under ``user:{id}:{token_type}``: the
+# tokens of sessions, and nothing else. Emailed links (verification and
+# password reset) live in ``app.utils.emailed_links`` (#283).
+ALLOWLIST_TOKEN_TYPES = (TokenType.ACCESS, TokenType.REFRESH)
 
 
 def session_id_for(refresh_token: str) -> str:
@@ -324,15 +323,11 @@ async def revoke_user_tokens(redis_client: Redis, user_id: UUID | str, token_typ
 
 
 async def revoke_all_user_tokens(redis_client: Redis, user_id: UUID | str) -> None:
-    """Revoke every token the allowlist holds for a user, of any type.
+    """Revoke every token the allowlist holds for a user: every session.
 
-    Used where the account itself has changed hands -- a self-service
-    password change, a completed reset, or an administrator setting the
-    password -- so an outstanding reset link cannot outlive the change
-    that should have invalidated it. ``POST /logout`` does not call this: it
-    ends one session and says nothing about a reset link the user may be part
-    way through redeeming. ``POST /logout/all`` does, because signing out
-    everywhere is a statement about every token the allowlist holds.
+    Reset links are not sessions and are not touched here. Callers that must
+    also end an outstanding reset link -- a password change, ``POST
+    /logout/all`` -- call ``emailed_links.revoke`` for it explicitly (#283).
     """
     for token_type in ALLOWLIST_TOKEN_TYPES:
         await revoke_user_tokens(redis_client, user_id, token_type)

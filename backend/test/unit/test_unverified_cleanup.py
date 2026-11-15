@@ -17,6 +17,8 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models.user_model import User
 from app.models.user_role_model import UserRole
+from app.utils import emailed_links
+from app.utils.emailed_links import LinkKind
 from app.utils.unverified_cleanup import (
     delete_if_still_pending,
     sweep_unverified_users,
@@ -128,16 +130,17 @@ async def test_sweep_is_idempotent(db: AsyncSession, user_factory: AsyncUserFact
 
 
 @pytest.mark.asyncio
-async def test_sweep_discards_the_pending_verification_token(
+async def test_sweep_revokes_the_pending_verification_link(
     db: AsyncSession, user_factory: AsyncUserFactory
 ) -> None:
     stale = await _make_user(user_factory, age_hours=CLEANUP_HOURS + 1)
     redis_client = MockRedisClient()
-    await redis_client.setex(f"verification_token:{stale.id}", 600, "token")
+    await emailed_links.issue(LinkKind.VERIFICATION, stale, redis=redis_client)  # type: ignore[arg-type]
+    assert redis_client._storage
 
     await sweep_unverified_users(db_session=db, cleanup_hours=CLEANUP_HOURS, redis_client=redis_client)
 
-    assert not await redis_client.exists(f"verification_token:{stale.id}")
+    assert redis_client._storage == {}
 
 
 @pytest.mark.asyncio

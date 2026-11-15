@@ -1,9 +1,9 @@
-"""Direct call covering verify_email's Redis-mismatch branch (#239).
+"""Direct call covering verify_email's not-the-live-link branch (#239).
 
 The in-process HTTP tests in ``test/api/`` assert the same behaviour. This
-file calls the handler itself so the unit coverage data records the inner
-``if not (user.is_active and user.verified)`` / ``reject_verification`` lines
-that the ASGI path does not always trace.
+file calls the handler itself so the unit coverage data records the handler's
+path through ``emailed_links.verify_email`` that the ASGI path does not always
+trace.
 """
 
 from test.fixtures.mock_redis_client import MockRedisClient
@@ -17,7 +17,9 @@ from app.api.v1.endpoints.auth import verify_email
 from app.core.config import settings
 from app.core.security import create_verification_token
 from app.schemas.user_schema import VerifyEmail
+from app.utils import emailed_links
 from app.utils.account_token_responses import INVALID_VERIFICATION_TOKEN_MESSAGE
+from app.utils.emailed_links import LinkKind
 
 
 def _request() -> MagicMock:
@@ -26,22 +28,16 @@ def _request() -> MagicMock:
     return request
 
 
-def _sanitizer() -> MagicMock:
-    sanitizer = MagicMock()
-    sanitizer.sanitize = MagicMock(side_effect=lambda value, _kind: value)
-    return sanitizer
-
-
 @pytest.fixture(autouse=True)
 def _no_response_floor(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "UNIFORM_ACCOUNT_RESPONSE_FLOOR_SECONDS", 0)
 
 
 @pytest.mark.asyncio
-async def test_unverified_redis_mismatch_takes_the_uniform_reject(
+async def test_unverified_user_with_another_link_takes_the_uniform_reject(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """An unverified user whose Redis token does not match is the uniform 400."""
+    """An unverified user presenting a link other than the live one is the uniform 400."""
     user = MagicMock()
     user.id = uuid4()
     user.email = "unverified-mismatch@example.com"
@@ -49,13 +45,14 @@ async def test_unverified_redis_mismatch_takes_the_uniform_reject(
     user.verified = False
 
     redis = MockRedisClient()
-    await redis.setex(f"verification_token:{user.id}", 3600, "some-other-token")
+    await emailed_links.issue(LinkKind.VERIFICATION, user, redis=redis)  # type: ignore[arg-type]
     token = create_verification_token(user.email)
 
     monkeypatch.setattr(
         "app.api.v1.endpoints.auth.crud.user.get_by_email",
         AsyncMock(return_value=user),
     )
+    monkeypatch.setattr("app.utils.emailed_links.log_security_event", AsyncMock())
 
     with pytest.raises(HTTPException) as exc_info:
         await verify_email(
@@ -63,7 +60,6 @@ async def test_unverified_redis_mismatch_takes_the_uniform_reject(
             body=VerifyEmail(token=token),
             background_tasks=BackgroundTasks(),
             redis_client=redis,  # type: ignore[arg-type]
-            sanitizer=_sanitizer(),
             db_session=MagicMock(),
             _=None,
         )

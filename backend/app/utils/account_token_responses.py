@@ -8,11 +8,12 @@ The neighbouring failure branches were no better: they answered "Invalid token
 or user not found." in one place and "Invalid token" in another, so the set of
 distinguishable outcomes grew every time someone added a branch.
 
-Every failure in these flows now leaves through :func:`reject_verification` or
-:func:`reject_password_reset`. Each takes the security event that says what
-actually happened and returns the one message that says nothing. Putting the
-policy behind a call is the point: a branch added later cannot accidentally
-invent its own wording, because there is no wording at the call site to invent.
+Every failure in these flows now leaves through the one refusal per flow in
+:mod:`app.utils.emailed_links`, which records the security event that says what
+actually happened and answers with the message here that says nothing. Putting
+the policy behind the module is the point: a branch added later cannot
+accidentally invent its own wording, because there is no wording at the call
+site to invent (#283).
 
 What is deliberately *not* uniform:
 
@@ -20,18 +21,10 @@ What is deliberately *not* uniform:
   account is consulted. They describe the token the caller supplied and are
   decidable without a database.
 - Password complexity and history failures, which describe the submitted
-  password. Complexity is checked before any lookup; history is reachable only
-  by a caller already holding a valid, allow-listed token -- that is, the
-  mailbox owner, to whom the account's existence is not a secret.
+  password. Both are checked only once the reset link is known to be live
+  (#271), so they are reachable only by the mailbox owner, to whom the
+  account's existence is not a secret.
 """
-
-from typing import NoReturn, Optional
-from uuid import UUID
-
-from fastapi import BackgroundTasks, HTTPException, status
-from sqlmodel.ext.asyncio.session import AsyncSession
-
-from app.utils.background_tasks import log_security_event
 
 # The one answer verify-email gives to every failure that requires looking an
 # account up: unknown address, disabled account, wrong token, expired token,
@@ -59,64 +52,3 @@ INVALID_PASSWORD_RESET_TOKEN_MESSAGE = (
 PASSWORD_RESET_REQUEST_UNIFORM_MESSAGE = (
     "If the email exists and the account is active, a password reset link has been sent."
 )
-
-
-async def _reject(
-    *,
-    background_tasks: BackgroundTasks,
-    event_type: str,
-    message: str,
-    user_id: Optional[UUID],
-    details: dict,
-    db_session: Optional[AsyncSession] = None,
-) -> NoReturn:
-    # Awaited, not queued on ``background_tasks``. FastAPI attaches an
-    # endpoint's BackgroundTasks to the response it returns; an HTTPException
-    # is turned into a fresh response by the exception handler, which carries
-    # no tasks. ``log_security_event`` writes the AuditLog row in-process (#243).
-    await log_security_event(
-        background_tasks=background_tasks,
-        event_type=event_type,
-        user_id=user_id,
-        details=details,
-        db_session=db_session,
-    )
-    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
-
-
-async def reject_verification(
-    *,
-    background_tasks: BackgroundTasks,
-    event_type: str,
-    details: dict,
-    user_id: Optional[UUID] = None,
-    db_session: Optional[AsyncSession] = None,
-) -> NoReturn:
-    """Record why verification failed, then answer as if nothing was learned."""
-    await _reject(
-        background_tasks=background_tasks,
-        event_type=event_type,
-        message=INVALID_VERIFICATION_TOKEN_MESSAGE,
-        user_id=user_id,
-        details=details,
-        db_session=db_session,
-    )
-
-
-async def reject_password_reset(
-    *,
-    background_tasks: BackgroundTasks,
-    event_type: str,
-    details: dict,
-    user_id: Optional[UUID] = None,
-    db_session: Optional[AsyncSession] = None,
-) -> NoReturn:
-    """Record why the reset failed, then answer as if nothing was learned."""
-    await _reject(
-        background_tasks=background_tasks,
-        event_type=event_type,
-        message=INVALID_PASSWORD_RESET_TOKEN_MESSAGE,
-        user_id=user_id,
-        details=details,
-        db_session=db_session,
-    )

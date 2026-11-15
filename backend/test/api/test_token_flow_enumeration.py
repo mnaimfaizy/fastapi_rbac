@@ -26,14 +26,13 @@ from httpx import AsyncClient, Response
 from app.api.v1.endpoints import auth as auth_endpoints
 from app.core import security
 from app.core.config import settings
-from app.schemas.common_schema import TokenType
-from app.utils import account_token_responses
+from app.utils import emailed_links
 from app.utils.account_token_responses import (
     INVALID_PASSWORD_RESET_TOKEN_MESSAGE,
     INVALID_VERIFICATION_TOKEN_MESSAGE,
     PASSWORD_RESET_REQUEST_UNIFORM_MESSAGE,
 )
-from app.utils.token import add_token_to_redis
+from app.utils.emailed_links import LinkKind
 
 PASSWORD = "TestPassw0rd!47"
 NEW_PASSWORD = "ReplacementPassword!42"
@@ -101,7 +100,7 @@ def emitted_events(monkeypatch: Any) -> List[str]:
     async def recorder(**kwargs: Any) -> None:
         recorded.append(str(kwargs.get("event_type")))
 
-    monkeypatch.setattr(account_token_responses, "log_security_event", recorder)
+    monkeypatch.setattr(emailed_links, "log_security_event", recorder)
     monkeypatch.setattr(auth_endpoints, "log_security_event", recorder)
     return recorded
 
@@ -117,7 +116,7 @@ async def test_verify_email_disabled_matches_a_bad_token(
     """A disabled account with a good token answers exactly as a bad token does.
 
     The comparison is an *unverified* account whose token was never issued.
-    An active already-verified account with a missing Redis key is a repeat
+    An active already-verified account whose link was consumed is a repeat
     visit and answers 200 (#239), so it is no longer a "bad token".
     """
     _, disabled = await seed_users(user_factory)
@@ -125,8 +124,7 @@ async def test_verify_email_disabled_matches_a_bad_token(
         email="unverified-bad-token@example.com", password=PASSWORD, verified=False, is_active=True
     )
 
-    disabled_token = security.create_verification_token(disabled.email)
-    await redis_mock.setex(f"verification_token:{disabled.id}", 3600, disabled_token)
+    disabled_token = await emailed_links.issue(LinkKind.VERIFICATION, disabled, redis=redis_mock)
     disabled_response = observable(await post_verify_email(client, disabled_token))
 
     bad_token = security.create_verification_token(pending.email)
@@ -142,8 +140,7 @@ async def test_verify_email_disabled_matches_an_unknown_address(
     """A disabled account is indistinguishable from an address with no account."""
     _, disabled = await seed_users(user_factory)
 
-    disabled_token = security.create_verification_token(disabled.email)
-    await redis_mock.setex(f"verification_token:{disabled.id}", 3600, disabled_token)
+    disabled_token = await emailed_links.issue(LinkKind.VERIFICATION, disabled, redis=redis_mock)
     disabled_response = observable(await post_verify_email(client, disabled_token))
 
     absent_response = observable(
@@ -158,8 +155,7 @@ async def test_verify_email_disabled_still_emits_its_own_event(
 ) -> None:
     """The distinction survives in the audit log, not in the response."""
     _, disabled = await seed_users(user_factory)
-    token = security.create_verification_token(disabled.email)
-    await redis_mock.setex(f"verification_token:{disabled.id}", 3600, token)
+    token = await emailed_links.issue(LinkKind.VERIFICATION, disabled, redis=redis_mock)
 
     await post_verify_email(client, token)
 
@@ -173,8 +169,7 @@ async def test_verify_email_still_verifies_an_active_user(
     pending = await user_factory.create(
         email="pending-user@example.com", password=PASSWORD, verified=False, is_active=True
     )
-    token = security.create_verification_token(pending.email)
-    await redis_mock.setex(f"verification_token:{pending.id}", 3600, token)
+    token = await emailed_links.issue(LinkKind.VERIFICATION, pending, redis=redis_mock)
 
     response = await post_verify_email(client, token)
 
@@ -187,20 +182,18 @@ async def test_verify_email_second_visit_says_already_verified(
 ) -> None:
     """A repeat click on a still-valid JWT must not look like a dead link (#239).
 
-    First success consumes the Redis key. The JWT can still decode until ``exp``.
-    An active account that is already verified answers 200 instead of the
-    uniform 400 the missing key would otherwise produce.
+    First success consumes the stored link. The JWT can still decode until
+    ``exp``. An active account that is already verified answers 200 instead of
+    the uniform 400 a consumed link would otherwise produce.
     """
     pending = await user_factory.create(
         email="repeat-visit@example.com", password=PASSWORD, verified=False, is_active=True
     )
-    token = security.create_verification_token(pending.email)
-    await redis_mock.setex(f"verification_token:{pending.id}", 3600, token)
+    token = await emailed_links.issue(LinkKind.VERIFICATION, pending, redis=redis_mock)
 
     first = await post_verify_email(client, token)
     assert first.status_code == 200
     assert first.json()["message"] == "Email verified successfully."
-    assert await redis_mock.get(f"verification_token:{pending.id}") is None
 
     second = await post_verify_email(client, token)
 
@@ -220,7 +213,7 @@ async def test_verify_email_disabled_verified_matches_an_unknown_address(
         email="disabled-verified@example.com", password=PASSWORD, verified=True, is_active=False
     )
     token = security.create_verification_token(disabled.email)
-    # Redis gone — the same shape as a repeat visit after a consumed token.
+    # No live link: the same shape as a repeat visit after a consumed token.
     disabled_response = observable(await post_verify_email(client, token))
 
     absent_response = observable(
@@ -234,7 +227,7 @@ async def test_verify_email_disabled_verified_matches_an_unknown_address(
 async def test_verify_email_unverified_missing_redis_token_stays_uniform(
     client: AsyncClient, user_factory: Any, redis_mock: Any
 ) -> None:
-    """An unverified user whose Redis token is gone still gets the uniform 400."""
+    """An unverified user whose link is no longer live still gets the uniform 400."""
     pending = await user_factory.create(
         email="unverified-no-redis@example.com", password=PASSWORD, verified=False, is_active=True
     )
@@ -248,12 +241,12 @@ async def test_verify_email_unverified_missing_redis_token_stays_uniform(
 async def test_verify_email_unverified_mismatched_redis_token_stays_uniform(
     client: AsyncClient, user_factory: Any, redis_mock: Any
 ) -> None:
-    """An unverified user whose Redis token does not match still gets the uniform 400."""
+    """An unverified user presenting a link other than the live one still gets the uniform 400."""
     pending = await user_factory.create(
         email="unverified-mismatch@example.com", password=PASSWORD, verified=False, is_active=True
     )
+    await emailed_links.issue(LinkKind.VERIFICATION, pending, redis=redis_mock)
     token = security.create_verification_token(pending.email)
-    await redis_mock.setex(f"verification_token:{pending.id}", 3600, "some-other-token")
 
     response = observable(await post_verify_email(client, token))
 
@@ -301,14 +294,7 @@ async def test_reset_confirm_disabled_matches_a_bad_token(
 ) -> None:
     active, disabled = await seed_users(user_factory)
 
-    disabled_token = security.create_reset_token(disabled.email)
-    await add_token_to_redis(
-        redis_mock,
-        disabled,
-        disabled_token,
-        TokenType.RESET,
-        settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES,
-    )
+    disabled_token = await emailed_links.issue(LinkKind.PASSWORD_RESET, disabled, redis=redis_mock)
     disabled_response = observable(await post_reset_confirm(client, path, disabled_token))
 
     bad_token = security.create_reset_token(active.email)
@@ -324,14 +310,7 @@ async def test_reset_confirm_disabled_matches_an_unknown_address(
 ) -> None:
     _, disabled = await seed_users(user_factory)
 
-    disabled_token = security.create_reset_token(disabled.email)
-    await add_token_to_redis(
-        redis_mock,
-        disabled,
-        disabled_token,
-        TokenType.RESET,
-        settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES,
-    )
+    disabled_token = await emailed_links.issue(LinkKind.PASSWORD_RESET, disabled, redis=redis_mock)
     disabled_response = observable(await post_reset_confirm(client, path, disabled_token))
 
     absent_response = observable(
@@ -346,10 +325,7 @@ async def test_reset_confirm_disabled_still_emits_its_own_event(
     client: AsyncClient, user_factory: Any, redis_mock: Any, path: str, emitted_events: List[str]
 ) -> None:
     _, disabled = await seed_users(user_factory)
-    token = security.create_reset_token(disabled.email)
-    await add_token_to_redis(
-        redis_mock, disabled, token, TokenType.RESET, settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
-    )
+    token = await emailed_links.issue(LinkKind.PASSWORD_RESET, disabled, redis=redis_mock)
 
     await post_reset_confirm(client, path, token)
 
@@ -363,14 +339,7 @@ async def test_reset_confirm_separates_the_disabled_and_bad_token_branches(
     """One response, two records. The log is where the branches stay apart."""
     active, disabled = await seed_users(user_factory)
 
-    disabled_token = security.create_reset_token(disabled.email)
-    await add_token_to_redis(
-        redis_mock,
-        disabled,
-        disabled_token,
-        TokenType.RESET,
-        settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES,
-    )
+    disabled_token = await emailed_links.issue(LinkKind.PASSWORD_RESET, disabled, redis=redis_mock)
     await post_reset_confirm(client, path, disabled_token)
     await post_reset_confirm(client, path, security.create_reset_token(active.email))
 
@@ -392,10 +361,7 @@ async def test_reset_confirm_checks_the_token_before_the_password_rules(
     else gets the same answer as for a strong password (ADR 0010, decision 6).
     """
     active, disabled = await seed_users(user_factory)
-    disabled_token = security.create_reset_token(disabled.email)
-    await add_token_to_redis(
-        redis_mock, disabled, disabled_token, TokenType.RESET, settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
-    )
+    disabled_token = await emailed_links.issue(LinkKind.PASSWORD_RESET, disabled, redis=redis_mock)
 
     not_allowlisted = observable(
         await post_reset_confirm(client, path, security.create_reset_token(active.email), WEAK_PASSWORD)
@@ -414,10 +380,7 @@ async def test_reset_confirm_still_resets_an_active_user(
 ) -> None:
     """The uniform rejection must not swallow the success path."""
     active, _ = await seed_users(user_factory)
-    token = security.create_reset_token(active.email)
-    await add_token_to_redis(
-        redis_mock, active, token, TokenType.RESET, settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
-    )
+    token = await emailed_links.issue(LinkKind.PASSWORD_RESET, active, redis=redis_mock)
 
     response = await post_reset_confirm(client, path, token)
 
@@ -469,19 +432,15 @@ async def test_no_token_flow_branch_returns_faster_than_the_floor(
 
     Each of these branches returns before the work the others do -- the disabled
     check short-circuits ahead of the password write, and an unknown address
-    short-circuits ahead of the Redis lookup. Only the lower bound is asserted;
+    short-circuits ahead of the stored-link lookup. Only the lower bound is asserted;
     an upper bound would measure the host rather than the code.
     """
     _, disabled = await seed_users(user_factory)
     floor = settings.UNIFORM_ACCOUNT_RESPONSE_FLOOR_SECONDS
     minimum = floor * 0.9
 
-    verification_token = security.create_verification_token(disabled.email)
-    await redis_mock.setex(f"verification_token:{disabled.id}", 3600, verification_token)
-    reset_token = security.create_reset_token(disabled.email)
-    await add_token_to_redis(
-        redis_mock, disabled, reset_token, TokenType.RESET, settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
-    )
+    verification_token = await emailed_links.issue(LinkKind.VERIFICATION, disabled, redis=redis_mock)
+    reset_token = await emailed_links.issue(LinkKind.PASSWORD_RESET, disabled, redis=redis_mock)
 
     probes: List[Tuple[str, Callable[[], Any]]] = [
         ("verify-email disabled", lambda: post_verify_email(client, verification_token)),

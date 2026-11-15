@@ -36,12 +36,12 @@ from uuid import UUID
 import pytest
 from httpx import AsyncClient, Response
 
-from app.core import security
 from app.core.config import settings
 from app.schemas.common_schema import TokenType
+from app.utils import emailed_links
 from app.utils.account_token_responses import INVALID_PASSWORD_RESET_TOKEN_MESSAGE
+from app.utils.emailed_links import LinkKind
 from app.utils.token import (
-    add_token_to_redis,
     get_valid_tokens,
     revoke_user_tokens,
     token_is_allowlisted,
@@ -228,23 +228,16 @@ async def test_old_token_is_rejected_immediately_after_change_password(
 async def test_change_password_revokes_a_pending_reset_link(
     client: AsyncClient, user_factory: Any, redis_mock: Any
 ) -> None:
-    """ "Every previously issued token is gone" includes the reset allowlist.
+    """ "Every previously issued token is gone" includes a pending reset link.
 
-    RESET is an allowlist type and is the only thing gating a forgot-password
-    link. Leaving it behind means an attacker who requested a reset before the
-    victim changed their password can still redeem it afterwards. Which token
-    types the policy module revokes is asserted in
-    ``test/unit/test_password_change.py``; this is the route-level outcome.
+    The stored reset link is the only thing gating a forgot-password link.
+    Leaving it behind means an attacker who requested a reset before the
+    victim changed their password can still redeem it afterwards. What the
+    policy module revokes is asserted in ``test/unit/test_password_change.py``;
+    this is the route-level outcome.
     """
     user = await user_factory.create(email="pendingreset@example.com", password=PASSWORD, verified=True)
-    reset_token = security.create_reset_token("pendingreset@example.com")
-    await add_token_to_redis(
-        redis_mock,
-        user,
-        reset_token,
-        TokenType.RESET,
-        settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES,
-    )
+    reset_token = await emailed_links.issue(LinkKind.PASSWORD_RESET, user, redis=redis_mock)
     _, headers = await login(client, "pendingreset@example.com", PASSWORD)
 
     response = await post_change_password(client, headers, PASSWORD, NEW_PASSWORD)
@@ -291,28 +284,25 @@ async def test_logout_leaves_a_pending_reset_link_alone(
 ) -> None:
     """Logout ends a session; it is not a statement about the account.
 
-    Change-password revokes RESET because knowing the current password
-    supersedes any outstanding link. Logging out says nothing of the kind, and
-    killing the link there would break a user who requested one, logged out,
-    and then opened their email.
+    Change-password revokes the reset link because knowing the current
+    password supersedes any outstanding link. Logging out says nothing of the
+    kind, and killing the link there would break a user who requested one,
+    logged out, and then opened their email.
     """
     user = await user_factory.create(email="resetkept@example.com", password=PASSWORD, verified=True)
-    reset_token = security.create_reset_token("resetkept@example.com")
-    await add_token_to_redis(
-        redis_mock,
-        user,
-        reset_token,
-        TokenType.RESET,
-        settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES,
-    )
-    user_id = user.id
+    reset_token = await emailed_links.issue(LinkKind.PASSWORD_RESET, user, redis=redis_mock)
     _, headers = await login(client, "resetkept@example.com", PASSWORD)
 
     response = await client.post(auth_url("/logout"), headers=headers)
     assert response.status_code == 200, response.text
 
-    members = await get_valid_tokens(redis_mock, user_id, TokenType.RESET)
-    assert token_is_allowlisted(members, reset_token) is True
+    _, csrf = await get_csrf_token(client)
+    redeemed = await client.post(
+        auth_url("/password-reset/confirm"),
+        json={"token": reset_token, "new_password": NEW_PASSWORD},
+        headers=csrf,
+    )
+    assert redeemed.status_code == 200, redeemed.text
 
 
 async def test_logout_all_revokes_every_session(
@@ -328,3 +318,25 @@ async def test_logout_all_revokes_every_session(
 
     for token_type in (TokenType.ACCESS, TokenType.REFRESH):
         assert await get_valid_tokens(redis_mock, user_id, token_type) == set()
+
+
+async def test_logout_all_revokes_a_pending_reset_link(
+    client: AsyncClient, user_factory: Any, redis_mock: Any
+) -> None:
+    """Signing out everywhere still ends a pending reset link, as it did while
+    reset links lived in the allowlist (#283)."""
+    user = await user_factory.create(email="logoutallreset@example.com", password=PASSWORD, verified=True)
+    reset_token = await emailed_links.issue(LinkKind.PASSWORD_RESET, user, redis=redis_mock)
+    _, headers = await login(client, "logoutallreset@example.com", PASSWORD)
+
+    response = await client.post(auth_url("/logout/all"), headers=headers)
+    assert response.status_code == 200, response.text
+
+    _, csrf = await get_csrf_token(client)
+    redeemed = await client.post(
+        auth_url("/password-reset/confirm"),
+        json={"token": reset_token, "new_password": NEW_PASSWORD},
+        headers=csrf,
+    )
+    assert redeemed.status_code == 400, "logout/all left the reset link redeemable"
+    assert redeemed.json() == {"detail": INVALID_PASSWORD_RESET_TOKEN_MESSAGE}
