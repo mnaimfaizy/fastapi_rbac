@@ -16,7 +16,9 @@ from app.models.role_model import Role
 from app.models.user_model import User
 from app.qa_accounts.accounts import QAAccount, QAAccountsError
 from app.schemas.user_schema import IUserCreateFields
+from app.utils import emailed_links
 from app.utils.accepted_password import AcceptedPassword
+from app.utils.emailed_links import LinkKind
 from app.utils.password_policy import (
     FixturePasswordReason,
     InitialPasswordReason,
@@ -121,8 +123,9 @@ async def seed_account(
 ) -> list[str]:
     """Create ``account`` or repair its drift. Returns what changed; empty means nothing did.
 
-    Any repair ends every session the account holds, so a token issued while
-    it had drifted (another password, other roles, disabled) stops working.
+    Any repair ends every session the account holds and revokes a pending
+    reset link, so a token issued while it had drifted (another password,
+    other roles, disabled) stops working.
     """
     role = await _role(account, db_session)
     user = await crud.user.get_by_email(email=account.email, db_session=db_session)
@@ -151,6 +154,9 @@ async def seed_account(
     if len(changes) > committed:
         db_session.add(user)
         await revoke_all_user_tokens(redis_client, user.id)
+        # Reset links left the allowlist (#283), so ending sessions no longer
+        # covers one issued while the account had drifted.
+        await emailed_links.revoke(LinkKind.PASSWORD_RESET, user.id, redis=redis_client)
         await db_session.commit()
         await db_session.refresh(user)
     return changes
