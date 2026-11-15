@@ -155,7 +155,7 @@ jobs:
         pytest test/unit/ -q
         cd ../react-frontend
         npm run lint
-        npm run format -- --check
+        npm run format:check
         npm run build
     secrets:
       claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

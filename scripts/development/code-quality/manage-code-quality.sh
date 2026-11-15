@@ -183,7 +183,7 @@ format_frontend() {
 
     if [ "$CHECK" = true ]; then
         print_color "Checking code format (no changes will be made)..." "yellow"
-        npm run format -- --check
+        npm run format:check
     else
         print_color "Formatting TypeScript/React code with Prettier..." "blue"
         npm run format
