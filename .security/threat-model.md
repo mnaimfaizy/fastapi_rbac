@@ -14,7 +14,7 @@ Canonical behaviour lives in [`docs/reference/architecture.md`](../docs/referenc
 | Superuser and admin authority | Roles and permissions on protected routes; first-superuser bootstrap settings | Full control of every **user**, **role** and **permission** |
 | JWT signing keys | `SECRET_KEY`, `JWT_REFRESH_SECRET_KEY`, `JWT_RESET_SECRET_KEY` | Forging access, refresh or reset tokens bypasses authentication |
 | Other application secrets | `ENCRYPT_KEY`, database, Redis and SMTP credentials in the runtime environment | Data access, mail sending as the product |
-| The token **Allowlist** | Redis `user:{id}:{token_type}` sorted sets (`backend/app/utils/token.py`) | The sole session revocation mechanism (ADR 0011). Write access mints or keeps sessions alive |
+| The token **Allowlist** | Redis `user:{id}:{token_type}` sorted sets (`backend/app/utils/allowlist.py`, used only through `backend/app/utils/sessions.py`) | The sole session revocation mechanism (ADR 0011). Write access mints or keeps sessions alive |
 | Refresh tokens | HttpOnly cookie scoped to `{API_V1_STR}/auth` (ADR 0006) | Long-lived **session** takeover |
 | Verification and reset tokens | Emailed links; Redis entries checked by verify-email and reset-confirm | Account activation or password change for another person's address |
 | Audit log | `AuditLog` rows written by `log_security_event` | The only record of which uniform-rejection branch ran (ADR 0010). Compliance trail that outlives users (ADR 0013) |
