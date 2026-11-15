@@ -52,6 +52,24 @@ logger = logging.getLogger("fastapi_rbac")
 
 router = APIRouter()
 
+
+async def _end_unreturned_session(
+    user_id: UUID, issued: sessions.IssuedSession, *, redis_client: AsyncRedis
+) -> None:
+    """End a session that was opened but will not reach the client.
+
+    Left allowlisted it would count toward ``CONCURRENT_SESSION_LIMIT`` and
+    could evict a session the user really holds. A failure here is logged,
+    not raised, so the caller's original error is the one that propagates.
+    """
+    try:
+        await sessions.end(
+            user_id, refresh_token=issued.refresh_token, access_token=None, redis_client=redis_client
+        )
+    except Exception:
+        logger.exception("Failed to end an unreturned session for user %s", user_id)
+
+
 # Status and message for each reason the Session module refuses a refresh. An
 # origin-network mismatch is NOT_ACCEPTED too, so it reads as an invalid token.
 _REFRESH_REFUSALS = {
@@ -291,7 +309,11 @@ async def login(
             issued = await sessions.open(
                 authenticated_user, get_client_ip(request), redis_client=redis_client
             )
-            write_session_cookie(response, issued)
+            try:
+                write_session_cookie(response, issued)
+            except Exception:
+                await _end_unreturned_session(authenticated_user.id, issued, redis_client=redis_client)
+                raise
         except Exception as e:
             await log_security_event(
                 background_tasks=background_tasks,
@@ -304,14 +326,19 @@ async def login(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="An error occurred while processing your request.",
             )
-        user_data = serialize_user(authenticated_user)
-        user_read = IUserRead(**user_data)
-        data = Token(
-            access_token=issued.access_token,
-            token_type="bearer",
-            refresh_token=None,  # HttpOnly cookie; not exposed to JS
-            user=user_read,
-        )
+        try:
+            user_data = serialize_user(authenticated_user)
+            user_read = IUserRead(**user_data)
+            data = Token(
+                access_token=issued.access_token,
+                token_type="bearer",
+                refresh_token=None,  # HttpOnly cookie; not exposed to JS
+                user=user_read,
+            )
+        except Exception:
+            # The client never receives this session; end it before answering.
+            await _end_unreturned_session(authenticated_user.id, issued, redis_client=redis_client)
+            raise
         await log_security_event(
             background_tasks=background_tasks,
             db_session=db_session,
@@ -669,15 +696,20 @@ async def change_password(
         # to the policy. The old sessions were ended above, before this one is
         # opened. The order is the fix for #206: revocation used to be queued
         # and ran after the response, deleting the very tokens this response
-        # hands back. Opened last, so a failure above leaves no session behind.
+        # hands back. A failure before the open leaves no new session; one
+        # after it ends the session again, since the client never receives it.
         issued = await sessions.open(current_user, get_client_ip(request), redis_client=redis_client)
-        data = Token(
-            access_token=issued.access_token,
-            token_type="bearer",
-            refresh_token=None,  # HttpOnly cookie; not exposed to JS
-            user=user_read_for_token,  # Pass the IUserRead instance
-        )
-        write_session_cookie(response, issued)
+        try:
+            data = Token(
+                access_token=issued.access_token,
+                token_type="bearer",
+                refresh_token=None,  # HttpOnly cookie; not exposed to JS
+                user=user_read_for_token,  # Pass the IUserRead instance
+            )
+            write_session_cookie(response, issued)
+        except Exception:
+            await _end_unreturned_session(current_user.id, issued, redis_client=redis_client)
+            raise
         # Expire all objects in the session to ensure latest data is visible in subsequent requests
         db_session.expire_all()
         return create_response(data=data, message="Password changed successfully")
