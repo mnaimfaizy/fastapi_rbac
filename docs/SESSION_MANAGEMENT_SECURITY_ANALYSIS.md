@@ -778,9 +778,9 @@ Allow users to view and manage active sessions.
 
 **Implementation Approach:**
 
-1. **Backend - Add Session Metadata** (proposed; extend `app/utils/token.py` allowlist model):
+1. **Backend - Add Session Metadata** (proposed; extend the allowlist storage in `app/utils/allowlist.py`, reached only through the session lifecycle in `app/utils/sessions.py`):
 ```python
-# proposed: app/utils/token.py (or a dedicated sessions helper)
+# proposed: app/utils/allowlist.py (storage), exposed through app/utils/sessions.py
 async def store_session_metadata(
     redis_client, user_id: UUID, token_type: TokenType, session_id: str, claims: dict
 ) -> None:
