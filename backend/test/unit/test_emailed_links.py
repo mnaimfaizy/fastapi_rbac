@@ -291,6 +291,25 @@ async def test_a_completed_reset_is_not_reported_as_failed_when_consuming_fails(
 
 
 @pytest.mark.asyncio
+async def test_a_completed_verification_is_not_reported_as_failed_when_consuming_fails(
+    db: AsyncSession, user_factory: Any, redis_mock: MockRedisClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    user = await user_factory.create(verified=False, is_active=True)
+    token = await emailed_links.issue(LinkKind.VERIFICATION, user, redis=redis_mock)
+
+    async def redis_down(*_args: Any, **_kwargs: Any) -> None:
+        raise ConnectionError("redis down")
+
+    # The stored-link check reads; consuming the link is the delete after the
+    # account has been marked verified.
+    monkeypatch.setattr(redis_mock, "delete", redis_down)
+
+    outcome = await _redeem(LinkKind.VERIFICATION, token, db, redis_mock)
+    assert isinstance(outcome, VerifiedNow)
+    assert outcome.user.verified is True
+
+
+@pytest.mark.asyncio
 async def test_a_refused_link_never_runs_the_action(
     db: AsyncSession, user_factory: Any, redis_mock: MockRedisClient
 ) -> None:

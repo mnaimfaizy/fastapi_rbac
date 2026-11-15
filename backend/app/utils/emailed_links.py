@@ -289,7 +289,14 @@ async def verify_email(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail="Failed to update user verification status.",
                 )
-            await _consume(LinkKind.VERIFICATION, updated.id, token, redis)
+            try:
+                await _consume(LinkKind.VERIFICATION, updated.id, token, redis)
+            except Exception:
+                # The account is already verified; answering 500 would tell the
+                # user it failed.
+                logger.exception(
+                    "Could not consume the verification link for user %s after verifying", updated.id
+                )
             await attempt.record("email_verified_successfully", {"email": updated.email})
             return VerifiedNow(updated)
         except HTTPException:
