@@ -662,15 +662,15 @@ async def change_password(
             db_session=db_session,
             redis_client=redis_client,
         )
+        # Serialize the updated user to IUserRead for the Token response
+        user_payload_for_token = serialize_user(current_user)
+        user_read_for_token = IUserRead(**user_payload_for_token)
         # Issuing the fresh session stays here: it belongs to this caller, not
         # to the policy. The old sessions were ended above, before this one is
         # opened. The order is the fix for #206: revocation used to be queued
         # and ran after the response, deleting the very tokens this response
-        # hands back.
+        # hands back. Opened last, so a failure above leaves no session behind.
         issued = await sessions.open(current_user, get_client_ip(request), redis_client=redis_client)
-        # Serialize the updated user to IUserRead for the Token response
-        user_payload_for_token = serialize_user(current_user)
-        user_read_for_token = IUserRead(**user_payload_for_token)
         data = Token(
             access_token=issued.access_token,
             token_type="bearer",
