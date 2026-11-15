@@ -36,8 +36,12 @@ _Avoid_: Inactive account, banned user, locked user (locking is the separate, te
 The invariant that registration and resend-verification return one fixed response for every email address, so neither confirms nor denies that a user exists.
 _Avoid_: Generic error, anti-enumeration
 
+**Emailed link**:
+A single-use link mailed to an address to prove the reader holds that mailbox: a verification link or a password-reset link. One live link per kind per user; issuing a new one replaces the old, and only a hash of it is stored. `app/utils/emailed_links.py` is the one module that issues, redeems and revokes them, and redeeming one is where uniform token-flow rejection is applied. Security events about a link carry a short fingerprint of it, never the link.
+_Avoid_: Token (when meaning the whole link and its lifecycle), reset token, verification code, magic link
+
 **Uniform token-flow rejection**:
-The same invariant for verify-email and the password-reset endpoints: every failure that required looking an account up returns one fixed message per flow, so a disabled user is indistinguishable from an unknown address or a bad token. Which failure occurred is recorded as a security event instead.
+The same invariant for verify-email and the password-reset endpoints: every failure that required looking an account up returns one fixed message per flow, so a disabled user is indistinguishable from an unknown address or a bad token. Which failure occurred is recorded as a security event instead. Applied in one place, when an **Emailed link** is redeemed.
 _Avoid_: Generic error, invalid token message
 
 **Session**:
@@ -45,7 +49,7 @@ One refresh token and the access tokens derived from it. A user may hold several
 _Avoid_: Login, token pair, connection
 
 **Allowlist**:
-The Redis record of tokens currently accepted, checked on every authenticated request. Removing an entry revokes it immediately, and this is the sole session revocation mechanism.
+The Redis record of session tokens currently accepted, checked on every authenticated request. Removing an entry revokes it immediately, and this is the sole session revocation mechanism. Emailed links are not in it.
 _Avoid_: Blacklist, denylist, token blacklist, session store
 
 **Origin network**:
@@ -65,7 +69,7 @@ The rules a password must satisfy before it is accepted for a user: complexity (
 _Avoid_: Password validation, complexity check (when meaning the whole policy), password rules (when meaning reuse too)
 
 **Password change**:
-Replacing an existing user's password, for one of three reasons: self-service (the user knows the current password), reset (the user holds a live reset link) or admin set. Whatever the reason, it is one ordered operation: password policy, then stage the new hash and history row, then end every session in the allowlist, then commit, then audit. A partial failure leaves the user logged out with the old password intact, never the reverse. Admitting the first password of a new user (registration, admin create) is not a password change; only the complexity rules apply to it.
+Replacing an existing user's password, for one of three reasons: self-service (the user knows the current password), reset (the user holds a live reset link) or admin set. Whatever the reason, it is one ordered operation: password policy, then stage the new hash and history row, then end every session in the allowlist and revoke any pending reset link, then commit, then audit. A partial failure leaves the user logged out with the old password intact, never the reverse. Admitting the first password of a new user (registration, admin create) is not a password change; only the complexity rules apply to it.
 _Avoid_: Password update, password reset (when meaning any change), set password
 
 **Temporary password**:

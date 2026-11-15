@@ -23,6 +23,8 @@ The neighbouring failure branches were no better. Verify-email answered `"Invali
 
    _Note (#271):_ the reset-confirm endpoints now check the password rules **after** the token, not before any lookup, because the whole password change (rules, reuse, ending sessions, audit) moved into `app/utils/password_policy.py` and runs as one step once the token and `is_active` checks pass. A weak password sent with an invalid, expired or unknown link now gets the uniform rejection rather than the complexity error. Rules and reuse refusals are therefore reachable only by the holder of a live reset link, the mailbox owner, and the reuse refusal now carries its real message ("Cannot reuse any of your last N passwords.") instead of a generic one. This narrows what an unauthenticated caller can learn; it does not widen it.
 
+   _Note (#283):_ decisions 2 and 5 now live in one module. `reject_verification` and `reject_password_reset` are gone; `app/utils/emailed_links.py` owns the whole redemption of a verification or reset link (decode, lookup, stored-link check, `is_active`, consume) and raises the uniform `400` from a private helper, so no handler can reach a rejection branch at all. The order of decision 3 and the floor of decision 4 are unchanged, and the floor now also covers the password change that a reset link authorises.
+
 ## Considered options
 
 **Fix only the `"Account is inactive"` string.** The literal reading of #137. Rejected: the surrounding branches already distinguished an unknown address from a known one, so the disabled message was not the whole oracle and removing it alone would not have made the acceptance criterion true.
@@ -31,11 +33,13 @@ The neighbouring failure branches were no better. Verify-email answered `"Invali
 
 **Merge `/password-reset/confirm` and `/reset_password`.** They are near-identical handlers, and 0007's argument against duplicated policy applies. Deferred rather than rejected: the enumeration policy they share now lives in one function, which is the part that was drifting. Merging the routes is a separate change with its own client-compatibility question.
 
+_Update (#283):_ the two routes now share one body. `/reset_password` is kept with the same request and responses but is marked `deprecated` in OpenAPI; removing it is [#284](https://github.com/mnaimfaizy/fastapi_rbac/issues/284).
+
 ## Consequences
 
 - A user who genuinely mistyped a verification link and a user whose account an administrator disabled see the same message and the same recovery route. The second user's real problem — a disabled account — is visible only to an operator reading the audit log. This is the intended trade, and the reason the security events stay distinct.
 - A repeat visit with a still-valid verification JWT for an **active, already-verified** user is a 200 (`"Email is already verified."`), not the uniform 400. The caller already held the mailbox link; confirming verification status to them is the #239 trade. A **disabled** account — including disabled-and-verified — stays on the uniform 400 so that 200 is not an oracle. `is_active` is evaluated before that success.
 - Verify-email and both reset-confirm endpoints now take at least `UNIFORM_ACCOUNT_RESPONSE_FLOOR_SECONDS`. These are once-per-account operations; the floor is not on any hot path.
-- Reordering the `is_active` check means a disabled account with a live token now consumes the allow-list lookup before being refused. The refusal itself is unchanged.
+- Reordering the `is_active` check means a disabled account with a live link now costs the stored-link lookup before being refused. The refusal itself is unchanged.
 - A future reader will find four endpoints returning the same string from unrelated branches and may try to make the errors "more helpful". That reversal is the specific thing this ADR and 0007 exist to prevent.
 - Decision 5's await was necessary but not sufficient while `log_security_event` still queued an empty sink. Issue [#243](https://github.com/mnaimfaizy/fastapi_rbac/issues/243) made that function write an `AuditLog` row in-process, converted the remaining raising-path queues, and allowed `actor_id` to be null when no user is known.

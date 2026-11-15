@@ -125,11 +125,11 @@ Verify a user's email address using a verification token.
 }
 ```
 
-A second call with the same still-valid JWT, after the Redis key has been consumed, returns 200 with `"Email is already verified."` when the account is active and already verified (#239). The token remains single-use: the Redis key is deleted on first success.
+A second call with the same still-valid JWT, after the link has been consumed, returns 200 with `"Email is already verified."` when the account is active and already verified (#239). The link remains single-use: it is consumed on first success. Only the most recently issued verification link works; registering again or resending replaces it.
 
 **Error Responses:**
 
-- 400 Bad Request: `"This verification link is invalid or has expired. Please request a new verification email and try again."` — returned identically for an unknown address, a disabled account (including disabled-and-verified), a still-unverified user whose Redis token is missing or does not match, and a wrong or expired token, so the response never confirms that an account exists (#137). The audit log records which it was.
+- 400 Bad Request: `"This verification link is invalid or has expired. Please request a new verification email and try again."` — returned identically for an unknown address, a disabled account (including disabled-and-verified), a still-unverified user presenting a link that is not the live one, and a wrong or expired token, so the response never confirms that an account exists (#137). The audit log records which it was.
 - 401 Unauthorized: the token itself failed JWT validation
 
 ---
@@ -277,6 +277,8 @@ Request a password reset email (public, rate-limited).
 
 The same `200` and the same message are returned for an unknown address, a disabled account, and an active one (#137). Only `MODE=development` differs, where the reset token is echoed back for MailHog.
 
+Each request replaces any earlier reset link for the account: only the most recent reset email works (#283).
+
 **Error Responses:**
 
 - 400 Bad Request: Invalid email
@@ -307,8 +309,11 @@ Reset a user's password using a reset token.
 
 **Error Responses:**
 
-- 400 Bad Request: `"This password reset link is invalid or has expired. Please request a new password reset and try again."` — returned identically for an unknown address, a disabled account, and a token that is wrong, expired or not allow-listed (#137)
-- 400 Bad Request: password complexity or password-history failures, which describe the submitted password and stay distinct
+- 400 Bad Request: `"This password reset link is invalid or has expired. Please request a new password reset and try again."` — returned identically for an unknown address, a disabled account, and a link that is wrong, expired, superseded by a newer one, or already used (#137)
+- 400 Bad Request: password complexity or password-history failures, which describe the submitted password and stay distinct. They are checked only once the link is known to be live, and leave the link usable.
+- 401 Unauthorized: the token itself failed JWT validation
+
+`POST /api/v1/auth/reset_password` takes the same body and gives the same answers. It is deprecated (marked `deprecated` in OpenAPI) and will be removed (#284); use this endpoint.
 
 ---
 
