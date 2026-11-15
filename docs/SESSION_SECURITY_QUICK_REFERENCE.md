@@ -260,7 +260,8 @@ Consider revisiting in 6 months or when:
 
 ### Backend
 - `app/core/security.py` - JWT create/decode (PyJWT) & password hashing
-- `app/utils/token.py` - Redis session allowlist (`user:{id}:{token_type}`)
+- `app/utils/sessions.py` - Session lifecycle: open, refresh, accept, end
+- `app/utils/allowlist.py` - Redis session allowlist (`user:{id}:{token_type}`)
 - `app/api/v1/endpoints/auth.py` - Auth endpoints
 - `app/core/config.py` - Security configuration
 

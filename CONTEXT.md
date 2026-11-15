@@ -45,11 +45,11 @@ The same invariant for verify-email and the password-reset endpoints: every fail
 _Avoid_: Generic error, invalid token message
 
 **Session**:
-One refresh token and the access tokens derived from it. A user may hold several concurrent sessions, bounded by the concurrent session limit; revoking one leaves the others intact.
+One refresh token and the access tokens derived from it, or, for the OAuth2 form login, one access token on its own (an access-only session, never refreshed). A user may hold several concurrent sessions of either form, bounded by the concurrent session limit; revoking one leaves the others intact. `app/utils/sessions.py` is the one module that opens, refreshes, accepts and ends them.
 _Avoid_: Login, token pair, connection
 
 **Allowlist**:
-The Redis record of session tokens currently accepted, checked on every authenticated request. Removing an entry revokes it immediately, and this is the sole session revocation mechanism. Emailed links are not in it.
+The Redis record of session tokens currently accepted, checked on every authenticated request. Removing an entry revokes it immediately, and this is the sole session revocation mechanism. Emailed links are not in it. Its storage lives in `app/utils/allowlist.py`, which only the session module imports.
 _Avoid_: Blacklist, denylist, token blacklist, session store
 
 **Origin network**:

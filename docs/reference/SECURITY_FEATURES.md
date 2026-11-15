@@ -89,7 +89,7 @@ Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'
 
 ### 5. JWT Token Security
 
-**Implementation**: PyJWT signing/verification plus Redis **allowlist** session invalidation (`app/utils/token.py`). See [System Architecture](./architecture.md#authentication-flow) and [ADR 0001](../adr/0001-pyjwt-sole-jwt-library.md).
+**Implementation**: PyJWT signing/verification plus Redis **allowlist** session invalidation. `app/utils/sessions.py` owns the session lifecycle; its storage is `app/utils/allowlist.py`. See [System Architecture](./architecture.md#authentication-flow) and [ADR 0001](../adr/0001-pyjwt-sole-jwt-library.md).
 
 **Features**:
 
@@ -109,16 +109,16 @@ Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'
 **Security Measures**:
 
 ```python
-# Record tokens on the allowlist at login (simplified)
-await add_session_tokens_to_redis(
-    redis_client, user, access_token, refresh_token,
-    access_expire_minutes=..., refresh_expire_minutes=...,
-)
+# Open a session at login (simplified): mints both tokens, records them on
+# the allowlist, and evicts the oldest session at CONCURRENT_SESSION_LIMIT
+issued = await sessions.open(user, client_address, redis_client=redis_client)
+write_session_cookie(response, issued)
 
 # Reject tokens missing from the live allowlist
-valid = await get_valid_tokens(redis_client, user.id, TokenType.ACCESS)
-if not token_is_allowlisted(valid, access_token):
-    raise HTTPException(status_code=401, detail="Token has been revoked")
+try:
+    user_id = await sessions.accepts(access_token, redis_client=redis_client)
+except sessions.SessionRejected:
+    raise HTTPException(status_code=403, detail="Could not validate credentials, token invalid or revoked.")
 ```
 
 ### 6. Password Security

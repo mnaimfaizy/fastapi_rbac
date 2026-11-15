@@ -156,9 +156,9 @@ The project implements a dual-token JWT authentication system:
 ### Token Management (live path)
 
 Canonical JWT create/decode lives in `app/core/security.py` (**PyJWT only**).
-Session tracking uses a Redis **allowlist** in `app/utils/token.py`
-(`user:{user_id}:{token_type}` sets via `add_token_to_redis` / `get_valid_tokens` /
-`revoke_user_tokens`). Logout and change-password clear those keys inline, before
+Session tracking uses a Redis **allowlist** in `app/utils/allowlist.py`
+(`user:{user_id}:{token_type}` sorted sets), reached only through the session
+module `app/utils/sessions.py` (`open`, `refresh`, `accepts`, `end`, `end_all`). Logout and change-password clear those keys inline, before
 the response is written (#206).
 
 > **Note:** An unused `TokenManager` (jti blacklist, IP/UA binding, concurrent-session
@@ -975,7 +975,7 @@ Support WebAuthn, Magic Links, or Passkeys.
 - [x] JWT with standard claims (iat, exp, iss, aud, jti, nbf)
 - [x] Token signature validation
 - [x] Token type validation
-- [x] Token allowlist cleared on logout (`app/utils/token.py`)
+- [x] Token allowlist cleared on logout (`app/utils/sessions.py`)
 - [x] Redis-backed session storage
 - [x] IP address validation (optional)
 - [x] User agent tracking
@@ -1018,7 +1018,8 @@ Support WebAuthn, Magic Links, or Passkeys.
 
 **Core Security:**
 - `app/core/security.py` - JWT create/decode (PyJWT), password hashing, validation
-- `app/utils/token.py` - Redis session allowlist helpers
+- `app/utils/sessions.py` - Session lifecycle: open, refresh, accept, end
+- `app/utils/allowlist.py` - Redis session allowlist storage
 
 **Authentication:**
 - `app/api/v1/endpoints/auth.py` - Authentication endpoints
