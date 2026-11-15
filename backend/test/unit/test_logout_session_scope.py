@@ -4,7 +4,7 @@ Seams under test:
 - POST /logout (the logout handler): one session, identified by the refresh
   cookie or, failing that, the access token's allowlist metadata
 - POST /logout/all (the logout_all handler): every session, via
-  revoke_all_user_tokens
+  revoke_all_user_tokens, and any pending reset link, via emailed_links.revoke
 """
 
 from test.fixtures.mock_redis_client import MockRedisClient
@@ -17,6 +17,8 @@ from fastapi import BackgroundTasks, HTTPException, Response
 from app.api.v1.endpoints.auth import logout, logout_all
 from app.core.config import settings
 from app.schemas.common_schema import TokenType
+from app.utils import emailed_links
+from app.utils.emailed_links import LinkKind
 from app.utils.token import (
     _revoke_members_with_session_id,
     add_derived_access_token_to_redis,
@@ -242,13 +244,8 @@ async def test_logout_all_revokes_every_session() -> None:
     user = _user()
     _access_a, refresh_a = await _establish_session(redis, user, "browser-a")
     await _establish_session(redis, user, "browser-b")
-    await add_token_to_redis(
-        redis,  # type: ignore[arg-type]
-        user,
-        "reset.pending",
-        TokenType.RESET,
-        expire_time=15,
-    )
+    await emailed_links.issue(LinkKind.PASSWORD_RESET, user, redis=redis)  # type: ignore[arg-type]
+    assert redis._storage
     response = Response()
 
     result = await logout_all(
@@ -262,8 +259,10 @@ async def test_logout_all_revokes_every_session() -> None:
     )
 
     assert result.message == "Successfully logged out from all sessions"  # type: ignore[attr-defined]
-    for token_type in (TokenType.ACCESS, TokenType.REFRESH, TokenType.RESET):
+    for token_type in (TokenType.ACCESS, TokenType.REFRESH):
         assert await get_valid_tokens(redis, user.id, token_type) == set()  # type: ignore[arg-type]
+    # The pending reset link was the only plain value stored; it is revoked too.
+    assert redis._storage == {}
     for token_type in (TokenType.ACCESS, TokenType.REFRESH):
         zcard, hlen = await _allowlist_counts(redis, user.id, token_type)
         assert zcard == hlen

@@ -24,16 +24,17 @@ from redis.asyncio import Redis
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app import crud
-from app.core import security
 from app.core.config import settings
 from app.models.user_model import User
 from app.schemas.user_schema import IUserCreateFields, UserRegister
+from app.utils import emailed_links
 from app.utils.accepted_password import AcceptedPassword
 from app.utils.background_tasks import (
     log_security_event,
     send_registration_notice_email,
     send_verification_email,
 )
+from app.utils.emailed_links import LinkKind
 
 logger = logging.getLogger(__name__)
 
@@ -140,30 +141,19 @@ async def issue_verification(
     user: User,
     redis_client: Redis,
     background_tasks: BackgroundTasks,
-    token: Optional[str] = None,
 ) -> str:
-    """Store a verification token in Redis and send the verification mail.
+    """Issue a verification link and send the verification mail.
 
     Public because every path that mails a verification link must come through
-    here. Admin user creation minted its own token and mailed it without the
-    Redis write, so the link failed on first click -- the three parts of an
-    issued verification are inseparable, and this is where they are issued.
+    here. Admin user creation minted its own token and mailed it without
+    storing it, so the link failed on first click -- issuing the link and
+    mailing it are inseparable, and this is where they happen.
 
-    Reissuing replaces the previous token, so an older link stops working and
-    lands on the verify-email page, which already offers resend.
-
-    Redis is the source of truth for verification: ``/verify-email`` compares
-    the submitted token against ``verification_token:{user.id}`` and never reads
-    ``User.verification_code``. The column is written at creation and cleared on
-    verify, so it is left alone on reissue — matching the behaviour resend
-    already had, rather than adding a write nothing reads.
+    Reissuing replaces the previous link (:func:`app.utils.emailed_links.issue`),
+    so an older link stops working and lands on the verify-email page, which
+    already offers resend.
     """
-    issued = token or security.create_verification_token(user.email)
-    await redis_client.setex(
-        f"verification_token:{user.id}",
-        settings.VERIFICATION_TOKEN_EXPIRE_MINUTES * 60,
-        issued,
-    )
+    issued = await emailed_links.issue(LinkKind.VERIFICATION, user, redis=redis_client)
     await send_verification_email(
         background_tasks=background_tasks,
         user_email=user.email,
@@ -178,14 +168,12 @@ async def _create_pending_user(
     registration: UserRegister,
     password: AcceptedPassword,
     db_session: AsyncSession,
-    verification_code: str,
 ) -> User:
     """Create an unverified user and assign the default role."""
     # The plaintext is left out: CRUD takes only the accepted password (#272).
     user_create = IUserCreateFields(
         **registration.model_dump(exclude={"password"}),
         verified=False,
-        verification_code=verification_code,
         roles=[],
         last_changed_password_date=datetime.now(timezone.utc).replace(tzinfo=None),
     )
@@ -275,18 +263,15 @@ async def dispatch_account_email(
         if accepted_password is None:
             raise ValueError("accepted_password is required when may_create is True")
 
-        token = security.create_verification_token(email)
         new_user = await _create_pending_user(
             registration=registration,
             password=accepted_password,
             db_session=db_session,
-            verification_code=token,
         )
-        await issue_verification(
+        token = await issue_verification(
             user=new_user,
             redis_client=redis_client,
             background_tasks=background_tasks,
-            token=token,
         )
         await log_security_event(
             background_tasks=background_tasks,

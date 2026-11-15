@@ -38,6 +38,8 @@ from app.core.config import settings
 from app.crud.user_crud import clear_user_delete_references
 from app.models.user_model import User
 from app.models.user_role_model import UserRole
+from app.utils import emailed_links
+from app.utils.emailed_links import LinkKind
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +147,7 @@ async def sweep_unverified_users(
 
     Args:
         db_session: Session the sweep owns; it commits per user.
-        redis_client: Used to discard the pending verification token. Optional —
+        redis_client: Used to revoke the pending verification link. Optional —
             the token expires on its own, so its absence must not stop the sweep.
         cleanup_hours: Override for ``UNVERIFIED_ACCOUNT_CLEANUP_HOURS``.
         now: Override for the current time, for tests.
@@ -174,9 +176,9 @@ async def sweep_unverified_users(
         logger.info("Deleted pending user %s, unverified since before %s", user_id, cutoff.isoformat())
         if redis_client is not None:
             try:
-                await redis_client.delete(f"verification_token:{user_id}")
+                await emailed_links.revoke(LinkKind.VERIFICATION, user_id, redis=redis_client)
             except Exception:
-                logger.warning("Could not discard verification token for %s", user_id, exc_info=True)
+                logger.warning("Could not revoke verification link for %s", user_id, exc_info=True)
 
     if len(candidates) == limit:
         # A full batch means the backlog is at least one tick deep. Say so, or a

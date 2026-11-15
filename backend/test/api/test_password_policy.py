@@ -23,14 +23,13 @@ import pytest
 from httpx import AsyncClient, Response
 
 from app import crud
-from app.core import security
 from app.core.config import settings
 from app.core.security import PasswordValidator
 from app.models.user_model import User
-from app.schemas.common_schema import TokenType
+from app.utils import emailed_links
 from app.utils.account_email_dispatch import ACCOUNT_EMAIL_UNIFORM_MESSAGE
+from app.utils.emailed_links import LinkKind
 from app.utils.password_policy import PASSWORD_COMPLEXITY_FAILURE_MESSAGE
-from app.utils.token import add_token_to_redis
 
 # The three named in #192. Each fails a different rule: too common and too
 # short, sequential characters, and length alone.
@@ -68,10 +67,7 @@ async def post_register(client: AsyncClient, email: str, password: str) -> Respo
 
 
 async def issue_reset_token(redis_mock: Any, user: User) -> str:
-    token = security.create_reset_token(user.email)
-    await add_token_to_redis(
-        redis_mock, user, token, TokenType.RESET, settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
-    )
+    token = await emailed_links.issue(LinkKind.PASSWORD_RESET, user, redis=redis_mock)
     return token
 
 

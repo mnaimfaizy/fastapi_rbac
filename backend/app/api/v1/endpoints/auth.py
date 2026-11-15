@@ -32,22 +32,19 @@ from app.schemas.user_schema import (
     UserRegister,
     VerifyEmail,
 )
-from app.utils import password_policy
+from app.utils import emailed_links, password_policy
 from app.utils.account_email_dispatch import (
     ACCOUNT_EMAIL_UNIFORM_MESSAGE,
     dispatch_account_email,
 )
-from app.utils.account_token_responses import (
-    PASSWORD_RESET_REQUEST_UNIFORM_MESSAGE,
-    reject_password_reset,
-    reject_verification,
-)
+from app.utils.account_token_responses import PASSWORD_RESET_REQUEST_UNIFORM_MESSAGE
 from app.utils.auth_cookies import clear_refresh_token_cookie, set_refresh_token_cookie
 from app.utils.background_tasks import (
     log_security_event,
     send_password_reset_email,
 )
 from app.utils.client_address import get_client_ip
+from app.utils.emailed_links import LinkKind
 from app.utils.password_policy import (
     InitialPasswordReason,
     PasswordChangeReason,
@@ -529,211 +526,59 @@ async def verify_email(
     body: VerifyEmail,
     background_tasks: BackgroundTasks,
     redis_client: AsyncRedis = Depends(get_redis_client),
-    sanitizer: deps.InputSanitizer = Depends(get_strict_sanitizer),
     db_session: AsyncSession = Depends(deps.get_db),
     _: None = Depends(deps.validate_csrf_token),
 ) -> IPostResponseBase[IUserRead]:
     """
     Verify user's email address using the provided token.
 
-    Every failure that required looking an account up -- unknown address,
-    disabled account, wrong or expired token, or an unused token whose Redis
-    key is gone -- leaves through
-    :func:`~app.utils.account_token_responses.reject_verification` with one
-    message (#137). It previously answered "Account is inactive. Cannot verify
-    email." for a disabled user, which
-    confirmed an address in a single request.
-
-    A correctly signed, unexpired verification JWT for an *active*,
-    already-verified user returns 200 "Email is already verified." even when
-    the Redis key has been consumed (#239). ``is_active`` is evaluated before
-    that success, so a disabled account -- including disabled-and-verified --
-    still receives the uniform 400.
-
-    The floor covers the branches the uniform message alone does not: an
-    unknown address returns before the Redis lookup a disabled account pays
-    for, and a rejection returns before the write a success pays for.
+    Redeeming the link, and the uniform rejection of every failure that needed
+    an account looked up (#137, ADR 0010), belong to
+    :func:`app.utils.emailed_links.verify_email`. A repeat visit with a valid
+    link for an active, already-verified user is a 200 "Email is already
+    verified." (#239).
     """
     ip_address = get_client_ip(request) or "Unknown"
-    email_from_token_str: str | None = None
-    async with response_time_floor():
-        # Input sanitization for email verification data
-        try:
-            # Sanitize token (it should contain only alphanumeric and safe chars)
-            sanitized_token = sanitizer.sanitize(body.token, "text")
-            body.token = sanitized_token
-        except Exception as e:
-            await log_security_event(
-                background_tasks=background_tasks,
-                db_session=db_session,
-                event_type="verify_email_input_sanitization_failed",
-                details={"error": str(e), "ip_address": ip_address},
-            )
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid input data")
-        try:
-            try:
-                payload = security.decode_token(body.token, token_type="verification")
-            except HTTPException as exc:
-                await log_security_event(
-                    background_tasks=background_tasks,
-                    db_session=db_session,
-                    event_type=map_jwt_http_error_to_event(exc, flow="verify_email"),
-                    details={
-                        "error": (exc.detail if isinstance(exc.detail, str) else str(exc.detail)),
-                        "ip_address": ip_address,
-                    },
-                )
-                raise
-            email_from_token_str = payload.get("sub")
-            if not email_from_token_str:
-                await reject_verification(
-                    background_tasks=background_tasks,
-                    db_session=db_session,
-                    event_type="verify_email_token_missing_sub",
-                    details={"token_used": body.token, "ip_address": ip_address},
-                )
-            user = await crud.user.get_by_email(db_session=db_session, email=str(email_from_token_str))
-            if not user:
-                await reject_verification(
-                    background_tasks=background_tasks,
-                    db_session=db_session,
-                    event_type="verify_email_user_not_found",
-                    details={
-                        "email_from_token": email_from_token_str,
-                        "token_used": body.token,
-                        "ip_address": ip_address,
-                    },
-                )
-            user = cast(User, user)
-            redis_token_key = f"verification_token:{user.id}"
-            stored_token_value = await redis_client.get(redis_token_key)
-            stored_token_str: str | None = None
-            if isinstance(stored_token_value, bytes):
-                stored_token_str = stored_token_value.decode("utf-8")
-            elif isinstance(stored_token_value, str):
-                stored_token_str = stored_token_value
-            if not stored_token_str or stored_token_str != body.token:
-                # A successful verification deletes the Redis key. The JWT can
-                # still decode until exp. An active already-verified user who
-                # still presents that token is told the account is verified
-                # rather than that the link is dead (#239). Disabled accounts
-                # stay on the uniform 400 so this is not an oracle (#137).
-                if not (user.is_active and user.verified):
-                    await reject_verification(
-                        background_tasks=background_tasks,
-                        db_session=db_session,
-                        event_type="verify_email_token_mismatch_or_expired_redis",
-                        user_id=user.id,
-                        details={
-                            "email": user.email,
-                            "token_used": body.token,
-                            "ip_address": ip_address,
-                        },
-                    )
-            if not user.is_active:
-                # Answers exactly as a bad token does (#137). A disabled account is
-                # still an account, and saying so here confirmed an address.
-                await reject_verification(
-                    background_tasks=background_tasks,
-                    db_session=db_session,
-                    event_type="verify_email_inactive_account",
-                    user_id=user.id,
-                    details={"email": user.email, "ip_address": ip_address},
-                )
-            if user.verified:
-                await log_security_event(
-                    background_tasks=background_tasks,
-                    db_session=db_session,
-                    event_type="verify_email_already_verified",
-                    user_id=user.id,
-                    details={"email": user.email, "ip_address": ip_address},
-                )
-                user_data = serialize_user(user)  # Return current user state
-                user_read = IUserRead(**user_data)
-                response_data = user_read.model_dump()
-                if getattr(settings, "MODE", None) == "testing":
-                    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-                    refresh_token_expires = timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES)
-                    access_token = security.create_access_token(
-                        user.id,
-                        user.email,
-                        expires_delta=access_token_expires,
-                    )
-                    refresh_token = security.create_refresh_token(
-                        user.id, expires_delta=refresh_token_expires
-                    )
-                    response_data["access_token"] = access_token
-                    response_data["refresh_token"] = refresh_token
-                return create_response(data=response_data, message="Email is already verified.")
-            user_update = {"verified": True, "verification_code": None}
-            updated_user = await crud.user.update(
-                db_session=db_session, obj_current=user, obj_new=user_update
-            )
-            if not updated_user:  # Should not happen if user existed and update is valid
-                await log_security_event(
-                    background_tasks=background_tasks,
-                    db_session=db_session,
-                    event_type="verify_email_update_failed",
-                    user_id=user.id,
-                    details={"email": user.email, "ip_address": ip_address},
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Failed to update user verification status.",
-                )
-            await redis_client.delete(redis_token_key)  # Token successfully used
-            await log_security_event(
-                background_tasks=background_tasks,
-                db_session=db_session,
-                event_type="email_verified_successfully",
-                user_id=updated_user.id,
-                details={"email": updated_user.email, "ip_address": ip_address},
-            )
-            user_data = serialize_user(updated_user)
-            user_read = IUserRead(**user_data)
-            response_data = user_read.model_dump()
-            if getattr(settings, "MODE", None) == "testing":
-                access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-                refresh_token_expires = timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES)
-                access_token = security.create_access_token(
-                    updated_user.id,
-                    updated_user.email,
-                    expires_delta=access_token_expires,
-                )
-                refresh_token = security.create_refresh_token(
-                    updated_user.id, expires_delta=refresh_token_expires
-                )
-                response_data["access_token"] = access_token
-                response_data["refresh_token"] = refresh_token
-            return create_response(data=response_data, message="Email verified successfully.")
-        except HTTPException:
-            raise
-        except Exception as e:
-            error_type = type(e).__name__
-            logger.error(
-                (
-                    "Unexpected error in verify_email for IP %s, Token Sub: %s"
-                    % (
-                        ip_address,
-                        (email_from_token_str if "email_from_token_str" in locals() else "N/A"),
-                    )
-                ),
-                exc_info=True,
-            )
-            await log_security_event(
-                background_tasks=background_tasks,
-                db_session=db_session,
-                event_type=f"verify_email_unexpected_error_{error_type.lower()}",
-                details={
-                    "error": str(e),
-                    "ip_address": ip_address,
-                    "token_subject": (email_from_token_str if "email_from_token_str" in locals() else "N/A"),
-                },  # Log token if available
-            )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="An unexpected error occurred during email verification.",
-            )
+    try:
+        outcome = await emailed_links.verify_email(
+            body.token, client_address=ip_address, db_session=db_session, redis=redis_client
+        )
+    except emailed_links.LinkRedemptionError as e:
+        error_type = type(e.cause).__name__
+        logger.error(
+            "Unexpected error in verify_email for IP %s, Token Sub: %s",
+            ip_address,
+            e.subject or "N/A",
+            exc_info=e.cause,
+        )
+        await log_security_event(
+            background_tasks=background_tasks,
+            db_session=db_session,
+            event_type=f"verify_email_unexpected_error_{error_type.lower()}",
+            details={
+                "error": str(e.cause),
+                "ip_address": ip_address,
+                "token_subject": e.subject or "N/A",
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred during email verification.",
+        )
+    user = outcome.user
+    response_data = IUserRead(**serialize_user(user)).model_dump()
+    if getattr(settings, "MODE", None) == "testing":
+        response_data["access_token"] = security.create_access_token(
+            user.id,
+            user.email,
+            expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+        )
+        response_data["refresh_token"] = security.create_refresh_token(
+            user.id, expires_delta=timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES)
+        )
+    if isinstance(outcome, emailed_links.AlreadyVerified):
+        return create_response(data=response_data, message="Email is already verified.")
+    return create_response(data=response_data, message="Email verified successfully.")
 
 
 @router.post("/resend-verification-email")
@@ -1371,7 +1216,7 @@ async def logout_all(
     db_session: AsyncSession = Depends(deps.get_db),
     _: None = Depends(deps.validate_csrf_token),
 ) -> IPostResponseBase:
-    """End every session for the authenticated user and clear the refresh cookie.
+    """End every session and any pending reset link for the user, and clear the refresh cookie.
 
     Change-password ends sessions through ``password_policy.change_password``
     rather than going through this route.
@@ -1379,6 +1224,7 @@ async def logout_all(
     ip_address = get_client_ip(request) or "Unknown"
     try:
         await revoke_all_user_tokens(redis_client, current_user.id)
+        await emailed_links.revoke(LinkKind.PASSWORD_RESET, current_user.id, redis=redis_client)
         clear_refresh_token_cookie(response)
         await log_security_event(
             background_tasks=background_tasks,
@@ -1469,15 +1315,8 @@ async def request_password_reset(
                     details={"email": email_for_reset, "ip_address": ip_address},
                 )
                 return create_response(data={}, message=PASSWORD_RESET_REQUEST_UNIFORM_MESSAGE)
-            reset_token_expires = timedelta(minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
-            reset_token = security.create_reset_token(user.email, expires_delta=reset_token_expires)
-            await add_token_to_redis(
-                redis_client,
-                user,
-                reset_token,
-                TokenType.RESET,
-                settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES,
-            )
+            # Replaces any earlier reset link: only the latest email works.
+            reset_token = await emailed_links.issue(LinkKind.PASSWORD_RESET, user, redis=redis_client)
             reset_url = settings.PASSWORD_RESET_URL
             await send_password_reset_email(
                 background_tasks=background_tasks,
@@ -1529,6 +1368,89 @@ async def request_password_reset(
             )
 
 
+async def _reset_password_with_link(
+    *,
+    token: str,
+    new_password: str,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    redis_client: AsyncRedis,
+    db_session: AsyncSession,
+    unexpected_error_event: str,
+) -> IPostResponseBase:
+    """The one body of both reset-confirm routes.
+
+    Redeeming the link, and the uniform rejection of every failure that needed
+    an account looked up (#137, ADR 0010), belong to
+    :func:`app.utils.emailed_links.redeem_password_reset`. The password change
+    runs as its action, after the link is known to be live (#271), so a rules
+    or reuse refusal is reachable only by the holder of that link, and leaves
+    the link usable.
+    """
+    ip_address = get_client_ip(request) or "Unknown"
+    # Read in the except path below, which must not touch an ORM instance a
+    # rollback has expired.
+    redeemed_id: UUID | None = None
+    redeemed_email: str | None = None
+
+    async def change_password(user: User) -> None:
+        nonlocal redeemed_id, redeemed_email
+        redeemed_id, redeemed_email = user.id, user.email
+        await password_policy.change_password(
+            user,
+            new_password,
+            reason=PasswordChangeReason.RESET,
+            actor=None,
+            client_address=ip_address,
+            db_session=db_session,
+            redis_client=redis_client,
+        )
+
+    try:
+        await emailed_links.redeem_password_reset(
+            token, change_password, client_address=ip_address, db_session=db_session, redis=redis_client
+        )
+        return create_response(data={}, message="Password has been reset successfully")
+    except (HTTPException, PasswordRefused):
+        raise
+    except Exception as e:
+        if isinstance(e, emailed_links.LinkRedemptionError):
+            cause: Exception = e.cause
+            user_id, email, subject = e.user_id, e.email, e.subject
+        else:
+            cause = e
+            user_id, email, subject = redeemed_id, redeemed_email, redeemed_email
+        error_type = type(cause).__name__
+        logger.error(
+            f"Unexpected error resetting a password ({unexpected_error_event}) for user "
+            f"{email or 'N/A'} (ID: {user_id}) from IP {ip_address}: {str(cause)}",
+            exc_info=cause,
+        )
+        # A database error aborts this transaction. Roll it back before the
+        # audit insert, or that insert is lost with the request (#278).
+        # A rollback that itself fails must not replace the 500.
+        try:
+            await db_session.rollback()
+        except Exception:
+            logger.exception("Failed to roll back the session before recording the password reset error")
+        await log_security_event(
+            background_tasks=background_tasks,
+            db_session=db_session,
+            event_type=f"{unexpected_error_event}_{error_type.lower()}",
+            user_id=user_id,
+            details={
+                "email": email or "N/A",
+                "error": str(cause),
+                "ip_address": ip_address,
+                "token_subject": subject or "N/A",
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred. Please try again later.",
+        )
+
+
 @router.post("/password-reset/confirm")
 async def confirm_password_reset(
     request: Request,
@@ -1538,271 +1460,45 @@ async def confirm_password_reset(
     db_session: AsyncSession = Depends(deps.get_db),
     _: None = Depends(deps.validate_csrf_token),
 ) -> IPostResponseBase:  # No data returned, just a message
-    """
-    Reset a password against a token mailed to the address.
+    """Reset a password against a link mailed to the address.
 
     Every failure that required looking an account up answers with
     :data:`~app.utils.account_token_responses.INVALID_PASSWORD_RESET_TOKEN_MESSAGE`
-    (#137). It previously answered "Account is inactive. Cannot reset
-    password." for a disabled user, which
-    confirmed an address in a single request. The is_active check also moved
-    behind the allow-list check, so the disabled branch is now reachable only
-    by a caller already holding a live token.
-
-    Password rules and reuse refusals stay distinct: they describe the
-    submitted password, not the account. They are checked after the token
-    (#271), so only a caller holding a live reset link can see one; anyone
-    else gets the uniform rejection whatever password they sent.
+    (#137). Only the most recent reset link works.
     """
-    ip_address = get_client_ip(request) or "Unknown"
-    email_from_token_str: str | None = None
-    # Bound before the try so the except path can read them whichever step
-    # raised (#278).
-    user: User | None = None
-    payload: dict | None = None
-
-    async with response_time_floor():
-        try:
-            payload = security.decode_token(reset_confirm.token, token_type="reset")
-            email_from_token_str = payload.get("sub")
-            if not email_from_token_str:
-                await reject_password_reset(
-                    background_tasks=background_tasks,
-                    db_session=db_session,
-                    event_type="password_reset_token_missing_sub",
-                    details={"token_used": reset_confirm.token, "ip_address": ip_address},
-                )
-            user = await crud.user.get_by_email(db_session=db_session, email=str(email_from_token_str))
-            if not user:
-                await reject_password_reset(
-                    background_tasks=background_tasks,
-                    db_session=db_session,
-                    event_type="password_reset_user_not_found",
-                    details={
-                        "email_from_token": email_from_token_str,
-                        "token_used": reset_confirm.token,
-                        "ip_address": ip_address,
-                    },
-                )
-            user = cast(User, user)
-            # Verify token in Redis. This runs before the is_active check so
-            # that the disabled branch is reachable only by a caller who already
-            # holds a live reset token -- the mailbox owner, to whom the account
-            # is no secret. Everyone else is turned away here instead (#137).
-            valid_reset_tokens = await get_valid_tokens(redis_client, user.id, TokenType.RESET)
-            if not token_is_allowlisted(valid_reset_tokens, reset_confirm.token):
-                await reject_password_reset(
-                    background_tasks=background_tasks,
-                    db_session=db_session,
-                    event_type="password_reset_token_not_in_redis",
-                    user_id=user.id,  # user is guaranteed to be not None here
-                    details={
-                        "token_in_redis": bool(valid_reset_tokens),
-                        "ip_address": ip_address,
-                    },
-                )
-            if not user.is_active:
-                await reject_password_reset(
-                    background_tasks=background_tasks,
-                    db_session=db_session,
-                    event_type="password_reset_inactive_account",
-                    user_id=user.id,
-                    details={"email": user.email, "ip_address": ip_address},
-                )
-            # The password rules run here, after the token, not before it: a
-            # rules or reuse refusal is then reachable only by the holder of a
-            # live reset link (ADR 0010, decision 6). Ending every session
-            # revokes the reset link too, so it cannot be replayed.
-            await password_policy.change_password(
-                user,
-                reset_confirm.new_password,
-                reason=PasswordChangeReason.RESET,
-                actor=None,
-                client_address=ip_address,
-                db_session=db_session,
-                redis_client=redis_client,
-            )
-            return create_response(data={}, message="Password has been reset successfully")
-        except (HTTPException, PasswordRefused):
-            raise
-        except Exception as e:
-            error_type = type(e).__name__
-            user_id_for_log = user.id if user else None
-            email_for_log = user.email if user else "N/A"
-            logger.error(
-                f"Unexpected error in confirm_password_reset for user {email_for_log} "
-                f"(ID: {user_id_for_log}) from IP {ip_address}: {str(e)}",
-                exc_info=True,
-            )
-            # A database error aborts this transaction. Roll it back before the
-            # audit insert, or that insert is lost with the request (#278).
-            # A rollback that itself fails must not replace the 500.
-            try:
-                await db_session.rollback()
-            except Exception:
-                logger.exception("Failed to roll back the session before recording the password reset error")
-            await log_security_event(
-                background_tasks=background_tasks,
-                db_session=db_session,
-                event_type=f"password_reset_confirm_unexpected_error_{error_type.lower()}",
-                user_id=user_id_for_log,
-                details={
-                    "email": email_for_log,
-                    "error": str(e),
-                    "ip_address": ip_address,
-                    "token_subject": payload["sub"] if payload else "N/A",
-                },
-            )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="An unexpected error occurred. Please try again later.",
-            )
+    return await _reset_password_with_link(
+        token=reset_confirm.token,
+        new_password=reset_confirm.new_password,
+        request=request,
+        background_tasks=background_tasks,
+        redis_client=redis_client,
+        db_session=db_session,
+        unexpected_error_event="password_reset_confirm_unexpected_error",
+    )
 
 
-@router.post("/reset_password")
+@router.post("/reset_password", deprecated=True)
 async def reset_password(
     request: Request,
-    body_in: PasswordResetConfirm,  # Changed from body to body_in
+    body_in: PasswordResetConfirm,
     background_tasks: BackgroundTasks,
     redis_client: AsyncRedis = Depends(get_redis_client),
-    sanitizer: deps.InputSanitizer = Depends(get_strict_sanitizer),
     db_session: AsyncSession = Depends(deps.get_db),
     _: None = Depends(deps.validate_csrf_token),
 ) -> IPostResponseBase:  # No data returned, just a message
-    """
-    Reset a password against a token mailed to the address.
+    """Deprecated: use ``POST /password-reset/confirm``, which this shares its body with.
 
-    A near-duplicate of :func:`confirm_password_reset`, differing only in route
-    and input sanitisation; see it for why every account-dependent failure here
-    answers with one message. ADR 0010 records why the two were not merged.
+    Removal is tracked in #284.
     """
-    ip_address = get_client_ip(request) or "Unknown"
-    email_from_token_str: str | None = None
-    # Bound before the try so the except path can read them whichever step
-    # raised (#278).
-    user: User | None = None
-    payload: dict | None = None
-    async with response_time_floor():
-        # Input sanitization for password reset data
-        try:
-            # Sanitize token (it should contain only alphanumeric and safe chars)
-            sanitized_token = sanitizer.sanitize(body_in.token, "text")
-            body_in.token = sanitized_token
-            # Validate password length to prevent DoS attacks
-            if len(body_in.new_password) > 1000:
-                await log_security_event(
-                    background_tasks=background_tasks,
-                    db_session=db_session,
-                    event_type="password_reset_password_too_long",
-                    details={
-                        "ip_address": ip_address,
-                        "password_length": len(body_in.new_password),
-                    },
-                )
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password too long")
-        except Exception as e:
-            await log_security_event(
-                background_tasks=background_tasks,
-                db_session=db_session,
-                event_type="password_reset_input_sanitization_failed",
-                details={"error": str(e), "ip_address": ip_address},
-            )
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid input data")
-        try:
-            payload = security.decode_token(body_in.token, token_type="reset")
-            email_from_token_str = payload.get("sub")
-            if not email_from_token_str:
-                await reject_password_reset(
-                    background_tasks=background_tasks,
-                    db_session=db_session,
-                    event_type="password_reset_token_missing_sub",
-                    details={"token_used": body_in.token, "ip_address": ip_address},
-                )
-            user = await crud.user.get_by_email(db_session=db_session, email=str(email_from_token_str))
-            if not user:
-                await reject_password_reset(
-                    background_tasks=background_tasks,
-                    db_session=db_session,
-                    event_type="password_reset_user_not_found",
-                    details={
-                        "email_from_token": email_from_token_str,
-                        "token_used": body_in.token,
-                        "ip_address": ip_address,
-                    },
-                )
-            user = cast(User, user)
-            # Verify token in Redis. This runs before the is_active check so
-            # that the disabled branch is reachable only by a caller who already
-            # holds a live reset token -- the mailbox owner, to whom the account
-            # is no secret. Everyone else is turned away here instead (#137).
-            valid_reset_tokens = await get_valid_tokens(redis_client, user.id, TokenType.RESET)
-            if not token_is_allowlisted(valid_reset_tokens, body_in.token):
-                await reject_password_reset(
-                    background_tasks=background_tasks,
-                    db_session=db_session,
-                    event_type="password_reset_token_not_in_redis",
-                    user_id=user.id,  # user is guaranteed to be not None here
-                    details={
-                        "token_in_redis": bool(valid_reset_tokens),
-                        "ip_address": ip_address,
-                    },
-                )
-            if not user.is_active:
-                await reject_password_reset(
-                    background_tasks=background_tasks,
-                    db_session=db_session,
-                    event_type="password_reset_inactive_account",
-                    user_id=user.id,
-                    details={"email": user.email, "ip_address": ip_address},
-                )
-            # The password rules run here, after the token, not before it: a
-            # rules or reuse refusal is then reachable only by the holder of a
-            # live reset link (ADR 0010, decision 6). Ending every session
-            # revokes the reset link too, so it cannot be replayed.
-            await password_policy.change_password(
-                user,
-                body_in.new_password,
-                reason=PasswordChangeReason.RESET,
-                actor=None,
-                client_address=ip_address,
-                db_session=db_session,
-                redis_client=redis_client,
-            )
-            return create_response(data={}, message="Password has been reset successfully")
-        except (HTTPException, PasswordRefused):
-            raise
-        except Exception as e:
-            error_type = type(e).__name__
-            user_id_for_log = user.id if user else None
-            email_for_log = user.email if user else "N/A"
-            logger.error(
-                f"Unexpected error in reset_password for user {email_for_log} "
-                f"(ID: {user_id_for_log}) from IP {ip_address}: {str(e)}",
-                exc_info=True,
-            )
-            # A database error aborts this transaction. Roll it back before the
-            # audit insert, or that insert is lost with the request (#278).
-            # A rollback that itself fails must not replace the 500.
-            try:
-                await db_session.rollback()
-            except Exception:
-                logger.exception("Failed to roll back the session before recording the password reset error")
-            await log_security_event(
-                background_tasks=background_tasks,
-                db_session=db_session,
-                event_type=f"reset_password_unexpected_error_{error_type.lower()}",
-                user_id=user_id_for_log,
-                details={
-                    "email": email_for_log,
-                    "error": str(e),
-                    "ip_address": ip_address,
-                    "token_subject": payload["sub"] if payload else "N/A",
-                },
-            )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="An unexpected error occurred. Please try again later.",
-            )
+    return await _reset_password_with_link(
+        token=body_in.token,
+        new_password=body_in.new_password,
+        request=request,
+        background_tasks=background_tasks,
+        redis_client=redis_client,
+        db_session=db_session,
+        unexpected_error_event="reset_password_unexpected_error",
+    )
 
 
 @router.get("/csrf-token")

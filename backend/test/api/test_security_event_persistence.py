@@ -8,6 +8,7 @@ In ``test/api/`` because they boot the app in-process: see
 [ADR 0012](../../../docs/adr/0012-test-suites-split-by-environment.md).
 """
 
+import json
 from test.utils import get_csrf_token, random_email
 from typing import Any, Dict, Optional
 
@@ -21,8 +22,10 @@ from app.core.config import settings
 from app.models.audit_log_model import AuditLog
 from app.models.user_model import User
 from app.schemas.common_schema import TokenType
+from app.utils import emailed_links
 from app.utils.account_email_dispatch import ACCOUNT_EMAIL_UNIFORM_MESSAGE
-from app.utils.token import add_token_to_redis, get_valid_tokens
+from app.utils.emailed_links import LinkKind
+from app.utils.token import get_valid_tokens
 
 PASSWORD = "TestPassw0rd!47"
 UNKNOWN_EMAIL = "no-such-login@example.com"
@@ -426,10 +429,7 @@ async def test_password_reset_lookup_error_persists_an_audit_row(
     """
     monkeypatch.setattr(settings, "UNIFORM_ACCOUNT_RESPONSE_FLOOR_SECONDS", 0)
     user = await user_factory.create(password=PASSWORD, verified=True, is_active=True)
-    token = security.create_reset_token(user.email)
-    await add_token_to_redis(
-        redis_mock, user, token, TokenType.RESET, settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
-    )
+    token = await emailed_links.issue(LinkKind.PASSWORD_RESET, user, redis=redis_mock)
 
     async def raise_lookup(*_args: Any, **_kwargs: Any) -> None:
         raise RuntimeError("lookup failed")
@@ -477,10 +477,7 @@ async def test_password_reset_database_lookup_error_persists_an_audit_row(
     """
     monkeypatch.setattr(settings, "UNIFORM_ACCOUNT_RESPONSE_FLOOR_SECONDS", 0)
     user = await user_factory.create(password=PASSWORD, verified=True, is_active=True)
-    token = security.create_reset_token(user.email)
-    await add_token_to_redis(
-        redis_mock, user, token, TokenType.RESET, settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
-    )
+    token = await emailed_links.issue(LinkKind.PASSWORD_RESET, user, redis=redis_mock)
 
     async def abort_lookup_in_database(
         *_args: Any, email: str, db_session: AsyncSession, **_kwargs: Any
@@ -529,10 +526,7 @@ async def test_password_reset_rollback_failure_keeps_the_500(
     """
     monkeypatch.setattr(settings, "UNIFORM_ACCOUNT_RESPONSE_FLOOR_SECONDS", 0)
     user = await user_factory.create(password=PASSWORD, verified=True, is_active=True)
-    token = security.create_reset_token(user.email)
-    await add_token_to_redis(
-        redis_mock, user, token, TokenType.RESET, settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
-    )
+    token = await emailed_links.issue(LinkKind.PASSWORD_RESET, user, redis=redis_mock)
 
     async def raise_lookup(*_args: Any, **_kwargs: Any) -> None:
         raise RuntimeError("lookup failed")
@@ -560,3 +554,52 @@ async def test_password_reset_rollback_failure_keeps_the_500(
     assert row.actor_id is None
     assert row.details["token_subject"] == user.email
     assert row.details["error"] == "lookup failed"
+
+
+@pytest.mark.parametrize("path", ["/password-reset/confirm", "/reset_password"])
+async def test_no_audit_row_holds_a_submitted_token(
+    client: AsyncClient,
+    db: AsyncSession,
+    user_factory: Any,
+    redis_mock: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    path: str,
+) -> None:
+    """Failed token flows record a fingerprint of the token, never the token (#282).
+
+    Three failures that each write an audit row: a live reset link sent with a
+    weak password, a reset link whose email has no user, and a verification
+    link that was never stored. None of the persisted rows may contain any of
+    the submitted tokens anywhere in their JSON.
+    """
+    monkeypatch.setattr(settings, "UNIFORM_ACCOUNT_RESPONSE_FLOOR_SECONDS", 0)
+    user = await user_factory.create(password=PASSWORD, verified=True, is_active=True)
+    pending = await user_factory.create(password=PASSWORD, verified=False, is_active=True)
+    live_reset = await emailed_links.issue(LinkKind.PASSWORD_RESET, user, redis=redis_mock)
+    unknown_reset = security.create_reset_token("no-such-reset@example.com")
+    unstored_verification = security.create_verification_token(pending.email)
+
+    weak = await client.post(
+        auth_url(path),
+        json={"token": live_reset, "new_password": "password"},
+        headers=await csrf_headers(client),
+    )
+    unknown = await client.post(
+        auth_url(path),
+        json={"token": unknown_reset, "new_password": PASSWORD},
+        headers=await csrf_headers(client),
+    )
+    unstored = await client.post(
+        auth_url("/verify-email"),
+        json={"token": unstored_verification},
+        headers=await csrf_headers(client),
+    )
+
+    assert [weak.status_code, unknown.status_code, unstored.status_code] == [400, 400, 400]
+    assert await events_named(db, "password_reset_complexity_failed")
+    assert await events_named(db, "password_reset_user_not_found")
+    assert await events_named(db, "verify_email_token_mismatch_or_expired_redis")
+    rows = list((await db.exec(select(AuditLog))).all())
+    dumped = [json.dumps(row.details) for row in rows]
+    for token in (live_reset, unknown_reset, unstored_verification):
+        assert not any(token in row for row in dumped)

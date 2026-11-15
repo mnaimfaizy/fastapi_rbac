@@ -1,9 +1,9 @@
 """An admin-created user's verification link has to actually verify them.
 
-``POST /api/v1/users`` mints a verification token and mails it, but never wrote
-it to Redis. ``/verify-email`` compares the submitted token against
-``verification_token:{user.id}``, whose only writer was the registration and
-resend dispatcher -- so the emailed link failed on its first click with
+``POST /api/v1/users`` minted a verification token and mailed it, but never
+stored it. ``/verify-email`` checks the submitted token against the stored
+link, whose only writer was the registration and resend dispatcher -- so the
+emailed link failed on its first click with
 "This verification link is invalid or has expired", and the account it belonged
 to could never be verified by its owner.
 
@@ -34,6 +34,9 @@ from app.api.v1.endpoints.user import create_user
 from app.core.config import settings
 from app.models.user_model import User
 from app.schemas.user_schema import IUserCreate
+from app.utils import emailed_links
+from app.utils.account_token_responses import INVALID_VERIFICATION_TOKEN_MESSAGE
+from app.utils.emailed_links import LinkKind
 
 PASSWORD = "AdminMadeThis!47"
 
@@ -104,15 +107,19 @@ async def test_the_emailed_link_verifies_the_account(
 
 
 @pytest.mark.asyncio
-async def test_the_emailed_token_is_the_one_redis_holds(
-    db: AsyncSession, redis_mock: MockRedisClient
+async def test_the_emailed_token_is_the_live_link(
+    client: AsyncClient, db: AsyncSession, redis_mock: MockRedisClient
 ) -> None:
-    """Redis is what /verify-email checks, so the mail must carry that token."""
+    """The mail carries the link that was stored, so issuing a newer one retires it."""
     tasks = BackgroundTasks()
     user = await admin_creates_user(db, redis_mock, tasks)
+    token = emailed_token(tasks)
+    await emailed_links.issue(LinkKind.VERIFICATION, user, redis=redis_mock)  # type: ignore[arg-type]
 
-    stored = await redis_mock.get(f"verification_token:{user.id}")
-    if isinstance(stored, bytes):
-        stored = stored.decode()
+    _, headers = await get_csrf_token(client)
+    response = await client.post(
+        f"{settings.API_V1_STR}/auth/verify-email", json={"token": token}, headers=headers
+    )
 
-    assert stored == emailed_token(tasks)
+    assert response.status_code == 400, response.text
+    assert response.json()["detail"] == INVALID_VERIFICATION_TOKEN_MESSAGE

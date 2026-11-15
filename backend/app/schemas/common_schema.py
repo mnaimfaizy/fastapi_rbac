@@ -15,11 +15,10 @@ class IOrderEnum(str, Enum):
     descendent = "descendent"
 
 
+# The token types the session allowlist holds. Emailed links are not among them (#283).
 class TokenType(str, Enum):
     ACCESS = "access_token"
     REFRESH = "refresh_token"
-    RESET = "reset_token"
-    VERIFICATION = "verification_token"
 
 
 class IUserMessage(BaseModel):

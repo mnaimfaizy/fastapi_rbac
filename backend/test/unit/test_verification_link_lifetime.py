@@ -2,9 +2,9 @@
 
 Two settings used to govern one lifetime. ``EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES``
 drove the JWT ``exp`` and the "valid for N hours" copy; ``VERIFICATION_TOKEN_EXPIRE_MINUTES``
-drove the Redis ``setex`` TTL. ``/verify-email`` compares the submitted token against
-``verification_token:{user.id}``, so Redis is the real lifetime and the shorter value
-always won -- production mailed a 168-hour promise for a link that died after 24.
+drove the Redis ``setex`` TTL. ``/verify-email`` checks the submitted token against the
+link stored in Redis, so Redis is the real lifetime and the shorter value always won --
+production mailed a 168-hour promise for a link that died after 24.
 
 The property under test: whatever the email says, a reader who waits that long still
 gets in, and a reader who waits longer does not. It is asserted by reading the duration
@@ -64,9 +64,9 @@ async def issue_and_observe(redis: MockRedisClient, minutes: int) -> Issued:
     tasks = BackgroundTasks()
     user = User(id=uuid4(), email="pending@example.com", first_name="Pending", last_name="User")
 
-    await issue_verification(user=user, redis_client=redis, background_tasks=tasks)
+    token = await issue_verification(user=user, redis_client=redis, background_tasks=tasks)
 
-    _key, ttl_seconds, token = redis.setex.await_args.args
+    _key, ttl_seconds, _digest = redis.setex.await_args.args
     context: Dict[str, Any] = tasks.tasks[0].kwargs["context"]
     return Issued(
         ttl_seconds=ttl_seconds,
