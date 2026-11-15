@@ -504,6 +504,36 @@ async def test_password_reset_database_lookup_error_persists_an_audit_row(
     assert row.details["token_subject"] == user.email
 
 
+async def test_verify_email_database_lookup_error_persists_an_audit_row(
+    client: AsyncClient,
+    db: AsyncSession,
+    user_factory: Any,
+    redis_mock: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A database error while redeeming a verification link still leaves its audit row (#278)."""
+    monkeypatch.setattr(settings, "UNIFORM_ACCOUNT_RESPONSE_FLOOR_SECONDS", 0)
+    user = await user_factory.create(password=PASSWORD, verified=False, is_active=True)
+    token = await emailed_links.issue(LinkKind.VERIFICATION, user, redis=redis_mock)
+
+    async def abort_lookup_in_database(
+        *_args: Any, email: str, db_session: AsyncSession, **_kwargs: Any
+    ) -> None:
+        db_session.add(User(email=email, password="x"))
+        await db_session.flush()
+
+    monkeypatch.setattr("app.api.v1.endpoints.auth.crud.user.get_by_email", abort_lookup_in_database)
+
+    response = await client.post(
+        auth_url("/verify-email"), json={"token": token}, headers=await csrf_headers(client)
+    )
+
+    assert response.status_code == 500, response.text
+    rows = await events_named(db, "verify_email_unexpected_error_integrityerror")
+    assert len(rows) == 1
+    assert rows[0].details["token_subject"] == user.email
+
+
 @pytest.mark.parametrize(
     ("path", "event_name"),
     [

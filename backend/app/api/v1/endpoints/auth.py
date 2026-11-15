@@ -551,6 +551,12 @@ async def verify_email(
             e.subject or "N/A",
             exc_info=e.cause,
         )
+        # A database error aborts this transaction. Roll it back before the
+        # audit insert, or that insert is lost with the request (#278).
+        try:
+            await db_session.rollback()
+        except Exception:
+            logger.exception("Failed to roll back the session before recording the verify-email error")
         await log_security_event(
             background_tasks=background_tasks,
             db_session=db_session,
