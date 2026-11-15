@@ -52,6 +52,7 @@ nav:
       - "Dependency Upgrades": "development/DEPENDENCY_UPGRADES.md"
       - "Knowledge Graph (graphify)": "agents/graphify.md"
       - "Agent-kit integration": "agents/agent-kit.md"
+      - "Sandcastle runbook": "agents/sandcastle.md"
       - "Keeping explainer pages current": "development/explainer-pages.md"
   - "Deployment":
       - "Overview": "deployment/index.md"

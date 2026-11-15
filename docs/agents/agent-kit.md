@@ -9,6 +9,8 @@ Agent-kit supplies reusable GitHub Actions workflows that run Claude Code in thi
 | Security audit | 1 | Adopted; runs weekly while the Kill switch is `true` |
 | Plan → implement → review | 2 | Adopted; runs on its Trigger labels while the Kill switch is `true` |
 
+For local, sandboxed agent runs on your own machine (Claude Code, Cursor or Copilot), see the [Sandcastle runbook](sandcastle.md) instead.
+
 For the kit's own terms (Caller, Kill switch, Trigger label, Verified plan, Threat pack), see the [Agent-kit glossary](https://github.com/mnaimfaizy/agent-kit/blob/main/GLOSSARY.md). They are tooling terms, not product terms, so they stay out of this repository's `CONTEXT.md`.
 
 ## Vocabulary: actor allowlist
