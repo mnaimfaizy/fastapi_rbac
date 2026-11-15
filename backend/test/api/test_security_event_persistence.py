@@ -24,8 +24,8 @@ from app.models.user_model import User
 from app.schemas.common_schema import TokenType
 from app.utils import emailed_links
 from app.utils.account_email_dispatch import ACCOUNT_EMAIL_UNIFORM_MESSAGE
+from app.utils.allowlist import get_valid_tokens
 from app.utils.emailed_links import LinkKind
-from app.utils.token import get_valid_tokens
 
 PASSWORD = "TestPassw0rd!47"
 UNKNOWN_EMAIL = "no-such-login@example.com"

@@ -47,11 +47,10 @@ from app import crud
 from app.core.security import PasswordValidator
 from app.crud.user_crud import PasswordReuseError
 from app.models.user_model import User
-from app.utils import emailed_links
+from app.utils import emailed_links, sessions
 from app.utils.accepted_password import AcceptedPassword, _issue
 from app.utils.background_tasks import log_security_event
 from app.utils.emailed_links import LinkKind
-from app.utils.token import revoke_all_user_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -261,7 +260,7 @@ async def change_password(
     try:
         # Every session and the pending reset link: the password has changed
         # hands. Awaited inline, never queued (#206).
-        await revoke_all_user_tokens(redis_client, user_id)
+        await sessions.end_all(user_id, redis_client=redis_client)
         await emailed_links.revoke(LinkKind.PASSWORD_RESET, user_id, redis=redis_client)
         await db_session.commit()
     except Exception:
@@ -311,7 +310,7 @@ async def restore_fixture_password(
     )
 
     try:
-        await revoke_all_user_tokens(redis_client, user_id)
+        await sessions.end_all(user_id, redis_client=redis_client)
         await emailed_links.revoke(LinkKind.PASSWORD_RESET, user_id, redis=redis_client)
         await db_session.commit()
     except Exception:

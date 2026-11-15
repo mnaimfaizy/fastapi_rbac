@@ -2,33 +2,27 @@
 
 Seams under test:
 - POST /logout (the logout handler): one session, identified by the refresh
-  cookie or, failing that, the access token's allowlist metadata
+  cookie or, failing that, the access token
 - POST /logout/all (the logout_all handler): every session, via
-  revoke_all_user_tokens, and any pending reset link, via emailed_links.revoke
+  ``sessions.end_all``
+
+Sessions are opened through the Session module and the outcome is read back
+through ``sessions.accepts``; the allowlist's Redis keys are not touched. That
+logout/all also ends a pending reset link is asserted at the route in
+``test/api/test_session_revocation.py``, where the link can be redeemed.
 """
 
 from test.fixtures.mock_redis_client import MockRedisClient
 from unittest.mock import AsyncMock, MagicMock
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 from fastapi import BackgroundTasks, HTTPException, Response
 
 from app.api.v1.endpoints.auth import logout, logout_all
 from app.core.config import settings
-from app.schemas.common_schema import TokenType
-from app.utils import emailed_links
-from app.utils.emailed_links import LinkKind
-from app.utils.token import (
-    _revoke_members_with_session_id,
-    add_derived_access_token_to_redis,
-    add_session_tokens_to_redis,
-    add_token_to_redis,
-    end_caller_session,
-    get_valid_tokens,
-    session_id_for,
-    token_is_allowlisted,
-)
+from app.utils import sessions
+from app.utils.sessions import IssuedSession, SessionRejected
 
 
 @pytest.fixture(autouse=True)
@@ -53,18 +47,16 @@ def _request(refresh_token: str | None = None) -> MagicMock:
     return request
 
 
-async def _establish_session(redis: MockRedisClient, user: MagicMock, tag: str) -> tuple[str, str]:
-    access_token = f"access.{tag}"
-    refresh_token = f"refresh.{tag}"
-    await add_session_tokens_to_redis(
-        redis,  # type: ignore[arg-type]
-        user,
-        access_token=access_token,
-        refresh_token=refresh_token,
-        access_expire_minutes=15,
-        refresh_expire_minutes=60,
-    )
-    return access_token, refresh_token
+async def _open(redis: MockRedisClient, user: MagicMock) -> IssuedSession:
+    return await sessions.open(user, "127.0.0.1", redis_client=redis)  # type: ignore[arg-type]
+
+
+async def _accepted(redis: MockRedisClient, access_token: str) -> bool:
+    try:
+        await sessions.accepts(access_token, redis_client=redis)  # type: ignore[arg-type]
+    except SessionRejected:
+        return False
+    return True
 
 
 async def _logout(
@@ -87,170 +79,10 @@ async def _logout(
     )
 
 
-async def _allowlist_counts(redis: MockRedisClient, user_id: UUID, token_type: TokenType) -> tuple[int, int]:
-    members = await redis.zrange(f"user:{user_id}:{token_type}", 0, -1)
-    meta = await redis.hgetall(f"user:{user_id}:{token_type}:meta")
-    return len(members), len(meta)
-
-
-@pytest.mark.asyncio
-async def test_logout_ends_the_calling_session_and_leaves_others() -> None:
-    redis = MockRedisClient()
-    user = _user()
-    access_a, refresh_a = await _establish_session(redis, user, "browser-a")
-    access_b, refresh_b = await _establish_session(redis, user, "browser-b")
-
-    result = await _logout(redis, user, refresh_token=refresh_a)
-
-    assert result.message == "Successfully logged out"  # type: ignore[attr-defined]
-
-    refresh_members = await get_valid_tokens(redis, user.id, TokenType.REFRESH)  # type: ignore[arg-type]
-    access_members = await get_valid_tokens(redis, user.id, TokenType.ACCESS)  # type: ignore[arg-type]
-    assert token_is_allowlisted(refresh_members, refresh_a) is False
-    assert token_is_allowlisted(access_members, access_a) is False
-    assert token_is_allowlisted(refresh_members, refresh_b) is True
-    assert token_is_allowlisted(access_members, access_b) is True
-
-
-@pytest.mark.asyncio
-async def test_logout_rejects_every_access_token_derived_from_the_session() -> None:
-    redis = MockRedisClient()
-    user = _user()
-    access_original, refresh = await _establish_session(redis, user, "one")
-    await add_derived_access_token_to_redis(
-        redis,  # type: ignore[arg-type]
-        user,
-        access_token="access.refreshed",
-        refresh_token=refresh,
-        expire_time=15,
-    )
-    access_other, refresh_other = await _establish_session(redis, user, "other")
-
-    await _logout(redis, user, refresh_token=refresh)
-
-    access_members = await get_valid_tokens(redis, user.id, TokenType.ACCESS)  # type: ignore[arg-type]
-    refresh_members = await get_valid_tokens(redis, user.id, TokenType.REFRESH)  # type: ignore[arg-type]
-    assert token_is_allowlisted(access_members, access_original) is False
-    assert token_is_allowlisted(access_members, "access.refreshed") is False
-    assert token_is_allowlisted(refresh_members, refresh) is False
-    assert token_is_allowlisted(access_members, access_other) is True
-    assert token_is_allowlisted(refresh_members, refresh_other) is True
-
-
-@pytest.mark.asyncio
-async def test_logout_without_refresh_cookie_uses_access_token_metadata() -> None:
-    redis = MockRedisClient()
-    user = _user()
-    access_a, _refresh_a = await _establish_session(redis, user, "browser-a")
-    access_b, refresh_b = await _establish_session(redis, user, "browser-b")
-
-    await _logout(redis, user, refresh_token=None, access_token=access_a)
-
-    refresh_members = await get_valid_tokens(redis, user.id, TokenType.REFRESH)  # type: ignore[arg-type]
-    access_members = await get_valid_tokens(redis, user.id, TokenType.ACCESS)  # type: ignore[arg-type]
-    assert token_is_allowlisted(access_members, access_a) is False
-    assert token_is_allowlisted(refresh_members, refresh_b) is True
-    assert token_is_allowlisted(access_members, access_b) is True
-    # The refresh token that belongs to session A is gone even though the
-    # cookie was not presented.
-    assert token_is_allowlisted(refresh_members, _refresh_a) is False
-    for token_type in (TokenType.ACCESS, TokenType.REFRESH):
-        zcard, hlen = await _allowlist_counts(redis, user.id, token_type)
-        assert zcard == hlen
-
-
-@pytest.mark.asyncio
-async def test_logout_without_cookie_ends_an_access_only_session() -> None:
-    """OAuth2 /access-token allowlists an access token and sets no refresh cookie."""
-    redis = MockRedisClient()
-    user = _user()
-    await add_token_to_redis(
-        redis,  # type: ignore[arg-type]
-        user,
-        "access.oauth2",
-        TokenType.ACCESS,
-        expire_time=15,
-        session_id=session_id_for("access.oauth2"),
-    )
-    access_b, refresh_b = await _establish_session(redis, user, "browser-b")
-
-    await _logout(redis, user, refresh_token=None, access_token="access.oauth2")
-
-    access_members = await get_valid_tokens(redis, user.id, TokenType.ACCESS)  # type: ignore[arg-type]
-    refresh_members = await get_valid_tokens(redis, user.id, TokenType.REFRESH)  # type: ignore[arg-type]
-    assert token_is_allowlisted(access_members, "access.oauth2") is False
-    assert token_is_allowlisted(refresh_members, refresh_b) is True
-    assert token_is_allowlisted(access_members, access_b) is True
-
-
-@pytest.mark.asyncio
-async def test_logout_fails_without_a_session_id_and_does_not_revoke_others() -> None:
-    redis = MockRedisClient()
-    user = _user()
-    await add_token_to_redis(
-        redis,  # type: ignore[arg-type]
-        user,
-        "access.orphan",
-        TokenType.ACCESS,
-        expire_time=15,
-        session_id=None,
-    )
-    access_b, refresh_b = await _establish_session(redis, user, "browser-b")
-
-    with pytest.raises(HTTPException) as raised:
-        await _logout(redis, user, refresh_token=None, access_token="access.orphan")
-
-    assert raised.value.status_code == 400
-    assert raised.value.detail == "Unable to identify the current session."
-
-    refresh_members = await get_valid_tokens(redis, user.id, TokenType.REFRESH)  # type: ignore[arg-type]
-    access_members = await get_valid_tokens(redis, user.id, TokenType.ACCESS)  # type: ignore[arg-type]
-    assert token_is_allowlisted(access_members, "access.orphan") is True
-    assert token_is_allowlisted(refresh_members, refresh_b) is True
-    assert token_is_allowlisted(access_members, access_b) is True
-
-
-@pytest.mark.asyncio
-async def test_logout_leaves_allowlist_metadata_without_orphans() -> None:
-    redis = MockRedisClient()
-    user = _user()
-    access_a, refresh_a = await _establish_session(redis, user, "browser-a")
-    await _establish_session(redis, user, "browser-b")
-
-    await _logout(redis, user, refresh_token=refresh_a, access_token=access_a)
-
-    for token_type in (TokenType.ACCESS, TokenType.REFRESH):
-        zcard, hlen = await _allowlist_counts(redis, user.id, token_type)
-        assert zcard == hlen
-
-
-@pytest.mark.asyncio
-async def test_logout_clears_the_refresh_cookie() -> None:
-    redis = MockRedisClient()
-    user = _user()
-    access_a, refresh_a = await _establish_session(redis, user, "browser-a")
-    response = Response()
-
-    await _logout(redis, user, refresh_token=refresh_a, access_token=access_a, response=response)
-
-    set_cookie = response.headers.get("set-cookie", "")
-    assert settings.REFRESH_TOKEN_COOKIE_NAME in set_cookie
-    assert "max-age=0" in set_cookie.lower() or "Max-Age=0" in set_cookie
-
-
-@pytest.mark.asyncio
-async def test_logout_all_revokes_every_session() -> None:
-    redis = MockRedisClient()
-    user = _user()
-    _access_a, refresh_a = await _establish_session(redis, user, "browser-a")
-    await _establish_session(redis, user, "browser-b")
-    await emailed_links.issue(LinkKind.PASSWORD_RESET, user, redis=redis)  # type: ignore[arg-type]
-    assert redis._storage
-    response = Response()
-
-    result = await logout_all(
-        request=_request(refresh_a),
-        response=response,
+async def _logout_all(redis: MockRedisClient, user: MagicMock, response: Response | None = None) -> object:
+    return await logout_all(
+        request=_request(),
+        response=response or Response(),
         background_tasks=BackgroundTasks(),
         current_user=user,
         redis_client=redis,  # type: ignore[arg-type]
@@ -258,46 +90,114 @@ async def test_logout_all_revokes_every_session() -> None:
         _=None,
     )
 
-    assert result.message == "Successfully logged out from all sessions"  # type: ignore[attr-defined]
-    for token_type in (TokenType.ACCESS, TokenType.REFRESH):
-        assert await get_valid_tokens(redis, user.id, token_type) == set()  # type: ignore[arg-type]
-    # The pending reset link was the only plain value stored; it is revoked too.
-    assert redis._storage == {}
-    for token_type in (TokenType.ACCESS, TokenType.REFRESH):
-        zcard, hlen = await _allowlist_counts(redis, user.id, token_type)
-        assert zcard == hlen
-    set_cookie = response.headers.get("set-cookie", "")
-    assert settings.REFRESH_TOKEN_COOKIE_NAME in set_cookie
-
 
 @pytest.mark.asyncio
-async def test_end_caller_session_returns_false_without_tokens() -> None:
+async def test_logout_ends_the_calling_session_and_leaves_others() -> None:
     redis = MockRedisClient()
     user = _user()
+    browser_a = await _open(redis, user)
+    browser_b = await _open(redis, user)
 
-    assert (
-        await end_caller_session(
-            redis,  # type: ignore[arg-type]
-            user.id,
-            refresh_token=None,
-            access_token=None,
-        )
-        is False
+    result = await _logout(
+        redis, user, refresh_token=browser_a.refresh_token, access_token=browser_a.access_token
     )
 
+    assert result.message == "Successfully logged out"  # type: ignore[attr-defined]
+    assert await _accepted(redis, browser_a.access_token) is False
+    assert await _accepted(redis, browser_b.access_token) is True
+
 
 @pytest.mark.asyncio
-async def test_empty_session_id_revokes_nothing() -> None:
+async def test_logout_with_the_cookie_ends_the_cookies_session() -> None:
+    """The cookie names the session even when the bearer token is someone else's."""
     redis = MockRedisClient()
     user = _user()
-    access, refresh = await _establish_session(redis, user, "keep")
+    browser_a = await _open(redis, user)
+    browser_b = await _open(redis, user)
 
-    await _revoke_members_with_session_id(redis, user.id, "")  # type: ignore[arg-type]
+    await _logout(redis, user, refresh_token=browser_a.refresh_token, access_token=browser_b.access_token)
 
-    refresh_members = await get_valid_tokens(redis, user.id, TokenType.REFRESH)  # type: ignore[arg-type]
-    access_members = await get_valid_tokens(redis, user.id, TokenType.ACCESS)  # type: ignore[arg-type]
-    assert token_is_allowlisted(refresh_members, refresh) is True
-    assert token_is_allowlisted(access_members, access) is True
+    assert await _accepted(redis, browser_a.access_token) is False
+    assert await _accepted(redis, browser_b.access_token) is True
+
+
+@pytest.mark.asyncio
+async def test_logout_without_refresh_cookie_uses_the_access_token() -> None:
+    redis = MockRedisClient()
+    user = _user()
+    browser_a = await _open(redis, user)
+    browser_b = await _open(redis, user)
+
+    await _logout(redis, user, refresh_token=None, access_token=browser_a.access_token)
+
+    assert await _accepted(redis, browser_a.access_token) is False
+    assert await _accepted(redis, browser_b.access_token) is True
+
+
+@pytest.mark.asyncio
+async def test_logout_without_cookie_ends_an_access_only_session() -> None:
+    """OAuth2 /access-token opens an access-only session and sets no refresh cookie."""
+    redis = MockRedisClient()
+    user = _user()
+    swagger = await sessions.open_access_only(user, "127.0.0.1", redis_client=redis)  # type: ignore[arg-type]
+    browser_b = await _open(redis, user)
+
+    await _logout(redis, user, refresh_token=None, access_token=swagger)
+
+    assert await _accepted(redis, swagger) is False
+    assert await _accepted(redis, browser_b.access_token) is True
+
+
+@pytest.mark.asyncio
+async def test_logout_answers_400_when_no_session_is_identified_and_ends_nothing() -> None:
+    redis = MockRedisClient()
+    user = _user()
+    browser_b = await _open(redis, user)
+
+    with pytest.raises(HTTPException) as raised:
+        await _logout(redis, user, refresh_token=None, access_token="never.issued.token")
+
+    assert raised.value.status_code == 400
+    assert raised.value.detail == "Unable to identify the current session."
+    assert await _accepted(redis, browser_b.access_token) is True
+
+
+@pytest.mark.asyncio
+async def test_logout_clears_the_refresh_cookie() -> None:
+    redis = MockRedisClient()
+    user = _user()
+    browser_a = await _open(redis, user)
+    response = Response()
+
+    await _logout(
+        redis,
+        user,
+        refresh_token=browser_a.refresh_token,
+        access_token=browser_a.access_token,
+        response=response,
+    )
+
+    set_cookie = response.headers.get("set-cookie", "")
+    assert settings.REFRESH_TOKEN_COOKIE_NAME in set_cookie
+    assert "max-age=0" in set_cookie.lower()
+
+
+@pytest.mark.asyncio
+async def test_logout_all_ends_every_session() -> None:
+    redis = MockRedisClient()
+    user = _user()
+    browser_a = await _open(redis, user)
+    browser_b = await _open(redis, user)
+    swagger = await sessions.open_access_only(user, "127.0.0.1", redis_client=redis)  # type: ignore[arg-type]
+    response = Response()
+
+    result = await _logout_all(redis, user, response)
+
+    assert result.message == "Successfully logged out from all sessions"  # type: ignore[attr-defined]
+    for access_token in (browser_a.access_token, browser_b.access_token, swagger):
+        assert await _accepted(redis, access_token) is False
+    set_cookie = response.headers.get("set-cookie", "")
+    assert settings.REFRESH_TOKEN_COOKIE_NAME in set_cookie
 
 
 @pytest.mark.asyncio
@@ -307,15 +207,7 @@ async def test_logout_all_returns_500_when_revocation_fails() -> None:
     redis.delete = AsyncMock(side_effect=RuntimeError("redis down"))
 
     with pytest.raises(HTTPException) as raised:
-        await logout_all(
-            request=_request(),
-            response=Response(),
-            background_tasks=BackgroundTasks(),
-            current_user=user,
-            redis_client=redis,  # type: ignore[arg-type]
-            db_session=AsyncMock(),
-            _=None,
-        )
+        await _logout_all(redis, user)
 
     assert raised.value.status_code == 500
     assert raised.value.detail == "An unexpected error occurred during logout."

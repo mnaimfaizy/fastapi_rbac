@@ -1,13 +1,20 @@
+"""The allowlist: the Redis record of session tokens currently accepted.
+
+Storage for ``app.utils.sessions``, which is the only module that imports it
+(#279). Handlers and dependencies go through the Session module instead, so
+they cannot mint, record or revoke a token by a route of their own.
+"""
+
 import hashlib
 import json
 import time
+from dataclasses import dataclass
 from datetime import timedelta
 from uuid import UUID
 
 from redis.asyncio import Redis
 
 from app.core.config import settings
-from app.models.user_model import User
 from app.schemas.common_schema import TokenType
 from app.utils.origin_network import is_different_network
 
@@ -18,7 +25,11 @@ ALLOWLIST_TOKEN_TYPES = (TokenType.ACCESS, TokenType.REFRESH)
 
 
 def session_id_for(refresh_token: str) -> str:
-    """Stable id for one session (a refresh token and the access tokens derived from it)."""
+    """Stable id for one session (a refresh token and the access tokens derived from it).
+
+    An access-only session has no refresh token, so its id is derived from its
+    access token the same way.
+    """
     return hashlib.sha256(refresh_token.encode("utf-8")).hexdigest()
 
 
@@ -187,41 +198,75 @@ async def end_caller_session(
     return False
 
 
-async def _enforce_concurrent_session_limit(redis_client: Redis, user_id: UUID | str) -> None:
+@dataclass(frozen=True)
+class _LiveSession:
+    issued_at: float
+    session_id: str
+    token_type: TokenType
+    token: str
+
+
+async def _live_sessions(redis_client: Redis, user_id: UUID | str) -> list[_LiveSession]:
+    """Every live session: each refresh token, and each access-only session.
+
+    An access-only session is an access entry whose session id is derived from
+    the access token itself, which no access token derived from a refresh
+    token can have.
+    """
+    sessions: list[_LiveSession] = []
+    for member in await get_valid_tokens(redis_client, user_id, TokenType.REFRESH):
+        token = _as_text(member)
+        session_id = await _session_id_of(redis_client, user_id, TokenType.REFRESH, token)
+        issued_at = await _load_issued_at(redis_client, user_id, TokenType.REFRESH, token)
+        sessions.append(
+            _LiveSession(issued_at, session_id or session_id_for(token), TokenType.REFRESH, token)
+        )
+    for member in await get_valid_tokens(redis_client, user_id, TokenType.ACCESS):
+        token = _as_text(member)
+        if await _session_id_of(redis_client, user_id, TokenType.ACCESS, token) != session_id_for(token):
+            continue
+        issued_at = await _load_issued_at(redis_client, user_id, TokenType.ACCESS, token)
+        sessions.append(_LiveSession(issued_at, session_id_for(token), TokenType.ACCESS, token))
+    return sessions
+
+
+async def _enforce_concurrent_session_limit(
+    redis_client: Redis, user_id: UUID | str, new_session_id: str
+) -> None:
+    """Evict the oldest sessions over ``CONCURRENT_SESSION_LIMIT``, never the new one.
+
+    A limit of 0 or less disables enforcement (ADR 0011 decision 7).
+    """
     limit = settings.CONCURRENT_SESSION_LIMIT
     if limit <= 0:
         return
-    refresh_tokens = [
-        _as_text(member) for member in await get_valid_tokens(redis_client, user_id, TokenType.REFRESH)
-    ]
-    overflow = len(refresh_tokens) - limit
+    sessions = await _live_sessions(redis_client, user_id)
+    overflow = len(sessions) - limit
     if overflow <= 0:
         return
-    ranked: list[tuple[float, str]] = []
-    for token in refresh_tokens:
-        issued_at = await _load_issued_at(redis_client, user_id, TokenType.REFRESH, token)
-        ranked.append((issued_at, token))
-    ranked.sort(key=lambda item: (item[0], item[1]))
-    for _issued_at, token in ranked[:overflow]:
-        await revoke_session(redis_client, user_id, token)
+    older = [session for session in sessions if session.session_id != new_session_id]
+    older.sort(key=lambda session: (session.issued_at, session.token))
+    for session in older[:overflow]:
+        if session.token_type is TokenType.REFRESH:
+            await revoke_session(redis_client, user_id, session.token)
+        else:
+            await _revoke_members_with_session_id(redis_client, user_id, session.session_id)
 
 
-async def add_token_to_redis(
+async def _add_token(
     redis_client: Redis,
-    user: User,
+    user_id: UUID | str,
     token: str,
     token_type: TokenType,
-    expire_time: int,
-    session_id: str | None = None,
+    expire_minutes: int,
+    session_id: str,
     origin_ip: str | None = None,
 ) -> None:
     issued_at = time.time()
-    expires_at = issued_at + timedelta(minutes=expire_time).total_seconds()
-    if token_type is TokenType.REFRESH and not session_id:
-        session_id = session_id_for(token)
-    token_key = _allowlist_key(user.id, token_type)
-    meta_key = _allowlist_meta_key(user.id, token_type)
-    await _purge_expired(redis_client, user.id, token_type)
+    expires_at = issued_at + timedelta(minutes=expire_minutes).total_seconds()
+    token_key = _allowlist_key(user_id, token_type)
+    meta_key = _allowlist_meta_key(user_id, token_type)
+    await _purge_expired(redis_client, user_id, token_type)
     await redis_client.zadd(token_key, {token: expires_at})
     await redis_client.hset(
         meta_key,
@@ -233,67 +278,74 @@ async def add_token_to_redis(
             origin_ip=origin_ip,
         ),
     )
-    await _extend_key_ttl(redis_client, user.id, token_type)
-    if token_type is TokenType.REFRESH:
-        await _enforce_concurrent_session_limit(redis_client, user.id)
+    await _extend_key_ttl(redis_client, user_id, token_type)
 
 
-async def add_session_tokens_to_redis(
+async def record_session(
     redis_client: Redis,
-    user: User,
+    user_id: UUID | str,
+    *,
     access_token: str,
-    refresh_token: str,
     access_expire_minutes: int,
-    refresh_expire_minutes: int,
+    refresh_token: str | None = None,
+    refresh_expire_minutes: int = 0,
     origin_ip: str | None = None,
 ) -> None:
-    """Record one session: a refresh token and the access token derived from it.
+    """Record one new session, then enforce ``CONCURRENT_SESSION_LIMIT``.
 
-    Adding the refresh token enforces ``CONCURRENT_SESSION_LIMIT`` (ADR 0011
-    decision 7): a login at the limit evicts the oldest session rather than
-    rejecting the new one. A limit of 0 or less disables enforcement.
+    A session is a refresh token and the access token derived from it, or,
+    with no refresh token, an access token on its own. Either form counts
+    toward the limit, and a new session at the limit evicts the oldest other
+    session rather than being rejected (ADR 0011 decision 7).
 
-    ``origin_ip`` is the client address the session was established from, kept
-    on the refresh entry alone because that is the only place it is read
-    (ADR 0011 decision 5). Copying it onto the access entry would be a second
-    place to keep correct with no reader. Passing None records no origin, and a
-    session with no origin is never treated as an anomaly.
+    ``origin_ip`` is the client address the session was established from,
+    kept on the session's own entry (its refresh token, or the access token of
+    an access-only session) and not copied onto derived access tokens.
+    Passing None records no origin, and a session with no origin is never
+    treated as an anomaly.
     """
-    session_id = session_id_for(refresh_token)
-    await add_token_to_redis(
-        redis_client,
-        user,
-        refresh_token,
-        TokenType.REFRESH,
-        refresh_expire_minutes,
-        session_id=session_id,
-        origin_ip=origin_ip,
-    )
-    await add_token_to_redis(
-        redis_client,
-        user,
-        access_token,
-        TokenType.ACCESS,
-        access_expire_minutes,
-        session_id=session_id,
-    )
+    session_id = session_id_for(refresh_token or access_token)
+    if refresh_token is not None:
+        await _add_token(
+            redis_client,
+            user_id,
+            refresh_token,
+            TokenType.REFRESH,
+            refresh_expire_minutes,
+            session_id,
+            origin_ip=origin_ip,
+        )
+        await _add_token(
+            redis_client, user_id, access_token, TokenType.ACCESS, access_expire_minutes, session_id
+        )
+    else:
+        await _add_token(
+            redis_client,
+            user_id,
+            access_token,
+            TokenType.ACCESS,
+            access_expire_minutes,
+            session_id,
+            origin_ip=origin_ip,
+        )
+    await _enforce_concurrent_session_limit(redis_client, user_id, session_id)
 
 
-async def add_derived_access_token_to_redis(
+async def add_derived_access_token(
     redis_client: Redis,
-    user: User,
+    user_id: UUID | str,
     access_token: str,
     refresh_token: str,
-    expire_time: int,
+    expire_minutes: int,
 ) -> None:
     """Allowlist an access token as belonging to the session of ``refresh_token``."""
-    await add_token_to_redis(
+    await _add_token(
         redis_client,
-        user,
+        user_id,
         access_token,
         TokenType.ACCESS,
-        expire_time,
-        session_id=session_id_for(refresh_token),
+        expire_minutes,
+        session_id_for(refresh_token),
     )
 
 
@@ -307,6 +359,11 @@ async def get_valid_tokens(
 
 def token_is_allowlisted(valid_tokens: set[bytes | str], token: str) -> bool:
     return token in valid_tokens or token.encode() in valid_tokens
+
+
+async def is_live(redis_client: Redis, user_id: UUID | str, token_type: TokenType, token: str) -> bool:
+    """Whether ``token`` is a live allowlist member of ``token_type`` for the user."""
+    return token_is_allowlisted(await get_valid_tokens(redis_client, user_id, token_type), token)
 
 
 async def revoke_user_tokens(redis_client: Redis, user_id: UUID | str, token_type: TokenType) -> None:

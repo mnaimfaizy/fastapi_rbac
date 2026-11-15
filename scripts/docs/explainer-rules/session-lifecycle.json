@@ -4,6 +4,7 @@
   "dataIds": ["session-lifecycle-scenes"],
   "scriptPathMaps": ["P"],
   "aliases": {
+    "allowlist.py": "backend/app/utils/allowlist.py",
     "api.ts": "react-frontend/src/services/api.ts",
     "auth.py": "backend/app/api/v1/endpoints/auth.py",
     "auth.service.ts": "react-frontend/src/services/auth.service.ts",
@@ -19,7 +20,7 @@
     "password_policy.py": "backend/app/utils/password_policy.py",
     "rate_limit.py": "backend/app/core/rate_limit.py",
     "security.py": "backend/app/core/security.py",
-    "token.py": "backend/app/utils/token.py",
+    "sessions.py": "backend/app/utils/sessions.py",
     "tokenStorage.ts": "react-frontend/src/lib/tokenStorage.ts",
     "user_crud.py": "backend/app/crud/user_crud.py",
     "user_model.py": "backend/app/models/user_model.py"
@@ -41,7 +42,7 @@
       "type": "int"
     },
     "sessionLimitDisabledAtOrBelow": {
-      "file": "backend/app/utils/token.py",
+      "file": "backend/app/utils/allowlist.py",
       "pattern": "limit = settings\\.CONCURRENT_SESSION_LIMIT\\s*\\n\\s*if limit <= (-?\\d+):",
       "type": "int"
     },
@@ -82,7 +83,7 @@
     "allowlistTokenTypeValues": {
       "type": "map",
       "keys": {
-        "file": "backend/app/utils/token.py",
+        "file": "backend/app/utils/allowlist.py",
         "within": "^ALLOWLIST_TOKEN_TYPES = \\(([^)]*)\\)",
         "pattern": "TokenType\\.(\\w+)",
         "type": "list"
@@ -95,27 +96,27 @@
       }
     },
     "allowlistKeyPattern": {
-      "file": "backend/app/utils/token.py",
+      "file": "backend/app/utils/allowlist.py",
       "pattern": "def _allowlist_key\\(.*?\\n\\s*return f\"([^\"]+)\""
     },
     "allowlistMetaKeyPattern": {
       "type": "concat",
       "parts": [
-        { "file": "backend/app/utils/token.py", "pattern": "def _allowlist_key\\(.*?\\n\\s*return f\"([^\"]+)\"" },
+        { "file": "backend/app/utils/allowlist.py", "pattern": "def _allowlist_key\\(.*?\\n\\s*return f\"([^\"]+)\"" },
         {
-          "file": "backend/app/utils/token.py",
+          "file": "backend/app/utils/allowlist.py",
           "pattern": "def _allowlist_meta_key\\(.*?\\n\\s*return f\"\\{_allowlist_key\\(user_id, token_type\\)\\}([^\"]*)\""
         }
       ]
     },
     "allowlistMetaFields": {
-      "file": "backend/app/utils/token.py",
+      "file": "backend/app/utils/allowlist.py",
       "within": "^def _metadata_payload\\(.*?json\\.dumps\\(\\s*\\{(.*?)\\}",
       "pattern": "^\\s+\"(\\w+)\":",
       "type": "list"
     },
     "sessionIdDerivation": {
-      "file": "backend/app/utils/token.py",
+      "file": "backend/app/utils/allowlist.py",
       "pattern": "def session_id_for\\(refresh_token: str\\).*?return hashlib\\.sha256\\(refresh_token\\.encode\\(\"utf-8\"\\)\\)\\.hexdigest\\(\\)",
       "type": "present",
       "expect": "sha256(refresh_token).hexdigest()"
@@ -131,7 +132,7 @@
     },
     "allowlistMissStatus": {
       "file": "backend/app/api/deps.py",
-      "pattern": "if not token_is_allowlisted\\(valid_access_tokens, access_token\\):\\s*raise HTTPException\\(\\s*status_code=status\\.HTTP_(\\d{3})_",
+      "pattern": "except sessions\\.SessionRejected as rejected:\\s*raise HTTPException\\(\\s*status_code=status\\.HTTP_(\\d{3})_",
       "type": "int"
     },
     "logoutUnidentifiedStatus": {
@@ -145,8 +146,8 @@
       "type": "int"
     },
     "refreshOriginMismatchEvent": {
-      "file": "backend/app/api/v1/endpoints/auth.py",
-      "pattern": "event_type=\"(refresh_origin[a-z_]*)\""
+      "file": "backend/app/utils/sessions.py",
+      "pattern": "_record\\(\\s*db_session, \"(refresh_origin[a-z_]*)\""
     },
     "spaRefreshEndpoint": {
       "file": "react-frontend/src/services/api.ts",

@@ -33,7 +33,7 @@ def auth_url(path: str) -> str:
 async def allowlisted_lifetime(redis_mock: Any, user_id: UUID, token: str) -> float:
     """Seconds the allowlist keeps ``token``, from its ``user:{id}:refresh_token:meta`` entry.
 
-    Spelled exactly as ``app.utils.token`` writes it, so a re-key cannot pass.
+    Spelled exactly as ``app.utils.allowlist`` writes it, so a re-key cannot pass.
     """
     raw = await redis_mock.hget(f"user:{user_id}:refresh_token:meta", token)
     assert raw is not None, "the refresh token is not allowlisted"

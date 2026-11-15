@@ -16,7 +16,7 @@ from app.models.role_model import Role
 from app.models.user_model import User
 from app.qa_accounts.accounts import QAAccount, QAAccountsError
 from app.schemas.user_schema import IUserCreateFields
-from app.utils import emailed_links
+from app.utils import emailed_links, sessions
 from app.utils.accepted_password import AcceptedPassword
 from app.utils.emailed_links import LinkKind
 from app.utils.password_policy import (
@@ -25,7 +25,6 @@ from app.utils.password_policy import (
     accept_initial_password,
     restore_fixture_password,
 )
-from app.utils.token import revoke_all_user_tokens
 
 
 def _now() -> datetime:
@@ -153,7 +152,7 @@ async def seed_account(
         await _restore_profile(account, user, db_session, changes)
     if len(changes) > committed:
         db_session.add(user)
-        await revoke_all_user_tokens(redis_client, user.id)
+        await sessions.end_all(user.id, redis_client=redis_client)
         # Reset links left the allowlist (#283), so ending sessions no longer
         # covers one issued while the account had drifted.
         await emailed_links.revoke(LinkKind.PASSWORD_RESET, user.id, redis=redis_client)

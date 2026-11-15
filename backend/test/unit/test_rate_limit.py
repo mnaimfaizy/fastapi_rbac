@@ -173,22 +173,14 @@ async def test_get_current_user_establishes_identity_for_the_limiter(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from app.api.deps import get_current_user
-    from app.core import security
     from app.models.user_model import User
-    from app.utils.token import add_session_tokens_to_redis
+    from app.utils import sessions
 
     redis = MockRedisClient()
     user_id = uuid4()
     user = User(id=user_id, email="rate-limit-key@example.com", is_active=True)
-    access_token = security.create_access_token(str(user_id), user.email)
-    await add_session_tokens_to_redis(
-        redis,  # type: ignore[arg-type]
-        user,
-        access_token=access_token,
-        refresh_token="refresh.one",
-        access_expire_minutes=15,
-        refresh_expire_minutes=60,
-    )
+    issued = await sessions.open(user, None, redis_client=redis)  # type: ignore[arg-type]
+    access_token = issued.access_token
     monkeypatch.setattr(
         "app.crud.user.get_with_roles_permissions",
         AsyncMock(return_value=user),

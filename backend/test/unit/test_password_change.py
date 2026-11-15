@@ -22,8 +22,9 @@ from app.models.audit_log_model import AuditLog
 from app.models.password_history_model import UserPasswordHistory
 from app.models.user_model import User
 from app.schemas.common_schema import TokenType
-from app.utils import emailed_links
+from app.utils import emailed_links, sessions
 from app.utils.accepted_password import AcceptedPassword
+from app.utils.allowlist import get_valid_tokens
 from app.utils.emailed_links import LinkKind
 from app.utils.password_policy import (
     PASSWORD_COMPLEXITY_FAILURE_MESSAGE,
@@ -34,7 +35,6 @@ from app.utils.password_policy import (
     accept_initial_password,
     change_password,
 )
-from app.utils.token import add_token_to_redis, get_valid_tokens
 
 CURRENT_PASSWORD = "QaRegisterPass!47"
 NEW_PASSWORD = "ReplacementPassword!42"
@@ -87,11 +87,7 @@ async def _locked_user_with_sessions(
     # The factory only flushes. Commit so the user predates the change, as it
     # does in production, and a rollback cannot take the row with it.
     await db.commit()
-    for token_type, token in (
-        (TokenType.ACCESS, "prior-access"),
-        (TokenType.REFRESH, "prior-refresh"),
-    ):
-        await add_token_to_redis(redis_mock, user, token, token_type, 30)
+    await sessions.open(user, None, redis_client=redis_mock)  # type: ignore[arg-type]
     await emailed_links.issue(LinkKind.PASSWORD_RESET, user, redis=redis_mock)  # type: ignore[arg-type]
     return user
 

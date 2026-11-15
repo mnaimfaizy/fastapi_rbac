@@ -13,7 +13,7 @@ from redis.asyncio import Redis
 
 from app.core.config import settings
 from app.schemas.common_schema import TokenType
-from app.utils.token import get_valid_tokens, revoke_user_tokens, token_is_allowlisted
+from app.utils.allowlist import get_valid_tokens, revoke_user_tokens, token_is_allowlisted
 
 
 def _user_id_from_access_token(access_token: str) -> str:
