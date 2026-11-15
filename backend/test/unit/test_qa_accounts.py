@@ -28,8 +28,9 @@ from app.qa_accounts.accounts import (
 )
 from app.qa_accounts.seeding import seed
 from app.schemas.common_schema import TokenType
+from app.utils import sessions
+from app.utils.allowlist import get_valid_tokens
 from app.utils.password_policy import PasswordRefused
-from app.utils.token import add_token_to_redis, get_valid_tokens
 
 PG = "postgresql+asyncpg://postgres:postgres@{host}:5432/fastapi_db"
 
@@ -291,8 +292,7 @@ async def _sessions(redis_mock: Any, user: User) -> int:
 
 
 async def _give_sessions(redis_mock: Any, user: User) -> None:
-    for token_type, token in ((TokenType.ACCESS, "drift-access"), (TokenType.REFRESH, "drift-refresh")):
-        await add_token_to_redis(redis_mock, user, token, token_type, 30)
+    await sessions.open(user, None, redis_client=redis_mock)
 
 
 async def test_a_password_reset_goes_through_the_policy(db: AsyncSession, redis_mock: Any) -> None:

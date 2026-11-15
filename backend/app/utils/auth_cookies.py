@@ -5,6 +5,7 @@ from typing import Any, Literal, Optional
 from fastapi import Response
 
 from app.core.config import ModeEnum, settings
+from app.utils.sessions import IssuedSession
 
 SameSite = Literal["lax", "strict", "none"]
 
@@ -44,15 +45,13 @@ def _refresh_cookie_attrs(max_age: Optional[int] = None) -> dict[str, Any]:
     return attrs
 
 
-def set_refresh_token_cookie(
-    response: Response,
-    refresh_token: str,
-    max_age: Optional[int] = None,
-) -> None:
-    """Set the HttpOnly refresh token cookie. Never log the token value."""
-    if max_age is None:
-        max_age = settings.REFRESH_TOKEN_EXPIRE_MINUTES * 60
-    response.set_cookie(value=refresh_token, **_refresh_cookie_attrs(max_age=max_age))
+def write_session_cookie(response: Response, issued: IssuedSession) -> None:
+    """Set the HttpOnly refresh token cookie of a session just opened. Never log the token value.
+
+    Max-Age comes from the session, so the cookie cannot outlive or undercut
+    its refresh token.
+    """
+    response.set_cookie(value=issued.refresh_token, **_refresh_cookie_attrs(max_age=issued.refresh_max_age))
 
 
 def clear_refresh_token_cookie(response: Response) -> None:

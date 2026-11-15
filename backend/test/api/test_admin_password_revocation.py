@@ -1,7 +1,7 @@
 """An admin-set password revokes the target user's allowlisted sessions (#240).
 
 ``PUT /users/{user_id}`` was the one password-setting path that did not call
-``revoke_all_user_tokens``. It now ends sessions through
+the allowlist revocation. It now ends sessions through
 ``password_policy.change_password`` like every other path (#271); an administrator
 reset is the response to a compromised account, so it must lock the old
 sessions out before the response is written.
@@ -14,15 +14,16 @@ from test.utils import get_csrf_token
 from typing import Any, Dict, Tuple
 from uuid import uuid4
 
+import pytest
 from httpx import AsyncClient, Response
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.api.v1.endpoints.user import update_user
 from app.core.config import settings
 from app.models.user_model import User
-from app.schemas.common_schema import TokenType
 from app.schemas.user_schema import IUserUpdate
-from app.utils.token import add_token_to_redis, get_valid_tokens, token_is_allowlisted
+from app.utils import sessions
+from app.utils.sessions import SessionRejected
 
 PASSWORD = "TestPassw0rd!47"
 NEW_PASSWORD = "ReplacementPassword!42"
@@ -46,6 +47,14 @@ async def login(client: AsyncClient, email: str, password: str) -> Tuple[str, Di
     return token, {**headers, "Authorization": f"Bearer {token}"}
 
 
+async def accepted(redis_mock: Any, access_token: str) -> bool:
+    try:
+        await sessions.accepts(access_token, redis_client=redis_mock)
+    except SessionRejected:
+        return False
+    return True
+
+
 def _admin() -> User:
     return User(id=uuid4(), email="admin-direct@example.com", first_name="An", last_name="Admin")
 
@@ -65,14 +74,7 @@ async def test_admin_update_revokes_tokens_the_target_already_held(
 ) -> None:
     """A token the target held before the admin-set password does not survive it."""
     user = await user_factory.create(password=PASSWORD, verified=True)
-    prior = "prior-access-token-for-admin-reset"
-    await add_token_to_redis(
-        redis_mock,
-        user,
-        prior,
-        TokenType.ACCESS,
-        settings.ACCESS_TOKEN_EXPIRE_MINUTES,
-    )
+    prior = (await sessions.open(user, None, redis_client=redis_mock)).access_token
 
     await update_user(
         user_update=IUserUpdate(password=NEW_PASSWORD),
@@ -82,12 +84,11 @@ async def test_admin_update_revokes_tokens_the_target_already_held(
         current_user=_admin(),
     )
 
-    members = await get_valid_tokens(redis_mock, user.id, TokenType.ACCESS)
-    assert token_is_allowlisted(members, prior) is False
+    assert await accepted(redis_mock, prior) is False
 
 
 async def test_admin_set_password_invalidates_the_target_token(
-    client: AsyncClient, user_factory: Any, redis_mock: Any
+    client: AsyncClient, user_factory: Any, redis_mock: Any, db: AsyncSession
 ) -> None:
     """The token the target held beforehand must not survive the change."""
     await user_factory.create(
@@ -109,10 +110,9 @@ async def test_admin_set_password_invalidates_the_target_token(
     response = await put_user_password(client, admin_headers, target_id, NEW_PASSWORD)
     assert response.status_code == 200, response.text
 
-    access_members = await get_valid_tokens(redis_mock, target_id, TokenType.ACCESS)
-    refresh_members = await get_valid_tokens(redis_mock, target_id, TokenType.REFRESH)
-    assert token_is_allowlisted(access_members, old_access) is False
-    assert token_is_allowlisted(refresh_members, str(old_refresh)) is False
+    assert await accepted(redis_mock, old_access) is False
+    with pytest.raises(SessionRejected):
+        await sessions.refresh(str(old_refresh), "127.0.0.1", db_session=db, redis_client=redis_mock)
 
     me = await client.get(
         users_url("/me"),
@@ -124,7 +124,7 @@ async def test_admin_set_password_invalidates_the_target_token(
 async def test_admin_session_survives_setting_another_users_password(
     client: AsyncClient, user_factory: Any, redis_mock: Any
 ) -> None:
-    admin = await user_factory.create(
+    await user_factory.create(
         email="admin-stays@example.com",
         password=PASSWORD,
         verified=True,
@@ -135,14 +135,12 @@ async def test_admin_session_survives_setting_another_users_password(
         password=PASSWORD,
         verified=True,
     )
-    admin_id = admin.id
     admin_access, admin_headers = await login(client, "admin-stays@example.com", PASSWORD)
 
     response = await put_user_password(client, admin_headers, target.id, NEW_PASSWORD)
     assert response.status_code == 200, response.text
 
-    members = await get_valid_tokens(redis_mock, admin_id, TokenType.ACCESS)
-    assert token_is_allowlisted(members, admin_access) is True
+    assert await accepted(redis_mock, admin_access) is True
 
     me = await client.get(users_url("/me"), headers=admin_headers)
     assert me.status_code == 200, me.text
@@ -169,8 +167,7 @@ async def test_rejected_complexity_revokes_nothing(
     response = await put_user_password(client, admin_headers, target_id, REJECTED_PASSWORD)
     assert response.status_code == 400, response.text
 
-    members = await get_valid_tokens(redis_mock, target_id, TokenType.ACCESS)
-    assert token_is_allowlisted(members, old_access) is True
+    assert await accepted(redis_mock, old_access) is True
 
 
 async def test_rejected_reuse_revokes_nothing(
@@ -194,12 +191,11 @@ async def test_rejected_reuse_revokes_nothing(
     response = await put_user_password(client, admin_headers, target_id, PASSWORD)
     assert response.status_code == 400, response.text
 
-    members = await get_valid_tokens(redis_mock, target_id, TokenType.ACCESS)
-    assert token_is_allowlisted(members, old_access) is True
+    assert await accepted(redis_mock, old_access) is True
 
 
 async def test_unknown_user_revokes_nothing(client: AsyncClient, user_factory: Any, redis_mock: Any) -> None:
-    target = await user_factory.create(
+    await user_factory.create(
         email="target-unknown@example.com",
         password=PASSWORD,
         verified=True,
@@ -210,15 +206,13 @@ async def test_unknown_user_revokes_nothing(client: AsyncClient, user_factory: A
         verified=True,
         is_superuser=True,
     )
-    target_id = target.id
     old_access, _ = await login(client, "target-unknown@example.com", PASSWORD)
     _, admin_headers = await login(client, "admin-unknown@example.com", PASSWORD)
 
     response = await put_user_password(client, admin_headers, uuid4(), NEW_PASSWORD)
     assert response.status_code == 404, response.text
 
-    members = await get_valid_tokens(redis_mock, target_id, TokenType.ACCESS)
-    assert token_is_allowlisted(members, old_access) is True
+    assert await accepted(redis_mock, old_access) is True
 
 
 async def test_non_password_update_revokes_nothing(
@@ -247,5 +241,4 @@ async def test_non_password_update_revokes_nothing(
     )
     assert response.status_code == 200, response.text
 
-    members = await get_valid_tokens(redis_mock, target_id, TokenType.ACCESS)
-    assert token_is_allowlisted(members, old_access) is True
+    assert await accepted(redis_mock, old_access) is True

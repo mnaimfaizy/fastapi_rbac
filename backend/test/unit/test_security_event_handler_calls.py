@@ -238,7 +238,7 @@ async def test_login_token_generation_error_emits_event(
 ) -> None:
     user = _user()
     monkeypatch.setattr(
-        "app.api.v1.endpoints.auth.security.create_access_token",
+        "app.utils.sessions.security.create_access_token",
         MagicMock(side_effect=RuntimeError("signing failed")),
     )
     with pytest.raises(HTTPException) as raised:
@@ -539,7 +539,6 @@ async def _reset_request(
         AsyncMock(return_value=user),
     )
     monkeypatch.setattr("app.api.v1.endpoints.auth.send_password_reset_email", AsyncMock())
-    monkeypatch.setattr("app.api.v1.endpoints.auth.add_token_to_redis", AsyncMock())
     return await request_password_reset(
         request=_request(),
         reset_request=PasswordResetRequest(email="reset@example.com"),

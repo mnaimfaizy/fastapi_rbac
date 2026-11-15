@@ -17,7 +17,7 @@ Standard library only. See docs/development/explainer-pages.md for the workflow.
     python scripts/docs/check_explainers.py              # check every page
     python scripts/docs/check_explainers.py --fix        # move citations whose code only moved
     python scripts/docs/check_explainers.py --stamp      # anchor new citations, drop orphans
-    python scripts/docs/check_explainers.py --accept backend/app/utils/token.py
+    python scripts/docs/check_explainers.py --accept backend/app/utils/sessions.py
                                                          # re-anchor reviewed changes in a file
 """
 
@@ -101,7 +101,7 @@ class Finding:
 
 @dataclass
 class Occurrence:
-    key: str  # resolved citation, e.g. backend/app/utils/token.py:191-207
+    key: str  # resolved citation, e.g. backend/app/utils/sessions.py:191-207
     file: str
     start: int
     end: int

@@ -16,7 +16,7 @@ Related: [System Architecture — Authentication flow](../../reference/architect
 5. **Temporary password** — a 403 whose `detail.code` is `password_change_required` means an administrator set the user's password. The interceptor marks the stored user `needs_to_change_password` and does **not** log out; `ProtectedRoute` then sends the user to `/change-password-required`. That page (under `AuthLayout`) offers only the change-password form and Logout. A successful change stores the user and access token from the response and goes to `/dashboard`. See [ADR 0014](../../adr/0014-temporary-password-restricts-account.md).
 6. **Logout** — Sidebar and header **Logout** call `POST /auth/logout`, which ends this session only (allowlist entries for that session + cookie cleared server-side) and clears client memory/hint. Other devices stay signed in. **Log out everywhere** (same two surfaces, behind a confirmation) posts `POST /auth/logout/all`, then does the same local cleanup and sends the user to login. Cancelling the confirmation leaves the current session alone.
 
-Backend session invalidation uses a Redis **allowlist** (`app/utils/token.py`), not a JWT `jti` blacklist. See [ADR 0001](../../adr/0001-pyjwt-sole-jwt-library.md) and [ADR 0006](../../adr/0006-httponly-refresh-token-cookies.md).
+Backend session invalidation uses a Redis **allowlist** (`app/utils/allowlist.py`, behind `app/utils/sessions.py`), not a JWT `jti` blacklist. See [ADR 0001](../../adr/0001-pyjwt-sole-jwt-library.md) and [ADR 0006](../../adr/0006-httponly-refresh-token-cookies.md).
 
 ## CSRF
 

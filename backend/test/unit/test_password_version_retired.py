@@ -87,7 +87,7 @@ def test_every_password_path_revokes_prior_sessions(module: str, handler: str) -
 
     assert handler in handlers
     assert calls_named(handlers[handler], "change_password")
-    assert not calls_named(handlers[handler], "revoke_all_user_tokens")
+    assert not calls_named(handlers[handler], "end_all")
 
 
 def test_the_policy_module_revokes_prior_sessions() -> None:
@@ -98,6 +98,6 @@ def test_the_policy_module_revokes_prior_sessions() -> None:
     """
     handlers = handlers_in(APP_DIR / "utils" / "password_policy.py")
 
-    assert calls_named(handlers["change_password"], "revoke_all_user_tokens")
+    assert calls_named(handlers["change_password"], "end_all")
     # Reset links left the allowlist (#283), so ending a pending one is its own call.
     assert calls_named(handlers["change_password"], "revoke")

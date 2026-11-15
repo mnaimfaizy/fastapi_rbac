@@ -37,7 +37,7 @@ When the `graphify` MCP server is connected, use it for "what directly calls or 
 - CRUD → `backend/app/crud/`
 - Endpoints → `backend/app/api/v1/endpoints/`
 - Schemas → `backend/app/schemas/`
-- Session invalidation → Redis **allowlist** helpers in `backend/app/utils/token.py` (not a jti blacklist)
+- Session lifecycle → `backend/app/utils/sessions.py`; its Redis **allowlist** storage is `backend/app/utils/allowlist.py` (not a jti blacklist)
 
 ### SQLModel async idioms and tests
 

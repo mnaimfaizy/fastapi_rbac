@@ -8,8 +8,9 @@ from app.utils.auth_cookies import (
     clear_refresh_token_cookie,
     refresh_cookie_path,
     refresh_cookie_secure,
-    set_refresh_token_cookie,
+    write_session_cookie,
 )
+from app.utils.sessions import IssuedSession
 
 
 def test_refresh_cookie_path_scopes_to_auth_routes() -> None:
@@ -27,16 +28,20 @@ def test_refresh_cookie_secure_defaults_by_mode(monkeypatch: Any) -> None:
     assert refresh_cookie_secure() is True
 
 
-def test_set_refresh_token_cookie_flags() -> None:
+def test_write_session_cookie_flags() -> None:
     response = MagicMock()
-    set_refresh_token_cookie(response, "opaque-refresh-value")
+    issued = IssuedSession(
+        access_token="opaque-access", refresh_token="opaque-refresh-value", refresh_max_age=4321
+    )
+    write_session_cookie(response, issued)
     response.set_cookie.assert_called_once()
     kwargs = response.set_cookie.call_args.kwargs
     assert kwargs["key"] == settings.REFRESH_TOKEN_COOKIE_NAME
     assert kwargs["value"] == "opaque-refresh-value"
     assert kwargs["httponly"] is True
     assert kwargs["path"] == refresh_cookie_path()
-    assert kwargs["max_age"] == settings.REFRESH_TOKEN_EXPIRE_MINUTES * 60
+    # From the session, not recomputed from a setting, so the two cannot drift.
+    assert kwargs["max_age"] == 4321
     assert kwargs["samesite"] == "lax"
 
 

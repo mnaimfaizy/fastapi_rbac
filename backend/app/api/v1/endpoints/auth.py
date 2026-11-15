@@ -1,6 +1,6 @@
 import logging
 import traceback
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import cast  # Keep cast
 from uuid import UUID
 
@@ -14,16 +14,10 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app import crud
 from app.api import deps
 from app.api.deps import get_redis_client, get_strict_sanitizer
-from app.core import security  # security module contains token functions
 from app.core.config import settings
 from app.core.rate_limit import limiter
-from app.core.security import (  # For password complexity / JWT audit mapping
-    PasswordValidator,
-    decode_token,
-    map_jwt_http_error_to_event,
-)
+from app.core.security import PasswordValidator
 from app.models.user_model import User
-from app.schemas.common_schema import TokenType
 from app.schemas.response_schema import IPostResponseBase, create_response
 from app.schemas.token_schema import PasswordResetConfirm, RefreshToken, Token, TokenRead
 from app.schemas.user_schema import PasswordResetRequest  # Used for resend-verification
@@ -32,13 +26,13 @@ from app.schemas.user_schema import (
     UserRegister,
     VerifyEmail,
 )
-from app.utils import emailed_links, password_policy
+from app.utils import emailed_links, password_policy, sessions
 from app.utils.account_email_dispatch import (
     ACCOUNT_EMAIL_UNIFORM_MESSAGE,
     dispatch_account_email,
 )
 from app.utils.account_token_responses import PASSWORD_RESET_REQUEST_UNIFORM_MESSAGE
-from app.utils.auth_cookies import clear_refresh_token_cookie, set_refresh_token_cookie
+from app.utils.auth_cookies import clear_refresh_token_cookie, write_session_cookie
 from app.utils.background_tasks import (
     log_security_event,
     send_password_reset_email,
@@ -52,23 +46,37 @@ from app.utils.password_policy import (
     accept_initial_password,
 )
 from app.utils.response_timing import response_time_floor
-from app.utils.token import (
-    add_derived_access_token_to_redis,
-    add_session_tokens_to_redis,
-    add_token_to_redis,
-    end_caller_session,
-    get_valid_tokens,
-    refresh_origin_is_anomalous,
-    revoke_all_user_tokens,
-    revoke_session,
-    session_id_for,
-    token_is_allowlisted,
-)
 from app.utils.user_utils import serialize_user
 
 logger = logging.getLogger("fastapi_rbac")
 
 router = APIRouter()
+
+
+async def _end_unreturned_session(
+    user_id: UUID, issued: sessions.IssuedSession, *, redis_client: AsyncRedis
+) -> None:
+    """End a session that was opened but will not reach the client.
+
+    Left allowlisted it would count toward ``CONCURRENT_SESSION_LIMIT`` and
+    could evict a session the user really holds. A failure here is logged,
+    not raised, so the caller's original error is the one that propagates.
+    """
+    try:
+        await sessions.end(
+            user_id, refresh_token=issued.refresh_token, access_token=None, redis_client=redis_client
+        )
+    except Exception:
+        logger.exception("Failed to end an unreturned session for user %s", user_id)
+
+
+# Status and message for each reason the Session module refuses a refresh. An
+# origin-network mismatch is NOT_ACCEPTED too, so it reads as an invalid token.
+_REFRESH_REFUSALS = {
+    sessions.RejectReason.NOT_ACCEPTED: (status.HTTP_403_FORBIDDEN, "Refresh token invalid"),
+    sessions.RejectReason.INVALID_SUBJECT: (status.HTTP_403_FORBIDDEN, "Invalid user identifier in token"),
+    sessions.RejectReason.USER_UNAVAILABLE: (status.HTTP_404_NOT_FOUND, "User not found or inactive"),
+}
 
 
 @router.post("/login")
@@ -298,26 +306,14 @@ async def login(
                 detail={"field_name": "email", "message": "Inactive user"},
             )
         try:
-            access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-            refresh_token_expires = timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES)
-            access_token = security.create_access_token(
-                authenticated_user.id,
-                authenticated_user.email,
-                expires_delta=access_token_expires,
+            issued = await sessions.open(
+                authenticated_user, get_client_ip(request), redis_client=redis_client
             )
-            refresh_token = security.create_refresh_token(
-                authenticated_user.id, expires_delta=refresh_token_expires
-            )
-            await add_session_tokens_to_redis(
-                redis_client,
-                authenticated_user,
-                access_token=access_token,
-                refresh_token=refresh_token,
-                access_expire_minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES,
-                refresh_expire_minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES,
-                origin_ip=get_client_ip(request),
-            )
-            set_refresh_token_cookie(response, refresh_token)
+            try:
+                write_session_cookie(response, issued)
+            except Exception:
+                await _end_unreturned_session(authenticated_user.id, issued, redis_client=redis_client)
+                raise
         except Exception as e:
             await log_security_event(
                 background_tasks=background_tasks,
@@ -330,14 +326,19 @@ async def login(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="An error occurred while processing your request.",
             )
-        user_data = serialize_user(authenticated_user)
-        user_read = IUserRead(**user_data)
-        data = Token(
-            access_token=access_token,
-            token_type="bearer",
-            refresh_token=None,  # HttpOnly cookie; not exposed to JS
-            user=user_read,
-        )
+        try:
+            user_data = serialize_user(authenticated_user)
+            user_read = IUserRead(**user_data)
+            data = Token(
+                access_token=issued.access_token,
+                token_type="bearer",
+                refresh_token=None,  # HttpOnly cookie; not exposed to JS
+                user=user_read,
+            )
+        except Exception:
+            # The client never receives this session; end it before answering.
+            await _end_unreturned_session(authenticated_user.id, issued, redis_client=redis_client)
+            raise
         await log_security_event(
             background_tasks=background_tasks,
             db_session=db_session,
@@ -571,17 +572,7 @@ async def verify_email(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred during email verification.",
         )
-    user = outcome.user
-    response_data = IUserRead(**serialize_user(user)).model_dump()
-    if getattr(settings, "MODE", None) == "testing":
-        response_data["access_token"] = security.create_access_token(
-            user.id,
-            user.email,
-            expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
-        )
-        response_data["refresh_token"] = security.create_refresh_token(
-            user.id, expires_delta=timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES)
-        )
+    response_data = IUserRead(**serialize_user(outcome.user)).model_dump()
     if isinstance(outcome, emailed_links.AlreadyVerified):
         return create_response(data=response_data, message="Email is already verified.")
     return create_response(data=response_data, message="Email verified successfully.")
@@ -698,40 +689,27 @@ async def change_password(
             db_session=db_session,
             redis_client=redis_client,
         )
-        # Issuing the fresh session stays here: it belongs to this caller, not
-        # to the policy.
-        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-        refresh_token_expires = timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES)
-        access_token = security.create_access_token(
-            current_user.id, current_user.email, expires_delta=access_token_expires
-        )
-        refresh_token = security.create_refresh_token(current_user.id, expires_delta=refresh_token_expires)
         # Serialize the updated user to IUserRead for the Token response
         user_payload_for_token = serialize_user(current_user)
         user_read_for_token = IUserRead(**user_payload_for_token)
-        data = Token(
-            access_token=access_token,
-            token_type="bearer",
-            refresh_token=None,  # HttpOnly cookie; not exposed to JS
-            user=user_read_for_token,  # Pass the IUserRead instance
-        )
-        # The old sessions were ended above, before these are allowlisted. The
-        # order is the fix for #206: revocation used to be queued and ran after
-        # the response, deleting the very tokens this response hands back.
-        await add_session_tokens_to_redis(
-            redis_client,
-            current_user,
-            access_token=access_token,
-            refresh_token=refresh_token,
-            access_expire_minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES,
-            refresh_expire_minutes=int(refresh_token_expires.total_seconds() / 60),
-            origin_ip=get_client_ip(request),
-        )
-        set_refresh_token_cookie(
-            response,
-            refresh_token,
-            max_age=int(refresh_token_expires.total_seconds()),
-        )
+        # Issuing the fresh session stays here: it belongs to this caller, not
+        # to the policy. The old sessions were ended above, before this one is
+        # opened. The order is the fix for #206: revocation used to be queued
+        # and ran after the response, deleting the very tokens this response
+        # hands back. A failure before the open leaves no new session; one
+        # after it ends the session again, since the client never receives it.
+        issued = await sessions.open(current_user, get_client_ip(request), redis_client=redis_client)
+        try:
+            data = Token(
+                access_token=issued.access_token,
+                token_type="bearer",
+                refresh_token=None,  # HttpOnly cookie; not exposed to JS
+                user=user_read_for_token,  # Pass the IUserRead instance
+            )
+            write_session_cookie(response, issued)
+        except Exception:
+            await _end_unreturned_session(current_user.id, issued, redis_client=redis_client)
+            raise
         # Expire all objects in the session to ensure latest data is visible in subsequent requests
         db_session.expire_all()
         return create_response(data=data, message="Password changed successfully")
@@ -779,7 +757,6 @@ async def get_new_access_token(
     """
     client_host = get_client_ip(request)
     ip_address = client_host or "Unknown"  # The audit-log rendering of the same address
-    payload = None  # Initialize payload for broader scope in exception handling
     refresh_token = request.cookies.get(settings.REFRESH_TOKEN_COOKIE_NAME)
     if not refresh_token and body and body.refresh_token:
         refresh_token = body.refresh_token
@@ -798,156 +775,33 @@ async def get_new_access_token(
             },
         )
     try:
-        try:
-            payload = decode_token(refresh_token, token_type="refresh")
-        except HTTPException as exc:
-            await log_security_event(
-                background_tasks=background_tasks,
-                db_session=db_session,
-                event_type=map_jwt_http_error_to_event(exc, flow="refresh"),
-                details={
-                    "token_error": (exc.detail if isinstance(exc.detail, str) else str(exc.detail)),
-                    "ip_address": ip_address,
-                },
-            )
-            raise
-        if payload["type"] == "refresh":
-            user_id_from_token = payload["sub"]
-            valid_refresh_tokens = await get_valid_tokens(redis_client, user_id_from_token, TokenType.REFRESH)
-            if not token_is_allowlisted(valid_refresh_tokens, refresh_token):
-                await log_security_event(
-                    background_tasks=background_tasks,
-                    db_session=db_session,
-                    event_type="refresh_token_invalid",
-                    details={"user_id": user_id_from_token, "ip_address": ip_address},
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail={"status": False, "message": "Refresh token invalid"},
-                )
-            # Origin-network anomaly detection (#69, ADR 0011 decision 5). The
-            # session dies and the user re-authenticates on this device; their
-            # other sessions are untouched. The answer is the ordinary refresh
-            # failure above, deliberately not a distinct error -- a caller must
-            # not learn that the address is what gave it away.
-            if await refresh_origin_is_anomalous(
-                redis_client, user_id_from_token, refresh_token, client_host
-            ):
-                await revoke_session(redis_client, user_id_from_token, refresh_token)
-                # Logged inline as well as persisted. The HTTP answer is the
-                # ordinary refresh failure, so this line is how the anomaly
-                # rate is counted in logs -- and ADR 0011 decision 5 defers
-                # notifying users precisely until that rate is known.
-                logger.warning(
-                    "refresh_origin_network_mismatch: revoked session for token subject "
-                    f"{user_id_from_token} presented from {ip_address}"
-                )
-                await log_security_event(
-                    background_tasks=background_tasks,
-                    db_session=db_session,
-                    event_type="refresh_origin_network_mismatch",
-                    details={"user_id": user_id_from_token, "ip_address": ip_address},
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail={"status": False, "message": "Refresh token invalid"},
-                )
-            access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-            user: User | None = None
-            try:
-                user_uuid = UUID(user_id_from_token)
-                user = await crud.user.get(id=user_uuid, db_session=db_session)
-            except ValueError:
-                await log_security_event(
-                    background_tasks=background_tasks,
-                    db_session=db_session,
-                    event_type="refresh_token_invalid_uuid",
-                    details={"user_id": user_id_from_token, "ip_address": ip_address},
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail={
-                        "status": False,
-                        "message": "Invalid user identifier in token",
-                    },
-                )
-            if user and user.is_active:
-                access_token = security.create_access_token(
-                    str(user.id),
-                    user.email,
-                    expires_delta=access_token_expires,  # Use user.id from DB object
-                )
-                # It's debatable whether to add the new access token to redis
-                # if only refresh tokens are strictly managed this way.
-                # The existing code had this logic, so keeping it.
-                valid_access_tokens = await get_valid_tokens(redis_client, user.id, TokenType.ACCESS)
-                if valid_access_tokens is not None:  # Check if Redis list exists (even if empty)
-                    await add_derived_access_token_to_redis(
-                        redis_client,
-                        user,
-                        access_token,
-                        refresh_token,
-                        settings.ACCESS_TOKEN_EXPIRE_MINUTES,
-                    )
-                await log_security_event(
-                    background_tasks=background_tasks,
-                    db_session=db_session,
-                    event_type="refresh_token_success",
-                    user_id=user.id,
-                    details={"email": user.email, "ip_address": ip_address},
-                )
-                return create_response(
-                    data=TokenRead(access_token=access_token, token_type="bearer"),
-                    message="Access token generated correctly",
-                )
-            else:
-                # This covers user not found (user is None) or user is inactive
-                event_user_id = user.id if user else user_id_from_token
-                event_email = user.email if user else "N/A"
-                await log_security_event(
-                    background_tasks=background_tasks,
-                    db_session=db_session,
-                    event_type="refresh_token_user_not_found_or_inactive",
-                    user_id=event_user_id,
-                    details={
-                        "email": event_email,
-                        "token_subject": user_id_from_token,
-                        "ip_address": ip_address,
-                    },
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail={"status": False, "message": "User not found or inactive"},
-                )
-        else:
-            await log_security_event(
-                background_tasks=background_tasks,
-                db_session=db_session,
-                event_type="refresh_token_wrong_type",
-                details={"token_type": payload.get("type"), "ip_address": ip_address},
-            )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"status": False, "message": "Incorrect token type provided"},
-            )
-    except HTTPException:
-        raise  # Re-raise HTTPException directly to maintain original status code and detail
-    except Exception as e:
-        error_type = type(e).__name__
+        # Origin-network anomaly detection (#69, ADR 0011 decision 5) happens
+        # inside: a mismatch ends that session and answers as an invalid
+        # refresh token, deliberately not a distinct error -- a caller must not
+        # learn that the address is what gave it away.
+        refreshed = await sessions.refresh(
+            refresh_token, client_host, db_session=db_session, redis_client=redis_client
+        )
+    except sessions.SessionRejected as rejected:
+        status_code, message = _REFRESH_REFUSALS[rejected.reason]
+        raise HTTPException(status_code=status_code, detail={"status": False, "message": message})
+    except sessions.SessionError as e:
+        subject = e.subject
+        error_type = type(e.cause).__name__
         logger.error(
             f"Unexpected error in get_new_access_token from IP {ip_address} for "
-            f"token sub {payload.get('sub') if payload else 'N/A'}: {str(e)}",
-            exc_info=True,
+            f"token sub {subject or 'N/A'}: {str(e.cause)}",
+            exc_info=e.cause,
         )
         await log_security_event(
             background_tasks=background_tasks,
             db_session=db_session,
             event_type=f"new_access_token_unexpected_error_{error_type.lower()}",
-            user_id=payload.get("sub") if payload else None,
+            user_id=subject,
             details={
-                "error": str(e),
+                "error": str(e.cause),
                 "ip_address": ip_address,
-                "token_subject": payload.get("sub") if payload else "N/A",
+                "token_subject": subject or "N/A",
             },
         )
         raise HTTPException(
@@ -957,6 +811,17 @@ async def get_new_access_token(
                 "message": "An unexpected error occurred while refreshing the token.",
             },
         )
+    await log_security_event(
+        background_tasks=background_tasks,
+        db_session=db_session,
+        event_type="refresh_token_success",
+        user_id=refreshed.user.id,
+        details={"email": refreshed.user.email, "ip_address": ip_address},
+    )
+    return create_response(
+        data=TokenRead(access_token=refreshed.access_token, token_type="bearer"),
+        message="Access token generated correctly",
+    )
 
 
 @router.post("/access-token")
@@ -970,6 +835,10 @@ async def login_access_token(
 ) -> IPostResponseBase[TokenRead]:  # Changed return type
     """
     OAuth2 compatible token login, get an access token for future requests
+
+    No ``validate_csrf_token`` dependency, unlike ``/login``: this is the form
+    Swagger's Authorize button posts, and it cannot send the CSRF header. Kept
+    that way until the owner decides otherwise (#279).
     """
     # Check if user exists and get their current status
     user_record = await crud.user.get_by_email(email=form_data.username, db_session=db_session)
@@ -1121,17 +990,8 @@ async def login_access_token(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={"field_name": "email", "message": "Inactive user"},
         )
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = security.create_access_token(user.id, user.email, expires_delta=access_token_expires)
     # Form login issues no refresh cookie, so the access token is the session.
-    await add_token_to_redis(
-        redis_client,
-        user,
-        access_token,
-        TokenType.ACCESS,
-        settings.ACCESS_TOKEN_EXPIRE_MINUTES,
-        session_id=session_id_for(access_token),
-    )
+    access_token = await sessions.open_access_only(user, get_client_ip(request), redis_client=redis_client)
     # Log successful OAuth2 login
     await log_security_event(
         background_tasks=background_tasks,
@@ -1167,13 +1027,14 @@ async def logout(
     ip_address = get_client_ip(request) or "Unknown"
     try:
         refresh_token = request.cookies.get(settings.REFRESH_TOKEN_COOKIE_NAME) or None
-        ended = await end_caller_session(
-            redis_client,
-            current_user.id,
-            refresh_token=refresh_token,
-            access_token=access_token,
-        )
-        if not ended:
+        try:
+            await sessions.end(
+                current_user.id,
+                refresh_token=refresh_token,
+                access_token=access_token,
+                redis_client=redis_client,
+            )
+        except sessions.SessionRejected:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Unable to identify the current session.",
@@ -1229,7 +1090,7 @@ async def logout_all(
     """
     ip_address = get_client_ip(request) or "Unknown"
     try:
-        await revoke_all_user_tokens(redis_client, current_user.id)
+        await sessions.end_all(current_user.id, redis_client=redis_client)
         await emailed_links.revoke(LinkKind.PASSWORD_RESET, current_user.id, redis=redis_client)
         clear_refresh_token_cookie(response)
         await log_security_event(

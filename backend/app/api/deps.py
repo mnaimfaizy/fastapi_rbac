@@ -5,7 +5,6 @@ used across the FastAPI application.
 
 from collections.abc import AsyncGenerator, Coroutine
 from typing import Any, Callable, Optional
-from uuid import UUID  # Import UUID
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
@@ -16,12 +15,10 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app import crud
 from app.core.config import Settings, settings
 from app.core.rate_limit import remember_authenticated_identity
-from app.core.security import decode_token
 from app.db.session import SessionLocal, get_redis_client
 from app.models.user_model import User
-from app.schemas.common_schema import TokenType
+from app.utils import sessions
 from app.utils.sanitization import InputSanitizer
-from app.utils.token import get_valid_tokens, token_is_allowlisted
 
 # Import CSRF protection for dependency injection
 csrf_protect = None  # Will be set by main.py during startup
@@ -62,6 +59,13 @@ PASSWORD_CHANGE_REQUIRED_DETAIL = {
     "message": "Password change required.",
 }
 
+# The 403 detail for each reason the Session module refuses an access token.
+_ACCESS_REFUSALS = {
+    sessions.RejectReason.MISSING_SUBJECT: "User identifier not found in token.",
+    sessions.RejectReason.INVALID_SUBJECT: "Invalid user identifier in token.",
+    sessions.RejectReason.NOT_ACCEPTED: "Could not validate credentials, token invalid or revoked.",
+}
+
 
 def get_current_user(
     required_permissions: Optional[list] = None,
@@ -82,27 +86,12 @@ def get_current_user(
         redis_client: Redis = Depends(get_redis_client),
         db_session: AsyncSession = Depends(get_db),
     ) -> User:
-        payload = decode_token(access_token)
-
-        user_id_str = payload.get("sub")
-        if not user_id_str:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="User identifier not found in token.",
-            )
         try:
-            user_id = UUID(user_id_str)
-        except ValueError:
+            user_id = await sessions.accepts(access_token, redis_client=redis_client)
+        except sessions.SessionRejected as rejected:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Invalid user identifier in token.",
-            )
-
-        valid_access_tokens = await get_valid_tokens(redis_client, user_id_str, TokenType.ACCESS)
-        if not token_is_allowlisted(valid_access_tokens, access_token):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Could not validate credentials, token invalid or revoked.",
+                detail=_ACCESS_REFUSALS[rejected.reason],
             )
 
         # Use eager loading to ensure roles and permissions are loaded
@@ -111,6 +100,9 @@ def get_current_user(
         if not user_from_db:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
 
+        # Temporary: disabling a user does not end their sessions yet, so this
+        # is a second revocation mechanism beside the allowlist (ADR 0011
+        # decision 1) until #281 makes disable and delete call end_all.
         if not user_from_db.is_active:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user.")
 
