@@ -10,7 +10,7 @@ This document summarizes the investigation and implementation of improved Redis 
 
 #### Security Issues Identified
 1. **Weak Certificate Validation**
-   - `service_config.py` used `ssl_cert_reqs=none` 
+   - `service_config.py` used `ssl_cert_reqs=none`
    - Disabled certificate validation, vulnerable to MITM attacks
    - Inconsistent configuration across services
 
@@ -410,6 +410,6 @@ The Redis SSL implementation successfully addresses all identified security issu
 
 ---
 
-**Document Version:** 1.0  
-**Last Updated:** 2025-12-30  
+**Document Version:** 1.0
+**Last Updated:** 2025-12-30
 **Author:** FastAPI RBAC Development Team

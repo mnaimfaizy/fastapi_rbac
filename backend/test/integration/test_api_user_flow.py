@@ -445,7 +445,7 @@ class TestUserManagementFlow:
         # Create multiple test users
         for i in range(15):
             # Add random suffix to email to guarantee uniqueness
-            email = f"testuser{i}_{random.randint(10000,99999)}@example.com"
+            email = f"testuser{i}_{random.randint(10000, 99999)}@example.com"
             await register_and_verify_user(client, email=email, first_name=f"User{i}")
 
         # Test pagination
@@ -513,7 +513,7 @@ class TestUserManagementFlow:
         # Register and verify test users
         user_ids = []
         for i in range(5):
-            email = f"bulktest{i}_{random.randint(10000,99999)}@example.com"
+            email = f"bulktest{i}_{random.randint(10000, 99999)}@example.com"
             await register_and_verify_user(client, email=email)
             response = await client.get(f"{settings.API_V1_STR}/users?email={email}", headers=auth_headers)
             if response.status_code != 200:
