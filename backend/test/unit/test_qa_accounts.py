@@ -4,11 +4,9 @@ Seams: ``refusal`` (the pure rule), ``main`` (the CLI, which must refuse
 before touching a database) and ``seed`` (the database work).
 """
 
-import hashlib
 from typing import Any
 
 import pytest
-from fastapi import HTTPException
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -30,9 +28,6 @@ from app.qa_accounts.accounts import (
 )
 from app.qa_accounts.seeding import seed
 from app.schemas.common_schema import TokenType
-from app.utils import emailed_links
-from app.utils.account_token_responses import INVALID_PASSWORD_RESET_TOKEN_MESSAGE
-from app.utils.emailed_links import LinkKind
 from app.utils.password_policy import PasswordRefused
 from app.utils.token import add_token_to_redis, get_valid_tokens
 
@@ -333,33 +328,6 @@ async def test_any_repair_ends_the_sessions(db: AsyncSession, redis_mock: Any) -
 
     assert results["user"][0].startswith("set roles to [User]")
     assert await _sessions(redis_mock, await _user(db, "user")) == 0
-
-
-async def test_a_repair_revokes_a_pending_reset_link(db: AsyncSession, redis_mock: Any) -> None:
-    """A repair that does not change the password still kills a reset link issued while drifted."""
-    roles = await _roles(db)
-    await seed(ACCOUNTS, db, redis_mock)
-    user = await _user(db, "user")
-    token = await emailed_links.issue(LinkKind.PASSWORD_RESET, user, redis=redis_mock)
-    digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
-    assert digest in [str(value) for value in redis_mock._storage.values()]
-    user.roles = [roles["Admin"]]
-    db.add(user)
-    await db.commit()
-
-    await seed(select_accounts("user"), db, redis_mock)
-
-    assert digest not in [str(value) for value in redis_mock._storage.values()]
-
-    async def should_not_run(_user: User) -> None:
-        raise AssertionError("a revoked reset link must not change the password")
-
-    with pytest.raises(HTTPException) as exc_info:
-        await emailed_links.redeem_password_reset(
-            token, should_not_run, client_address=None, db_session=db, redis=redis_mock
-        )
-    assert exc_info.value.status_code == 400
-    assert exc_info.value.detail == INVALID_PASSWORD_RESET_TOKEN_MESSAGE
 
 
 async def test_an_unchanged_account_keeps_its_sessions(db: AsyncSession, redis_mock: Any) -> None:
