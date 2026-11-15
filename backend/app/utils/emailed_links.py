@@ -31,6 +31,7 @@ of the submitted token, never the token itself (#282).
 
 import hashlib
 import hmac
+import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Awaitable, Callable, Literal, NoReturn, Optional, Union
@@ -51,6 +52,8 @@ from app.utils.account_token_responses import (
 )
 from app.utils.background_tasks import log_security_event
 from app.utils.response_timing import response_time_floor
+
+logger = logging.getLogger(__name__)
 
 
 class LinkKind(str, Enum):
@@ -322,5 +325,7 @@ async def redeem_password_reset(
         await act(user)
         try:
             await _consume(LinkKind.PASSWORD_RESET, user_id, token, redis)
-        except Exception as e:
-            raise attempt.failed(e) from e
+        except Exception:
+            # The password change has committed; answering 500 would tell the
+            # user it failed.
+            logger.exception("Could not consume the reset link for user %s after a password change", user_id)

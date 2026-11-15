@@ -137,6 +137,8 @@ async def test_a_redeemed_link_works_once(
         assert isinstance(outcome, VerifiedNow)
         assert outcome.user.verified is True
         assert "email_verified_successfully" in await _event_names(db)
+        # Consumed; a repeat visit is AlreadyVerified only because the user now is (#239).
+        assert redis_mock._storage == {}
     else:
         # The link is consumed: a second redemption is refused.
         assert await _refusal(kind, token, db, redis_mock) == REFUSAL[kind]
@@ -266,6 +268,26 @@ async def test_a_refused_action_leaves_the_reset_link_usable(
     assert (
         await _refusal(LinkKind.PASSWORD_RESET, token, db, redis_mock) == INVALID_PASSWORD_RESET_TOKEN_MESSAGE
     )
+
+
+@pytest.mark.asyncio
+async def test_a_completed_reset_is_not_reported_as_failed_when_consuming_fails(
+    db: AsyncSession, user_factory: Any, redis_mock: MockRedisClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    user = await user_factory.create(verified=True, is_active=True)
+    token = await emailed_links.issue(LinkKind.PASSWORD_RESET, user, redis=redis_mock)
+    acted_on: list[str] = []
+
+    async def accept(redeemed: User) -> None:
+        acted_on.append(redeemed.email)
+
+        async def redis_down(*_args: Any, **_kwargs: Any) -> None:
+            raise ConnectionError("redis down")
+
+        monkeypatch.setattr(redis_mock, "get", redis_down)
+
+    await _redeem(LinkKind.PASSWORD_RESET, token, db, redis_mock, act=accept)
+    assert acted_on == [user.email]
 
 
 @pytest.mark.asyncio
