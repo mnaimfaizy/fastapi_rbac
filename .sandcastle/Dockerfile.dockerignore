@@ -1,0 +1,4 @@
+*
+!backend/requirements.txt
+!react-frontend/package.json
+!react-frontend/package-lock.json

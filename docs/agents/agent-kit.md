@@ -9,6 +9,8 @@ Agent-kit supplies reusable GitHub Actions workflows that run Claude Code in thi
 | Security audit | 1 | Adopted; runs weekly while the Kill switch is `true` |
 | Plan → implement → review | 2 | Adopted; runs on its Trigger labels while the Kill switch is `true` |
 
+For local, sandboxed agent runs on your own machine (Claude Code, Cursor or Copilot), see the [Sandcastle runbook](sandcastle.md) instead.
+
 For the kit's own terms (Caller, Kill switch, Trigger label, Verified plan, Threat pack), see the [Agent-kit glossary](https://github.com/mnaimfaizy/agent-kit/blob/main/GLOSSARY.md). They are tooling terms, not product terms, so they stay out of this repository's `CONTEXT.md`.
 
 ## Vocabulary: actor allowlist
@@ -91,7 +93,7 @@ Caller choices:
 - **`setup_commands`** take Node 22 from the runner's tool cache and Python 3.10 from it when present. `ubuntu-latest` is Ubuntu 26.04, which caches no CPython 3.10, so they then install 3.10 with `pipx run uv` (a download from PyPI and python-build-standalone). They create a venv under `$RUNNER_TEMP`, install `backend/requirements.txt` and run `npm ci --legacy-peer-deps`, and start a Redis container for the unit tests. They run in both the implement and verify jobs.
 - **`verify_commands`** run the fast checks only, with Backend CI's non-secret test settings (database, signing-key and superuser settings keep their `config.py` defaults):
   - backend: `black --check`, `isort --check-only`, `flake8` with the strict `E9,F63,F7,F82` set, `mypy app`, and `pytest test/unit/` (SQLite)
-  - frontend: `npm run lint`, `npm run format -- --check`, `npm run build`
+  - frontend: `npm run lint`, `npm run format:check`, `npm run build`
   - API, integration and e2e suites are left to PR CI.
 - **`extra_allowed_tools`** is left empty. The implementer cannot run the test suite itself; the verify job does. Widening it would let agent-written code run with the Claude App token.
 - Each job asks for only the permissions its reusable workflow needs. Runs are serialised per issue or PR.

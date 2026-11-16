@@ -1,0 +1,8 @@
+.env
+secrets.env
+op.env
+node_modules/
+worktrees/
+logs/
+patches/
+reviews/

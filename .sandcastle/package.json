@@ -1,0 +1,17 @@
+{
+  "name": "fastapi-rbac-sandcastle",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "image": "cd .. && docker build -f .sandcastle/Dockerfile -t sandcastle:fastapi-rbac .",
+    "smoke": "tsx smoke.ts",
+    "build": "tsx main.ts",
+    "gate": "tsx gate.ts",
+    "test": "tsx --test agents.test.ts pipeline.test.ts",
+    "e2e": "tsx e2e.ts"
+  },
+  "dependencies": {
+    "@ai-hero/sandcastle": "0.14.0",
+    "tsx": "4.23.15"
+  }
+}

@@ -54,7 +54,7 @@ jobs:
         run: npm ci --legacy-peer-deps
 
       - name: Check formatting
-        run: npm run format -- --check
+        run: npm run format:check
 
   build:
     name: Frontend Build
