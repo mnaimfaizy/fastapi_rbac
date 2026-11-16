@@ -4,3 +4,11 @@ Fingerprints of known findings from the Agent-kit security audit, so repeat runs
 
 | Concept id | Status | First seen | Advisory | Notes |
 | --- | --- | --- | --- | --- |
+| `user-role-assign-privilege-escalation` | confirmed; fix PR open | 2026-11-07 | GHSA-9p2m-g4cr-xqmx | Also reported as `user-role-assignment-privilege-escalation` (GHSA-33c4-299h-9xc7). Triaged 2026-11-16 |
+| `user-superuser-mass-assignment` | confirmed; fix PR open | 2026-11-07 | GHSA-9p2m-g4cr-xqmx | Triaged 2026-11-16 |
+| `pending-user-self-verify-bypass` | fixed; Release pending | 2026-11-07 | GHSA-9p2m-g4cr-xqmx | Fixed by #339; follow-up hardening open |
+| `prod-seeded-demo-accounts-shared-password` | untriaged; open | 2026-11-07 | GHSA-9p2m-g4cr-xqmx | Partly mitigated |
+| `prod-accepts-example-secrets` | untriaged; open | 2026-11-07 | GHSA-9p2m-g4cr-xqmx | |
+| `login-account-enumeration-oracle` | untriaged; open | 2026-11-07 | GHSA-9p2m-g4cr-xqmx | Re-reported in GHSA-33c4-299h-9xc7 |
+| `ci-third-party-actions-unpinned` | untriaged; open | 2026-11-07 | GHSA-9p2m-g4cr-xqmx | Partly mitigated |
+| `non-production-mode-token-disclosure` | untriaged; open | 2026-11-09 | GHSA-33c4-299h-9xc7 | |
