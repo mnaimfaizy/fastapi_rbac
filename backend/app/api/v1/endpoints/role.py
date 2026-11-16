@@ -32,9 +32,13 @@ from app.utils.exceptions.common_exception import (
     NameExistException,
     ResourceNotFoundException,
 )
+from app.utils.role_grants import ensure_can_set_permissions, load_permissions, load_role
 from app.utils.role_utils import serialize_role
 
 router = APIRouter()
+
+SYSTEM_ROLE_PERMISSIONS_DETAIL = "Cannot modify system role permissions"
+SYSTEM_ROLE_RENAME_DETAIL = "Cannot rename a system role"
 
 
 @router.get("")
@@ -107,6 +111,9 @@ async def create_role(
     if role_current:
         raise NameExistException(Role, name=role_current.name)
 
+    new_permissions = await load_permissions(role.permission_ids or [], db_session=db_session)
+    ensure_can_set_permissions(actor=current_user, role_id=None, current=[], new=new_permissions)
+
     new_role = await crud.role.create(obj_in=role, created_by_id=current_user.id, db_session=db_session)
     return create_response(data=new_role)
 
@@ -140,6 +147,24 @@ async def update_role(
 
     if not basic_fields_changed and not permissions_changed:
         raise ContentNoChangeException()
+
+    # Check every rule before any write. The role from the dependency may hold
+    # a stale permissions list, so judge against a fresh load.
+    role_now = await load_role(current_role.id, db_session=db_session)
+    is_system_role = await crud.role.validate_system_role(role_id=current_role.id, db_session=db_session)
+    if is_system_role and role.name is not None and role.name != role_now.name:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=SYSTEM_ROLE_RENAME_DETAIL)
+    if role.permission_ids is not None:
+        new_permissions = await load_permissions(role.permission_ids, db_session=db_session)
+        current_ids = {permission.id for permission in role_now.permissions}
+        if is_system_role and {permission.id for permission in new_permissions} != current_ids:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=SYSTEM_ROLE_PERMISSIONS_DETAIL)
+        ensure_can_set_permissions(
+            actor=current_user,
+            role_id=current_role.id,
+            current=role_now.permissions,
+            new=new_permissions,
+        )
 
     # Only check for name conflicts if the name is being changed
     if role.name and role.name != current_role.name:
@@ -224,10 +249,16 @@ async def assign_permissions_to_role(
     # Check if it's a system role
     is_system_role = await crud.role.validate_system_role(role_id=role_id, db_session=db_session)
     if is_system_role:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot modify system role permissions",
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=SYSTEM_ROLE_PERMISSIONS_DETAIL)
+
+    role_now = await load_role(role_id, db_session=db_session)
+    requested = await load_permissions(permissions.permission_ids, db_session=db_session)
+    ensure_can_set_permissions(
+        actor=current_user,
+        role_id=role_id,
+        current=role_now.permissions,
+        new=[*role_now.permissions, *requested],
+    )
 
     try:
         role = await crud.role.assign_permissions(
@@ -268,6 +299,23 @@ async def assign_permissions_to_role(
         )
 
 
+async def _ensure_can_remove(
+    role_id: UUID, permission_ids: List[UUID], *, actor: User, db_session: AsyncSession
+) -> None:
+    """Refuse with 403 unless ``actor`` may remove ``permission_ids`` from the role.
+
+    Ids not on the role change nothing here; the removal itself reports them as 404.
+    """
+    role_now = await load_role(role_id, db_session=db_session)
+    removing = set(permission_ids)
+    ensure_can_set_permissions(
+        actor=actor,
+        role_id=role_id,
+        current=role_now.permissions,
+        new=[permission for permission in role_now.permissions if permission.id not in removing],
+    )
+
+
 @router.delete("/{role_id}/permissions")
 async def remove_permissions_from_role(
     role_id: UUID,
@@ -293,10 +341,7 @@ async def remove_permissions_from_role(
     # Check if it's a system role
     is_system_role = await crud.role.validate_system_role(role_id=role_id, db_session=db_session)
     if is_system_role:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot modify system role permissions",
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=SYSTEM_ROLE_PERMISSIONS_DETAIL)
 
     # Get permission IDs either from query parameters or request body
     ids_to_remove = []
@@ -307,6 +352,8 @@ async def remove_permissions_from_role(
     # Otherwise fall back to query parameters
     elif permission_ids:
         ids_to_remove = permission_ids
+
+    await _ensure_can_remove(role_id, ids_to_remove, actor=current_user, db_session=db_session)
 
     try:
         role = await crud.role.remove_permissions(
@@ -365,10 +412,8 @@ async def remove_permission_from_role_by_id(
     # Check if it's a system role
     is_system_role = await crud.role.validate_system_role(role_id=role_id, db_session=db_session)
     if is_system_role:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot modify system role permissions",
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=SYSTEM_ROLE_PERMISSIONS_DETAIL)
+    await _ensure_can_remove(role_id, [permission_id], actor=current_user, db_session=db_session)
     try:
         role = await crud.role.remove_permissions(
             role_id=role_id,
