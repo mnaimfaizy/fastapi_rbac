@@ -88,7 +88,52 @@ To set up WSL2:
    git clone git@github.com:mnaimfaizy/fastapi_rbac.git ~/projects/fastapi_rbac
    ```
 
-Keep the `D:\` checkout for editing. Use the WSL2 clone only for Sandcastle runs.
+Then either work fully in WSL (recommended, below) or keep the `D:\` checkout for editing and use the WSL2 clone only for Sandcastle runs.
+
+#### Working fully in WSL
+
+One checkout, in WSL, for editing, committing, the dev stack and Sandcastle. You get no copies to keep in step, LF line endings, and fast bind mounts for Docker Compose too. Sandcastle's agent branches and reviews live in that same clone.
+
+1. **Bring your work over.** Commit and push anything on `D:\` that you want to keep, then in WSL:
+
+   ```bash
+   cd ~/projects/fastapi_rbac && git fetch origin
+   ```
+
+   A branch that exists only on `D:\` can be fetched without pushing it, by adding `D:\` as a remote:
+
+   ```bash
+   git remote add windows /mnt/d/Projects/fastapi_rbac && git fetch windows
+   ```
+
+2. **Backend toolchain.** Ubuntu's own Python is newer than the project's 3.10, so let `uv` provide 3.10 in `backend/.venv` (the location `backend/backend.md` uses):
+
+   ```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
+
+   ```bash
+   uv venv --seed --python 3.10 backend/.venv && uv pip install --python backend/.venv/bin/python -r backend/requirements.txt
+   ```
+
+3. **Pre-commit hooks.** The hooks build their own environments; `pre-commit` itself just needs installing once:
+
+   ```bash
+   uv tool install pre-commit && pre-commit install
+   ```
+
+   For the graphify refresh hooks, also follow [graphify.md](graphify.md) inside WSL. Without graphify those hooks skip silently.
+
+4. **Frontend.** Node 22 is already there from the Sandcastle setup:
+
+   ```bash
+   cd react-frontend && npm ci --legacy-peer-deps
+   ```
+
+5. **Editor.** Open the clone from WSL with `code ~/projects/fastapi_rbac` (VS Code's WSL extension runs the language servers inside Linux), or run Claude Code inside WSL. Windows apps can also reach the files at `\\wsl.localhost\Ubuntu\home\<you>\projects\fastapi_rbac`, but that path is slow for anything that scans the tree.
+6. **Retire `D:\`** once nothing on it is unpushed: `git status` is clean and `git log --branches --not --remotes` prints nothing.
+
+Docker Desktop, `gh` and the 1Password Environment need no changes: they already work from WSL.
 
 Run `wsl` commands from PowerShell, not Git Bash. Git Bash rewrites `/mnt/c/...` paths and `$` variables before WSL sees them.
 
