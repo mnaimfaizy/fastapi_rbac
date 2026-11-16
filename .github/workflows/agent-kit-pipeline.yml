@@ -61,7 +61,7 @@ jobs:
     permissions:
       contents: read
       issues: write
-    uses: mnaimfaizy/agent-kit/.github/workflows/agent-plan-reusable.yml@v1.0.0-beta.6
+    uses: mnaimfaizy/agent-kit/.github/workflows/agent-plan-reusable.yml@v1.0.0-beta.7
     with:
       kill_switch: ${{ vars.CLAUDE_PIPELINE_ENABLED != 'true' }}
       model: ${{ vars.CLAUDE_MODEL_PLAN || vars.CLAUDE_MODEL || 'claude-opus-5' }}
@@ -84,7 +84,7 @@ jobs:
       issues: write
       pull-requests: write
       id-token: write
-    uses: mnaimfaizy/agent-kit/.github/workflows/agent-implement-reusable.yml@v1.0.0-beta.6
+    uses: mnaimfaizy/agent-kit/.github/workflows/agent-implement-reusable.yml@v1.0.0-beta.7
     with:
       kill_switch: ${{ vars.CLAUDE_PIPELINE_ENABLED != 'true' }}
       model: ${{ vars.CLAUDE_MODEL_IMPLEMENT || vars.CLAUDE_MODEL || 'claude-opus-5' }}
@@ -167,11 +167,15 @@ jobs:
     concurrency:
       group: agent-kit-review-${{ github.event.pull_request.number || inputs.pr_number }}
       cancel-in-progress: true
+    # What agent-review-reusable.yml's jobs request: its handoff job needs
+    # actions: write (Agent-kit v1.0.0-beta.7), and GitHub refuses the run if
+    # the Caller grants less, even in manual mode.
     permissions:
       contents: read
       issues: read
       pull-requests: write
-    uses: mnaimfaizy/agent-kit/.github/workflows/agent-review-reusable.yml@v1.0.0-beta.6
+      actions: write
+    uses: mnaimfaizy/agent-kit/.github/workflows/agent-review-reusable.yml@v1.0.0-beta.7
     with:
       kill_switch: ${{ vars.CLAUDE_PIPELINE_ENABLED != 'true' }}
       model: ${{ vars.CLAUDE_MODEL_REVIEW || vars.CLAUDE_MODEL || 'claude-opus-5' }}
@@ -187,5 +191,14 @@ jobs:
       # Without a Verified plan, a maintainer's issue comment that starts with
       # <!-- agent-kit-brief --> is accepted as the spec.
       trusted_spec_authors: '["mnaimfaizy"]'
+      # Review response handoff. Only CLAUDE_REVIEW_RESPONSE_MODE set to
+      # exactly `auto` hands a finished review that left findings to
+      # agent-kit-review-response.yml; unset (manual) hands nothing off.
+      # Keep the two lists equal to that Caller's allowlist_actors and
+      # reviewer_logins.
+      response_mode: ${{ vars.CLAUDE_REVIEW_RESPONSE_MODE || 'manual' }}
+      response_workflow: .github/workflows/agent-kit-review-response.yml
+      response_allowlist_actors: '["mnaimfaizy"]'
+      response_reviewer_logins: "[]"
     secrets:
       claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

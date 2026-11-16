@@ -27,7 +27,7 @@ A QA Delegation's brief carries the same eight items, filled for QA. It tests on
    3. **Run it** with `/manual-qa <plan file>`, which reaches this session as a message after phase 2, as item 5 says, against the target `qa.config` names. On a `stack` target it holds the QA Stack until `manual-qa` has stopped what it started. **Stop:** none of its own: it goes straight on to phase 4, stopping only to raise a Decision Request item 6 needs, such as an upload, and waiting for its answer.
    4. **Report.** Copy the QA Report to `qa-report.md` in its Delegation folder. At `manual-qa`'s offer to post, post only as item 6 allows. **Stop:** write the QA report below.
 4. **Scope fences.** None: it commits nothing, pushes nothing, and changes no tracked file. Its working copy stays detached at `<head>`. The QA Stack is its only shared resource, when it holds it.
-5. **Command routes.** The pull request's number and `<head>`, the QA config's path (`qa_config` from `check`), and how each QA skill starts on this harness ([HARNESSES.md](HARNESSES.md#choosing-an-executor)): sent to the session as a message after the phase before it stops, or typed there by the human. `qa-plan` and `manual-qa` are invoked only by a person, so the session never tries to start one itself. When a message names a skill and the session cannot run it as an invocation, it says so in its Activity Log and its last message, and waits for the human to type it.
+5. **Command routes.** The pull request's number and `<head>`, the QA config's path (`qa_config` from `check`), and how each QA skill starts on this harness (its file under [harnesses/](harnesses/), and [HARNESSES.md](HARNESSES.md#choosing-an-executor)): sent to the session as a message after the phase before it stops, or typed there by the human. `qa-plan` and `manual-qa` are invoked only by a person, so the session never tries to start one itself. When a message names a skill and the session cannot run it as an invocation, it says so in its Activity Log and its last message, and waits for the human to type it.
 6. **Rules for writes.** Delivering the QA Plan only on the answer to phase 2's Decision Request. Posting the QA Report only when the brief lists it as an approved routine kind for the run, or on a Decision Request's yes. Uploading a QA Artifact only on a yes for that file. When the human is in this session and answers a QA skill's own question here (to deliver, to post, or to upload a file), that answer counts: log it, and raise no Decision Request for it. No other write.
 7. **The Decision Request form.** As in the Brief Contract.
 8. **Report and log files.** As in the Brief Contract, with the paths of `qa-plan.md` and `qa-report.md` in its Delegation folder, and the QA report form below in place of the report form.
@@ -61,7 +61,7 @@ The Chief of Staff relays it as written, adding only which Delegation it is from
 **Pull request:** <URL, or none yet>
 **Done:** <each acceptance criterion, and how it was shown>
 **Re-gate:** <each command, and its result>
-**Review:** <each review comment, and how it was handled>
+**Review:** <each review comment, and how it was handled; where the repository runs Agent-kit's review workflow, its run on this head: finished, running, or not started>
 **Not done:** <what is left, and why>
 **Decision Requests:** <open ones, by heading>
 ```

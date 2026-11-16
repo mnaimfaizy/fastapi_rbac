@@ -15,6 +15,20 @@ Load [ANATOMY.md](ANATOMY.md) before writing the plan: it is the format, section
 
 `<skill>` in a command below is the absolute path of the folder this file is in, written with forward slashes (`C:/Users/me/...` on Windows), inside double quotes because it may contain spaces. Every command runs from the root of the repository the pull request belongs to.
 
+## Which copy runs
+
+A harness can load this skill from a user-level folder (under the home folder) while the repository keeps its own copy, pinned to the version the repository was set up with. The user-level copy can be older, and would then follow rules the repository no longer uses. So before anything else, check which copy this is:
+
+```bash
+node "<skill>/adapter.mjs" where qa-plan
+```
+
+It finds the repository from the folder it runs in, and lists the copies of `qa-plan` the repository keeps in the folders harnesses read skills from: `.claude/skills`, `.agents/skills`, `.github/skills` and `.cursor/skills`.
+
+- `use` is `this`: go on. This copy is inside the repository, or the repository keeps none of its own.
+- `use` is `repository`: stop, and run nothing more from this copy. Read the `SKILL.md` that `load` names and follow it from its start instead, with `<skill>` its folder. Tell the human that the copy at `this_copy` was not used, and that the repository's copy at `load` was.
+- Exit 2, or no such script: compare by hand. When this file is outside the repository's root (`git rev-parse --show-toplevel`) and one of those folders in the repository holds `qa-plan/SKILL.md`, do as for `repository`.
+
 ## Rules
 
 - **Residue only.** A scenario earns its place by naming what no passing suite establishes. Re-testing what CI proves wastes the tester and hides the scenarios that matter.
@@ -88,9 +102,18 @@ It runs each `plan.suites` command in the platform's default shell (`cmd.exe` on
 
 Then, for each promise, find what proves it: the rows for the tests the diff adds or changes (`git diff --stat <merge-base> HEAD`), the suites whose `surfaces` cover the changed paths, and what the issue history says was tested. A CI check on the head (`gh pr checks`) that is not a configured suite gives a `[reconstructed]` claim; so does a failure on it, which is a red herring only when it also fails at the merge-base.
 
+**A double does not prove a live path.** A suite that replaces a service the QA Stack provides (a database, a cache, a queue) with a double, such as SQLite for Postgres or a mocked Redis, proves the code against the double. Its claim does not by itself cover a promise whose code path reaches that service, however green it is. A suite's `services` ([ADAPTER.md](ADAPTER.md#plansuites-entries)) lists the services it runs against for real; a suite without it ran against doubles only. Such a promise is covered only when a suite against the real services covers it too: a configured suite whose `services` names each one, or a CI check on the head whose workflow starts them (a `services:` block, a compose file), read from the workflow and tagged `[reconstructed]`. Name that suite or check as the promise's live check, beside the in-memory claim. With none, the promise stays for the Residue.
+
 Optional, when a claim carries the plan: perturb the code it covers (comment out the guard, invert the condition) and run the suite. A green suite that stays green is not a proving suite; the promise moves to the Residue. Revert the change before going on.
 
-**Done when:** no regression is left, every `unknown` row has the person's answer, and every promise is either covered by a named claim or left for the Residue.
+**Could a test prove it?** Last, for each promise left for the Residue, check whether a test in a configured suite could prove it; this check is yours, and the person is asked only where the answer is yes. A suite whose `services` names the real services counts as real infrastructure, so a test there is a live check. For a promise left for the Residue because only doubles covered it, only a suite whose `services` names each service its path reaches could prove it; with none, it stays for the Residue. What a test cannot reach is a real deployment, real infrastructure no configured suite starts, or a real browser; a promise that needs one stays for the Residue, with nothing to ask the person. When a test could prove one or more promises, stop before step 6, and for each one tell the person which suite, and what the test would assert. They choose, promise by promise:
+
+- **Add the test.** They write it, commit it and push it. The head moves, so check step 1 again (the local `HEAD` must equal the pull request's new head), take the new head as step 3's head anchor and compute step 3's merge-base again (a rebase or a merge of the base ref moves it), and run step 4 again on the new head, from `two-point.mjs`. A promise the new test covers is then a claim like any other. A promise the person already chose to keep as a scenario is not asked about again on the new head; their choice stands, unless the new run covers it, in which case it is a claim and leaves the Residue.
+- **Keep it as a scenario.** The promise stays for the Residue, and step 6 composes it.
+
+Never write the test for them, and never carry the suggestion into the plan.
+
+**Done when:** no regression is left, every `unknown` row has the person's answer, every promise is either covered by a named claim, with a named live check when its path reaches a QA Stack service, or left for the Residue, and every promise left for the Residue has been checked once for a test that could prove it, with the person's choice for each one a test could prove.
 
 ### 5. Match the Hazard packs
 
@@ -104,17 +127,31 @@ Each pack it prints matched at least one changed path. Exit 1 means a pack in `h
 
 ### 6. Compose the Residue
 
-Each promise step 4 left uncovered becomes a scenario ([ANATOMY.md](ANATOMY.md#scenarios)). For each one, read the code and templates it exercises and quote their real labels in the steps. A scenario that touches a path a Hazard pack matched gets that pack's _Rule out first_ list; every matching pack's _Capture rules_ go into the Run brief.
+Each promise step 4 left for the Residue, including each one the person chose to keep as a scenario, becomes a scenario ([ANATOMY.md](ANATOMY.md#scenarios)). The plan carries no test recommendations: step 4's question was for the person, not the tester. For each one, read the code and templates it exercises and quote their real labels in the steps. Write each expected result as [ANATOMY.md](ANATOMY.md#scenarios) says. A scenario that touches a path a Hazard pack matched gets that pack's _Rule out first_ list; every matching pack's _Capture rules_ go into the Run brief.
+
+A promise that only a command can observe (a setting, a cache entry, internal state) is either observable through the product surface, or it is not Residue: Setup and steps are product actions, and the plan check reports one that reads as a shell command ([ANATOMY.md](ANATOMY.md#setup)).
+
+A promise only reading can check (the copy of a doc, a static file the app does not serve, a code comment) has no surface to drive, so it is not a scenario, and it is never dropped: it becomes a `- [ ] Review: <what to read, and what it must say>` box in the **Sign-off checklist** ([ANATOMY.md](ANATOMY.md#sign-off-checklist)), such as `- [ ] Review: docs/x.html says the token lasts 30 days`. Name the file and the words it must carry, so a person can check it without the diff. A Residue of review boxes only is still a plan: its Scenarios says `None.`.
+
+Pick each scenario's surface from what its **Expected result:** must observe, not from the config ([ANATOMY.md](ANATOMY.md#scenarios)). Response headers, cookies (including `HttpOnly`), status codes and response bodies are seen on `api`. Rendered copy, flows and layout are seen on `web`. The app itself is seen on `desktop` or `mobile`. The Run brief's **Surface:** is the one most scenarios use; give a scenario its own **Surface:** only when it needs another, so a promise no driver on the plan's default could see is still planned where one can. `run.surface` in the config is only the starting default for the Run brief's.
+
+Give a scenario **Observes:** whenever its **Expected result:** needs something not every driver of its surface can see: in practice response headers, `HttpOnly` cookies or a local file. List each such value from `headers`, `cookies`, `httponly-cookies`, `status`, `body`, `screen`, `local-file`, right after the scenario's **Surface:**, or after its sign-in field when it has none ([ANATOMY.md](ANATOMY.md#scenarios)), so `manual-qa` checks its driver before the run starts instead of finding out mid-scenario. Use the same list to choose the surface: `headers`, `cookies`, `httponly-cookies` and `status` are seen on `api`; `body` on `api`, and by some `web` drivers; `screen` on `web`, `desktop` or `mobile`; `local-file` on a surface whose driver can open a `file://` address, as `manual-qa`'s step 4 table gives it.
+
+Give a scenario **Expected before:** when it proves a defect is fixed: the subject issue or a child issue is a bug, or the promise reads as a fix. Write what the tester sees at the merge-base, drawn from the issue's reproduction or the merge-base's behaviour, never invented, in the product's own words as **Expected result:** is, right after **Expected result:** ([ANATOMY.md](ANATOMY.md#fix-scenarios)). It makes the scenario a fix scenario; a scenario that adds behaviour has none.
+
+Give each scenario the **Capture:** its result needs, after its **Observes:** or wherever **Observes:** would sit ([ANATOMY.md](ANATOMY.md#scenarios)): `video` for a multi-session or timing-dependent scenario with a screen, `transcript` on `api`, `none` where an image would show nothing the written result does not, and otherwise `screenshot`, or leave it out, since a missing **Capture:** means `screenshot` on a screen surface.
 
 When a promise needs two people signed in at once, compose a multi-session scenario. For example, an `admin`'s action ends a `user`'s session elsewhere. Give it **Sessions:** (`A = user, B = admin`) in place of **Signs in as:**, and start every step `In session <name>,` ([ANATOMY.md](ANATOMY.md#sessions)). Never fold the second person into a step's prose: the run would sign in once and could not carry the scenario out.
 
-**An empty Residue is a valid outcome.** When every promise is covered, write no plan: tell the person the change is proved by automation, name the claims that prove it, and recommend merging without one. Stop here.
+A promise step 4 left for the Residue because only doubles covered it becomes a scenario that runs against the real services, even when the in-memory suite is green. A plan has one target for every scenario, so set the Run brief's **Target:** to `stack` ([ANATOMY.md](ANATOMY.md#run-brief)), unless a hosted test environment that runs those services is the target; with neither, say so to the person, since no run can carry the scenario out. Its steps drive the path that reaches them, through the API when no screen calls it.
 
-**Done when:** every uncovered promise is a scenario with every field [ANATOMY.md](ANATOMY.md#scenarios) requires, or the Residue is empty and the person has been told.
+**An empty Residue is a valid outcome.** When every promise is covered, write no plan: tell the person the change is proved by automation, name the claims that prove it, and recommend merging without one. For a promise whose path reaches a QA Stack service, name its live check, the suite against the real services that covers it, and say the QA Stack is not started because that suite is the live check. Stop here.
+
+**Done when:** every promise step 4 left for the Residue is a scenario with every field [ANATOMY.md](ANATOMY.md#scenarios) requires, or a `Review:` box, or the Residue is empty and the person has been told.
 
 ### 7. Write the draft and show it
 
-Write the plan to `<working_dir>/qa-plan-pr-<n>.md`, in the shape [ANATOMY.md](ANATOMY.md) gives, with the _Execution record_ exactly `_Not run yet._`. Read it back against [ANATOMY.md](ANATOMY.md): nine sections in order, the marker on line 1, every claim tagged, no credentials. `node "<skill>/adapter.mjs" plan <file>` must exit 0: it is the check `manual-qa` runs before it accepts a plan. Show the person the draft and where it would be delivered (step 8), and ask them to confirm or correct it.
+Write the plan to `<working_dir>/qa-plan-pr-<n>.md`, in the shape [ANATOMY.md](ANATOMY.md) gives, with the _Execution record_ exactly `_Not run yet._`. Read it back against [ANATOMY.md](ANATOMY.md): nine sections in order, the marker on line 1 with `format=3`, every claim tagged, no credentials. `node "<skill>/adapter.mjs" plan <file>` must exit 0: it is the check `manual-qa` runs before it accepts a plan. Show the person the draft and where it would be delivered (step 8). Then name each `Review:` box to the person, what to read and what it must say, since no run checks it and only a person ticks it. Ask them to confirm or correct the draft.
 
 **Done when:** the person has confirmed the draft, as written or after the corrections they asked for.
 
@@ -127,15 +164,34 @@ node "<skill>/adapter.mjs" delivery --label <label> --label <label> …
 Pass each of the subject issue's labels. It prints `to`, and the rule that chose it:
 
 - **`working-copy`:** the file from step 7 is the plan. Give the person its path to hand on.
-- **`tracker-issue`:** one issue per subject. Find the one already there before creating one, in this order, and accept a candidate only when its body's first line starts with `<!-- qa-plan format=1 subject=#<n> `:
+- **`tracker-issue`:** one issue per subject. Find the one already there before creating one, in this order, and accept a candidate only when its body's first line starts with `<!-- qa-plan format=1 subject=#<n> `, `<!-- qa-plan format=2 subject=#<n> ` or `<!-- qa-plan format=3 subject=#<n> ` (a plan written in an older format is still the one to replace):
   1. the issue named in the pull request's link comment (the comment whose body starts with `<!-- qa-plan-link -->`);
   2. with a rule `label`, each issue carrying it: `gh issue list --state all --label <label> --limit 200 --json number,body`;
   3. otherwise a search, `gh issue list --state all --search "qa-plan subject=#<n> in:body" --json number,body`, which can lag behind an issue created minutes ago.
 
   Edit the issue found (`gh issue edit <m> --body-file <plan>`). Create one only when none is found (`gh issue create --title "QA Plan: #<n> <title>" --body-file <plan>`, with `--label <label>` when the rule names one), then post the link comment on the pull request: `<!-- qa-plan-link -->` on its first line, then `QA Plan: #<m>`.
 
-- **`pr-comment`:** one comment on the pull request. Find the comment whose body starts with the plan's marker and edit it; post a new one only when there is none.
+- **`pr-comment`:** one comment on the pull request. Find the comment whose body starts with the plan's marker, or the same marker with `format=1` or `format=2`, and edit it; post a new one only when there is none.
 
 A revision of the plan replaces the delivered one; it never adds a second. With `tracker: none`, the plan stays in the working copy whatever the rules say.
 
-**Done when:** the plan is at the target the rules chose, the person has its path or URL, and nothing was committed.
+Then check for a QA Report left over from an older head. `manual-qa` posts one comment on the pull request, its first line `<!-- qa-report -->`, whose **Plan:** line names the head it ran on; after a revision for a new head it describes a plan that no longer exists. Read it with `manual-qa`'s own `report.mjs`, in the `manual-qa` folder beside this one, rather than parsing the comment here:
+
+```bash
+gh api --paginate "repos/{owner}/{repo}/issues/<pr>/comments" --jq '.[] | {id, body, user: .user.login}' | node "<skill>/../manual-qa/report.mjs" find --login "<login>" --head <head>
+```
+
+`<login>` is `gh api user --jq .login`, and `<head>` is the plan's full head anchor (step 3). Write every file this check needs (`<tmp>` below) in the system's temporary directory, and delete them when done. Skip this check, and change nothing, when `gh` cannot reach the pull request, when there is no `manual-qa/report.mjs` beside this folder, when `report` is `create` (no report comment of the person's own), when `report` has no `stale` key (an older `manual-qa` that does not read `--head`), or when `find` exits 1 (the plan's head is not a full SHA: show the person the problems). A report comment someone else wrote, named in `others`, is never edited here.
+
+- **`stale` is `false`:** the report is for the plan's head, or its **Stale:** line already names it. Say nothing about it.
+- **`stale` is `null`:** the comment's **Plan:** line names no full head SHA. Tell the person its URL (as below) and that it could not be checked against the plan's head; offer no edit.
+- **`stale` is `true`:** tell the person the comment's URL (`gh api "repos/{owner}/{repo}/issues/comments/<id>" --jq .html_url`), the head the report is for (`report.head`) and the plan's head, and ask whether to mark it stale. Editing the comment notifies the people watching the pull request, so do it only on their yes:
+
+  ```bash
+  gh api "repos/{owner}/{repo}/issues/comments/<id>" --jq .body | node "<skill>/../manual-qa/report.mjs" stale --head <head> > "<tmp>/stale.md" &&
+    gh api -X PATCH "repos/{owner}/{repo}/issues/comments/<id>" -F body=@<tmp>/stale.md
+  ```
+
+  Run the PATCH only after `stale` exits 0. On exit 1, `stale.md` holds `{"problems": …}`, not a comment body: show the person the problems and edit nothing. It adds `**Stale:** the plan was revised for head <head>; this report is for <old head>.` after the marker, and leaves the report itself as it is. On a no, leave the comment as it is. Never delete or hide it: the next `manual-qa` run replaces the whole comment, Stale line included. That run is also what clears a Stale line that is no longer true, such as after the plan is revised back to the report's head. This step never removes one.
+
+**Done when:** the plan is at the target the rules chose, the person has its path or URL, nothing was committed, and, when the pull request carries a QA Report comment for another head, the person has its URL and both heads and has answered whether to mark it stale.

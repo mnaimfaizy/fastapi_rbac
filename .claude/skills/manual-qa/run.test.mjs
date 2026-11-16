@@ -9,14 +9,18 @@
  */
 
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
+  WEB_NOTES,
+  findPlaywright,
   hostVerdict,
   main,
+  onPath,
   parseConfig,
   readQaConfig,
   runReadiness,
@@ -218,6 +222,73 @@ test("no version-endpoint note when the plan's Build names one", () => {
   assert.deepEqual(runReadiness(read, validatePlan(GOOD_PLAN).plan).notes, []);
 });
 
+// ── The `web` driver's tools (#232) ─────────────────────────────────────────
+
+const tools = (chromium, ffmpeg) => () => ({ chromium, ffmpeg });
+const STACK_READ = () => readQaConfig(reader({ "qa.config.yml": STACK_RUN.join("\n") }));
+
+test("a `web` run notes whether Playwright with Chromium and ffmpeg are there, and needs neither", () => {
+  const plan = validatePlan(GOOD_PLAN).plan;
+  const without = runReadiness(STACK_READ(), plan, tools(false, false));
+  assert.equal(without.ready, true);
+  assert.deepEqual(without.needs, []);
+  assert.deepEqual(without.notes, [WEB_NOTES.noChromium, WEB_NOTES.noFfmpeg]);
+  assert.deepEqual(runReadiness(STACK_READ(), plan, tools(true, true)).notes, [
+    WEB_NOTES.chromium,
+    WEB_NOTES.ffmpeg,
+  ]);
+  // Each note says what the run loses without the tool (#236).
+  assert.match(WEB_NOTES.noChromium, /harness's browsers/);
+  assert.match(WEB_NOTES.noChromium, /`web\.mjs`/);
+  assert.match(WEB_NOTES.noChromium, /no Storyboards \(and so no MP4s\)/);
+  assert.match(WEB_NOTES.noFfmpeg, /no `ffmpeg` with `ffprobe` on `PATH`, so no MP4s/);
+  assert.match(WEB_NOTES.noFfmpeg, /keeps its Storyboard/);
+  assert.match(WEB_NOTES.ffmpeg, /`mp4\.mjs` builds an MP4 for each `Capture: video` scenario/);
+});
+
+test("the tool notes come only when a scenario drives `web`", () => {
+  const apiOnly = GOOD_PLAN.replace("- **Surface:** `web`", "- **Surface:** `api`");
+  const api = STACK_RUN.map((l) => l.replace("surface: web", "surface: api")).join("\n");
+  const plan = validatePlan(apiOnly).plan;
+  assert.ok(plan.scenarios.every((s) => s.surface === "api"));
+  let asked = false;
+  const read = readQaConfig(reader({ "qa.config.yml": api }));
+  const readiness = runReadiness(read, plan, () => {
+    asked = true;
+    return { chromium: false, ffmpeg: false };
+  });
+  assert.deepEqual(readiness.notes, []);
+  assert.equal(asked, false, "no detection when nothing drives `web`");
+  // No plan: the effective surface decides.
+  assert.equal(runReadiness(STACK_READ(), null, tools(false, true)).notes.length, 2);
+});
+
+test("check --for run reports the tool notes it detects", () => {
+  const io = {
+    read: reader({ "qa.config.yml": STACK_RUN.join("\n") }),
+    readFile: (p) => (p === "plan.md" ? GOOD_PLAN : null),
+    tools: tools(false, true),
+  };
+  const out = JSON.parse(main(["check", "--for", "run", "--plan", "plan.md"], io).out);
+  assert.deepEqual(out.readiness.notes, [WEB_NOTES.noChromium, WEB_NOTES.ffmpeg]);
+});
+
+test("onPath finds a program by PATH and PATHEXT, and findPlaywright finds none in an empty folder", () => {
+  const bin = mkdtempSync(join(tmpdir(), "onpath-"));
+  try {
+    writeFileSync(join(bin, "ffmpeg"), "");
+    writeFileSync(join(bin, "ffmpeg.EXE"), "");
+    assert.equal(onPath("ffmpeg", { PATH: bin }, "linux"), true);
+    assert.equal(onPath("ffmpeg", { PATH: "" }, "linux"), false);
+    assert.equal(onPath("ffmpeg", { Path: `C:\\nope;${bin}`, PATHEXT: ".EXE" }, "win32"), true);
+    mkdirSync(join(bin, "ffprobe"));
+    assert.equal(onPath("ffprobe", { PATH: bin }, "linux"), false, "a folder is not a program");
+    assert.deepEqual(findPlaywright(bin), { package: null, module: null, chromium: false });
+  } finally {
+    rmSync(bin, { recursive: true, force: true });
+  }
+});
+
 test("the plan's Run brief fills target and surface; its roles must be declared", () => {
   const { plan } = validatePlan(GOOD_PLAN);
   const onlyAdmin = [
@@ -309,6 +380,58 @@ test("a config that disagrees with the plan's Run brief is asked about", () => {
   );
 });
 
+// ── The surface question (#223) ───────────────────────────────────────────────
+
+/** The good plan with its Run brief on `api`: both scenarios drive `api`. */
+const API_PLAN = GOOD_PLAN.replace("- **Surface:** `web`", "- **Surface:** `api`");
+const surfaceNeed = (text, config = STACK_RUN.join("\n")) => {
+  const { plan, problems } = validatePlan(text);
+  assert.deepEqual(problems, []);
+  const readiness = runReadiness(readQaConfig(reader({ "qa.config.yml": config })), plan);
+  return readiness.needs.filter((n) => n.startsWith("run.surface:"));
+};
+
+test("the surface question offers the two surfaces in dispute and names the scenarios that move", () => {
+  assert.deepEqual(surfaceNeed(API_PLAN), [
+    "run.surface: the config says `web` but the plan's Run brief says `api`; say which this run " +
+      "uses, `web` or `api`. With `web`, S1 and S2 drive `web`; with `api`, they drive `api`, " +
+      "the surface the plan's author chose from what those scenarios must observe. " +
+      "No scenario keeps its own **Surface:** whatever the answer.",
+  ]);
+});
+
+test("the surface question names a scenario that keeps its own Surface", () => {
+  // S2 carries its own `desktop`; S1 repeats the Run brief's `api`, which moves it all the same.
+  const mixed = API_PLAN.replace(
+    "- **Signs in as:** `admin`\n",
+    "- **Signs in as:** `admin`\n- **Surface:** `api`\n",
+  ).replace("- **Signs in as:** nobody\n", "- **Signs in as:** nobody\n- **Surface:** `desktop`\n");
+  assert.deepEqual(surfaceNeed(mixed), [
+    "run.surface: the config says `web` but the plan's Run brief says `api`; say which this run " +
+      "uses, `web` or `api`. With `web`, S1 drives `web`; with `api`, it drives `api`, " +
+      "the surface the plan's author chose from what that scenario must observe. " +
+      "S2 (`desktop`) keeps its own **Surface:** whatever the answer.",
+  ]);
+  // When every scenario carries another surface, neither answer moves one.
+  const allOwn = mixed.replace(
+    "- **Signs in as:** `admin`\n- **Surface:** `api`\n",
+    "- **Signs in as:** `admin`\n- **Surface:** `mobile`\n",
+  );
+  assert.deepEqual(surfaceNeed(allOwn), [
+    "run.surface: the config says `web` but the plan's Run brief says `api`; say which this run " +
+      "uses, `web` or `api`. No scenario drives the Run brief's surface, so neither answer moves " +
+      "one. S1 (`mobile`) and S2 (`desktop`) keep their own **Surface:** whatever the answer.",
+  ]);
+});
+
+test("no surface question when the config agrees with the plan or gives no surface", () => {
+  assert.deepEqual(surfaceNeed(GOOD_PLAN), []);
+  const api = STACK_RUN.join("\n").replace("surface: web", "surface: api");
+  assert.deepEqual(surfaceNeed(API_PLAN, api), []);
+  const none = STACK_RUN.filter((l) => !/surface:/.test(l)).join("\n");
+  assert.deepEqual(surfaceNeed(API_PLAN, none), []);
+});
+
 test("a malformed role entry is a problem, not a crash", () => {
   for (const roles of [["    roles:", "      -"], ["    roles: [admin]"]]) {
     const files = { "qa.config.yml": ["run:", "  accounts:", ...roles].join("\n") };
@@ -332,6 +455,117 @@ test("readiness is never ready over `run:` problems", () => {
   );
   assert.equal(readiness.ready, false);
   assert.deepEqual(readiness.needs, ["a config with no problems in `run:`: fix each one listed"]);
+});
+
+// ── Readiness for a plan with no scenarios (#221) ─────────────────────────────
+
+/** The good plan with no scenarios: its Scenarios says `None.`, and its checklist one `Review:` box. */
+const REVIEW_ONLY = GOOD_PLAN.replace(
+  /(## Scenarios\n\n)[\s\S]*?(?=## Sign-off checklist)/,
+  "$1None.\n\n",
+).replace(
+  /(## Sign-off checklist\n\n)[\s\S]*?(?=\n## Stop)/,
+  "$1- [ ] Review: docs/x.html says the token lasts 30 days\n",
+);
+const reviewOnlyPlan = (text = REVIEW_ONLY) => {
+  const { plan, problems } = validatePlan(text);
+  assert.deepEqual(problems, []);
+  assert.equal(plan.scenarios.length, 0);
+  return plan;
+};
+
+test("a plan with no scenarios asks for nothing that only driving scenarios needs", () => {
+  const plan = reviewOnlyPlan();
+  const none = runReadiness(readQaConfig(reader({})), plan);
+  assert.equal(none.ready, true);
+  assert.deepEqual(none.needs, []);
+  // A config that leaves out roles, stack commands and `accounts.print` asks nothing either.
+  const bare = runReadiness(
+    readQaConfig(reader({ "qa.config.yml": "run:\n  target: stack\n  stack: { up: go }\n" })),
+    plan,
+  );
+  assert.equal(bare.ready, true);
+  assert.deepEqual(bare.needs, []);
+  // Nor does a Run brief with no target or surface, or roles the config does not declare.
+  const unbriefed = {
+    ...plan,
+    brief: { ...plan.brief, target: null, surface: null, roles: ["admin", "member"] },
+  };
+  const asks = runReadiness(
+    readQaConfig(
+      reader({ "qa.config.yml": "run:\n  accounts:\n    roles: [{ id: admin, purpose: x }]\n" }),
+    ),
+    unbriefed,
+  );
+  assert.deepEqual(asks.needs, []);
+  assert.equal(asks.ready, true);
+});
+
+test("a plan with no scenarios raises no target or surface conflict, and still reports the run", () => {
+  const conflicting = [
+    "run:",
+    "  target: url",
+    "  surface: api",
+    "  accounts:",
+    "    roles: [{ id: admin, purpose: x }]",
+  ].join("\n");
+  const readiness = runReadiness(
+    readQaConfig(reader({ "qa.config.yml": conflicting })),
+    reviewOnlyPlan(),
+  );
+  assert.deepEqual(readiness.needs, []);
+  assert.equal(readiness.ready, true);
+  assert.deepEqual(readiness.run, { target: "url", surface: "api", roles: ["admin"] });
+  // The same config with the good plan's scenarios asks which surface and target this run uses.
+  const driven = runReadiness(
+    readQaConfig(reader({ "qa.config.yml": conflicting })),
+    validatePlan(GOOD_PLAN).plan,
+  );
+  assert.ok(driven.needs.some((n) => /^run\.surface: the config says `api`/.test(n)));
+  assert.ok(driven.needs.some((n) => /^run\.target: the config says `url`/.test(n)));
+});
+
+test("a plan with no scenarios keeps the build-check note, and drops the notes about driving", () => {
+  // It reads no version endpoint (step 4 skips step 5), so only `gh` can check its build,
+  // whether or not the Build or the config names an endpoint.
+  const BUILD_NOTE =
+    "a plan with no scenarios reads no version endpoint: without `gh` access the build cannot be " +
+    "checked against the plan's head, and the report opens with **build not verified against plan**";
+  const unbuilt = REVIEW_ONLY.replace(
+    /- \*\*Build:\*\*.*\n/,
+    "- **Build:** 2222222222222222222222222222222222222222\n",
+  );
+  const url = "run:\n  target: url\n  surface: web\n";
+  const notesOf = (text, plan) => runReadiness(readQaConfig(reader(text)), plan).notes;
+  assert.deepEqual(notesOf({ "qa.config.yml": url }, reviewOnlyPlan(unbuilt)), [BUILD_NOTE]);
+  // The Build names a version endpoint, and so does the config: the note stays.
+  assert.deepEqual(notesOf({ "qa.config.yml": url }, reviewOnlyPlan()), [BUILD_NOTE]);
+  assert.deepEqual(
+    notesOf({ "qa.config.yml": `${url}  version_endpoint: /version\n` }, reviewOnlyPlan(unbuilt)),
+    [BUILD_NOTE],
+  );
+  const unconfigured = notesOf({}, reviewOnlyPlan(unbuilt));
+  assert.equal(unconfigured.length, 2);
+  assert.match(unconfigured[0], /^no qa\.config\.yml/);
+  assert.equal(unconfigured[1], BUILD_NOTE);
+});
+
+test("a plan with no scenarios still gets each `run:` config problem", () => {
+  const read = readQaConfig(reader({ "qa.config.yml": "run:\n  target: moon\n" }));
+  assert.ok(read.runProblems.length);
+  const readiness = runReadiness(read, reviewOnlyPlan());
+  assert.equal(readiness.ready, false);
+  assert.deepEqual(readiness.needs, ["a config with no problems in `run:`: fix each one listed"]);
+});
+
+test("check --for run --plan: a review-only plan with no config is ready and needs nothing", () => {
+  const io = { read: reader({}), readFile: (p) => (p === "plan.md" ? REVIEW_ONLY : null) };
+  const result = main(["check", "--for", "run", "--plan", "plan.md"], io);
+  assert.equal(result.code, 0);
+  const out = JSON.parse(result.out);
+  assert.deepEqual(out.planProblems, []);
+  assert.equal(out.readiness.ready, true);
+  assert.deepEqual(out.readiness.needs, []);
 });
 
 // ── check --for run ─────────────────────────────────────────────────────────

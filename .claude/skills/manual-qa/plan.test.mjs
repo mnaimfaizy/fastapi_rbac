@@ -14,6 +14,10 @@ import { fileURLToPath } from "node:url";
 import {
   BRIEF_LABELS,
   ANCHOR_LABELS,
+  COMMAND_WORDS,
+  COMMAND_MARKS,
+  COPY_WORDS,
+  SCRIPT_EXTENSIONS,
   PLAN_SECTIONS,
   SCENARIO_LABELS,
   credentialProblems,
@@ -24,6 +28,7 @@ import {
 const HERE = dirname(fileURLToPath(import.meta.url));
 const fixture = (name) => readFileSync(join(HERE, "fixtures", "plans", name), "utf8");
 const GOOD = fixture("good.md");
+const GOOD3 = fixture("good-format-3.md");
 const anatomy = readFileSync(join(HERE, "ANATOMY.md"), "utf8");
 
 /** The good plan with one replacement; the replacement must apply. */
@@ -62,7 +67,7 @@ test("every label the validator requires is one ANATOMY.md names", () => {
 test("the good plan reads with no problems, and its parts are read out", () => {
   const { plan, problems } = validatePlan(GOOD);
   assert.deepEqual(problems, []);
-  assert.equal(plan.format, 1);
+  assert.equal(plan.format, 2);
   assert.equal(plan.subject, 42);
   assert.equal(plan.pr, 57);
   assert.equal(plan.title, "Members can be invited by email");
@@ -85,6 +90,11 @@ test("the good plan reads with no problems, and its parts are read out", () => {
       signsInAs: "admin",
       sessions: [{ name: null, id: "admin" }],
       creates: [],
+      surface: "web",
+      observes: [],
+      capture: "screenshot",
+      captureGiven: false,
+      expectedBefore: null,
     },
     {
       id: "S2",
@@ -92,6 +102,11 @@ test("the good plan reads with no problems, and its parts are read out", () => {
       signsInAs: "nobody",
       sessions: [{ name: null, id: "nobody" }],
       creates: [],
+      surface: "web",
+      observes: [],
+      capture: "screenshot",
+      captureGiven: false,
+      expectedBefore: null,
     },
   ]);
   assert.equal(plan.executed, false);
@@ -116,7 +131,11 @@ test("a filled execution record is read as a plan already run", () => {
 });
 
 test("a heading inside a fenced block is not a section", () => {
-  const text = broken("## Setup\n", "## Setup\n\n```text\n## Not a section\n```\n");
+  // Not under Setup or Steps, where a fence is a shell command (#199).
+  const text = broken(
+    "## Stop and do not merge if\n",
+    "## Stop and do not merge if\n\n```text\n## Not a section\n```\n",
+  );
   assert.deepEqual(problemsOf(text), []);
 });
 
@@ -124,12 +143,21 @@ test("a heading inside a fenced block is not a section", () => {
 
 test("something that is not a plan stops at the marker", () => {
   assert.deepEqual(problemsOf("# Notes\n\nNothing here.\n"), [
-    "line 1: expected the marker `<!-- qa-plan format=1 subject=#<n> pr=#<n> -->`: this is not a QA Plan",
+    "line 1: expected the marker `<!-- qa-plan format=3 subject=#<n> pr=#<n> -->`: this is not a QA Plan",
   ]);
 });
 
-test("another format version is a problem", () => {
-  assertProblem(broken("format=1", "format=2"), /^line 1: format=2: this copy/);
+test("a format=1 plan with no per-scenario fields still reads; a format=4 plan is refused", () => {
+  const old = validatePlan(broken("format=2", "format=1"));
+  assert.deepEqual(old.problems, []);
+  assert.equal(old.plan.format, 1);
+  assert.deepEqual(
+    old.plan.scenarios.map((s) => s.surface),
+    ["web", "web"],
+  );
+  assert.deepEqual(problemsOf(broken("format=2", "format=4")), [
+    "line 1: format=4: this copy of ANATOMY.md reads format=1, format=2 and format=3 only",
+  ]);
 });
 
 test("a missing title is a problem", () => {
@@ -268,6 +296,320 @@ test("steps are a numbered list", () => {
   );
 });
 
+// ── Shell commands in Setup and Steps (#199) ────────────────────────────────
+
+/** The 1-based number of the line of `text` that holds `needle`. */
+const lineHolding = (text, needle) =>
+  text.split("\n").findIndex((line) => line.includes(needle)) + 1;
+const SHELL =
+  /a plan carries product actions only, and `manual-qa` will not run it|a plan gives product actions, and any data to enter, as prose/;
+/** The problems that report a shell command. */
+const shellProblems = (text) => problemsOf(text).filter((p) => SHELL.test(p));
+
+test("ANATOMY.md's Setup names every command word the check reads", () => {
+  const setup = anatomy.split(/^## /m).find((part) => part.startsWith("Setup\n"));
+  for (const word of COMMAND_WORDS)
+    assert.ok(setup.includes(`\`${word}\``), `ANATOMY.md's Setup does not name \`${word}\``);
+  const copy = /`export`, `node`, `env`, `python` and `sh` also name things in a product/;
+  assert.match(setup, copy);
+  assert.deepEqual([...COPY_WORDS], ["export", "node", "env", "python", "sh"]);
+  const rule = setup.split("also name things in a product")[1].split("\n")[0];
+  for (const mark of COMMAND_MARKS)
+    assert.ok(
+      rule.includes(`\`${mark}\``),
+      `ANATOMY.md's copy-word rule does not name \`${mark}\``,
+    );
+  for (const extension of SCRIPT_EXTENSIONS)
+    assert.ok(
+      rule.includes(`\`.${extension}\``),
+      `ANATOMY.md's copy-word rule does not name \`.${extension}\``,
+    );
+  for (const start of ["`/`", "`./`", "`../`", "`~/`"])
+    assert.ok(rule.includes(start), `ANATOMY.md's copy-word rule does not name ${start}`);
+  assert.match(
+    setup,
+    /Give data to type or paste as prose, in a backticked span, not in a code block/,
+  );
+});
+
+test("a Setup line holding a backticked shell command fails, with its line number", () => {
+  const command = '1. Run `docker exec api python -c "print(settings.INVITES)"`.';
+  const text = broken("1. Restore the `admin` account with `accounts.restore`.", command);
+  const problems = shellProblems(text);
+  assert.equal(problems.length, 1, problems.join("\n"));
+  assert.match(problems[0], new RegExp(`^line ${lineHolding(text, command)}: Setup: `));
+  assert.match(problems[0], /`docker`/);
+});
+
+test("a Setup line that is itself a command, or a `$ ` prompt, fails", () => {
+  for (const line of [
+    "- env | grep -c INVITE",
+    "$ redis-cli FLUSHALL",
+    "1. curl -s localhost/version",
+  ]) {
+    const text = broken("1. Restore the `admin` account with `accounts.restore`.", line);
+    const problems = shellProblems(text);
+    assert.equal(problems.length, 1, `${line}\n${problems.join("\n")}`);
+    assert.match(problems[0], new RegExp(`^line ${lineHolding(text, line)}: Setup: `));
+  }
+});
+
+test("a scenario step running a command, in a span or after a `$ ` prompt, fails", () => {
+  const span = "  1. Run `redis-cli HGETALL session:1`.";
+  const text = broken("  1. Open **Members**.", span);
+  const problems = shellProblems(text);
+  assert.equal(problems.length, 1, problems.join("\n"));
+  assert.match(problems[0], new RegExp(`^line ${lineHolding(text, span)}: S1: step 1 `));
+  assert.match(problems[0], /`redis-cli`/);
+
+  for (const step of [
+    "  1. $ psql -c 'select 1'",
+    "  1. Type `$ kubectl get pods` into the shell.",
+  ]) {
+    const prompted = broken("  1. Open `/members` while signed out.", step);
+    const found = shellProblems(prompted);
+    assert.equal(found.length, 1, `${step}\n${found.join("\n")}`);
+    assert.match(found[0], new RegExp(`^line ${lineHolding(prompted, step)}: S2: step 1 `));
+  }
+});
+
+test("a fenced code block under Setup or Steps fails, once, at its opening fence", () => {
+  const setup = broken(
+    "1. Restore the `admin` account with `accounts.restore`.",
+    "1. Restore the `admin` account with `accounts.restore`.\n\n```\nmake seed\nmake flags\n```",
+  );
+  const atSetup = shellProblems(setup);
+  assert.equal(atSetup.length, 1, atSetup.join("\n"));
+  assert.match(
+    atSetup[0],
+    new RegExp(`^line ${lineHolding(setup, "```")}: Setup: a fenced code block`),
+  );
+
+  const steps = broken(
+    "  1. Open **Members**.",
+    "  1. Open **Members**.\n\n     ```sh\n     whoami\n     ```",
+  );
+  const atSteps = shellProblems(steps);
+  assert.equal(atSteps.length, 1, atSteps.join("\n"));
+  assert.match(
+    atSteps[0],
+    new RegExp(`^line ${lineHolding(steps, "```sh")}: S1: a fenced code block`),
+  );
+});
+
+test("product labels, copy, paths and role ids in Setup and Steps are not commands", () => {
+  assert.deepEqual(shellProblems(GOOD), []);
+  const text = broken(
+    "  1. Open **Members**.",
+    [
+      "  1. Click **Save changes**, then open `/version` and `/members/new`.",
+      "  2. Pick the role `admin`, then `member`, and type `node-1` into **Name**.",
+      "  3. Export the CSV from **Reports**, and check the **Env** badge reads `env: staging`.",
+      "     export is the menu's last item, after `Node` and `Python`.",
+    ].join("\n"),
+  );
+  assert.deepEqual(shellProblems(text), []);
+});
+
+test("lowercase product copy that starts with a command word is not a command (#214 review)", () => {
+  const text = broken(
+    "  1. Open **Members**.",
+    [
+      "  1. Click `export` in the toolbar.",
+      "  2. Pick `python` from **Language**, then `python 3.12`, and pick the `node` filter.",
+      "  3. Check the toast reads `export started`, and the badge reads `env staging`.",
+      "  4. Open `sh` under **Shells**, and `docker` under **Integrations**.",
+      "  5. Pick `export to CSV/PDF`, check `env staging/eu` and the footer `node v20.x`.",
+      "  6. The toast reads `export started - 3 files`, the badge `env staging - eu`.",
+    ].join("\n"),
+  );
+  assert.deepEqual(shellProblems(text), []);
+});
+
+test("a word that is also product copy is a command before a flag, a path, a script file or a shell mark", () => {
+  for (const step of [
+    "  1. Run `export INVITES_ENABLED=1`.",
+    "  1. Run `node scripts/seed.js`.",
+    "  1. Run `python manage.py shell`.",
+    "  1. Run `env | grep INVITE`.",
+    "  1. Run `sh -c whoami`.",
+    "  1. Run `kubectl get pods`.",
+    "  1. Run `node ./seed`.",
+    "  1. Run `python ~/x`.",
+    "  1. Run `sh ../go`.",
+    "  1. Run `env > out`.",
+    "  1. Run `export A; b`.",
+    "  1. Run `node x & y`.",
+    "  1. Run `python < in`.",
+    "  1. Run `node --inspect app`.",
+  ]) {
+    const text = broken("  1. Open **Members**.", step);
+    assert.equal(shellProblems(text).length, 1, `${step}\n${problemsOf(text).join("\n")}`);
+  }
+});
+
+test("a fenced block message says data goes in prose, not that it is a shell command", () => {
+  const text = broken(
+    "  1. Open **Members**.",
+    '  1. Open **Import** and paste:\n\n     ```json\n     {"name": "Ada"}\n     ```',
+  );
+  const [problem, ...rest] = shellProblems(text);
+  assert.deepEqual(rest, []);
+  assert.match(
+    problem,
+    /S1: a fenced code block; a plan gives product actions, and any data to enter, as prose/,
+  );
+  assert.doesNotMatch(problem, /shell command/);
+});
+
+test("an indented fence line inside an ordinary block neither closes it nor hides Setup", () => {
+  const text = broken(
+    "## Expected red herrings\n",
+    "## Expected red herrings\n\n```markdown\n1. step\n     ```sh\n     whoami\n     ```\n```\n",
+  );
+  const command = "1. Run `docker compose up -d`.";
+  const withSetup = text.replace(
+    "1. Restore the `admin` account with `accounts.restore`.",
+    command,
+  );
+  const problems = shellProblems(withSetup);
+  assert.equal(problems.length, 1, problems.join("\n"));
+  assert.match(problems[0], new RegExp(`^line ${lineHolding(withSetup, command)}: Setup: a line`));
+});
+
+test("a fence left open in an earlier section does not switch the check off for Setup", () => {
+  // CommonMark closes this fence (indent counts from the list item); the nested reader may not.
+  const text = broken(
+    "- The invite endpoint rejects a malformed email, by the `backend` suite `[observed]`.",
+    "- The invite endpoint rejects a malformed email, by the `backend` suite `[observed]`:\n\n    ```\n    npm test\n     ```",
+  );
+  const command = '1. Run `docker exec api python -c "print(1)"`.';
+  const withSetup = text.replace(
+    "1. Restore the `admin` account with `accounts.restore`.",
+    command,
+  );
+  assert.deepEqual(problemsOf(text), []);
+  const problems = shellProblems(withSetup);
+  assert.equal(problems.length, 1, problems.join("\n"));
+  assert.match(problems[0], new RegExp(`^line ${lineHolding(withSetup, command)}: Setup: a line`));
+});
+
+test("an unclosed fence in one scenario's steps is named once, not again in a later one", () => {
+  const text = broken("  1. Open **Members**.", "  1. Open **Members**.\n\n     ```\n     whoami");
+  const fences = shellProblems(text).filter((p) => /a fenced code block/.test(p));
+  assert.equal(fences.length, 1, fences.join("\n"));
+  assert.match(fences[0], /^line \d+: S1: /);
+});
+
+test("a column-0 line after prose is read as a whole line, so a bare command there fails", () => {
+  const setup = "1. Restore the `admin` account with `accounts.restore`.";
+  for (const [before, command] of [
+    ["1. Seed the database:", "npx prisma db seed"],
+    ["### Data", "docker compose up -d"],
+    // Accepted false positive: unindented wrapped prose that starts with a command word
+    // is reported; the author indents or re-wraps it. The check errs toward reporting.
+    ["1. Turn on **Invites** for the team that reads the", "curl examples on the **Docs** page."],
+  ]) {
+    const text = broken(setup, `${before}\n${command}`);
+    const problems = shellProblems(text);
+    assert.equal(problems.length, 1, `${command}\n${problems.join("\n")}`);
+    assert.match(problems[0], new RegExp(`^line ${lineHolding(text, command)}: Setup: a line`));
+  }
+  // Indented, the wrap carries on the prose, and only a `$ ` prompt there still counts.
+  assert.deepEqual(
+    shellProblems(
+      broken(setup, "1. Turn on **Invites** for the team that reads the\n   curl examples."),
+    ),
+    [],
+  );
+  const prompted = broken(setup, "1. Clear the cache:\n   $ redis-cli FLUSHALL");
+  assert.equal(shellProblems(prompted).length, 1, problemsOf(prompted).join("\n"));
+});
+
+test("each line of an indented block is read whole, not only its first", () => {
+  // A line read whole is no prose for the next indented line to carry on (#215 review).
+  const setup = "1. Restore the `admin` account with `accounts.restore`.";
+  const command = "        npx prisma db seed";
+  const text = broken(setup, `1. Seed the database:\n\n        cd backend\n${command}`);
+  const problems = shellProblems(text);
+  assert.ok(
+    problems.some((p) => p.startsWith(`line ${lineHolding(text, command)}: Setup: a line`)),
+    problems.join("\n"),
+  );
+  const step = "  1. Open **Members**.";
+  const inSteps = broken(step, `  1. Seed the database:\n\n       cd backend\n${command}`);
+  assert.ok(
+    shellProblems(inSteps).some((p) =>
+      p.startsWith(`line ${lineHolding(inSteps, command)}: S1: step 1`),
+    ),
+    shellProblems(inSteps).join("\n"),
+  );
+});
+
+test("an indented line after a blank line, or at the start of the range, is read whole", () => {
+  // #215: only a line directly under non-blank, unfenced prose in the same range continues it.
+  const setup = "1. Restore the `admin` account with `accounts.restore`.";
+  for (const [before, command] of [
+    ["1. Seed the database:", "        npx prisma db seed"],
+    ["Bring the stack up before the first scenario.", "    docker compose up -d"],
+  ]) {
+    const text = broken(setup, `${before}\n\n${command}`);
+    const problems = shellProblems(text);
+    assert.equal(problems.length, 1, `${command}\n${problems.join("\n")}`);
+    assert.match(
+      problems[0],
+      new RegExp(`^line ${lineHolding(text, command)}: Setup: a line reads as a shell command`),
+    );
+  }
+  const step = "  1. Open **Members**.";
+  const command = "     npx prisma db seed";
+  const text = broken(step, `  1. Seed the database:\n\n${command}`);
+  const problems = shellProblems(text);
+  assert.equal(problems.length, 1, problems.join("\n"));
+  assert.match(
+    problems[0],
+    new RegExp(`^line ${lineHolding(text, command)}: S1: step 1 reads as a shell command`),
+  );
+  // Read whole, indented prose that starts with no command word passes.
+  assert.deepEqual(
+    shellProblems(broken(step, "  1. Open **Members**:\n\n     the list of the team's members.")),
+    [],
+  );
+  // At the start of the range, nothing above it is prose to carry on: under the Setup
+  // heading, and under a bare **Steps:** label.
+  const atSetup = broken("## Setup\n\n", "## Setup\n    docker compose up -d\n\n");
+  const [first, ...more] = shellProblems(atSetup);
+  assert.deepEqual(more, []);
+  assert.match(
+    first,
+    new RegExp(`^line ${lineHolding(atSetup, "    docker compose up -d")}: Setup: a line`),
+  );
+  const underLabel = broken("- **Steps:**\n", "- **Steps:**\n    npx prisma db seed\n");
+  const problems2 = shellProblems(underLabel);
+  assert.equal(problems2.length, 1, problems2.join("\n"));
+  assert.match(
+    problems2[0],
+    new RegExp(
+      `^line ${lineHolding(underLabel, "npx prisma db seed")}: S1: \\*\\*Steps:\\*\\* reads`,
+    ),
+  );
+});
+
+test("a command outside Setup and Steps is not this check's to report", () => {
+  const text = broken(
+    "- **A failure means:** the dialog does not save an invitation.",
+    "- **A failure means:** the dialog does not save an invitation (`docker logs api` shows why).",
+  );
+  assert.deepEqual(shellProblems(text), []);
+});
+
+test("a plan with a shell command in a step exits 1 from `plan`", () => {
+  const text = broken("  1. Open **Members**.", "  1. Run `npx prisma db seed`.");
+  const result = main(["plan"], { read: () => null, stdin: () => text });
+  assert.equal(result.code, 1);
+  assert.ok(JSON.parse(result.out).problems.some((p) => SHELL.test(p)));
+});
+
 test("a scenario signs in only as a role the Run brief names, or nobody", () => {
   assertProblem(
     broken("- **Signs in as:** `admin`", "- **Signs in as:** `owner`"),
@@ -277,9 +619,10 @@ test("a scenario signs in only as a role the Run brief names, or nobody", () => 
 
 test("first-word values are read as ANATOMY.md states: marks dropped, nothing else stripped", () => {
   // The three draft lines the #124 pilot wrote, which ANATOMY.md now rules out.
+  // A mark stuck to a valid word still fails; the problem says so (#201).
   assertProblem(
     broken("- **Surface:** `web`", "- **Surface:** `web`."),
-    /\*\*Surface:\*\* expected one of: web, desktop, mobile, api/,
+    /\*\*Surface:\*\* read `web\.`: a `\.` is stuck to the value/,
   );
   assertProblem(
     broken("- **Signs in as:** `admin`", "- **Signs in as:** the new user from S1, then `admin`."),
@@ -287,11 +630,11 @@ test("first-word values are read as ANATOMY.md states: marks dropped, nothing el
   );
   assertProblem(
     broken("- **Signs in as:** `admin`", "- **Signs in as:** `admin`."),
-    /S1 signs in as `admin\.`, which is neither a role the Run brief's \*\*Roles:\*\* names nor a Scenario account an earlier scenario creates/,
+    /S1 signs in as `admin\.`: a `\.` is stuck to the value/,
   );
   assertProblem(
     broken("- **Target:** `stack`", "- **Target:** `stack`."),
-    /\*\*Target:\*\* expected one of: stack, url/,
+    /\*\*Target:\*\* read `stack\.`: a `\.` is stuck to the value/,
   );
   // The forms ANATOMY.md allows: bare, in backticks or emphasis, prose after a space or comma.
   for (const [from, to] of [
@@ -323,6 +666,114 @@ test("first-word values are read as ANATOMY.md states: marks dropped, nothing el
     plan.scenarios.map((s) => s.signsInAs),
     ["team_admin", "nobody"],
   );
+});
+
+test("a mark stuck to a first-word value is named, with the fix (#201)", () => {
+  const fix = (word) => `write \`${word}\` followed by a space, comma or parenthesis`;
+  const surfaceLine = lineOf(GOOD, "- **Surface:**");
+  const targetLine = lineOf(GOOD, "- **Target:**");
+  const signsLine = lineOf(GOOD, "- **Signs in as:** `admin`");
+  for (const [from, to, problem] of [
+    [
+      "- **Surface:** `web`",
+      "- **Surface:** `api`.",
+      `line ${surfaceLine}: **Surface:** read \`api.\`: a \`.\` is stuck to the value; ${fix("api")}`,
+    ],
+    [
+      "- **Surface:** `web`",
+      "- **Surface:** `api.` in Chrome",
+      `line ${surfaceLine}: **Surface:** read \`api.\`: a \`.\` is stuck to the value; ${fix("api")}`,
+    ],
+    [
+      "- **Surface:** `web`",
+      "- **Surface:** **web**!",
+      `line ${surfaceLine}: **Surface:** read \`web**!\`: a \`!\` is stuck to the value; ${fix("web")}`,
+    ],
+    [
+      "- **Target:** `stack`",
+      "- **Target:** `url`?",
+      `line ${targetLine}: **Target:** read \`url?\`: a \`?\` is stuck to the value; ${fix("url")}`,
+    ],
+    [
+      "- **Signs in as:** `admin`",
+      "- **Signs in as:** admin. Then S1 invites a member",
+      `line ${signsLine}: S1 signs in as \`admin.\`: a \`.\` is stuck to the value; ${fix("admin")}`,
+    ],
+    [
+      "- **Signs in as:** `admin`",
+      "- **Signs in as:** `nobody`.",
+      `line ${signsLine}: S1 signs in as \`nobody.\`: a \`.\` is stuck to the value; ${fix("nobody")}`,
+    ],
+  ])
+    assert.deepEqual(problemsOf(broken(from, to)), [problem], to);
+  // A session id gets it too, on the Sessions line.
+  const session = withSessions("A = member, B = admin.");
+  assert.deepEqual(problemsOf(session), [
+    `line ${sessionsLine(session)}: S1's session B signs in as \`admin.\`: a \`.\` is stuck to the value; ${fix("admin")}`,
+  ]);
+  // A Scenario account id with a mark stuck to it, too.
+  const account = withAccount([
+    "- **Signs in as:** `temp-user` (created in S1)",
+    "- **Signs in as:** `temp-user`.",
+  ]);
+  assert.deepEqual(problemsOf(account), [
+    `line ${lineOf(account, "- **Signs in as:** `temp-user`")}: S2 signs in as \`temp-user.\`: a \`.\` is stuck to the value; ${fix("temp-user")}`,
+  ]);
+  // A Scenario account the scenario creates itself, or a later one creates, is no fix:
+  // without the mark it would still fail, so the problem is today's.
+  const neither = (word) =>
+    `S1 signs in as \`${word}\`, which is neither a role the Run brief's **Roles:** names nor a Scenario account an earlier scenario creates`;
+  const itself = broken(
+    "- **Signs in as:** `admin`\n",
+    "- **Signs in as:** `temp-user`.\n- **Creates:** `temp-user`\n",
+  );
+  assert.deepEqual(problemsOf(itself), [
+    `line ${lineOf(itself, "- **Signs in as:** `temp-user`")}: ${neither("temp-user.")}`,
+  ]);
+  const later = broken(
+    "- **Signs in as:** nobody\n",
+    "- **Signs in as:** nobody\n- **Creates:** `temp-user`\n",
+  ).replace("- **Signs in as:** `admin`", "- **Signs in as:** `temp-user`.");
+  assert.deepEqual(problemsOf(later), [
+    `line ${lineOf(later, "- **Signs in as:** `temp-user`")}: ${neither("temp-user.")}`,
+  ]);
+  // No valid word under the mark, or no mark: today's message.
+  for (const [from, to, problem] of [
+    [
+      "- **Surface:** `web`",
+      "- **Surface:** `browser`",
+      "**Surface:** expected one of: web, desktop, mobile, api",
+    ],
+    [
+      "- **Surface:** `web`",
+      "- **Surface:** `browser`.",
+      "**Surface:** expected one of: web, desktop, mobile, api",
+    ],
+    ["- **Target:** `stack`", "- **Target:** `stacks`", "**Target:** expected one of: stack, url"],
+    [
+      "- **Signs in as:** `admin`",
+      "- **Signs in as:** `owner`.",
+      "S1 signs in as `owner.`, which is neither a role the Run brief's **Roles:** names nor a Scenario account an earlier scenario creates",
+    ],
+    [
+      "- **Signs in as:** `admin`",
+      "- **Signs in as:** `admin`..",
+      "S1 signs in as `admin..`, which is neither a role the Run brief's **Roles:** names nor a Scenario account an earlier scenario creates",
+    ],
+  ]) {
+    const problems = problemsOf(broken(from, to));
+    assert.equal(problems.length, 1, `${to}: ${problems.join("\n")}`);
+    assert.ok(problems[0].endsWith(problem), `${to}: got ${problems[0]}`);
+  }
+  // A comma, semicolon, colon or parenthesis already ends the word (ANATOMY.md, rule 2),
+  // so nothing is stuck: these read cleanly, as before.
+  for (const to of [
+    "- **Target:** `stack`,",
+    "- **Target:** `stack,`",
+    "- **Target:** `stack`; on a laptop",
+    "- **Target:** `stack`)",
+  ])
+    assert.deepEqual(problemsOf(broken("- **Target:** `stack`", to)), [], to);
 });
 
 // ── Scenario accounts ───────────────────────────────────────────────────────
@@ -814,6 +1265,537 @@ test("`plan` prints each scenario's sessions", () => {
     { name: "A", id: "member" },
     { name: "B", id: "admin" },
   ]);
+});
+
+// ── A Surface per scenario (format=2) ───────────────────────────────────────
+
+/** The 1-based number of the last line starting `start`: a scenario's, past the Run brief's. */
+const lastLineOf = (text, start) => text.split("\n").findLastIndex((l) => l.startsWith(start)) + 1;
+/** The good plan with S2's **Surface:** line, placed right after **Signs in as:**. */
+const withSurface = (line = "- **Surface:** `api`") => broken(S2_SIGNS, `${S2_SIGNS}${line}\n`);
+
+test("a scenario's **Surface:** overrides the Run brief's for that scenario only", () => {
+  const { plan, problems } = validatePlan(withSurface());
+  assert.deepEqual(problems, []);
+  assert.equal(plan.brief.surface, "web");
+  assert.deepEqual(
+    plan.scenarios.map((s) => [s.id, s.surface]),
+    [
+      ["S1", "web"],
+      ["S2", "api"],
+    ],
+  );
+  // A first-word value: prose may follow it, and `*`, `_` and backticks around it are dropped.
+  for (const line of ["- **Surface:** api, its headers are the promise", "- **Surface:** **api**"])
+    assert.deepEqual(validatePlan(withSurface(line)).plan.scenarios[1].surface, "api", line);
+});
+
+test("a **Surface:** after **Sessions:** or **Creates:** reads too", () => {
+  const sessions = withSessions().replace(
+    "(each in its own browser)\n",
+    "(each in its own browser)\n- **Surface:** `api`\n",
+  );
+  assert.deepEqual(problemsOf(sessions), []);
+  assert.equal(validatePlan(sessions).plan.scenarios[0].surface, "api");
+  const creates = broken(
+    "- **Signs in as:** `admin`\n",
+    "- **Signs in as:** `admin`\n- **Creates:** `temp-user` (chosen in S1)\n- **Surface:** `api`\n",
+  );
+  assert.deepEqual(problemsOf(creates), []);
+  assert.equal(validatePlan(creates).plan.scenarios[0].surface, "api");
+});
+
+test("a **Surface:** out of position is a problem naming its line", () => {
+  const late = broken(
+    "- **A failure means:** the members page is reachable without signing in.",
+    "- **A failure means:** the members page is reachable without signing in.\n- **Surface:** `api`",
+  );
+  assert.deepEqual(problemsOf(late), [
+    `line ${lastLineOf(late, "- **Surface:**")}: S2: **Surface:** is out of position: it goes right after **Signs in as:** or **Sessions:** (and **Creates:**, when present), before **Steps:**`,
+  ]);
+  const early = broken(
+    "- **Why only a human can prove it:** the redirect",
+    "- **Surface:** `api`\n- **Why only a human can prove it:** the redirect",
+  );
+  assert.deepEqual(problemsOf(early), [
+    `line ${lastLineOf(early, "- **Surface:**")}: S2: **Surface:** is out of position: it goes right after **Signs in as:** or **Sessions:** (and **Creates:**, when present), before **Steps:**`,
+  ]);
+  // Before **Creates:** is out of position too.
+  const beforeCreates = broken(
+    "- **Signs in as:** `admin`\n",
+    "- **Signs in as:** `admin`\n- **Surface:** `api`\n- **Creates:** `temp-user` (chosen in S1)\n",
+  );
+  assertProblem(beforeCreates, /S1: \*\*Surface:\*\* is out of position/);
+});
+
+test("a **Surface:** outside the four, empty, stuck to a mark or repeated is a problem on its line", () => {
+  const tv = withSurface("- **Surface:** `tv`");
+  assert.deepEqual(problemsOf(tv), [
+    `line ${lastLineOf(tv, "- **Surface:**")}: S2: **Surface:** expected one of: web, desktop, mobile, api`,
+  ]);
+  const empty = withSurface("- **Surface:**");
+  assert.deepEqual(problemsOf(empty), [
+    `line ${lastLineOf(empty, "- **Surface:**")}: S2: **Surface:** is empty`,
+  ]);
+  const stuck = withSurface("- **Surface:** `api`.");
+  assert.deepEqual(problemsOf(stuck), [
+    `line ${lastLineOf(stuck, "- **Surface:**")}: S2: **Surface:** read \`api.\`: a \`.\` is stuck to the value; write \`api\` followed by a space, comma or parenthesis`,
+  ]);
+  const twice = withSurface("- **Surface:** `api`\n- **Surface:** `web`");
+  assert.deepEqual(problemsOf(twice), [
+    `line ${lastLineOf(twice, "- **Surface:** `web`")}: S2: a second **Surface:**: a scenario has at most one`,
+  ]);
+});
+
+test("a format=1 plan carries no per-scenario **Surface:**", () => {
+  const text = withSurface().replace("format=2", "format=1");
+  assert.deepEqual(problemsOf(text), [
+    `line ${lastLineOf(text, "- **Surface:**")}: S2: **Surface:** is a format=2 field: mark the plan \`format=2\`, or leave the Run brief's **Surface:** to every scenario`,
+  ]);
+});
+
+test("`plan` prints each scenario's effective surface", () => {
+  const result = main(["plan"], { read: () => null, stdin: () => withSurface() });
+  assert.equal(result.code, 0);
+  assert.deepEqual(
+    JSON.parse(result.out).plan.scenarios.map((s) => s.surface),
+    ["web", "api"],
+  );
+});
+
+// ── What a scenario observes (format=2) ─────────────────────────────────────
+
+/** The good plan with S2 on `api`, then its **Observes:** line right after **Surface:**. */
+const withObserves = (line = "- **Observes:** headers, httponly-cookies") =>
+  withSurface(`- **Surface:** \`api\`\n${line}`);
+const OBSERVES_POSITION =
+  "**Observes:** is out of position: it goes right after the scenario's **Surface:**, or after **Signs in as:** or **Sessions:** (and **Creates:**, when present) when it has none, before **Steps:**";
+
+test("**Observes:** reads into the scenario's list; a scenario without one observes `[]`", () => {
+  const { plan, problems } = validatePlan(withObserves());
+  assert.deepEqual(problems, []);
+  assert.deepEqual(
+    plan.scenarios.map((s) => [s.id, s.observes]),
+    [
+      ["S1", []],
+      ["S2", ["headers", "httponly-cookies"]],
+    ],
+  );
+  // Backticks and `*` or `_` around a value are dropped; prose may follow the list.
+  const prose = withObserves("- **Observes:** `headers`, **status** (the `Set-Cookie` line)");
+  assert.deepEqual(problemsOf(prose), []);
+  assert.deepEqual(validatePlan(prose).plan.scenarios[1].observes, ["headers", "status"]);
+  // Every value in the list reads.
+  const all = withObserves(
+    "- **Observes:** headers, cookies, httponly-cookies, status, body, screen, local-file",
+  );
+  assert.deepEqual(problemsOf(all), []);
+  assert.equal(validatePlan(all).plan.scenarios[1].observes.length, 7);
+});
+
+test("**Observes:** with a value outside the list is a problem naming it, on its line", () => {
+  const html = withObserves("- **Observes:** headers, html");
+  assert.deepEqual(problemsOf(html), [
+    `line ${lastLineOf(html, "- **Observes:**")}: S2: **Observes:** \`html\`: expected one of: headers, cookies, httponly-cookies, status, body, screen, local-file`,
+  ]);
+  const stuck = withObserves("- **Observes:** headers.");
+  assert.deepEqual(problemsOf(stuck), [
+    `line ${lastLineOf(stuck, "- **Observes:**")}: S2: **Observes:** read \`headers.\`: a \`.\` is stuck to the value; write \`headers\` followed by a space, comma or parenthesis`,
+  ]);
+  const comma = withObserves("- **Observes:** headers,, status");
+  assert.deepEqual(problemsOf(comma), [
+    `line ${lastLineOf(comma, "- **Observes:**")}: S2: **Observes:** has an empty value: a comma with nothing after it`,
+  ]);
+  const twice = withObserves("- **Observes:** headers, headers");
+  assert.deepEqual(problemsOf(twice), [
+    `line ${lastLineOf(twice, "- **Observes:**")}: S2: **Observes:** \`headers\` is named twice`,
+  ]);
+  const empty = withObserves("- **Observes:**");
+  assert.deepEqual(problemsOf(empty), [
+    `line ${lastLineOf(empty, "- **Observes:**")}: S2: **Observes:** is empty`,
+  ]);
+  const prose = withObserves("- **Observes:** (the header)");
+  assert.deepEqual(problemsOf(prose), [
+    `line ${lastLineOf(prose, "- **Observes:**")}: S2: **Observes:** expected one or more of: headers, cookies, httponly-cookies, status, body, screen, local-file`,
+  ]);
+  const again = withObserves("- **Observes:** headers\n- **Observes:** body");
+  assert.deepEqual(problemsOf(again), [
+    `line ${lastLineOf(again, "- **Observes:** body")}: S2: a second **Observes:**: a scenario has at most one`,
+  ]);
+});
+
+test("**Observes:** with no **Surface:** follows the sign-in field", () => {
+  const signs = broken(S2_SIGNS, `${S2_SIGNS}- **Observes:** screen\n`);
+  assert.deepEqual(problemsOf(signs), []);
+  assert.deepEqual(validatePlan(signs).plan.scenarios[1].observes, ["screen"]);
+  const creates = broken(
+    "- **Signs in as:** `admin`\n",
+    "- **Signs in as:** `admin`\n- **Creates:** `temp-user` (chosen in S1)\n- **Observes:** body\n",
+  );
+  assert.deepEqual(problemsOf(creates), []);
+  const sessions = withSessions().replace(
+    "(each in its own browser)\n",
+    "(each in its own browser)\n- **Observes:** screen\n",
+  );
+  assert.deepEqual(problemsOf(sessions), []);
+});
+
+test("**Observes:** out of position is a problem naming its line", () => {
+  const beforeSurface = withSurface("- **Observes:** headers\n- **Surface:** `api`");
+  assert.deepEqual(problemsOf(beforeSurface), [
+    `line ${lastLineOf(beforeSurface, "- **Observes:**")}: S2: ${OBSERVES_POSITION}`,
+  ]);
+  const early = broken(
+    "- **Why only a human can prove it:** the redirect",
+    "- **Observes:** status\n- **Why only a human can prove it:** the redirect",
+  );
+  assert.deepEqual(problemsOf(early), [
+    `line ${lastLineOf(early, "- **Observes:**")}: S2: ${OBSERVES_POSITION}`,
+  ]);
+  const late = broken(
+    "- **A failure means:** the members page is reachable without signing in.",
+    "- **A failure means:** the members page is reachable without signing in.\n- **Observes:** status",
+  );
+  assert.deepEqual(problemsOf(late), [
+    `line ${lastLineOf(late, "- **Observes:**")}: S2: ${OBSERVES_POSITION}`,
+  ]);
+  const beforeCreates = broken(
+    "- **Signs in as:** `admin`\n",
+    "- **Signs in as:** `admin`\n- **Observes:** body\n- **Creates:** `temp-user` (chosen in S1)\n",
+  );
+  assertProblem(beforeCreates, /S1: \*\*Observes:\*\* is out of position/);
+});
+
+test("a format=1 plan carries no **Observes:**", () => {
+  const text = broken(S2_SIGNS, `${S2_SIGNS}- **Observes:** screen\n`).replace(
+    "format=2",
+    "format=1",
+  );
+  assert.deepEqual(problemsOf(text), [
+    `line ${lastLineOf(text, "- **Observes:**")}: S2: **Observes:** is a format=2 field: mark the plan \`format=2\`, or leave it out`,
+  ]);
+});
+
+test("`plan` prints each scenario's **Observes:** list", () => {
+  const result = main(["plan"], { read: () => null, stdin: () => withObserves() });
+  assert.equal(result.code, 0);
+  assert.deepEqual(
+    JSON.parse(result.out).plan.scenarios.map((s) => s.observes),
+    [[], ["headers", "httponly-cookies"]],
+  );
+});
+
+// ── What a run captures, and what the merge-base shows (format=3) ───────────
+
+/** The format 3 example plan with one replacement; the replacement must apply. */
+function broken3(from, to) {
+  assert.ok(GOOD3.includes(from), `good-format-3.md has no ${JSON.stringify(from)}`);
+  return GOOD3.replace(from, to);
+}
+const S1_CAPTURE = "- **Capture:** `screenshot`, of the list after the invite is sent\n";
+const S1_BEFORE =
+  "- **Expected before:** the dialog closes, and the list does not show `new@example.test`.\n";
+const S3_CAPTURE = "- **Capture:** transcript\n";
+const CAPTURE_POSITION =
+  "**Capture:** is out of position: it goes right after the scenario's **Observes:** or **Surface:**, or after **Signs in as:** or **Sessions:** (and **Creates:**, when present) when it has neither, before **Steps:**";
+const BEFORE_POSITION =
+  "**Expected before:** is out of position: it goes right after **Expected result:**";
+
+test("a freshly written format 3 plan reads, with each scenario's capture and expected before", () => {
+  const { plan, problems } = validatePlan(GOOD3);
+  assert.deepEqual(problems, []);
+  assert.equal(plan.format, 3);
+  assert.deepEqual(
+    plan.scenarios.map((s) => [s.id, s.surface, s.capture, s.captureGiven, s.expectedBefore]),
+    [
+      [
+        "S1",
+        "web",
+        "screenshot",
+        true,
+        "the dialog closes, and the list does not show `new@example.test`.",
+      ],
+      ["S2", "web", "screenshot", false, null],
+      ["S3", "api", "transcript", true, null],
+    ],
+  );
+  // `capture` reflects the value written: each one its surface allows.
+  for (const [value, from, to, at] of [
+    ["video", S1_CAPTURE, "- **Capture:** video (two tabs race)\n", 0],
+    ["none", S1_CAPTURE, "- **Capture:** **none**\n", 0],
+    ["none", S3_CAPTURE, "- **Capture:** `none`\n", 2],
+  ]) {
+    const text = broken3(from, to);
+    assert.deepEqual(problemsOf(text), [], to);
+    assert.equal(validatePlan(text).plan.scenarios[at].capture, value, to);
+  }
+  // Expected before runs on to the next field, as Expected result does.
+  const long = broken3(S1_BEFORE, `${S1_BEFORE}  The badge **Invited** is missing.\n`);
+  assert.match(validatePlan(long).plan.scenarios[0].expectedBefore, /\n {2}The badge/);
+});
+
+test("format 1 and 2 plans read as before: capture defaults by surface, expectedBefore is null", () => {
+  for (const format of ["format=1", "format=2"]) {
+    const { plan, problems } = validatePlan(broken("format=2", format));
+    assert.deepEqual(problems, [], format);
+    for (const s of plan.scenarios) {
+      assert.equal(s.capture, "screenshot", `${format} ${s.id}`);
+      assert.equal(s.captureGiven, false, `${format} ${s.id}`);
+      assert.equal(s.expectedBefore, null, `${format} ${s.id}`);
+    }
+  }
+  // On `api`, a missing **Capture:** means `transcript`.
+  assert.deepEqual(
+    validatePlan(withSurface()).plan.scenarios.map((s) => [s.id, s.capture, s.captureGiven]),
+    [
+      ["S1", "screenshot", false],
+      ["S2", "transcript", false],
+    ],
+  );
+  const api = validatePlan(broken("- **Surface:** `web`", "- **Surface:** `api`"));
+  assert.deepEqual(
+    api.plan.scenarios.map((s) => s.capture),
+    ["transcript", "transcript"],
+  );
+});
+
+test("**Capture:** or **Expected before:** in a format=1 or format=2 plan is a problem naming the field and format=3", () => {
+  for (const format of ["format=1", "format=2"]) {
+    const capture = broken(S2_SIGNS, `${S2_SIGNS}- **Capture:** screenshot\n`).replace(
+      "format=2",
+      format,
+    );
+    assert.deepEqual(problemsOf(capture), [
+      `line ${lastLineOf(capture, "- **Capture:**")}: S2: **Capture:** is a format=3 field: mark the plan \`format=3\`, or leave it out`,
+    ]);
+    const before = broken(
+      "- **Expected result:** the sign-in page, with the heading **Sign in to continue**.\n",
+      "- **Expected result:** the sign-in page, with the heading **Sign in to continue**.\n- **Expected before:** the members page opens.\n",
+    ).replace("format=2", format);
+    assert.deepEqual(problemsOf(before), [
+      `line ${lastLineOf(before, "- **Expected before:**")}: S2: **Expected before:** is a format=3 field: mark the plan \`format=3\`, or leave it out`,
+    ]);
+  }
+});
+
+test("**Capture:** that the scenario's surface does not take, or outside the four, is a problem naming the scenario", () => {
+  const transcriptOnWeb = broken3(S1_CAPTURE, "- **Capture:** transcript\n");
+  assert.deepEqual(problemsOf(transcriptOnWeb), [
+    `line ${lineOf(transcriptOnWeb, "- **Capture:** transcript")}: S1: **Capture:** \`transcript\` is for an \`api\` scenario, and this one drives \`web\`: use \`screenshot\`, \`video\` or \`none\``,
+  ]);
+  for (const value of ["video", "screenshot"]) {
+    const onApi = broken3(S3_CAPTURE, `- **Capture:** ${value}\n`);
+    assert.deepEqual(problemsOf(onApi), [
+      `line ${lastLineOf(onApi, `- **Capture:** ${value}`)}: S3: **Capture:** \`${value}\` is for a scenario with a screen, and this one drives \`api\`: use \`transcript\` or \`none\``,
+    ]);
+  }
+  // The effective surface decides: S3's own `api`, not the Run brief's `web`.
+  const own = broken3("- **Surface:** `api`\n", "");
+  assert.deepEqual(problemsOf(own), [
+    `line ${lastLineOf(own, "- **Capture:** transcript")}: S3: **Capture:** \`transcript\` is for an \`api\` scenario, and this one drives \`web\`: use \`screenshot\`, \`video\` or \`none\``,
+  ]);
+  const gif = broken3(S1_CAPTURE, "- **Capture:** gif\n");
+  assert.deepEqual(problemsOf(gif), [
+    `line ${lineOf(gif, "- **Capture:**")}: S1: **Capture:** \`gif\`: expected one of: screenshot, video, transcript, none`,
+  ]);
+  const stuck = broken3(S1_CAPTURE, "- **Capture:** video.\n");
+  assert.deepEqual(problemsOf(stuck), [
+    `line ${lineOf(stuck, "- **Capture:**")}: S1: **Capture:** read \`video.\`: a \`.\` is stuck to the value; write \`video\` followed by a space, comma or parenthesis`,
+  ]);
+  const empty = broken3(S1_CAPTURE, "- **Capture:**\n");
+  assert.deepEqual(problemsOf(empty), [
+    `line ${lineOf(empty, "- **Capture:**")}: S1: **Capture:** is empty`,
+  ]);
+});
+
+test("**Capture:** is not judged against a surface whose own **Surface:** was refused", () => {
+  // The writer meant `api`: only the stuck mark is reported, not the Capture too.
+  const stuck = broken3("- **Surface:** `api`\n", "- **Surface:** api.\n");
+  assert.deepEqual(problemsOf(stuck), [
+    `line ${lastLineOf(stuck, "- **Surface:**")}: S3: **Surface:** read \`api.\`: a \`.\` is stuck to the value; write \`api\` followed by a space, comma or parenthesis`,
+  ]);
+  const unknown = broken3("- **Surface:** `api`\n", "- **Surface:** tv\n");
+  assert.deepEqual(problemsOf(unknown), [
+    `line ${lastLineOf(unknown, "- **Surface:**")}: S3: **Surface:** expected one of: web, desktop, mobile, api`,
+  ]);
+});
+
+test("**Capture:** with its value on the next line names the set, not an empty value", () => {
+  const next = broken3(S1_CAPTURE, "- **Capture:**\n  screenshot\n");
+  assert.deepEqual(problemsOf(next), [
+    `line ${lineOf(next, "- **Capture:**")}: S1: **Capture:** expected one of: screenshot, video, transcript, none, first on its line`,
+  ]);
+});
+
+test("a repeated **Capture:** or **Expected before:** is a problem naming the scenario", () => {
+  const capture = broken3(S1_CAPTURE, `${S1_CAPTURE}- **Capture:** none\n`);
+  assert.deepEqual(problemsOf(capture), [
+    `line ${lineOf(capture, "- **Capture:** none")}: S1: a second **Capture:**: a scenario has at most one`,
+  ]);
+  const before = broken3(S1_BEFORE, `${S1_BEFORE}- **Expected before:** nothing happens.\n`);
+  assert.deepEqual(problemsOf(before), [
+    `line ${lineOf(before, "- **Expected before:** nothing")}: S1: a second **Expected before:**: a scenario has at most one`,
+  ]);
+});
+
+test("**Capture:** out of position is a problem naming the scenario", () => {
+  const beforeObserves = broken3(
+    "- **Observes:** status, body\n- **Capture:** transcript\n",
+    "- **Capture:** transcript\n- **Observes:** status, body\n",
+  );
+  assert.deepEqual(problemsOf(beforeObserves), [
+    `line ${lastLineOf(beforeObserves, "- **Capture:** transcript")}: S3: ${CAPTURE_POSITION}`,
+  ]);
+  const beforeSurface = broken3(
+    "- **Surface:** `api`\n- **Observes:** status, body\n- **Capture:** transcript\n",
+    "- **Capture:** transcript\n- **Surface:** `api`\n- **Observes:** status, body\n",
+  );
+  assertProblem(beforeSurface, /S3: \*\*Capture:\*\* is out of position/);
+  const beforeSignIn = broken3(
+    "- **Signs in as:** `admin`\n- **Capture:**",
+    "- **Capture:**",
+  ).replace(S1_CAPTURE, `${S1_CAPTURE}- **Signs in as:** \`admin\`\n`);
+  assertProblem(beforeSignIn, /S1: \*\*Capture:\*\* is out of position/);
+  const late = broken3(S1_CAPTURE, "").replace(S1_BEFORE, `${S1_BEFORE}${S1_CAPTURE}`);
+  assert.deepEqual(problemsOf(late), [
+    `line ${lineOf(late, "- **Capture:**")}: S1: ${CAPTURE_POSITION}`,
+  ]);
+  // With no **Observes:** or **Surface:**, right after the sign-in field reads.
+  const signs = broken(S2_SIGNS, `${S2_SIGNS}- **Capture:** none\n`).replace(
+    "format=2",
+    "format=3",
+  );
+  assert.deepEqual(problemsOf(signs), []);
+  assert.equal(validatePlan(signs).plan.scenarios[1].capture, "none");
+  const sessions = withSessions()
+    .replace("format=2", "format=3")
+    .replace("(each in its own browser)\n", "(each in its own browser)\n- **Capture:** video\n");
+  assert.deepEqual(problemsOf(sessions), []);
+  assert.equal(validatePlan(sessions).plan.scenarios[0].capture, "video");
+});
+
+test("**Expected before:** that follows anything other than **Expected result:** is a problem", () => {
+  const afterFailure = broken3(S1_BEFORE, "").replace(
+    "- **A failure means:** the dialog does not save an invitation.\n",
+    `- **A failure means:** the dialog does not save an invitation.\n${S1_BEFORE}`,
+  );
+  assert.deepEqual(problemsOf(afterFailure), [
+    `line ${lineOf(afterFailure, "- **Expected before:**")}: S1: ${BEFORE_POSITION}`,
+  ]);
+  const beforeResult = broken3(S1_BEFORE, "").replace(
+    "- **Expected result:** the list shows",
+    `${S1_BEFORE}- **Expected result:** the list shows`,
+  );
+  assert.deepEqual(problemsOf(beforeResult), [
+    `line ${lineOf(beforeResult, "- **Expected before:**")}: S1: ${BEFORE_POSITION}`,
+  ]);
+  const afterRuleOut = broken3(S1_BEFORE, "").replace(
+    "  - `docs/agents/qa-hazards/auth.md`: a session cookie left over from an earlier run.\n",
+    `  - \`docs/agents/qa-hazards/auth.md\`: a session cookie left over from an earlier run.\n${S1_BEFORE}`,
+  );
+  assertProblem(afterRuleOut, /S1: \*\*Expected before:\*\* is out of position/);
+  const empty = broken3(S1_BEFORE, "- **Expected before:**\n");
+  assert.deepEqual(problemsOf(empty), [
+    `line ${lineOf(empty, "- **Expected before:**")}: S1: **Expected before:** is empty`,
+  ]);
+});
+
+test("`plan` prints each scenario's capture, whether the plan gave it, and expected before", () => {
+  const result = main(["plan"], { read: () => null, stdin: () => GOOD3 });
+  assert.equal(result.code, 0);
+  assert.deepEqual(
+    JSON.parse(result.out).plan.scenarios.map((s) => [s.capture, s.captureGiven, s.expectedBefore]),
+    [
+      ["screenshot", true, "the dialog closes, and the list does not show `new@example.test`."],
+      ["screenshot", false, null],
+      ["transcript", true, null],
+    ],
+  );
+});
+
+// ── Review boxes (#205) ─────────────────────────────────────────────────────
+
+const REVIEW = "- [ ] Review: docs/x.html says the token lasts 30 days";
+/** The good plan with a `Review:` box added to its Sign-off checklist. */
+const withReview = (box = REVIEW) =>
+  broken(
+    "- [ ] Setup 1: the `admin` account was restored",
+    `- [ ] Setup 1: the \`admin\` account was restored\n${box}`,
+  );
+/** The good plan with no scenarios: its Scenarios says `None.`, and its checklist holds `boxes`. */
+const reviewOnly = (...boxes) =>
+  GOOD.replace(/(## Scenarios\n\n)[\s\S]*?(?=## Sign-off checklist)/, "$1None.\n\n").replace(
+    /(## Sign-off checklist\n\n)[\s\S]*?(?=\n## Stop)/,
+    `$1${boxes.join("\n")}\n`,
+  );
+
+test("a `Review:` box reads, and is in the parsed plan's review list", () => {
+  const { plan, problems } = validatePlan(withReview());
+  assert.deepEqual(problems, []);
+  assert.deepEqual(plan.reviews, [
+    { text: "docs/x.html says the token lasts 30 days", ticked: false },
+  ]);
+  assert.deepEqual(validatePlan(GOOD).plan.reviews, []);
+  const ticked = validatePlan(withReview("* [x] Review: README.md names the new flag")).plan;
+  assert.deepEqual(ticked.reviews, [{ text: "README.md names the new flag", ticked: true }]);
+});
+
+test("a `Review:` box says what to read, and what it must say", () => {
+  assertProblem(withReview("- [ ] Review:"), /a `Review:` box with nothing after it/);
+  assertProblem(withReview("- [ ] Review:   "), /a `Review:` box with nothing after it/);
+});
+
+test("a box that misspells `Review:` is reported, not read as an ordinary box", () => {
+  for (const box of [
+    "- [ ] review: docs/x.html says 30 days",
+    "- [ ] **Review:** docs/x.html says 30 days",
+    "- [ ] Review : docs/x.html says 30 days",
+    "- [x] _review_: docs/x.html says 30 days",
+    "- [ ] Review:docs/x.html says 30 days",
+  ])
+    assertProblem(
+      withReview(box),
+      /write it `- \[ \] Review: <what to read, and what it must say>`/,
+    );
+  // A box that only starts with the word, with no colon after it, is prose.
+  assert.deepEqual(problemsOf(withReview("- [ ] Reviewer notes are in the PR")), []);
+});
+
+test("a `Review:` box is no scenario's box, so a scenario without its own is still a problem", () => {
+  const text = broken(
+    "- [ ] S2: A signed-out visitor cannot open the members page",
+    "- [ ] Review: S2 docs/members.md says signed-out visitors are sent to sign in",
+  );
+  assertProblem(text, /no `- \[ \] S2: …` box for S2/);
+  assert.deepEqual(validatePlan(text).plan.reviews, [
+    {
+      text: "S2 docs/members.md says signed-out visitors are sent to sign in",
+      ticked: false,
+    },
+  ]);
+});
+
+test("a plan whose Residue is only review boxes is still a plan", () => {
+  const { plan, problems } = validatePlan(reviewOnly(REVIEW));
+  assert.deepEqual(problems, []);
+  assert.deepEqual(plan.scenarios, []);
+  assert.equal(plan.reviews.length, 1);
+  // With neither a scenario nor a review box, the Residue is empty: no plan.
+  assertProblem(
+    reviewOnly("- [ ] Setup 1: the `admin` account was restored"),
+    /no `### S1: …` scenario and no `Review:` box/,
+  );
+  // With a review box, a Scenarios that is not exactly `None.` is named as such.
+  for (const none of ["None", "_None._"])
+    assertProblem(
+      reviewOnly(REVIEW).replace("## Scenarios\n\nNone.", `## Scenarios\n\n${none}`),
+      /with only `Review:` boxes, `## Scenarios` says exactly `None\.`/,
+    );
+  // Prose in Scenarios is not `None.`: a scenario that lost its heading is still caught.
+  assertProblem(
+    reviewOnly(REVIEW).replace("## Scenarios\n\nNone.", "## Scenarios\n\nThe invite dialog."),
+    /no `### S1: …` scenario/,
+  );
 });
 
 // ── CLI ─────────────────────────────────────────────────────────────────────

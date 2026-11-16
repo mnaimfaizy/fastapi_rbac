@@ -1,0 +1,36 @@
+{
+  "steps": [
+    {
+      "session": "A",
+      "index": 1,
+      "caption": "The profile form, with the new name typed",
+      "still": "step-01-a.png",
+      "subject": { "x": 400, "y": 200, "width": 300, "height": 40 },
+      "text": "Ada",
+      "atMs": 1500,
+      "withheld": null
+    },
+    {
+      "session": "A",
+      "index": 2,
+      "caption": "The saved toast",
+      "still": "step-02-a.png",
+      "subject": { "x": 900, "y": 40, "width": 300, "height": 60 },
+      "text": "Saved",
+      "atMs": 2500,
+      "withheld": null
+    },
+    {
+      "session": "A",
+      "index": 3,
+      "caption": "The members list after saving",
+      "still": "step-03-a.png",
+      "subject": { "x": 100, "y": 500, "width": 600, "height": 120 },
+      "text": "Ada",
+      "atMs": 3200,
+      "withheld": null
+    }
+  ],
+  "sessions": { "A": { "startedAtMs": 500, "video": "video-a.webm" } },
+  "error": null
+}

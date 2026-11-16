@@ -12,6 +12,10 @@ These are word for word the definitions in Agent-kit's root glossary, where a co
 
 **Executor**: What carries out a Delegation: a Live Session, a headless run, or a sub-agent in the Chief of Staff's own session.
 
+**Harness**: The agent product a session runs in (Claude Code desktop, Claude Code CLI, Cursor, Codex CLI and the like), which decides how one session can start, message and wait for another; two versions of one product that behave differently are two harnesses.
+
+**Support Level**: How far `orchestrate` has been proven on a harness: verified (a full run passed), tried (a run happened, with known gaps) or documented (built from the harness's documentation alone).
+
 **Live Session**: A separate agent session the human can open, read and talk to while it works; always written in full, because a Session is a signed-in identity in a QA scenario.
 
 **Brief Contract**: The eight items every Delegation's brief carries: what to read first, the goal and what done means, phases with explicit stop points, scope fences, the repository's command routes, the rules for writes, the Decision Request form, and the Delegation's report and log files.
@@ -99,6 +103,8 @@ A run outlives a session: usage limits end it, laptops close, and a run with blo
 ## Four verbs, three tiers
 
 Harnesses differ in how one agent starts another: some start sessions the human can open, some start background runs to poll, some cannot start one at all. The skill body speaks only of `spawn`, `message`, `await` and `report`, and HARNESSES.md says how each works on each harness, so the body does not change when a harness does. Reports travel as files on every harness, so the verbs only carry signals. Facts about a harness are dated and marked when unconfirmed, because a harness changes faster than the skill, and a guessed flag fails at the worst moment of a run.
+
+Each harness has a file of its own, and a run loads only the one it is on, so a run on one harness carries none of the others' facts. The run finds its harness, from the environment and its own tools, rather than trusting the config alone: the same repository is opened in one harness one day and another the next, so a config value goes stale, while a guess sends every Delegation down the wrong route. So the config may pin the harness, and a disagreement is a question, never a choice the run makes. Each harness carries a **Support Level** because "documented" and "proven" fail differently: the first Cursor run followed a harness description no run had tried, and invented what it lacked. Below `verified`, the human sees the level and the harness's limits before the "go", and a level rises only on a run's evidence. Executors may run on another harness because one harness's headless run can carry a run whose own harness cannot yet; it is not the default, because it needs a second CLI signed in and a second set of model names.
 
 ## The config reader
 

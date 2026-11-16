@@ -1,0 +1,16 @@
+{
+  "findings": [
+    {
+      "thread_id": "PRRT_a",
+      "verdict": "fixed",
+      "commit": "3f2c1e9a8b7d6c5e4f3a2b1c0d9e8f7a6b5c4d3e",
+      "reply": "Fixed it."
+    },
+    { "thread_id": "PRRT_b", "verdict": "addressed", "reply": "Already handled on line 40." },
+    {
+      "thread_id": "PRRT_c",
+      "verdict": "declined",
+      "reply": "Out of scope; reply to open an issue."
+    }
+  ]
+}

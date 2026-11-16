@@ -1,4 +1,4 @@
-<!-- qa-plan format=1 subject=#42 pr=#57 -->
+<!-- qa-plan format=2 subject=#42 pr=#57 -->
 
 # QA Plan: Members can be invited by email
 

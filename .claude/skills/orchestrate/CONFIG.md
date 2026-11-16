@@ -61,6 +61,8 @@ Tabs, anchors, aliases, multi-line scalars, flow collections that span lines, a 
 | `skills`         | none                | Companion skills a brief names. See below.                                                                                                                                                                                |
 | `triage_labels`  | each role's name    | The repository's own mapping of the five triage roles to its labels. See below.                                                                                                                                           |
 | `models`         | the harness default | The model for each kind of work. See below.                                                                                                                                                                               |
+| `harness`        | none: detected      | The harness the Chief of Staff runs on, as an id from [HARNESSES.md](HARNESSES.md#the-harnesses). See below.                                                                                                              |
+| `executors`      | this harness        | Another harness for one kind of Delegation. Not the default. See below.                                                                                                                                                   |
 | `limits`         | see below           | How many building Delegations run at once, and the shared resources that have one holder at a time.                                                                                                                       |
 | `decisions`      | see below           | Where a human decision is recorded, so a reviewer of the pull request can see it.                                                                                                                                         |
 | `ready_to_merge` | see below           | What Ready to Merge requires beyond green CI and a clean merge.                                                                                                                                                           |
@@ -107,7 +109,21 @@ The roles are `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`
 | `review`   | The code-review phase of a building brief, where the harness lets a phase run on its own model. |
 | `qa`       | QA Delegations: composing a QA Plan and running it.                                             |
 
-Each value is a model name the Executor's harness accepts, passed as written. Unset, that work runs on the harness's default model.
+Each value is a model name the Executor's harness accepts, passed as written: with `executors` set for that kind of work, a model on that harness. Unset, that work runs on the harness's default model.
+
+### `harness`
+
+An id from [HARNESSES.md](HARNESSES.md#the-harnesses), such as `claude-code-desktop` or `cursor`. Unset, the run finds its harness at step 1, from the environment and the session's tools, and asks when it cannot tell. Set, it pins the harness: when what the run finds disagrees, the run raises it as a Decision Request before it goes on. An id with no harness file is a problem. A pinned harness below Support Level `verified` is a note, and its Dispatch Plan waits for the human's "go".
+
+### `executors`
+
+| Key        | The Delegations |
+| ---------- | --------------- |
+| `build`    | Building        |
+| `analysis` | Analysis        |
+| `qa`       | QA              |
+
+Each value is a harness id whose Delegations of that kind run as that harness's headless run, started from the Chief of Staff's shell, instead of on the Chief of Staff's own harness ([HARNESSES.md](HARNESSES.md#executors-on-another-harness)). For example, a Chief of Staff in Cursor with `executors: { build: claude-code-cli }` builds with `claude -p`. Its CLI must be installed and signed in, `models` for that work names a model there, and its Support Level and Limits join the Dispatch Plan's. Unset, every Delegation runs on the Chief of Staff's harness. A value that names the pinned `harness` is that harness's own default, and moves nothing. Any other harness with no headless run, such as `claude-code-desktop` named from Cursor, is a problem here. So is `qa` naming a harness whose headless run cannot carry QA (its harness file's **Headless QA** line is `none`), such as `gemini-cli` or `devin`.
 
 ### `limits`
 
@@ -129,11 +145,12 @@ The **QA Stack** is a shared resource whether or not `shared` names it: every QA
 
 A Delegation is Ready to Merge only when every check on its head has passed and its branch merges cleanly. These keys add to that; they never take either away.
 
-| Key         | Default   | Meaning                                                                                                                |
-| ----------- | --------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `review`    | `settled` | `settled`: every review comment is fixed or answered. `approved`: that, and an approving review.                       |
-| `qa`        | `none`    | `report`: each pull request's head is QA'd by a QA Delegation, and Ready to Merge needs its result for that head.      |
-| `qa_labels` | `[]`      | With `qa: report`, the report is required only for an issue carrying one of these labels. Any other `qa` is a problem. |
+| Key               | Default   | Meaning                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ----------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `review`          | `settled` | `settled`: every review comment is fixed or answered. `approved`: that, and an approving review.                                                                                                                                                                                                                                                                                                                    |
+| `qa`              | `none`    | `report`: each pull request's head is QA'd by a QA Delegation, and Ready to Merge needs its result for that head.                                                                                                                                                                                                                                                                                                   |
+| `qa_labels`       | `[]`      | With `qa: report`, the report is required only for an issue carrying one of these labels. Any other `qa` is a problem.                                                                                                                                                                                                                                                                                              |
+| `review_workflow` | `detect`  | The Caller of Agent-kit's review workflow, whose run on a head the review must wait for (SKILL.md step 7). `detect`: the Caller found under `.github/workflows/`, by a job that `uses:` `agent-review-reusable.yml`, if any; when more than one has such a job, the run asks which. A path directly under `.github/workflows/`: that file, which must be in the repository. `none`: no review workflow to wait for. |
 
 ### `spec`
 
