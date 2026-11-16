@@ -25,3 +25,7 @@ memory_test_db_default
 # graphify knowledge graph: generated locally and refreshed by git hooks, never
 # committed. .mcp.json and .graphifyignore are committed. See docs/agents/graphify.md.
 graphify-out/
+
+# Claude Code agent worktrees: per-developer checkouts that background agents
+# work in. Never committed.
+.claude/worktrees/
