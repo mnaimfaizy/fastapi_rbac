@@ -56,7 +56,7 @@ def _user() -> MagicMock:
 
 def _refresh_meta(redis: MockRedisClient, user_id: UUID) -> dict:
     """Spelled exactly as ``app.utils.allowlist`` writes it, so a re-key cannot pass."""
-    return redis._hashes[_allowlist_meta_key(user_id, TokenType.REFRESH)]
+    return redis._hashes[f"user:{user_id}:refresh_token:meta"]
 
 
 async def _accepted(redis: MockRedisClient, access_token: str) -> bool:
