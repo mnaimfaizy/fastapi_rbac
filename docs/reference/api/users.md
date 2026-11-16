@@ -400,15 +400,36 @@ Authorization: Bearer <access_token>
 }
 ```
 
-**Permissions:** `user.update` (admin)
+**Permissions:** `user.update` (admin), subject to the role-grant ceiling below.
+
+**Error Responses:**
+
+- 403 Forbidden: a role being granted or removed has a permission the caller does not hold, or the caller is changing their own roles
+- 404 Not Found: user or role not found
+- 422 Unprocessable Entity: invalid user or role id
+
+---
+
+## Role-grant ceiling
+
+Holding `user.update` or `user.create` lets a caller edit users. It does not let them hand out more authority than they have. These rules apply wherever a user's roles or superuser flag are set: `POST /users`, `PUT /users/{user_id}`, `PUT /users/bulk-update` (through `role_id` and `is_superuser`), and `POST /users/{user_id}/roles`.
+
+- A superuser is not limited.
+- Anyone else can grant or remove only roles whose permissions they already hold.
+- Anyone else cannot change their own roles.
+- Only a superuser can set or clear `is_superuser`.
+- Only changes are checked. Resending a user's current roles or `is_superuser` value is allowed.
+- `PUT /users/bulk-update` checks every target first, so a refused request changes no user.
+
+Each refusal is a 403 Forbidden with a `detail` naming the rule.
 
 ---
 
 ## Error Responses
 
-- 400 Bad Request: Invalid input, missing required fields
+- 400 Bad Request: Invalid input, missing required fields, or `user_ids` that are not UUIDs on `PUT /users/bulk-update`
 - 401 Unauthorized: Missing or invalid token
-- 403 Forbidden: Insufficient permissions, cannot delete self
+- 403 Forbidden: Insufficient permissions, cannot delete self, or refused by the [role-grant ceiling](#role-grant-ceiling)
 - 404 Not Found: User or role not found
 - 409 Conflict: User has roles assigned and cannot be deleted
 - 422 Unprocessable Entity: Validation errors, locked account, unverified email, etc.
