@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -39,10 +39,11 @@ interface ChangePasswordFormProps {
  * the change-password-required page a temporary password leads to (ADR 0014).
  */
 export const ChangePasswordForm = ({ onSuccess }: ChangePasswordFormProps) => {
-  const { isLoading, error, passwordChangeSuccess } = useAppSelector(
+  const { error, passwordChangeSuccess } = useAppSelector(
     (state) => state.auth
   );
   const dispatch = useAppDispatch();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Initialize React Hook Form with Zod validation
   const {
@@ -75,10 +76,11 @@ export const ChangePasswordForm = ({ onSuccess }: ChangePasswordFormProps) => {
   }, [passwordChangeSuccess, reset]);
 
   const onSubmit = async (data: PasswordChangeFormData) => {
-    if (isLoading) return;
+    if (isSubmitting) return;
 
     // Clear any previous errors
     dispatch(clearError());
+    setIsSubmitting(true);
 
     try {
       // Dispatch password change action
@@ -92,6 +94,8 @@ export const ChangePasswordForm = ({ onSuccess }: ChangePasswordFormProps) => {
       // Error is handled by the auth slice
       console.error('Error changing password:', error);
       return;
+    } finally {
+      setIsSubmitting(false);
     }
     onSuccess?.();
   };
@@ -179,8 +183,8 @@ export const ChangePasswordForm = ({ onSuccess }: ChangePasswordFormProps) => {
         </div>
 
         <div>
-          <Button type="submit" disabled={isLoading} className="w-full">
-            {isLoading ? 'Updating...' : 'Change Password'}
+          <Button type="submit" disabled={isSubmitting} className="w-full">
+            {isSubmitting ? 'Updating...' : 'Change Password'}
           </Button>
         </div>
       </form>
