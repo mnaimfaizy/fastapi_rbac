@@ -13,3 +13,27 @@ LICENSE
 __pycache__
 logfile.log
 user_management.db
+
+# Local runtime data and caches: bind-mounted or generated, never part of an image.
+postgres-data
+postgres_dev_data
+postgres_test_data
+pgadmin-data
+pgadmin_dev_data
+redis-data
+logs
+app.db
+celerybeat-schedule.db
+.mypy_cache
+.pytest_cache
+
+# Local env files with real or per-developer values. No Dockerfile copies them:
+# the dev and test compose services get settings through env_file and bind-mount
+# the source over /app, and the prod Dockerfiles copy named folders only.
+# .env.development stays so a dev image run on its own can still configure itself.
+# certs/ stays: Dockerfile.prod and queue.dockerfile.prod copy it, and the prod
+# app reads /app/certs/ca.crt from the image.
+.env.production
+.env.local
+.env.test*
+!.env.test.example
