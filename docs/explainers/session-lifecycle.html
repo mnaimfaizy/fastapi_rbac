@@ -829,8 +829,8 @@ Cookie: refresh_token=eyJ…·R·F
 
 {&quot;current_password&quot;: &quot;…&quot;, &quot;new_password&quot;: &quot;…&quot;}</pre></div></li><li class="bl-beat" data-ch="9" data-b="1" data-zones="pg api"><span class="bi">2</span><button type="button" class="bl-go">Postgres: the current password matches the stored hash.</button><div class="bl-meta"><span class="bl-zone-dots" aria-hidden="true"><span class="zd zd-pg"></span><span class="zd zd-api"></span></span><span class="bl-hop">API → Postgres</span><span class="bl-refs"><code title="backend/app/api/v1/endpoints/auth.py:667-678">auth.py:667-678</code></span></div><div class="bl-detail"><p class="bl-delta"><b>Δ</b>none</p><h4>Postgres</h4><pre>PasswordValidator.verify_password(current_password, current_user.password)
 no match → 400 &quot;Invalid Current Password&quot;</pre></div></li><li class="bl-beat" data-ch="9" data-b="2" data-zones="redis api"><span class="bi">3</span><button type="button" class="bl-go">The policy deletes the access and refresh keys and revokes the reset link: D, E, F, G all end.</button><div class="bl-meta"><span class="bl-zone-dots" aria-hidden="true"><span class="zd zd-redis"></span><span class="zd zd-api"></span></span><span class="bl-hop">API → Redis</span><span class="bl-refs"><code title="backend/app/utils/password_policy.py:263">password_policy.py:263</code> <code title="backend/app/utils/allowlist.py:382-390">allowlist.py:382-390</code></span></div><div class="bl-detail"><p class="bl-delta"><b>Δ</b>R·D, D1, R·E, E1, R·F, F1, R·G, G1 revoked; reset link revoked</p><h4>Redis</h4><pre>revoke_all_user_tokens: for access_token, refresh_token:
-  DEL user:{id}:{token_type}
-  DEL user:{id}:{token_type}:meta
+  DEL user:{id}:{token_type.value}
+  DEL user:{id}:{token_type.value}:meta
 emailed_links.revoke(PASSWORD_RESET, user_id)
 both run before the password commit, the caller’s own session and any reset link included</pre></div></li><li class="bl-beat" data-ch="9" data-b="3" data-zones="pg api"><span class="bi">4</span><button type="button" class="bl-go">The new hash is committed, then the change is audited.</button><div class="bl-meta"><span class="bl-zone-dots" aria-hidden="true"><span class="zd zd-pg"></span><span class="zd zd-api"></span></span><span class="bl-hop">API → Postgres</span><span class="bl-refs"><code title="backend/app/utils/password_policy.py:265">password_policy.py:265</code> <code title="backend/app/utils/password_policy.py:271">password_policy.py:271</code></span></div><div class="bl-detail"><p class="bl-delta"><b>Δ</b>User.password = new hash; + AuditLog row (password change)</p><h4>Postgres</h4><pre>await db_session.commit()        # the new hash
 log_security_event(…)            # the password policy's own success event</pre></div></li><li class="bl-beat" data-ch="9" data-b="4" data-zones="redis api"><span class="bi">5</span><button type="button" class="bl-go">Fresh session F′: R·F′ lives 100 days, origin recorded; then F′1.</button><div class="bl-meta"><span class="bl-zone-dots" aria-hidden="true"><span class="zd zd-redis"></span><span class="zd zd-api"></span></span><span class="bl-hop">API → Redis</span><span class="bl-refs"><code title="backend/app/api/v1/endpoints/auth.py:695-701">auth.py:695-701</code> <code title="backend/app/core/config.py:94">config.py:94</code></span></div><div class="bl-detail"><p class="bl-delta"><b>Δ</b>+ R·F′ live, 100 d; + F′1 live</p><h4>Redis</h4><pre>refresh_token_expires = timedelta(minutes=REFRESH_TOKEN_EXPIRE_MINUTES)   # default 100 days
@@ -1252,8 +1252,8 @@ logoutAllUser … finally dispatch(logout())   // local state cleared even if th
     "access_token",
     "refresh_token"
   ],
-  "allowlistKeyPattern": "user:{user_id}:{token_type}",
-  "allowlistMetaKeyPattern": "user:{user_id}:{token_type}:meta",
+  "allowlistKeyPattern": "user:{user_id}:{token_type.value}",
+  "allowlistMetaKeyPattern": "user:{user_id}:{token_type.value}:meta",
   "allowlistMetaFields": [
     "issued_at",
     "exp",
@@ -1375,8 +1375,8 @@ logoutAllUser … finally dispatch(logout())   // local state cleared even if th
     "backend/app/utils/allowlist.py:331": {"file": "backend/app/utils/allowlist.py", "start": "await _enforce_concurrent_session_limit(redis_client, user_id, session_id)", "n": 1, "sha": "330adc05daa8c38a"},
     "backend/app/utils/allowlist.py:334-349": {"file": "backend/app/utils/allowlist.py", "start": "async def add_derived_access_token(", "n": 16, "sha": "d85f92788c13f370", "end": ")"},
     "backend/app/utils/allowlist.py:352-361": {"file": "backend/app/utils/allowlist.py", "start": "async def get_valid_tokens(", "n": 10, "sha": "6e7786c4402422ec", "end": "return token in valid_tokens or token.encode() in valid_tokens"},
-    "backend/app/utils/allowlist.py:36-41": {"file": "backend/app/utils/allowlist.py", "start": "def _allowlist_key(user_id: UUID | str, token_type: TokenType) -> str:", "n": 6, "sha": "58fba0a0094e8094", "end": "return f\"{_allowlist_key(user_id, token_type)}:meta\""},
-    "backend/app/utils/allowlist.py:36-58": {"file": "backend/app/utils/allowlist.py", "start": "def _allowlist_key(user_id: UUID | str, token_type: TokenType) -> str:", "n": 23, "sha": "bfd849b1f753ad01", "end": ")"},
+    "backend/app/utils/allowlist.py:36-41": {"file": "backend/app/utils/allowlist.py", "start": "def _allowlist_key(user_id: UUID | str, token_type: TokenType) -> str:", "n": 6, "sha": "ba04cbb1f0dd1a2d", "end": "return f\"{_allowlist_key(user_id, token_type)}:meta\""},
+    "backend/app/utils/allowlist.py:36-58": {"file": "backend/app/utils/allowlist.py", "start": "def _allowlist_key(user_id: UUID | str, token_type: TokenType) -> str:", "n": 23, "sha": "87feb279e9c27911", "end": ")"},
     "backend/app/utils/allowlist.py:369-390": {"file": "backend/app/utils/allowlist.py", "start": "async def revoke_user_tokens(redis_client: Redis, user_id: UUID | str, token_type: TokenType) -> None:", "n": 22, "sha": "69bfc16708feaa3e", "end": "await revoke_user_tokens(redis_client, user_id, token_type)"},
     "backend/app/utils/allowlist.py:382-390": {"file": "backend/app/utils/allowlist.py", "start": "async def revoke_all_user_tokens(redis_client: Redis, user_id: UUID | str) -> None:", "n": 9, "sha": "08e7008ac0a0a39b", "end": "await revoke_user_tokens(redis_client, user_id, token_type)"},
     "backend/app/utils/allowlist.py:48-58": {"file": "backend/app/utils/allowlist.py", "start": "def _metadata_payload(", "n": 11, "sha": "90d0430c646e825b", "end": ")"},
@@ -4410,7 +4410,7 @@ logoutAllUser … finally dispatch(logout())   // local state cleared even if th
      "detail": [
       [
        "Redis",
-       "revoke_all_user_tokens: for access_token, refresh_token:\n  DEL user:{id}:{token_type}\n  DEL user:{id}:{token_type}:meta\nemailed_links.revoke(PASSWORD_RESET, user_id)\nboth run before the password commit, the caller’s own session and any reset link included"
+       "revoke_all_user_tokens: for access_token, refresh_token:\n  DEL user:{id}:{token_type.value}\n  DEL user:{id}:{token_type.value}:meta\nemailed_links.revoke(PASSWORD_RESET, user_id)\nboth run before the password commit, the caller’s own session and any reset link included"
       ]
      ]
     },
