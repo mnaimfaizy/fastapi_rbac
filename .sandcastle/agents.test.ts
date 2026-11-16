@@ -5,8 +5,49 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import {
-  assertNoForwardedEnvFile, loadHostEnv, resolveAgentKind, resolveCredential, resolveModel,
+  assertNoForwardedEnvFile, credentialSources, loadHostEnv, opBinary, readOpEnvironment, resolveAgentKind,
+  resolveCredential, resolveModel,
 } from "./agents.ts";
+
+test("1Password Environment wins over shell and secrets.env, and is only read when set", () => {
+  const dir = mkdtempSync(join(tmpdir(), "sc-op-"));
+  writeFileSync(join(dir, "secrets.env"), "CURSOR_API_KEY=file\nOP_ENVIRONMENT_ID=env-from-file\n");
+  const seen: string[] = [];
+  const read = (id: string) => {
+    seen.push(id);
+    return { CURSOR_API_KEY: "from-1password", SANDCASTLE_AGENT: "claude" };
+  };
+  const env = loadHostEnv(dir, { CURSOR_API_KEY: "shell" }, read);
+  assert.deepEqual(seen, ["env-from-file"]);
+  assert.equal(env.CURSOR_API_KEY, "from-1password");
+  assert.equal(env.SANDCASTLE_AGENT, "claude");
+  const noOp = mkdtempSync(join(tmpdir(), "sc-op-"));
+  assert.equal(loadHostEnv(noOp, { CURSOR_API_KEY: "shell" }, () => assert.fail("read without an id")).CURSOR_API_KEY, "shell");
+  assert.match(credentialSources(dir, env), /^1Password Environment env-from-file via op(\.exe)? > shell > \.sandcastle\/secrets\.env$/);
+});
+
+test("op binary: op.exe under WSL unless a service account or OP_CLI is set", () => {
+  assert.equal(opBinary({}, true), "op.exe");
+  assert.equal(opBinary({}, false), "op");
+  assert.equal(opBinary({ OP_SERVICE_ACCOUNT_TOKEN: "ops_x" }, true), "op");
+  assert.equal(opBinary({ OP_CLI: "/opt/op" }, true), "/opt/op");
+});
+
+test("readOpEnvironment calls secret list and explains failures", () => {
+  let args: string[] = [];
+  const vars = readOpEnvironment("abc", { OP_CLI: "op" }, (_bin, a) => {
+    args = a;
+    return "CURSOR_API_KEY=k\r\nANTHROPIC_API_KEY=\"q\"\n";
+  });
+  assert.deepEqual(args, ["environment", "secret", "list", "abc", "--reveal", "--format=dotenv"]);
+  assert.deepEqual(vars, { CURSOR_API_KEY: "k", ANTHROPIC_API_KEY: "q" });
+  const fail = (stderr: string) => () =>
+    readOpEnvironment("abc", { OP_CLI: "op" }, () => { throw Object.assign(new Error("x"), { stderr }); });
+  assert.throws(fail('[ERROR] unknown command "environment" for "op"'), /2\.42\.0/);
+  assert.throws(fail("spawn op ENOENT"), /was not found/);
+  assert.throws(fail("[ERROR] 2026/11/16 12:04:44 environment couldn't be found"), /Check OP_ENVIRONMENT_ID/);
+  assert.throws(fail("[ERROR] authorization prompt dismissed"), /desktop app unlocked/);
+});
 
 const all = {
   CLAUDE_CODE_OAUTH_TOKEN: "oauth",

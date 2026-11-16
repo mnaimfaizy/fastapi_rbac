@@ -1,11 +1,14 @@
 // Agent selection and credentials. Exactly one credential, for the selected
 // agent, reaches the sandbox, through that agent provider's own env.
 //
-// Credentials are read from the host environment (shell, or `op run`) or from
-// the gitignored .sandcastle/secrets.env, which only this host code reads.
-// Never use .sandcastle/.env for secrets: Sandcastle forwards every key in it
-// into the sandbox, whichever agent runs.
+// Credentials come from, highest first: a 1Password Environment (when
+// OP_ENVIRONMENT_ID is set), the shell, then the gitignored
+// .sandcastle/secrets.env. Only this host code reads them. Never use
+// .sandcastle/.env for secrets: Sandcastle forwards every key in it into the
+// sandbox, whichever agent runs.
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
+import { release } from "node:os";
 import { resolve } from "node:path";
 import { claudeCode, copilot, cursor } from "@ai-hero/sandcastle";
 
@@ -35,11 +38,69 @@ const parseDotenv = (text: string): Record<string, string> =>
       }),
   );
 
-/** Host env merged over .sandcastle/secrets.env (the shell wins). */
-export function loadHostEnv(sandcastleDir: string, env: Env = process.env): Env {
+export type RunOp = (bin: string, args: string[]) => string;
+const runOp: RunOp = (bin, args) =>
+  execFileSync(bin, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 1024 * 1024 });
+
+/**
+ * Which 1Password CLI to call. Under WSL the Linux `op` cannot use the Windows
+ * desktop app, so 1Password's docs say to call the Windows `op.exe`; with a
+ * service-account token the Linux `op` works. OP_CLI overrides both.
+ */
+export function opBinary(env: Env, wsl = /microsoft/i.test(release())): string {
+  if (env.OP_CLI) return env.OP_CLI;
+  return wsl && !env.OP_SERVICE_ACCOUNT_TOKEN ? "op.exe" : "op";
+}
+
+/**
+ * Read every variable of a 1Password Environment, in memory, with
+ * `op environment secret list <id> --reveal --format=dotenv` (CLI 2.42.0+).
+ * Nothing is written to disk and no value is printed.
+ */
+export function readOpEnvironment(id: string, env: Env, run: RunOp = runOp): Record<string, string> {
+  const bin = opBinary(env);
+  let out: string;
+  try {
+    out = run(bin, ["environment", "secret", "list", id, "--reveal", "--format=dotenv"]);
+  } catch (err) {
+    const detail = String((err as { stderr?: unknown }).stderr ?? (err as Error).message ?? err).trim();
+    const hint = /unknown command|unknown flag/i.test(detail)
+      ? " It needs 1Password CLI 2.42.0 or later: `winget upgrade AgileBits.1Password.CLI` on Windows."
+      : /couldn't be found|not found|no environment/i.test(detail)
+        ? " Check OP_ENVIRONMENT_ID: copy it from Developer → View Environments → Manage environment."
+      : /ENOENT/.test(detail)
+        ? ` \`${bin}\` was not found. Install the 1Password CLI, or set OP_CLI to its path.`
+        : " Is the 1Password desktop app unlocked, with Settings → Developer → Integrate with 1Password CLI on?";
+    throw new Error(`Could not read 1Password Environment ${id} with ${bin}.${hint}\n${detail.split("\n")[0]}`);
+  }
+  return parseDotenv(out);
+}
+
+/**
+ * The host's credentials and settings: a 1Password Environment (OP_ENVIRONMENT_ID)
+ * over the shell over .sandcastle/secrets.env. The Environment wins, the same
+ * order `op run` uses.
+ */
+export function loadHostEnv(
+  sandcastleDir: string,
+  env: Env = process.env,
+  readEnvironment: (id: string, env: Env) => Record<string, string> = readOpEnvironment,
+): Env {
   const file = resolve(sandcastleDir, "secrets.env");
   const fromFile = existsSync(file) ? parseDotenv(readFileSync(file, "utf8")) : {};
-  return { ...fromFile, ...Object.fromEntries(Object.entries(env).filter(([, v]) => v)) };
+  const merged: Env = { ...fromFile, ...Object.fromEntries(Object.entries(env).filter(([, v]) => v)) };
+  const id = merged.OP_ENVIRONMENT_ID?.trim();
+  return id ? { ...merged, ...readEnvironment(id, merged) } : merged;
+}
+
+/** Where credentials were read from, for the run header. Never includes values. */
+export function credentialSources(sandcastleDir: string, env: Env = process.env): string {
+  const sources = [];
+  const id = env.OP_ENVIRONMENT_ID?.trim();
+  if (id) sources.push(`1Password Environment ${id} via ${opBinary(env)}`);
+  sources.push("shell");
+  if (existsSync(resolve(sandcastleDir, "secrets.env"))) sources.push(".sandcastle/secrets.env");
+  return sources.join(" > ");
 }
 
 /** Refuse to run when .sandcastle/.env holds any key: Sandcastle would forward all of them. */

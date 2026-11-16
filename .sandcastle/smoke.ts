@@ -3,10 +3,10 @@
 //   npm run smoke            (from .sandcastle/)
 //   npm run smoke -- --skip-gates
 import { execFileSync } from "node:child_process";
-import { createSandbox } from "@ai-hero/sandcastle";
+import type { Sandbox } from "@ai-hero/sandcastle";
 import { CREDENTIAL_KEYS, assertNoForwardedEnvFile } from "./agents.ts";
 import {
-  FORBIDDEN_ENV, GATES, REPO_DIR, SANDCASTLE_DIR, ensureServices, removeWorktree, sandbox,
+  FORBIDDEN_ENV, GATES, REPO_DIR, SANDCASTLE_DIR, openSandbox, removeWorktree, startServices, stopServices,
 } from "./config.ts";
 
 assertNoForwardedEnvFile(SANDCASTLE_DIR);
@@ -21,12 +21,13 @@ const deleteBranch = () => {
 };
 deleteBranch();
 
-ensureServices();
-let box;
+const svc = startServices("smoke");
+let box: Sandbox;
 try {
-  box = await createSandbox({ branch: BRANCH, sandbox: sandbox(), cwd: REPO_DIR });
+  box = await openSandbox(BRANCH, svc.network);
 } catch (err) {
   deleteBranch(); // createSandbox makes the branch before it starts the container
+  stopServices(svc);
   throw err;
 }
 let failed = false;
@@ -76,5 +77,6 @@ try {
   await box.close();
   removeWorktree(box.worktreePath);
   deleteBranch();
+  stopServices(svc);
 }
 process.exit(failed ? 1 : 0);

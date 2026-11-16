@@ -7,7 +7,8 @@
     "smoke": "tsx smoke.ts",
     "build": "tsx main.ts",
     "gate": "tsx gate.ts",
-    "test": "tsx --test agents.test.ts"
+    "test": "tsx --test agents.test.ts pipeline.test.ts",
+    "e2e": "tsx e2e.ts"
   },
   "dependencies": {
     "@ai-hero/sandcastle": "0.14.0",
