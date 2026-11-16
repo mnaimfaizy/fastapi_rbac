@@ -92,21 +92,38 @@ Then either work fully in WSL (recommended, below) or keep the `D:\` checkout fo
 
 #### Working fully in WSL
 
-One checkout, in WSL, for editing, committing, the dev stack and Sandcastle. You get no copies to keep in step, LF line endings, and fast bind mounts for Docker Compose too. Sandcastle's agent branches and reviews live in that same clone.
+One checkout, in WSL, for editing, committing, the dev stack and Sandcastle. You get no copies to keep in step, LF line endings, and fast bind mounts for Docker Compose too. Sandcastle's agent branches and reviews live in that same clone. These steps were run end to end on Ubuntu 26.04 under WSL2. The timings below are from that run.
 
-1. **Bring your work over.** Commit and push anything on `D:\` that you want to keep, then in WSL:
+1. **Check what exists only on `D:\`.** Run these in the `D:\` checkout:
 
    ```bash
-   cd ~/projects/fastapi_rbac && git fetch origin
+   git status --short && git stash list
    ```
 
-   A branch that exists only on `D:\` can be fetched without pushing it, by adding `D:\` as a remote:
+   ```bash
+   for b in $(git for-each-ref --format='%(refname:short)' refs/heads); do [ "$(git rev-list --count "$b" --not --remotes)" -gt 0 ] && echo "$b $(gh pr list --head "$b" --state all --json state -q '.[0].state')"; done
+   ```
+
+   `git log --branches --not --remotes` alone is misleading here, because PRs are squash-merged. Every merged branch still shows its original commits as "not on any remote". Treat a branch as safe only if its PR shows `MERGED`. Anything else, or a stash you want to keep, push or fetch over. A branch can come across without being pushed, by adding `D:\` as a remote in the WSL clone:
 
    ```bash
    git remote add windows /mnt/d/Projects/fastapi_rbac && git fetch windows
    ```
 
-2. **Backend toolchain.** Ubuntu's own Python is newer than the project's 3.10, so let `uv` provide 3.10 in `backend/.venv` (the location `backend/backend.md` uses):
+2. **Use an SSH remote.** A clone made over HTTPS has no git credential helper in WSL, so `git push` hangs waiting for a username. WSL needs its own SSH key added to GitHub; check it with `ssh -T git@github.com`. Then:
+
+   ```bash
+   git remote set-url origin git@github.com:mnaimfaizy/fastapi_rbac.git
+   ```
+
+3. **Copy the gitignored dev and test env files.** They aren't in git, so a fresh clone has none of them. Copy only the dev and test ones, and convert them to LF line endings, because Docker's `env_file` keeps a trailing `\r` in every value:
+
+   ```bash
+   for f in backend/.env.development backend/.env.local backend/.env.test backend/.env.test.local react-frontend/.env react-frontend/.env.development react-frontend/.env.test; do [ -e "$f" ] || { cp "/mnt/d/Projects/fastapi_rbac/$f" "$f" && sed -i 's/\r$//' "$f" && chmod 600 "$f"; }; done
+   ```
+
+   Leave `backend/.env.production` and the private keys in `backend/certs/` on `D:\`. Only the local production stack uses them. Copy them across only if you run that stack from WSL.
+4. **Backend toolchain.** Ubuntu's own Python is newer than the project's 3.10, so let `uv` provide 3.10 in `backend/.venv`, the folder `backend/backend.md` uses (about 12 seconds for 158 packages):
 
    ```bash
    curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -116,22 +133,42 @@ One checkout, in WSL, for editing, committing, the dev stack and Sandcastle. You
    uv venv --seed --python 3.10 backend/.venv && uv pip install --python backend/.venv/bin/python -r backend/requirements.txt
    ```
 
-3. **Pre-commit hooks.** The hooks build their own environments; `pre-commit` itself just needs installing once:
+5. **Pre-commit hooks.** The hooks build their own environments. Install `pre-commit` once, then run every hook once so their environments get built (about 45 seconds the first time):
 
    ```bash
-   uv tool install pre-commit && pre-commit install
+   uv tool install pre-commit && pre-commit install && pre-commit run --all-files
    ```
 
-   For the graphify refresh hooks, also follow [graphify.md](graphify.md) inside WSL. Without graphify those hooks skip silently.
-
-4. **Frontend.** Node 22 is already there from the Sandcastle setup:
+   On a branch cut before #346, `trailing-whitespace` rewrites three old docs files. Discard those edits with `git checkout -- .`, since they aren't part of your work. The graphify refresh hooks skip silently until you follow [graphify.md](graphify.md) inside WSL.
+6. **Frontend.** Node 22 is already installed from the Sandcastle setup (about 12 seconds):
 
    ```bash
    cd react-frontend && npm ci --legacy-peer-deps
    ```
 
-5. **Editor.** Open the clone from WSL with `code ~/projects/fastapi_rbac` (VS Code's WSL extension runs the language servers inside Linux), or run Claude Code inside WSL. Windows apps can also reach the files at `\\wsl.localhost\Ubuntu\home\<you>\projects\fastapi_rbac`, but that path is slow for anything that scans the tree.
-6. **Retire `D:\`** once nothing on it is unpushed: `git status` is clean and `git log --branches --not --remotes` prints nothing.
+7. **Prove the toolchain.** ESLint, Vitest (about 16 seconds), and the backend unit tests natively (about 33 seconds). The unit tests need a Redis, which can run in a throwaway container:
+
+   ```bash
+   (cd react-frontend && npm run lint && npx vitest run)
+   ```
+
+   ```bash
+   docker run -d --rm --name wsl-dev-redis -p 127.0.0.1:6390:6379 redis:7.2-alpine
+   ```
+
+   ```bash
+   cd backend && MODE=testing PYTHONPATH=. REDIS_HOST=localhost REDIS_PORT=6390 DATABASE_HOST=localhost DATABASE_PORT=5432 DATABASE_NAME=test BACKEND_CORS_ORIGINS='["http://localhost:8000", "http://localhost:5173"]' PROJECT_NAME="FastAPI RBAC Test" TOKEN_ISSUER=test_issuer TOKEN_AUDIENCE=test_audience USER_CHANGED_PASSWORD_DATE=2023-01-01T00:00:00 .venv/bin/python -m pytest test/unit/ -q; docker stop wsl-dev-redis
+   ```
+
+   Expect 587 passed on the backend and 420 or more on the frontend.
+
+8. **The dev stack is shared, not doubled.** `backend/docker-compose.dev.yml` uses the compose project `backend` and fixed container names (`fastapi_rbac_db_dev` and the rest) from either checkout. So `docker compose up` in WSL **replaces** the `D:\` containers instead of running alongside them. Things to know:
+   - **Postgres starts empty in WSL.** Its data is bind-mounted from `backend/postgres_dev_data` inside the checkout, so WSL gets a new database, and pgAdmin's `pgadmin_dev_data` is new too. To keep your old data, run `pg_dump` against the `D:\` stack before you switch, then restore it into the new one.
+   - **Redis keeps its data,** because it uses a named Docker volume (`fastapi_rbac_redis_dev_data`) that both checkouts share.
+   - **Only one stack at a time.** Don't bring the stack up from both checkouts.
+9. **Editor.** Open the clone from WSL with `code ~/projects/fastapi_rbac`. VS Code's WSL extension, already installed on this machine, runs the language servers inside Linux, and the Python, ESLint and Prettier extensions get installed on the WSL side the first time. Windows apps can also reach the files at `\\wsl.localhost\Ubuntu\home\<you>\projects\fastapi_rbac`, but that path is slow for anything that scans the whole tree.
+10. **Claude Code inside WSL starts bare.** Your user-level setup lives in the Windows home: `~/.agents/skills` (28 skills, surfaced as `~/.claude/skills`) and `~/.claude/CLAUDE.md`. WSL's `~` has none of it, and no `claude` CLI either. If you run Claude Code inside WSL, install it there, run `npx skills update -g`, and copy `CLAUDE.md` over. Session memory is also stored by folder path, so a new checkout path starts with empty memory. The repo's own `.claude/` skills and `CLAUDE.md` come along with the clone.
+11. **Retire `D:\`** once step 1 shows nothing unmerged and nothing you want to keep. Delete it only after the WSL stack has your data, if you need the old dev database.
 
 Docker Desktop, `gh` and the 1Password Environment need no changes: they already work from WSL.
 
