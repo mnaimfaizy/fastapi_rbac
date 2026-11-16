@@ -317,12 +317,10 @@ const authSlice = createSlice({
 
       // Handle password change
       .addCase(changePassword.pending, (state) => {
-        state.isLoading = true;
         state.error = null;
         state.passwordChangeSuccess = false;
       })
       .addCase(changePassword.fulfilled, (state, action) => {
-        state.isLoading = false;
         state.passwordChangeSuccess = true;
         // The response carries the user with needs_to_change_password cleared.
         if (action.payload.user) {
@@ -339,7 +337,6 @@ const authSlice = createSlice({
         }
       })
       .addCase(changePassword.rejected, (state, action) => {
-        state.isLoading = false;
         state.error = action.payload as string;
         state.passwordChangeSuccess = false;
       })
