@@ -250,7 +250,20 @@ PASSWORD_MIN_LENGTH=8
 PASSWORD_HISTORY_COUNT=5
 ACCOUNT_LOCKOUT_ATTEMPTS=5
 ACCOUNT_LOCKOUT_DURATION=15
+
+# Mode and token exposure
+MODE=production                    # defaults to development; set it for every deployment
+EXPOSE_TOKENS_IN_RESPONSES=false   # default; refused when MODE=production
 ```
+
+`EXPOSE_TOKENS_IN_RESPONSES` puts password-reset tokens and email verification
+codes in the responses of `POST /auth/password-reset/request` and
+`POST /auth/register`, so automated test stacks can finish those flows without
+reading mail. It is off by default in every mode, whatever `MODE` is. The
+backend refuses to start with it on in production, and refuses to start when
+`FASTAPI_ENV=production` (set by the production images) and `MODE` is not
+`production`. At startup the API logs a warning when `MODE` is not
+`production` and another when the opt-in is on.
 
 ### Docker Security
 
@@ -278,6 +291,7 @@ read_only: true
 - [ ] **Password Security**: Verify password policies and account locking
 - [ ] **Audit Logging**: Confirm security events are being logged
 - [ ] **HTTPS**: Ensure all communications are encrypted in production
+- [ ] **Mode**: `MODE=production` is set in the container environment, and `EXPOSE_TOKENS_IN_RESPONSES` is unset or false
 
 ### Security Testing Commands
 
