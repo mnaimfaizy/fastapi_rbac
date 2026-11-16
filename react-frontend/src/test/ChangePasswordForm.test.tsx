@@ -47,7 +47,10 @@ describe('ChangePasswordForm inside ProtectedRoute', () => {
     const user = userEvent.setup();
     renderChangePasswordInProtectedRoute();
 
-    await user.type(screen.getByLabelText('Current Password'), 'OldPassword!99');
+    await user.type(
+      screen.getByLabelText('Current Password'),
+      'OldPassword!99'
+    );
     await user.type(screen.getByLabelText('New Password'), 'NewPassword!42');
     await user.type(
       screen.getByLabelText('Confirm New Password'),
@@ -56,7 +59,9 @@ describe('ChangePasswordForm inside ProtectedRoute', () => {
     await user.click(screen.getByRole('button', { name: 'Change Password' }));
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Updating...' })).toBeDisabled();
+      expect(
+        screen.getByRole('button', { name: 'Updating...' })
+      ).toBeDisabled();
     });
     expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
     expect(
