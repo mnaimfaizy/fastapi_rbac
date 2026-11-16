@@ -6,6 +6,68 @@ This file serves as the single source of truth for release history and versionin
 
 ## Version History
 
+### v0.3.0-beta (2026-11-17)
+
+_Pre-release._
+
+**New Features:**
+
+- Logout now ends only the calling session; the new `POST /auth/logout/all` ends every session, and the Admin UI adds a confirmed "Log out everywhere" action
+- Allowlist entries carry their own expiry, and `CONCURRENT_SESSION_LIMIT` is enforced by evicting the oldest session
+- Refresh from a different origin network (IPv4 /24 or IPv6 /64) revokes that one session and records a security event, controlled by `VALIDATE_TOKEN_IP`
+- Authenticated requests are rate-limited per user; anonymous auth routes stay keyed by client address
+- Outgoing emails include a plain-text part alongside the HTML
+- QA Accounts seeder (`python -m app.qa_accounts`) creates one verified fixture user per role for local and QA stacks, and refuses to run in production or against non-local databases
+
+**Bug Fixes:**
+
+- Login and `POST /auth/access-token` are refused until the email is verified and while the account is inactive
+- One password policy and one reuse policy now apply to every path that sets a password, including registration and admin-set passwords; the last two frontend forms use the shared policy schema
+- Sessions are revoked when an administrator sets a password, and change-password revokes old sessions before issuing new ones, so a successful change no longer logs the user out
+- Change-password sessions use `REFRESH_TOKEN_EXPIRE_MINUTES`, the same lifetime as `/login`
+- Account lockout is applied once, for `ACCOUNT_LOCKOUT_MINUTES`; locked users no longer get a 500 from the login routes
+- Security events are stored as audit log rows, including on failed requests and when a password-reset lookup fails
+- User endpoints check the `user.*` permissions the seed creates, so non-superuser roles can manage users again
+- Paginated list endpoints and user delete after a password change no longer return 500
+- Admin-created users get a verification link that works, and a second visit to a valid verification link reports the account as already verified
+- Verification and password-reset emails state the real link lifetime, and emailed links are built from `FRONTEND_URL`
+- Outgoing SMTP data uses CRLF line endings
+- Unverified accounts are cleaned up by a Celery Beat sweep that survives restarts
+- Allowlist Redis keys are pinned to `TokenType` values, so live sessions survive the Python 3.11+ upgrade
+- Forwarded client addresses are trusted only from proxies listed in the new `TRUSTED_PROXIES` setting (loopback by default; wildcards are rejected), so rate limits, audit logs and origin-network checks use the real client address
+- Admin UI shows the change-password success alert and keeps structured API error messages that have no `field_name`
+- Local database, Redis and pgAdmin data and non-dev `.env` files are kept out of the backend Docker build context
+
+**Breaking Changes:**
+
+- Users whose password was set by an administrator (on create or later) must change it before doing anything else. Until they do, they can only change their password, read `GET /users/me` and log out; every other route returns 403 with `detail.code` `password_change_required`, so API clients must call `POST /auth/change_password` first. Admin-created users are flagged even when `ADMIN_CREATED_USERS_AUTO_VERIFIED` is on. The upgrade clears all existing flags, so no current user is restricted.
+- `REFRESH_TOKEN_EXPIRE_DAYS` is removed and ignored if still set; `REFRESH_TOKEN_EXPIRE_MINUTES` controls every refresh-token lifetime
+
+**Security:**
+
+- Refresh tokens are delivered only in HttpOnly Secure cookies, not in browser storage
+- Verify-email, password-reset and registration/resend flows return the same response for every outcome
+- Callers who are not superusers can grant or remove only roles whose permissions they already hold, cannot change their own roles, and cannot set or clear `is_superuser`
+- Callers who are not superusers can add or remove only permissions they already hold and cannot change the permissions of a role they hold; system roles cannot be renamed or have their permissions changed through `PUT /roles/{role_id}`
+- Test helpers no longer print tokens, passwords or auth responses
+
+**Documentation:**
+
+- Session security model and vocabulary, a session lifecycle explainer with a CI drift check, and ADRs for uniform registration responses and temporary passwords
+- Role-grant and role-permission rules documented on the user and role API routes
+- Branch naming convention
+
+**Technical Details:**
+
+- Sessions, emailed links and password changes each go through one module (`app/utils/sessions.py`, the emailed-links module, `app/utils/password_policy.py`)
+- User creation accepts only a password that passed the policy; seeding refuses a `FIRST_SUPERUSER_PASSWORD` that fails the policy, and the default is now compliant
+- Removed the unused `password_version` column (migration included), the session control settings that were never implemented (ignored if still set), and the account-lockout Celery task
+- CI: backend and frontend coverage are sent to Codecov under separate flags with per-flag patch-coverage gates; backend CI runs on every pull request; every job has a timeout; the integration suite runs in Docker only and is gated in CI
+- Test database is built once per session; test suites are split by environment, with pyproject.toml as the only pytest config
+- Adopted the Agent-kit security audit and plan, implement and review pipeline (now at v1.0.0-beta.6), plus QA suite and QA Stack configuration
+- Release tags are pushed with a deploy key
+- Upgraded Vite to 8.2.2, plugin-react to 6.1.0, pytest to 9.1.1, pytest-asyncio to 1.4.0 and TypeScript to 6.0.3, moved frontend CI to Node 22, and applied Dependabot updates across the backend, frontend and GitHub Actions
+
 ### v0.2.0-beta (2026-07-26)
 
 _Pre-release._
