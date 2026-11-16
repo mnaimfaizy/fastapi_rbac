@@ -4,14 +4,15 @@ Every route that sets a user's roles is gated on one permission
 (``user.update`` or ``user.create``). Holding it must not let a caller give a
 role, to anyone including themselves, that carries a permission the caller
 lacks, nor take such a role away. A caller who isn't a superuser also cannot
-change their own roles. Superusers are not limited.
+change their own roles, and only a superuser can set or clear
+``is_superuser``. Superusers are not limited.
 
 In ``test/api/`` because these boot the app in-process: see
 `ADR 0012 <../../../docs/adr/0012-test-suites-split-by-environment.md>`_.
 """
 
-from test.api.test_user_permission_names import PASSWORD, seeded_permission
-from test.utils import get_csrf_token
+from test.utils import API_TEST_PASSWORD as PASSWORD
+from test.utils import get_csrf_token, seeded_permission
 from typing import Any, Dict, Iterable, List, Tuple
 from uuid import uuid4
 
@@ -208,3 +209,114 @@ async def test_a_superuser_is_not_limited(
 
     assert response.status_code == 200, response.text
     assert await role_ids_of(user_factory, caller) == {str(higher.id)}
+
+
+async def set_superuser(
+    client: AsyncClient, headers: Dict[str, str], route: str, target: User, value: bool
+) -> Any:
+    """Set ``target``'s ``is_superuser`` to ``value`` through ``route``."""
+    if route == "update":
+        return await client.put(url(f"/users/{target.id}"), json={"is_superuser": value}, headers=headers)
+    if route == "bulk":
+        return await client.put(
+            url("/users/bulk-update"),
+            json={"user_ids": [str(target.id)], "updates": {"is_superuser": value}},
+            headers=headers,
+        )
+    raise AssertionError(route)
+
+
+async def is_superuser(user_factory: Any, user: User) -> bool:
+    await user_factory.session.refresh(user, attribute_names=["is_superuser"])
+    return bool(user.is_superuser)
+
+
+@pytest.mark.parametrize("route", ["update", "bulk"])
+@pytest.mark.parametrize("self_target", [True, False], ids=["self", "other"])
+async def test_only_a_superuser_can_grant_superuser(
+    client: AsyncClient,
+    user_factory: Any,
+    role_factory: Any,
+    permission_factory: Any,
+    route: str,
+    self_target: bool,
+) -> None:
+    caller_role = await make_role(role_factory, permission_factory, CALLER_PERMISSIONS)
+    caller, headers = await sign_in(client, user_factory, [caller_role])
+    target = (
+        caller
+        if self_target
+        else await user_factory.create(email=f"target-{uuid4().hex[:8]}@example.com", password=PASSWORD)
+    )
+
+    response = await set_superuser(client, headers, route, target, True)
+
+    assert response.status_code == 403, response.text
+    assert await is_superuser(user_factory, target) is False
+
+
+@pytest.mark.parametrize("route", ["update", "bulk"])
+async def test_only_a_superuser_can_clear_superuser(
+    client: AsyncClient, user_factory: Any, role_factory: Any, permission_factory: Any, route: str
+) -> None:
+    caller_role = await make_role(role_factory, permission_factory, CALLER_PERMISSIONS)
+    _, headers = await sign_in(client, user_factory, [caller_role])
+    target = await user_factory.create(
+        email=f"target-{uuid4().hex[:8]}@example.com", password=PASSWORD, is_superuser=True
+    )
+
+    response = await set_superuser(client, headers, route, target, False)
+
+    assert response.status_code == 403, response.text
+    assert await is_superuser(user_factory, target) is True
+
+
+async def test_a_superuser_cannot_be_created_by_a_caller_who_is_not_one(
+    client: AsyncClient,
+    user_factory: Any,
+    role_factory: Any,
+    permission_factory: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "ADMIN_CREATED_USERS_SEND_EMAIL", False)
+    caller_role = await make_role(role_factory, permission_factory, CALLER_PERMISSIONS)
+    _, headers = await sign_in(client, user_factory, [caller_role])
+
+    response = await client.post(
+        url("/users"),
+        json={
+            "email": f"made-{uuid4().hex[:8]}@example.com",
+            "password": PASSWORD,
+            "first_name": "Made",
+            "last_name": "ByCaller",
+            "is_superuser": True,
+            "role_id": [],
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 403, response.text
+
+
+@pytest.mark.parametrize("route", ["update", "bulk"])
+async def test_resending_the_current_flag_is_allowed(
+    client: AsyncClient, user_factory: Any, role_factory: Any, permission_factory: Any, route: str
+) -> None:
+    caller_role = await make_role(role_factory, permission_factory, CALLER_PERMISSIONS)
+    _, headers = await sign_in(client, user_factory, [caller_role])
+    target = await user_factory.create(email=f"target-{uuid4().hex[:8]}@example.com", password=PASSWORD)
+
+    response = await set_superuser(client, headers, route, target, False)
+
+    assert response.status_code == 200, response.text
+
+
+@pytest.mark.parametrize("route", ["update", "bulk"])
+async def test_a_superuser_can_grant_superuser(client: AsyncClient, user_factory: Any, route: str) -> None:
+    _, headers = await sign_in(client, user_factory, [], superuser=True)
+    target = await user_factory.create(email=f"target-{uuid4().hex[:8]}@example.com", password=PASSWORD)
+
+    response = await set_superuser(client, headers, route, target, True)
+
+    assert response.status_code == 200, response.text
+    assert await is_superuser(user_factory, target) is True

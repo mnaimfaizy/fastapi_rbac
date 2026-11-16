@@ -144,6 +144,7 @@ async def create_user(
     """
     new_roles = await role_grants.load_roles(new_user.role_id or [], db_session=db_session)
     role_grants.ensure_can_set_roles(actor=current_user, target_id=None, current=[], new=new_roles)
+    role_grants.ensure_can_set_superuser(actor=current_user, current=False, new=new_user.is_superuser)
 
     accepted_password = await password_policy.accept_initial_password(
         new_user.password,
@@ -258,6 +259,11 @@ async def bulk_update_users(
         if user:
             targets.append(user)
     # Check every target before writing any, so a refusal changes nobody.
+    if "is_superuser" in update_obj.model_fields_set:
+        for user in targets:
+            role_grants.ensure_can_set_superuser(
+                actor=current_user, current=user.is_superuser, new=update_obj.is_superuser
+            )
     if "role_id" in update_obj.model_fields_set:
         new_roles = await role_grants.load_roles(update_obj.role_id or [], db_session=db_session)
         for user in targets:
@@ -294,6 +300,10 @@ async def update_user(
     """
     update_data = user_update.model_dump(exclude_unset=True)
     # Before any write, the password change included, so a refusal changes nothing.
+    if "is_superuser" in update_data:
+        role_grants.ensure_can_set_superuser(
+            actor=current_user, current=user.is_superuser, new=update_data["is_superuser"]
+        )
     if "role_id" in update_data:
         target = await crud.user.get_with_roles_permissions(id=user.id, db_session=db_session)
         new_roles = await role_grants.load_roles(update_data["role_id"] or [], db_session=db_session)

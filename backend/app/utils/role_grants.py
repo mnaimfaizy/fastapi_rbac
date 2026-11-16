@@ -1,17 +1,19 @@
-"""Who may set a user's roles.
+"""Who may set a user's roles and superuser flag.
 
 Every route that sets roles is gated on a single permission (``user.update``
 or ``user.create``). That permission says the caller may edit users. It does
-not say which roles they may hand out. This module adds that second check,
-the role-grant ceiling:
+not say which authority they may hand out. This module adds that second
+check, the role-grant ceiling:
 
 - A superuser is not limited.
 - Anyone else may grant or remove only roles whose permissions they already
   hold, so no one can give a role above their own.
 - Anyone else may not change their own roles at all.
+- Only a superuser may set or clear ``is_superuser``. A superuser skips every
+  permission check, so without this rule the ceiling could be stepped around.
 
-Only roles that change are checked. Resending a user's current roles is a
-no-op and is allowed, so an edit that leaves roles alone never fails here.
+Only values that change are checked. Resending a user's current roles or flag
+is a no-op and is allowed, so an edit that leaves them alone never fails here.
 """
 
 from collections.abc import Iterable, Sequence
@@ -26,6 +28,7 @@ from app.models.role_model import Role
 from app.models.user_model import User
 
 OWN_ROLES_DETAIL = "You cannot change your own roles."
+SUPERUSER_DETAIL = "Only a superuser can change whether a user is a superuser."
 
 
 def _permission_names(roles: Iterable[Role]) -> set[str]:
@@ -93,3 +96,14 @@ def ensure_can_set_roles(
                     "it has permissions you do not hold."
                 ),
             )
+
+
+def ensure_can_set_superuser(*, actor: User, current: bool, new: bool | None) -> None:
+    """Refuse with 403 unless ``actor`` may change ``is_superuser`` from ``current`` to ``new``.
+
+    ``new`` is None when the request does not set the flag. ``current`` is
+    False for a user being created.
+    """
+    if actor.is_superuser or new is None or bool(new) == bool(current):
+        return
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=SUPERUSER_DETAIL)
