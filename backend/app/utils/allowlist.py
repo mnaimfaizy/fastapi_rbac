@@ -34,7 +34,7 @@ def session_id_for(refresh_token: str) -> str:
 
 
 def _allowlist_key(user_id: UUID | str, token_type: TokenType) -> str:
-    return f"user:{user_id}:{token_type}"
+    return f"user:{user_id}:{token_type.value}"
 
 
 def _allowlist_meta_key(user_id: UUID | str, token_type: TokenType) -> str:

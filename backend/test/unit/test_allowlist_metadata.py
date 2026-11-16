@@ -25,7 +25,7 @@ import pytest
 from app.core.config import settings
 from app.schemas.common_schema import TokenType
 from app.utils import sessions
-from app.utils.allowlist import _extend_key_ttl
+from app.utils.allowlist import _allowlist_key, _allowlist_meta_key, _extend_key_ttl
 from app.utils.sessions import SessionRejected
 
 
@@ -56,7 +56,7 @@ def _user() -> MagicMock:
 
 def _refresh_meta(redis: MockRedisClient, user_id: UUID) -> dict:
     """Spelled exactly as ``app.utils.allowlist`` writes it, so a re-key cannot pass."""
-    return redis._hashes[f"user:{user_id}:{TokenType.REFRESH}:meta"]
+    return redis._hashes[_allowlist_meta_key(user_id, TokenType.REFRESH)]
 
 
 async def _accepted(redis: MockRedisClient, access_token: str) -> bool:
@@ -134,8 +134,8 @@ async def test_ending_a_session_leaves_no_orphaned_metadata() -> None:
     )
 
     for token_type in (TokenType.ACCESS, TokenType.REFRESH):
-        members = await redis.zrange(f"user:{user.id}:{token_type}", 0, -1)
-        meta = await redis.hgetall(f"user:{user.id}:{token_type}:meta")
+        members = await redis.zrange(_allowlist_key(user.id, token_type), 0, -1)
+        meta = await redis.hgetall(_allowlist_meta_key(user.id, token_type))
         assert len(members) == len(meta) == 1
 
 
