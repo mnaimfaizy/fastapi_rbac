@@ -22,7 +22,7 @@ from app.schemas.response_schema import (
     create_response,
 )
 from app.schemas.user_schema import IUserCreate, IUserRead, IUserRoleAssign, IUserUpdate
-from app.utils import password_policy
+from app.utils import password_policy, role_grants
 from app.utils.account_email_dispatch import issue_verification
 from app.utils.exceptions.user_exceptions import UserSelfDeleteException
 from app.utils.password_policy import InitialPasswordReason, PasswordChangeReason
@@ -142,6 +142,9 @@ async def create_user(
     self-service (#198). A weaker rule here would leave the new user unable
     to change the password they were given.
     """
+    new_roles = await role_grants.load_roles(new_user.role_id or [], db_session=db_session)
+    role_grants.ensure_can_set_roles(actor=current_user, target_id=None, current=[], new=new_roles)
+
     accepted_password = await password_policy.accept_initial_password(
         new_user.password,
         reason=InitialPasswordReason.ADMIN_CREATE,
@@ -243,13 +246,26 @@ async def bulk_update_users(
             status_code=400,
             detail="Password cannot be changed via bulk update. Update each user individually.",
         )
+    try:
+        parsed_ids = [UUID(str(user_id)) for user_id in user_ids]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="user_ids must be UUIDs")
+    # Only allow fields that IUserUpdate allows
+    update_obj = IUserUpdate(**updates)
+    targets = []
+    for user_id in parsed_ids:
+        user = await crud.user.get_with_roles_permissions(id=user_id, db_session=db_session)
+        if user:
+            targets.append(user)
+    # Check every target before writing any, so a refusal changes nobody.
+    if "role_id" in update_obj.model_fields_set:
+        new_roles = await role_grants.load_roles(update_obj.role_id or [], db_session=db_session)
+        for user in targets:
+            role_grants.ensure_can_set_roles(
+                actor=current_user, target_id=user.id, current=list(user.roles), new=new_roles
+            )
     updated_users = []
-    for user_id in user_ids:
-        user = await crud.user.get(id=user_id, db_session=db_session)
-        if not user:
-            continue
-        # Only allow fields that IUserUpdate allows
-        update_obj = IUserUpdate(**updates)
+    for user in targets:
         updated_user = await crud.user.update(obj_current=user, obj_new=update_obj, db_session=db_session)
         updated_users.append(serialize_user(updated_user))
     return create_response(data=updated_users, message="Bulk update successful")
@@ -277,6 +293,13 @@ async def update_user(
     change it.
     """
     update_data = user_update.model_dump(exclude_unset=True)
+    # Before any write, the password change included, so a refusal changes nothing.
+    if "role_id" in update_data:
+        target = await crud.user.get_with_roles_permissions(id=user.id, db_session=db_session)
+        new_roles = await role_grants.load_roles(update_data["role_id"] or [], db_session=db_session)
+        role_grants.ensure_can_set_roles(
+            actor=current_user, target_id=user.id, current=list(target.roles if target else []), new=new_roles
+        )
     # Popped whether or not it is blank: crud.user.update refuses a password
     # key outright, and blank / omitted means leave the password as-is.
     new_password = update_data.pop("password", None)
@@ -320,25 +343,21 @@ async def remove_user(
 
 @router.post("/{user_id}/roles", status_code=200)
 async def assign_roles_to_user(
-    user_id: str,
+    user_id: UUID,
     role_assign: IUserRoleAssign,
     db_session: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user(required_permissions=["user.update"])),
 ) -> JSONResponse:
     """
-    Assign one or more roles to a user.
+    Replace a user's roles. Subject to the role-grant ceiling (``role_grants``).
     """
-    # Fetch user
-    user = await crud.user.get(id=user_id, db_session=db_session)
+    user = await crud.user.get_with_roles_permissions(id=user_id, db_session=db_session)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    # Validate roles
-    roles = []
-    for role_id in role_assign.role_ids:
-        role = await crud.role.get(id=role_id, db_session=db_session)
-        if not role:
-            raise HTTPException(status_code=404, detail=f"Role {role_id} not found")
-        roles.append(role)
+    roles = await role_grants.load_roles(role_assign.role_ids, db_session=db_session)
+    role_grants.ensure_can_set_roles(
+        actor=current_user, target_id=user.id, current=list(user.roles), new=roles
+    )
     # Assign roles
     user.roles = roles
     db_session.add(user)
