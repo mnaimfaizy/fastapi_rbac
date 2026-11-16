@@ -4,9 +4,11 @@ from typing import Any, Dict, Tuple
 
 from fastapi.testclient import TestClient
 from httpx import AsyncClient
+from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import settings
+from app.models.permission_model import Permission
 from app.utils.accepted_password import AcceptedPassword
 
 
@@ -173,3 +175,15 @@ async def login_user_with_csrf(
     except Exception:
         response_json = {"error": "Failed to parse JSON response"}
     return response.status_code, response_json
+
+
+# A password the policy accepts, for API tests that sign a user in.
+API_TEST_PASSWORD = "PermissionNames!47"
+
+
+async def seeded_permission(permission_factory: Any, name: str) -> Permission:
+    """The permission ``name``, created once: names are unique and outlive a test."""
+    existing = (
+        await permission_factory.session.exec(select(Permission).where(Permission.name == name))
+    ).first()
+    return existing if existing is not None else await permission_factory.create(name=name)

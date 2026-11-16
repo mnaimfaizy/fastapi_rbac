@@ -10,31 +10,21 @@ In ``test/api/`` because these boot the app in-process: see
 `ADR 0012 <../../../docs/adr/0012-test-suites-split-by-environment.md>`_.
 """
 
-from test.utils import get_csrf_token
+from test.utils import API_TEST_PASSWORD, get_csrf_token, seeded_permission
 from typing import Any, Dict, Iterable
 from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
-from sqlmodel import select
 
 from app.core.config import settings
-from app.models.permission_model import Permission
 
-PASSWORD = "PermissionNames!47"
+PASSWORD = API_TEST_PASSWORD
 SEEDED_USER_PERMISSIONS = ("user.read", "user.create", "user.update", "user.delete")
 
 
 def url(path: str) -> str:
     return f"{settings.API_V1_STR}{path}"
-
-
-async def seeded_permission(permission_factory: Any, name: str) -> Permission:
-    """The permission ``name``, created once: names are unique, and this suite's database outlives a test."""
-    existing = (
-        await permission_factory.session.exec(select(Permission).where(Permission.name == name))
-    ).first()
-    return existing if existing is not None else await permission_factory.create(name=name)
 
 
 async def session_holding(
