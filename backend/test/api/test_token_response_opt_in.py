@@ -11,7 +11,7 @@ In ``test/api/`` because these boot the app in-process: see
 `ADR 0012 <../../../docs/adr/0012-test-suites-split-by-environment.md>`_.
 """
 
-from test.utils import get_csrf_token
+from test.utils import STRONG_TEST_PASSWORD, get_csrf_token
 from typing import Any, AsyncGenerator, List
 from uuid import uuid4
 
@@ -23,7 +23,7 @@ from app.core.config import ModeEnum, settings
 from app.utils.account_email_dispatch import ACCOUNT_EMAIL_UNIFORM_MESSAGE
 from app.utils.account_token_responses import PASSWORD_RESET_REQUEST_UNIFORM_MESSAGE
 
-PASSWORD = "TokenOptInPass!47"
+PASSWORD = STRONG_TEST_PASSWORD
 
 
 def auth_url(path: str) -> str:
