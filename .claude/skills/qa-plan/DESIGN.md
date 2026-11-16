@@ -8,13 +8,21 @@ These are word for word the definitions in Agent-kit's root glossary, where a co
 
 **QA Plan**: The Markdown file `qa-plan` writes for one pull request at one head, in the format its `ANATOMY.md` gives, carrying only the Residue and runnable from the plan alone.
 
-**Residue**: The manual verification a passing CI run would not establish; the only thing a QA Plan's scenarios cover.
+**Residue**: The manual verification a passing CI run would not establish; the only thing a QA Plan's scenarios and its Review boxes cover.
+
+**Review box**: A box in a QA Plan's Sign-off checklist for a promise only reading can check, such as a doc's copy or a static file the app does not serve, naming what to read and what it must say. Never a scenario and never a PASS: a person reads it and ticks it.
 
 **QA Account**: A role's sign-in on a test system, with fixed public values derived from tracked source and a reserved-domain email (`*.test`), created by an idempotent seeder that refuses any non-local database. Never copied into a QA Plan.
 
 **Scenario account**: An account a QA Plan's scenario creates during a run, with values the tester chooses then. Never seeded, and never copied into a QA Plan or QA Report.
 
+**Fix scenario**: A QA Plan scenario whose plan gives an **Expected before:** line, the defect the merge-base should show. On a `stack` target it runs Before, at the merge-base, and After, at the head; any other scenario, and every scenario on a `url` target, runs After only.
+
 **Session**: One signed-in identity in a QA Plan's scenario, with cookies and storage no other session shares; a scenario has one or more.
+
+**Surface**: What a scenario drives (`web`, `desktop`, `mobile` or `api`). The Run brief gives the plan's default; a scenario may override it.
+
+**Driver**: The tool a run uses to drive a Surface. It can observe some things and not others.
 
 **QA Stack**: A local copy of the application a tester starts and stops with the repository's `up`, `migrate`, `seed` and `down` commands; teardown touches only what `up` started.
 
@@ -22,13 +30,15 @@ These are word for word the definitions in Agent-kit's root glossary, where a co
 
 **Execution record**: A QA Plan's last section, empty after compose, where whoever runs the plan records each scenario's result.
 
-**QA Artifact**: A screenshot, recording or log captured during a QA run, saved locally by default at each scenario's expected result; private until the person picks it for upload.
+**QA Artifact**: A capture from a QA run that stands alone: someone holding only the file can tell the scenario, what each side expected, what each side did, and the result. It is saved locally by default, and stays private until the person picks it for upload.
 
-**QA Report**: The self-contained Markdown file `manual-qa` writes for one run of one QA Plan: the build it checked, one row per scenario (PASS, FAIL, or left for a person), and the evidence.
+**Storyboard**: The QA Artifact for a scenario with a screen: a band naming the scenario, the result, each side's expected and observed text and the commits, above numbered steps with Before beside After.
+
+**QA Report**: The self-contained Markdown file `manual-qa` writes for one run of one QA Plan: the build it checked, one row per scenario with one of five results (PASS, FAIL: regression, FAIL: pre-existing, Not proven, or left for a person), and the evidence.
 
 ## Two skills, one format
 
-Composing a plan and running one are different people's jobs here: a developer composes against their own checkout, and a QA team somewhere else runs it, perhaps with no repository at all. So they are two skills, `qa-plan` and `manual-qa`, joined only by the plan file.
+Composing a plan and running one are different people's jobs here: a developer composes against their own checkout, and a QA team somewhere else runs it, perhaps with no repository at all. So they are two skills, `qa-plan` and `manual-qa`, joined by the plan file. One more join: after a revision, `qa-plan`'s step 8 reads the pull request's QA Report comment with `manual-qa/report.mjs`, the code that writes that comment, so there is one reader for it and the two skills cannot parse it differently. Without `manual-qa` beside it, `qa-plan` skips that check.
 
 The risk in splitting them is drift: the composer writes a section the runner no longer reads, or the runner insists on one the composer stopped writing. The plan format (`ANATOMY.md`) and the config reader (`adapter.mjs`) are therefore **byte-identical copies** in both skills, and a contract test fails when they differ. A third shared folder would avoid the copy, but a Portable skill must carry everything it uses, so a skill installed alone would break. A looser runner that parsed "something like a plan" would accept a plan the composer never meant, which is the drift the copy prevents.
 
@@ -36,7 +46,11 @@ The risk in splitting them is drift: the composer writes a section the runner no
 
 A plan that re-tests what CI proves spends the tester's time on the parts least likely to be wrong and buries the scenarios that matter among them. So every scenario must say why only a human can prove it, and the plan says what automation already proves, so the reader can see what was left out and why.
 
+**Ask for a test before writing a scenario.** A promise no suite covers is not yet Residue when a cheap test could cover it: a manual scenario costs a run every time; a test costs once. In a pilot, two scenarios became tests the author added in minutes. So before step 6, the skill checks each uncovered promise for a test in a configured suite that could prove it, and where one could, the person chooses. The choice stays theirs, because only they know whether the test is cheap in their codebase, and the skill writes no test: a composer that edits the change it describes would be planning QA for code it wrote. The suggestion never goes into the plan, whose reader is the tester, who cannot act on it. And a scenario's **Why only a human can prove it:** says why no configured suite could reach the promise, not just that none does, so a reader can tell a promise that needs a human from one that is only missing a test.
+
 **An empty Residue is a result**, not a failure to find work: the change is proved by automation, and the honest output is "merge without a plan".
+
+**A double does not prove a live path.** An empty Residue means `manual-qa` never runs, so the QA Stack never starts. If a suite that mocks the cache and uses SQLite could cover a promise alone, a change whose real path runs through Postgres and Redis would merge with nothing ever having run it against them (fastapi_rbac pull request 339 did, until a stack run outside the skill). Starting the stack for every such change would re-test what a CI integration job already proves against the real services, which is the waste Residue only exists to avoid. So the in-memory claim needs a live check beside it: a suite or CI job against the real services. With one, the Residue can still be empty, and naming it tells the reader why the stack was not started; without one, a stack scenario remains. A suite declares its real services in `services` because the runner cannot see what a test mocks, and an unlisted suite is read as doubles only, the safe default: forgetting the key costs a scenario, not a missed check.
 
 ## Observed and reconstructed
 

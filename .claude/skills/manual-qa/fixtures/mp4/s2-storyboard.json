@@ -1,0 +1,19 @@
+{
+  "scenario": "S2",
+  "title": "A new member sees the welcome page",
+  "result": "PASS",
+  "after": {
+    "steps": "s2-web/steps.json",
+    "expected": "The welcome page greets the member",
+    "observed": "The welcome page greeted the member",
+    "judged": "expected",
+    "startedAt": "2026-11-16T10:06:00.000Z"
+  },
+  "before": null,
+  "commits": {
+    "base": "1111111aaaaaaa2222222bbbbbbb3333333ccccc",
+    "head": "4444444ddddddd5555555eeeeeee6666666fffff"
+  },
+  "context": { "accounts": ["member"], "sessions": [] },
+  "variables": []
+}

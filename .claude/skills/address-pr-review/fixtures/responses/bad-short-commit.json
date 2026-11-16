@@ -1,0 +1,5 @@
+{
+  "findings": [
+    { "thread_id": "PRRT_a", "verdict": "fixed", "commit": "3f2c1e9", "reply": "Fixed." }
+  ]
+}

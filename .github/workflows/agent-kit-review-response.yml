@@ -1,0 +1,126 @@
+name: Agent-kit review response
+
+# Caller for the Agent-kit Review response flow: one Response round answers
+# the unresolved review threads on a pull request (fixed, addressed or
+# declined), pushes the fix commits to the pull request's own branch, then
+# replies on and resolves the threads. Guide: docs/agents/agent-kit.md and
+# docs/review-response.md in the Agent-kit tag pinned below.
+#
+# Off until the repository variable CLAUDE_REVIEW_RESPONSE_ENABLED is exactly
+# "true" (the Kill switch). The Trigger label is agent:address-review on a
+# pull request; the gate removes it. Only logins on the actor allowlist
+# (Agent-kit's "Allowlist"; not the Redis token Allowlist) can start a round,
+# and only their thread replies count as Maintainer guidance.
+#
+# The round reads its trusted script, hooks and skill from main's tip, so the
+# Kit-owned paths must be on main before the first round.
+#
+# The uses: pin and the files copied from Agent-kit must be the same tag as
+# agent-kit-pipeline.yml and agent-kit-security-audit.yml. Upgrade them
+# together: docs/agents/agent-kit.md.
+#
+# setup_commands and verify_commands are code the job runs. Never build them
+# from issue or PR text.
+
+on:
+  # Manual mode: a login on the actor allowlist applies agent:address-review.
+  pull_request:
+    types: [labeled]
+  # Auto mode only (CLAUDE_REVIEW_RESPONSE_MODE=auto): the review workflow's
+  # handoff job dispatches this file on main with pr_number. The gate refuses
+  # every other dispatch, a person's "Run workflow" included.
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Pull request number (set by the review handoff)"
+        required: true
+
+# What agent-review-response-reusable.yml's jobs request. Only its publish
+# job, on a fresh runner with trusted code, holds the writes; the job that
+# runs the agent gets contents: read and pull-requests: read.
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  respond:
+    # Fork pull requests are refused by the gate anyway (a fork run gets no
+    # secrets); skipping them here starts no run at all.
+    if: |
+      (github.event_name == 'pull_request' &&
+        github.event.label.name == 'agent:address-review' &&
+        github.event.pull_request.head.repo.full_name == github.repository) ||
+      github.event_name == 'workflow_dispatch'
+    uses: mnaimfaizy/agent-kit/.github/workflows/agent-review-response-reusable.yml@v1.0.0-beta.7
+    with:
+      kill_switch: ${{ vars.CLAUDE_REVIEW_RESPONSE_ENABLED != 'true' }}
+      # Exactly `auto` accepts the review handoff's dispatch; unset is manual.
+      response_mode: ${{ vars.CLAUDE_REVIEW_RESPONSE_MODE || 'manual' }}
+      model: ${{ vars.CLAUDE_MODEL_REVIEW_RESPONSE || vars.CLAUDE_MODEL || 'claude-opus-5' }}
+      # Keep equal to the review job's response_allowlist_actors.
+      allowlist_actors: '["mnaimfaizy"]'
+      trigger_label: "agent:address-review"
+      pr_number: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.pr_number }}
+      # Findings are the unresolved threads started by github-actions, the kit
+      # reviewer (the default). Keep equal to the review job's
+      # response_reviewer_logins.
+      reviewer_logins: "[]"
+      # The same toolchain as the implement job in agent-kit-pipeline.yml.
+      # npm install scripts are always off in this job.
+      setup_commands: |
+        set -euo pipefail
+        # Newest tool-cache match for a glob, or empty. `|| true` because ls
+        # exits 2 on no match, which pipefail would turn into a silent exit.
+        cached() { ls -d $1 2>/dev/null | sort -V | tail -n 1 || true; }
+        PY="$(cached '/opt/hostedtoolcache/Python/3.10.*/x64')"
+        NODE="$(cached '/opt/hostedtoolcache/node/22.*/x64')"
+        [ -n "$NODE" ] || { echo "Node 22 is not in the runner tool cache."; exit 1; }
+        if [ -n "$PY" ]; then
+          "$PY/bin/python3" -m venv "$RUNNER_TEMP/venv"
+        else
+          # ubuntu-26.04 caches no CPython 3.10 (end of life). uv installs a
+          # standalone 3.10; --seed puts pip in the venv for the steps below.
+          echo "Python 3.10 is not in the runner tool cache; installing it with uv."
+          pipx run uv venv --seed --python 3.10 "$RUNNER_TEMP/venv"
+        fi
+        echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+        echo "$NODE/bin" >> "$GITHUB_PATH"
+        export PATH="$RUNNER_TEMP/venv/bin:$NODE/bin:$PATH"
+        python -m pip install --quiet --upgrade pip
+        python -m pip install --quiet -r backend/requirements.txt
+        (cd react-frontend && npm ci --legacy-peer-deps --no-audit --no-fund)
+        docker rm -f agent-kit-redis >/dev/null 2>&1 || true
+        docker run -d --name agent-kit-redis -p 127.0.0.1:6379:6379 redis:7.2-alpine >/dev/null
+      # The checks the agent runs before each fix commit: the same fast checks
+      # as the implement job. API, integration and e2e suites are left to PR CI.
+      verify_commands: |
+        set -euo pipefail
+        # Non-secret settings only. Signing-key and superuser settings keep
+        # their config.py defaults. The unit suite uses SQLite, but Settings
+        # still builds Postgres URIs at import, so it needs a host, port and
+        # name; no database user or password is set.
+        export MODE=testing PYTHONPATH=.
+        export DATABASE_HOST=localhost DATABASE_PORT=5432 DATABASE_NAME=test
+        export REDIS_HOST=localhost REDIS_PORT=6379
+        export BACKEND_CORS_ORIGINS='["http://localhost:8000", "http://localhost:5173"]'
+        export PROJECT_NAME="FastAPI RBAC Test" TOKEN_ISSUER=test_issuer TOKEN_AUDIENCE=test_audience
+        export USER_CHANGED_PASSWORD_DATE=2023-01-01T00:00:00
+        cd backend
+        black --check --config pyproject.toml .
+        isort --check-only --settings-path pyproject.toml .
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --max-line-length=110 --extend-ignore=E203
+        mypy --config-file pyproject.toml app
+        pytest test/unit/ -q
+        cd ../react-frontend
+        npm run lint
+        npm run format:check
+        npm run build
+      # A push made with the job token does not start CI: GitHub holds the
+      # pull_request runs for approval. ci_workflow names the one workflow
+      # whose held run the round may start. This repository has two (backend
+      # and frontend CI), so it is left unset: approve held runs from the pull
+      # request's checks ("Approve workflows to run").
+      # ci_workflow: .github/workflows/backend-ci.yml
+    secrets:
+      claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

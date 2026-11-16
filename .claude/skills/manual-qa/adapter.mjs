@@ -42,13 +42,16 @@
 //   node adapter.mjs delivery [--label L]… where the plan goes, by `plan.publish`
 //   node adapter.mjs render [--write [--drop-comments]] < answers.json
 //                                          the config with the answers merged in
+//   node adapter.mjs where <skill>         whether this copy of the skill is the
+//                                          repository's own (`whichCopy`)
 //   Each prints JSON (render prints the new file body, or writes it with --write;
 //   --write over a commented YAML config exits 3 unless --drop-comments)
 //   and exits 1 on any problem, 2 on bad usage; `host` exits 0 when the run may
 //   sign in, 1 on a stop, 3 when the QA person must confirm the host in chat.
 
-import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** Lookup order: the first file present is the config (ADAPTER.md). */
@@ -60,7 +63,13 @@ export const CONFIG_FILES = /** @type {const} */ ([
 
 export const TOP_KEYS = /** @type {const} */ (["working_dir", "plan", "hazards", "run"]);
 export const PLAN_KEYS = /** @type {const} */ (["base_ref", "suites", "publish", "tracker"]);
-export const SUITE_KEYS = /** @type {const} */ (["name", "command", "junit", "surfaces"]);
+export const SUITE_KEYS = /** @type {const} */ ([
+  "name",
+  "command",
+  "junit",
+  "surfaces",
+  "services",
+]);
 export const PUBLISH_KEYS = /** @type {const} */ (["when_label", "default", "to", "label"]);
 export const HAZARD_KEYS = /** @type {const} */ (["pack"]);
 export const PUBLISH_TARGETS = /** @type {const} */ ([
@@ -83,6 +92,12 @@ export const ROLE_KEYS = /** @type {const} */ (["id", "purpose"]);
 export const EVIDENCE_KEYS = /** @type {const} */ (["upload"]);
 export const TARGETS = /** @type {const} */ (["stack", "url"]);
 export const SURFACES = /** @type {const} */ (["web", "desktop", "mobile", "api"]);
+/**
+ * Marks a writer may leave stuck to the end of a first-word value (#201). A comma,
+ * semicolon, colon or parenthesis already ends the word (ANATOMY.md, "First-word
+ * values"), so none of them is ever left on it.
+ */
+const STUCK_MARKS = [".", "!", "?"];
 
 /** ADAPTER.md's defaults. `base_ref` and `suites` have none: the readiness check asks. */
 export const DEFAULTS = Object.freeze({
@@ -461,6 +476,8 @@ function planProblems(sink, plan) {
           sink.add(`${path}.junit`, "expected a relative path inside the repository");
         if (present(suite.surfaces) && !isStringList(suite.surfaces))
           sink.add(`${path}.surfaces`, "expected a list of globs");
+        if (present(suite.services) && !isStringList(suite.services))
+          sink.add(`${path}.services`, "expected a list of service names");
       });
     }
   }
@@ -702,12 +719,19 @@ export function planReadiness({ path, config, problems }) {
   if (!plan.suites.length)
     needs.push(
       "plan.suites: each test suite CI runs, with its `name`, the `command` that runs it, " +
-        "the `junit` XML path it writes, and the `surfaces` globs it covers",
+        "the `junit` XML path it writes, the `surfaces` globs it covers, " +
+        "and the `services` it runs against for real",
     );
   for (const suite of plan.suites)
     if (!present(suite.junit))
       notes.push(
         `suite \`${suite.name}\` has no \`junit\` path: what it proves is read from its exit code only, tagged [reconstructed]`,
+      );
+  if (isMapping(config.run) && present(config.run.stack) && plan.suites.length)
+    if (!plan.suites.some((suite) => isStringList(suite.services) && suite.services.length))
+      notes.push(
+        "no suite lists `services`: each suite is taken to run against doubles, so a promise " +
+          "that depends on a QA Stack service stays in the Residue unless a CI job against the real services covers it",
       );
   return { ready: needs.length === 0, needs, notes };
 }
@@ -758,18 +782,137 @@ const STACK_NEEDS = {
   down: "the command that stops what `up` started, and nothing else",
 };
 
+/** `a`, `a and b`, `a, b and c`. */
+const listed = (items) =>
+  items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
+
+/**
+ * The readiness need when the config's `run.surface` differs from the Run
+ * brief's (#223): the two surfaces in dispute, the scenarios each answer moves
+ * (those whose effective surface is the Run brief's, as step 4 applies it), and
+ * those that keep their own **Surface:** whatever the answer.
+ *
+ * @param {string} configured the config's surface
+ * @param {string} briefed the Run brief's surface
+ * @param {{id: string, surface: string | null}[]} scenarios
+ */
+function surfaceQuestion(configured, briefed, scenarios) {
+  const moving = scenarios.filter((s) => s.surface === briefed).map((s) => s.id);
+  const keeping = scenarios.filter((s) => s.surface !== briefed);
+  const one = moving.length === 1;
+  const moves = moving.length
+    ? `With \`${configured}\`, ${listed(moving)} ${one ? "drives" : "drive"} \`${configured}\`; ` +
+      `with \`${briefed}\`, ${one ? "it drives" : "they drive"} \`${briefed}\`, the surface the ` +
+      `plan's author chose from what ${one ? "that scenario" : "those scenarios"} must observe.`
+    : "No scenario drives the Run brief's surface, so neither answer moves one.";
+  const keeps = keeping.length
+    ? `${listed(keeping.map((s) => `${s.id} (\`${s.surface}\`)`))} ` +
+      `${keeping.length === 1 ? "keeps its" : "keep their"} own **Surface:** whatever the answer.`
+    : "No scenario keeps its own **Surface:** whatever the answer.";
+  return (
+    `run.surface: the config says \`${configured}\` but the plan's Run brief says \`${briefed}\`; ` +
+    `say which this run uses, \`${configured}\` or \`${briefed}\`. ${moves} ${keeps}`
+  );
+}
+
+// ── The `web` driver's tools ────────────────────────────────────────────────
+
+/**
+ * The readiness notes for the `web` driver's optional tools (#232, #236; ADAPTER.md
+ * "Readiness check"). Notes, never needs: without either, the run goes on.
+ */
+export const WEB_NOTES = /** @type {const} */ ({
+  chromium:
+    "`web`: Playwright with Chromium is installed in this repository, so `web.mjs` drives the `web` scenarios",
+  noChromium:
+    "`web`: no Playwright with Chromium in this repository, so no `web.mjs`: " +
+    "the `web` scenarios run on the harness's browsers, with no Storyboards (and so no MP4s)",
+  ffmpeg:
+    "`web`: `ffmpeg` with `ffprobe` is on `PATH`, so `mp4.mjs` builds an MP4 for each " +
+    "`Capture: video` scenario",
+  noFfmpeg:
+    "`web`: no `ffmpeg` with `ffprobe` on `PATH`, so no MP4s: each `Capture: video` " +
+    "scenario keeps its Storyboard",
+});
+
+/** The packages that carry Playwright's `chromium`, in the order they are tried. */
+const PLAYWRIGHT_PACKAGES = ["playwright", "@playwright/test", "playwright-core"];
+
+/**
+ * Playwright as the repository at `dir` has it, loaded from its own
+ * `node_modules` (never installed): the package found, its module, and whether
+ * its Chromium is downloaded. Agent-kit takes no dependency on it.
+ * @param {string} dir the repository root
+ * @returns {{package: string | null, module: any, chromium: boolean}}
+ */
+export function findPlaywright(dir) {
+  const require = createRequire(join(resolve(dir), "package.json"));
+  for (const name of PLAYWRIGHT_PACKAGES) {
+    let module;
+    try {
+      module = require(name);
+    } catch {
+      continue;
+    }
+    if (!module?.chromium) continue;
+    let executable = "";
+    try {
+      executable = module.chromium.executablePath();
+    } catch {
+      // no browser for this platform
+    }
+    return { package: name, module, chromium: Boolean(executable) && existsSync(executable) };
+  }
+  return { package: null, module: null, chromium: false };
+}
+
+/**
+ * Whether a program is a file in one of `PATH`'s folders (with a `PATHEXT`
+ * extension on Windows). Nothing is run.
+ * @param {string} name
+ * @param {Record<string, string | undefined>} [env]
+ * @param {string} [platform]
+ */
+export function onPath(name, env = process.env, platform = process.platform) {
+  const windows = platform === "win32";
+  const folders = (env.PATH ?? env.Path ?? "").split(windows ? ";" : ":").filter(Boolean);
+  const extensions = windows ? ["", ...(env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";")] : [""];
+  return folders.some((folder) =>
+    extensions.some((extension) => {
+      try {
+        return statSync(join(folder, name + extension)).isFile();
+      } catch {
+        return false;
+      }
+    }),
+  );
+}
+
+/** What `check --for run` detects for the `web` notes, from the repository root. */
+const detectWebTools = (repo) => () => ({
+  chromium: findPlaywright(repo).chromium,
+  ffmpeg: onPath("ffmpeg") && onPath("ffprobe"),
+});
+
 /**
  * What `manual-qa` still needs before it runs a plan, from the config and,
  * when one is given, the plan's Run brief. `needs` are asked for; a `note` is
  * said, and the run goes on.
  *
  * @param {{path: string | null, config: Record<string, any>, runProblems?: string[]}} read
- * @param {{brief: {target: string | null, surface: string | null, roles: string[]}, scenarios?: {sessions?: {id: string}[], creates?: string[]}[]} | null} [plan]
+ * @param {{brief: {target: string | null, surface: string | null, roles: string[]}, scenarios?: {id: string, surface: string | null, sessions?: {id: string}[], creates?: string[]}[]} | null} [plan]
  *   a plan `validatePlan` read with no problems; every session id that is a role
- *   must be declared, and a Scenario account need not be
+ *   must be declared, and a Scenario account need not be. A plan with no
+ *   scenarios needs nothing, and is told only `gh` can check its build
+ * @param {(() => {chromium: boolean, ffmpeg: boolean}) | null} [tools] detects the `web`
+ *   driver's tools, called only when a scenario drives `web`; without it, no tool notes
  * @returns {{ready: boolean, needs: string[], notes: string[], run: {target: string | null, surface: string | null, roles: string[]}}}
  */
-export function runReadiness({ path, config, runProblems: problems = [] }, plan = null) {
+export function runReadiness(
+  { path, config, runProblems: problems = [] },
+  plan = null,
+  tools = null,
+) {
   const brief = plan?.brief ?? null;
   const run = isMapping(config.run) ? config.run : {};
   // A malformed entry is a `run:` problem, reported below; it declares no role.
@@ -793,6 +936,16 @@ export function runReadiness({ path, config, runProblems: problems = [] }, plan 
   const needs = [];
   const notes = [];
   if (path === null) notes.push(`no ${CONFIG_FILES.join(" / ")} at the repository root`);
+  // A plan with no scenarios drives nothing and starts nothing: it needs no target,
+  // surface, roles or stack. Its run never reaches the address, so it reads no version
+  // endpoint either, and only `gh` can check its build.
+  if (Array.isArray(plan?.scenarios) && plan.scenarios.length === 0) {
+    notes.push(
+      "a plan with no scenarios reads no version endpoint: without `gh` access the build cannot be " +
+        "checked against the plan's head, and the report opens with **build not verified against plan**",
+    );
+    return { ready: true, needs, notes, run: effective };
+  }
 
   for (const [key, choices, what] of [
     [
@@ -805,8 +958,10 @@ export function runReadiness({ path, config, runProblems: problems = [] }, plan 
     if (!effective[key]) needs.push(`run.${key}: ${what}`);
     else if (present(run[key]) && brief?.[key] && run[key] !== brief[key])
       needs.push(
-        `run.${key}: the config says \`${run[key]}\` but the plan's Run brief says \`${brief[key]}\`; ` +
-          `say which this run uses (${choices.join(" or ")})`,
+        key === "surface"
+          ? surfaceQuestion(run.surface, brief.surface, plan?.scenarios ?? [])
+          : `run.${key}: the config says \`${run[key]}\` but the plan's Run brief says \`${brief[key]}\`; ` +
+              `say which this run uses (${choices.join(" or ")})`,
       );
   }
 
@@ -852,6 +1007,22 @@ export function runReadiness({ path, config, runProblems: problems = [] }, plan 
     notes.push(
       "no `run.version_endpoint`: without `gh` access the build cannot be checked against the plan's head",
     );
+  // The `web` driver's tools are optional: each note says what the run loses without one.
+  // With a plan, the scenarios' surfaces, and the config's when the surface question
+  // could move scenarios onto it; with none, the effective surface.
+  const surfaces = plan?.scenarios?.length
+    ? [
+        ...plan.scenarios.map((scenario) => scenario.surface),
+        ...(brief?.surface && run.surface !== brief.surface ? [run.surface] : []),
+      ]
+    : [effective.surface];
+  if (tools && surfaces.includes("web")) {
+    const found = tools();
+    notes.push(
+      found.chromium ? WEB_NOTES.chromium : WEB_NOTES.noChromium,
+      found.ffmpeg ? WEB_NOTES.ffmpeg : WEB_NOTES.noFfmpeg,
+    );
+  }
   return { ready: needs.length === 0, needs, notes, run: effective };
 }
 
@@ -895,20 +1066,29 @@ const SECTIONS = /** @type {const} */ ([
  * inside one (a shell comment, say) is not a heading.
  *
  * @param {string[]} lines
+ * @param {boolean} [nested] also open a fence indented four or more spaces, as
+ *   one inside a list item is. A fence then closes only on a line indented no
+ *   deeper than its opening one (or 3 spaces), so an indented fence line inside an
+ *   ordinary block is its content, as it is without `nested`.
  * @returns {boolean[]}
  */
-function fencedLines(lines) {
+function fencedLines(lines, nested = false) {
   const fenced = [];
   let fence = null;
+  let indent = 0;
+  const opens = nested ? /^(\s*)(`{3,}|~{3,})/ : /^(\s{0,3})(`{3,}|~{3,})/;
   for (const line of lines) {
-    const marker = /^\s{0,3}(`{3,}|~{3,})/.exec(line)?.[1];
+    const found = opens.exec(line);
+    const marker = found?.[2];
     if (fence === null && marker) {
       fence = marker;
+      indent = found[1].length;
       fenced.push(true);
     } else if (fence !== null) {
       fenced.push(true);
       if (
         marker &&
+        found[1].length <= Math.max(indent, 3) &&
         marker[0] === fence[0] &&
         marker.length >= fence.length &&
         line.trim() === marker
@@ -1061,10 +1241,112 @@ export const SCENARIO_LABELS = /** @type {const} */ ([
 export const SESSIONS = "Sessions";
 /** The optional field naming each Scenario account a scenario creates; it follows **Signs in as:**. */
 export const CREATES = "Creates";
+/**
+ * The optional field (format=2) giving the one Surface a scenario drives, in place of the
+ * Run brief's default: after **Signs in as:** or **Sessions:** (and **Creates:**), before
+ * **Steps:**.
+ */
+export const SCENARIO_SURFACE = "Surface";
+/**
+ * The optional field (format=2) naming what a scenario's result observes, for `manual-qa`
+ * to check each driver against: right after the scenario's **Surface:**, or after its
+ * sign-in field (and **Creates:**) when it has none, before **Steps:**.
+ */
+export const SCENARIO_OBSERVES = "Observes";
+/** The values **Observes:** takes, from ANATOMY.md "Scenarios". */
+export const OBSERVES = /** @type {const} */ ([
+  "headers",
+  "cookies",
+  "httponly-cookies",
+  "status",
+  "body",
+  "screen",
+  "local-file",
+]);
+/**
+ * The optional field (format=3) saying what evidence a run keeps for a scenario: right
+ * after its **Observes:**, or wherever **Observes:** would sit when it has none, before
+ * **Steps:**. Missing, it means `screenshot` on a screen surface and `transcript` on `api`.
+ */
+export const SCENARIO_CAPTURE = "Capture";
+/** The values **Capture:** takes, from ANATOMY.md "Scenarios". */
+export const CAPTURES = /** @type {const} */ (["screenshot", "video", "transcript", "none"]);
+/**
+ * The optional field (format=3) saying what the tester sees at the merge-base, where the
+ * change is not yet made: right after **Expected result:**. A scenario with one is a fix
+ * scenario.
+ */
+export const SCENARIO_EXPECTED_BEFORE = "Expected before";
+/**
+ * The plan formats this copy reads. A format=1 plan carries no per-scenario field; a
+ * format=2 plan no **Capture:** or **Expected before:**.
+ */
+export const FORMATS = /** @type {const} */ ([1, 2, 3]);
+/** The format the composer writes. */
+export const FORMAT = FORMATS.at(-1);
 const RULE_OUT = "If this fails, first rule out";
+/** A Sign-off box for a promise only reading can check: `- [ ] Review: <what to read, and what it must say>`, a space after the colon. */
+const REVIEW_BOX = /^\s*[-*]\s+\[(?<tick>[ xX])\]\s+Review:(?<text>(?:\s.*)?)$/;
+/** A box that looks meant as a `Review:` box but is not written as one: `review:`, `**Review:**`, `Review :`, `Review:docs`. */
+const NEAR_REVIEW_BOX = /^\s*[-*]\s+\[[ xX]\]\s+[*_]*review[*_]*\s*[*_]*:/i;
 /** A role id, and a Scenario account id: letters, digits, `_` and `-`. */
 const ACCOUNT_ID = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 export const NOT_RUN = "_Not run yet._";
+
+/**
+ * The words a shell command starts with (#199). A Setup line or a step that begins with
+ * one followed by an argument, or holds a backticked span that does, reads as a command,
+ * not a product action. Matched in lower case only, and only as a whole word followed by
+ * an argument, so `Export the CSV` and a lone `docker` label are prose.
+ */
+export const COMMAND_WORDS = /** @type {const} */ ([
+  "docker",
+  "docker-compose",
+  "kubectl",
+  "redis-cli",
+  "psql",
+  "mysql",
+  "python",
+  "python3",
+  "node",
+  "npm",
+  "npx",
+  "curl",
+  "wget",
+  "env",
+  "export",
+  "bash",
+  "sh",
+]);
+/**
+ * Command words that also name things in a product (a toolbar's `export`, a `python`
+ * language, an `env staging` badge). These read as a command only before an argument
+ * that reads as one; the others before any argument. A word alone is never a command.
+ */
+export const COPY_WORDS = /** @type {const} */ (["export", "node", "env", "python", "sh"]);
+/**
+ * The marks after a `COPY_WORDS` word that make it a command: assignment, pipes,
+ * variables, lists, redirects.
+ */
+export const COMMAND_MARKS = /** @type {const} */ (["=", "|", "$", ";", "&", "<", ">"]);
+/** The script files a `COPY_WORDS` word runs: `node seed.js`, `python manage.py`. */
+export const SCRIPT_EXTENSIONS = /** @type {const} */ (["py", "js", "mjs", "cjs", "ts", "sh"]);
+/**
+ * An argument as a command takes one: a flag (`-c`, `--force`: a dash before a
+ * letter, so a lone `-` separator is copy), a path that starts with `/`, `./`,
+ * `../` or `~/`, a script file, or one of `COMMAND_MARKS`. A `/` inside a word
+ * (`CSV/PDF`) and a version (`v20.x`) are copy.
+ */
+const COMMAND_ARGUMENT = new RegExp(
+  `(?:^|\\s)(?:-{1,2}[A-Za-z]|(?:\\.{1,2}|~)?/)|[${COMMAND_MARKS.join("")}]|\\w\\.(?:${SCRIPT_EXTENSIONS.join("|")})(?=\\s|$)`,
+);
+const COMMAND_START = new RegExp(`^(?:\\$\\s|(${COMMAND_WORDS.join("|")})\\s+(\\S.*))`);
+const NOT_RUN_HERE =
+  "a plan carries product actions only, and `manual-qa` will not run it: " +
+  "write the product action that shows the same thing, or leave the promise out of the Residue";
+const NO_CODE_BLOCK =
+  "a plan gives product actions, and any data to enter, as prose, never as a code block, " +
+  "and `manual-qa` runs nothing from one: quote data to type or paste in a backticked span";
 
 const MARKER = /^<!-- qa-plan format=(\d+) subject=#(\d+) pr=#(\d+) -->$/;
 const FULL_SHA = /\b[0-9a-f]{40}(?:[0-9a-f]{24})?\b/;
@@ -1186,8 +1468,16 @@ export function credentialProblems(lines) {
  * every label each section requires, the scenarios numbered from S1, each
  * scenario's one **Signs in as:** or its **Sessions:** (with each step naming
  * its session), each Scenario account created once and signed in as only after
- * it, and no credentials. Each parsed scenario lists its `sessions` as
- * `{name, id}`: one with `name: null` for **Signs in as:**, else one per letter.
+ * it, no shell command in Setup or Steps, and no credentials. Each parsed
+ * scenario lists its `sessions` as `{name, id}`: one with `name: null` for
+ * **Signs in as:**, else one per letter, its effective `surface`: its own
+ * **Surface:** (format=2), else the Run brief's, and the values its **Observes:**
+ * (format=2) lists, as `observes` (`[]` with none), what its run keeps as `capture`
+ * (format=3: its **Capture:**, else `transcript` on `api` and `screenshot` elsewhere),
+ * with `captureGiven` saying whether the plan wrote it, and its **Expected before:**
+ * (format=3) as `expectedBefore` (`null` with none). Each `Review:` box in the
+ * Sign-off checklist is in `reviews`, as `{text, ticked}`: never a scenario's box,
+ * and a plan whose Scenarios says `None.` reads when it has one.
  * `manual-qa` runs nothing from a plan with a problem.
  *
  * @param {string} text
@@ -1205,6 +1495,7 @@ export function validatePlan(text) {
     anchors: { subjectIssue: null, pullRequest: null, mergeBase: null, head: null },
     brief: { target: null, surface: null, versionEndpoint: null, roles: [] },
     scenarios: [],
+    reviews: [],
     executed: false,
   };
 
@@ -1212,14 +1503,19 @@ export function validatePlan(text) {
   if (!marker) {
     at(
       0,
-      "expected the marker `<!-- qa-plan format=1 subject=#<n> pr=#<n> -->`: this is not a QA Plan",
+      `expected the marker \`<!-- qa-plan format=${FORMAT} subject=#<n> pr=#<n> -->\`: this is not a QA Plan`,
     );
     problems.push(...credentialProblems(lines));
     return { plan, problems };
   }
   [plan.format, plan.subject, plan.pr] = marker.slice(1).map(Number);
-  if (plan.format !== 1)
-    at(0, `format=${plan.format}: this copy of ANATOMY.md reads format=1 only`);
+  if (!FORMATS.includes(plan.format))
+    at(
+      0,
+      `format=${plan.format}: this copy of ANATOMY.md reads ${FORMATS.slice(0, -1)
+        .map((f) => `format=${f}`)
+        .join(", ")} and format=${FORMAT} only`,
+    );
 
   const titleAt = lines.findIndex((line, n) => n > 0 && line.trim() !== "");
   const title = /^# QA Plan: (\S.*)$/.exec(lines[titleAt]?.trim() ?? "");
@@ -1285,7 +1581,23 @@ export function validatePlan(text) {
         .split(/[\s,;:()]+/)[0] ?? ""
     ).replace(/^[*_]+|[*_]+$/g, "");
   /**
-   * The ids a **Creates:** line names (ANATOMY.md, "Scenario accounts"): first-word values
+   * A first-word value that fails only because a mark is stuck to its end (#201), such
+   * as `api.` for `api`: the word as read, the mark and the fix, for the problem to name.
+   * The plan still fails; this only says why. `null` when `word` is valid, or is not
+   * valid without its last mark either.
+   * @param {string} word the value as `plainWord` read it
+   * @param {(word: string) => boolean} valid
+   */
+  const stuckMark = (word, valid) => {
+    const mark = word.slice(-1);
+    if (valid(word) || !STUCK_MARKS.includes(mark)) return null;
+    const bare = word.slice(0, -1).replace(/[*_]+$/, "");
+    if (bare === "" || !valid(bare)) return null;
+    return `\`${word}\`: a \`${mark}\` is stuck to the value; write \`${bare}\` followed by a space, comma or parenthesis`;
+  };
+  /**
+   * The ids a **Creates:** line names (ANATOMY.md, "Scenario accounts"), and the values an
+   * **Observes:** line names, read the same way: first-word values
    * joined by commas, with any spaces around each comma. Any other space, a semicolon, a
    * colon or a parenthesis ends the list; the rest is prose. An empty id after a comma is
    * kept as `""`, so the checker names it on this line.
@@ -1363,6 +1675,85 @@ export function validatePlan(text) {
     }
   };
 
+  /**
+   * The shell command a line of Setup or Steps reads as (#199): `$ `, or the command word
+   * that the line's text, or a backticked span on it, begins with before an argument
+   * (`COPY_WORDS` before one that reads as a command's); `null` for a product action. A
+   * `continuation` (an indented line, no list item, right under prose) carries on that
+   * prose, so only its spans and a `$ ` prompt are read. A lone word, such as a
+   * role id or a label, is no command.
+   */
+  const commandIn = (text, continuation) => {
+    const starts = (value) => {
+      const match = COMMAND_START.exec(value);
+      if (!match) return null;
+      if (match[1] === undefined) return "$ ";
+      return COPY_WORDS.includes(match[1]) && !COMMAND_ARGUMENT.test(match[2]) ? null : match[1];
+    };
+    for (const [, span] of text.matchAll(/`([^`]+)`/g)) {
+      const word = starts(span.trim());
+      if (word) return word;
+    }
+    // A `$ ` prompt is never prose, so it counts on a continuation too.
+    if (continuation) return /^\s*\$\s/.test(text) ? "$ " : null;
+    // Read whole: the indent goes too, as an indented line that continues nothing reaches here.
+    return starts(text.replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+)?/, ""));
+  };
+  /**
+   * Each line in `from`–`to` that reads as a shell command, and each fenced block there
+   * (named once, at its opening fence), as a problem: Setup and Steps carry product
+   * actions only (ANATOMY.md). In Steps, `where` is the scenario's id and each problem
+   * names the numbered step it is in; `first` stands in for line `from`'s text.
+   * @param {number} from
+   * @param {number} to
+   * @param {{where: string, section: string, steps?: boolean, first?: string}} options
+   */
+  const commandProblems = (from, to, { where, section, steps = false, first }) => {
+    const cite = `(ANATOMY.md, "${section}")`;
+    let step = null;
+    let column = null;
+    // Whether the line above was an indented line read whole: a code block's line, which
+    // the next indented line carries on as a block, not as prose.
+    let inBlock = false;
+    // Fences as a list item nests them too (a step's fence sits four or more spaces in),
+    // read within this range only: a fence ends with its section or field, as CommonMark
+    // ends one with its container, so one left open elsewhere never hides this range.
+    const fenced = fencedLines(lines.slice(from, to), true);
+    for (let n = from; n < to; n += 1) {
+      if (fenced[n - from]) {
+        inBlock = false;
+        if (n === from || !fenced[n - from - 1])
+          at(n, `${where}: a fenced code block; ${NO_CODE_BLOCK} ${cite}`);
+        continue;
+      }
+      const text = n === from && first !== undefined ? first : lines[n];
+      const numbered = /^(\s*)(\d+)[.)]\s+(.*)$/.exec(text);
+      if (numbered) {
+        column ??= text.length - numbered[3].length;
+        if (numbered[1].length < column) step = numbered[2];
+      }
+      // An indented line that is no list item carries on the prose just above it, when that
+      // line is in this range, non-blank, not fenced and not itself an indented line read
+      // whole (#215); line `from` is read as `first`, so a bare `- **Steps:**` label is no
+      // prose. Any other line, a column-0 one even when it wraps prose, is read whole: the
+      // check errs toward reporting.
+      const above = n - 1 === from && first !== undefined ? first : lines[n - 1];
+      const indented = !numbered && !/^\s*[-*+]\s/.test(text) && /^\s/.test(text);
+      const continuation =
+        indented && n > from && !fenced[n - from - 1] && !inBlock && /\S/.test(above);
+      inBlock = indented && !continuation && /\S/.test(text);
+      const word = commandIn(text, continuation);
+      if (word === null) continue;
+      const what = !steps
+        ? `${where}: a line`
+        : step === null
+          ? `${where}: **Steps:**`
+          : `${where}: step ${step}`;
+      const named = word === "$ " ? "a `$ ` prompt" : `\`${word}\``;
+      at(n, `${what} reads as a shell command (${named}); ${NOT_RUN_HERE} ${cite}`);
+    }
+  };
+
   if (sections.Anchors) {
     const { n, from, to } = sections.Anchors;
     const found = labelsIn(from, to);
@@ -1427,7 +1818,9 @@ export function validatePlan(text) {
       const entry = get(label);
       if (!entry || entry.text === "") continue;
       const word = plainWord(entry.inline);
-      if (!choices.includes(word))
+      const stuck = stuckMark(word, (candidate) => choices.includes(candidate));
+      if (stuck) at(entry.n, `**${label}:** read ${stuck}`);
+      else if (!choices.includes(word))
         at(entry.n, `**${label}:** expected one of: ${choices.join(", ")}`);
       else plan.brief[key] = word;
     }
@@ -1451,6 +1844,33 @@ export function validatePlan(text) {
     }
   }
 
+  if (sections.Setup) {
+    const { from, to } = sections.Setup;
+    commandProblems(from, to, { where: "Setup", section: "Setup" });
+  }
+
+  // Each `Review:` box: a promise only reading can check (ANATOMY.md, "Sign-off checklist").
+  // Read before Scenarios, whose empty-Residue check counts them.
+  if (sections["Sign-off checklist"]) {
+    const { from, to } = sections["Sign-off checklist"];
+    for (let n = from; n < to; n += 1) {
+      const box = !fenced[n] && REVIEW_BOX.exec(lines[n]);
+      if (!box) {
+        // Read as an ordinary box, it would reach no one's Follow-ups.
+        if (!fenced[n] && NEAR_REVIEW_BOX.test(lines[n]))
+          at(
+            n,
+            "a box that reads as a review box: write it `- [ ] Review: <what to read, and what it must say>`, with `Review:` exactly and a space after it",
+          );
+        continue;
+      }
+      const { tick, text } = /** @type {Record<string, string>} */ (box.groups);
+      if (text.trim() === "")
+        at(n, "a `Review:` box with nothing after it: say what to read, and what it must say");
+      else plan.reviews.push({ text: text.trim(), ticked: tick !== " " });
+    }
+  }
+
   if (sections.Scenarios) {
     const { n, from, to } = sections.Scenarios;
     const heads = [];
@@ -1460,8 +1880,19 @@ export function validatePlan(text) {
       const match = !fenced[i] && /^### (.*)$/.exec(lines[i]);
       if (match) heads.push({ text: match[1].trim(), n: i });
     }
-    if (!heads.length && textOf("Scenarios") !== "")
-      at(n, "no `### S1: …` scenario: a plan with no scenarios is not written (empty Residue)");
+    // A Residue of review boxes only is still a plan; its Scenarios says `None.`.
+    const scenariosText = textOf("Scenarios");
+    if (
+      !heads.length &&
+      scenariosText !== "" &&
+      !(scenariosText === "None." && plan.reviews.length)
+    )
+      at(
+        n,
+        plan.reviews.length
+          ? "no `### S1: …` scenario: with only `Review:` boxes, `## Scenarios` says exactly `None.`"
+          : "no `### S1: …` scenario and no `Review:` box: a plan with neither is not written (empty Residue)",
+      );
     heads.forEach((head, i) => {
       const match = /^S(\d+):\s*(\S.*)$/.exec(head.text);
       if (!match) return at(head.n, "expected `### S<n>: <what is verified>`");
@@ -1483,19 +1914,159 @@ export function validatePlan(text) {
           named.n,
           `${id} has both **Signs in as:** and **Sessions:**: a scenario has one or the other`,
         );
-      const order = [
-        ...SCENARIO_LABELS.slice(0, 2),
-        SESSIONS,
-        CREATES,
-        ...SCENARIO_LABELS.slice(2),
-        RULE_OUT,
-      ];
-      const positions = order.map(position).filter((p) => p !== -1);
+      const before = [...SCENARIO_LABELS.slice(0, 2), SESSIONS, CREATES];
+      const after = [...SCENARIO_LABELS.slice(2), RULE_OUT];
+      const positions = [...before, ...after].map(position).filter((p) => p !== -1);
       if (positions.some((p, k) => k > 0 && p < positions[k - 1]))
         at(head.n, `${id}: its fields are out of order (ANATOMY.md, "Scenarios")`);
+      // A Surface per scenario (#203): checked on its own line, apart from the order above.
+      let surface = plan.brief.surface;
+      /** False when the scenario's own **Surface:** was refused: its surface is then unknown. */
+      let surfaceKnown = true;
+      const surfaces = found.filter((entry) => entry.label === SCENARIO_SURFACE);
+      for (const extra of surfaces.slice(1))
+        at(extra.n, `${id}: a second **${SCENARIO_SURFACE}:**: a scenario has at most one`);
+      const own = surfaces[0];
+      if (own) {
+        const k = found.indexOf(own);
+        const misplaced =
+          found.slice(k + 1).some((entry) => before.includes(entry.label)) ||
+          found.slice(0, k).some((entry) => after.includes(entry.label));
+        const word = plainWord(own.inline);
+        const stuck = stuckMark(word, (candidate) => SURFACES.includes(candidate));
+        if (plan.format === 1)
+          at(
+            own.n,
+            `${id}: **${SCENARIO_SURFACE}:** is a format=2 field: mark the plan \`format=2\`, or leave the Run brief's **Surface:** to every scenario`,
+          );
+        else if (misplaced)
+          at(
+            own.n,
+            `${id}: **${SCENARIO_SURFACE}:** is out of position: it goes right after **${SCENARIO_LABELS[1]}:** or **${SESSIONS}:** (and **${CREATES}:**, when present), before **Steps:**`,
+          );
+        else if (own.text === "") at(own.n, `${id}: **${SCENARIO_SURFACE}:** is empty`);
+        else if (stuck) at(own.n, `${id}: **${SCENARIO_SURFACE}:** read ${stuck}`);
+        else if (!SURFACES.includes(word))
+          at(own.n, `${id}: **${SCENARIO_SURFACE}:** expected one of: ${SURFACES.join(", ")}`);
+        else surface = word;
+        if (surface !== word) surfaceKnown = false;
+      }
+      // What the scenario observes (#204): after its Surface, else after its sign-in field.
+      /** @type {string[]} */
+      const observes = [];
+      const observing = found.filter((entry) => entry.label === SCENARIO_OBSERVES);
+      for (const extra of observing.slice(1))
+        at(extra.n, `${id}: a second **${SCENARIO_OBSERVES}:**: a scenario has at most one`);
+      const listed = observing[0];
+      if (listed) {
+        const k = found.indexOf(listed);
+        const misplaced =
+          found.slice(k + 1).some((entry) => [...before, SCENARIO_SURFACE].includes(entry.label)) ||
+          found.slice(0, k).some((entry) => after.includes(entry.label));
+        const what = `${id}: **${SCENARIO_OBSERVES}:**`;
+        if (plan.format === 1)
+          at(listed.n, `${what} is a format=2 field: mark the plan \`format=2\`, or leave it out`);
+        else if (misplaced)
+          at(
+            listed.n,
+            `${what} is out of position: it goes right after the scenario's **${SCENARIO_SURFACE}:**, or after **${SCENARIO_LABELS[1]}:** or **${SESSIONS}:** (and **${CREATES}:**, when present) when it has none, before **Steps:**`,
+          );
+        else if (listed.text === "") at(listed.n, `${what} is empty`);
+        else if (!idList(listed.inline).length)
+          at(listed.n, `${what} expected one or more of: ${OBSERVES.join(", ")}`);
+        else
+          for (const value of idList(listed.inline)) {
+            const stuck = stuckMark(value, (candidate) => OBSERVES.includes(candidate));
+            if (value === "")
+              at(listed.n, `${what} has an empty value: a comma with nothing after it`);
+            else if (stuck) at(listed.n, `${what} read ${stuck}`);
+            else if (!OBSERVES.includes(value))
+              at(listed.n, `${what} \`${value}\`: expected one of: ${OBSERVES.join(", ")}`);
+            else if (observes.includes(value)) at(listed.n, `${what} \`${value}\` is named twice`);
+            else observes.push(value);
+          }
+      }
+      // What a run keeps (#233): after Observes, or wherever Observes would sit.
+      const defaultCapture = surface === "api" ? "transcript" : "screenshot";
+      let capture = defaultCapture;
+      const captures = found.filter((entry) => entry.label === SCENARIO_CAPTURE);
+      for (const extra of captures.slice(1))
+        at(extra.n, `${id}: a second **${SCENARIO_CAPTURE}:**: a scenario has at most one`);
+      const ownCapture = captures[0];
+      if (ownCapture) {
+        const k = found.indexOf(ownCapture);
+        const misplaced =
+          found
+            .slice(k + 1)
+            .some((entry) =>
+              [...before, SCENARIO_SURFACE, SCENARIO_OBSERVES].includes(entry.label),
+            ) || found.slice(0, k).some((entry) => after.includes(entry.label));
+        const what = `${id}: **${SCENARIO_CAPTURE}:**`;
+        const word = plainWord(ownCapture.inline);
+        const stuck = stuckMark(word, (candidate) => CAPTURES.includes(candidate));
+        if (plan.format < 3)
+          at(
+            ownCapture.n,
+            `${what} is a format=3 field: mark the plan \`format=3\`, or leave it out`,
+          );
+        else if (misplaced)
+          at(
+            ownCapture.n,
+            `${what} is out of position: it goes right after the scenario's **${SCENARIO_OBSERVES}:** or **${SCENARIO_SURFACE}:**, or after **${SCENARIO_LABELS[1]}:** or **${SESSIONS}:** (and **${CREATES}:**, when present) when it has neither, before **Steps:**`,
+          );
+        else if (ownCapture.text === "") at(ownCapture.n, `${what} is empty`);
+        else if (stuck) at(ownCapture.n, `${what} read ${stuck}`);
+        else if (word === "")
+          at(ownCapture.n, `${what} expected one of: ${CAPTURES.join(", ")}, first on its line`);
+        else if (!CAPTURES.includes(word))
+          at(ownCapture.n, `${what} \`${word}\`: expected one of: ${CAPTURES.join(", ")}`);
+        // A refused own **Surface:** is reported on its line; the Capture is not judged against a guess.
+        else if (!surfaceKnown) capture = word;
+        else if (word === "transcript" && surface && surface !== "api")
+          at(
+            ownCapture.n,
+            `${what} \`transcript\` is for an \`api\` scenario, and this one drives \`${surface}\`: use \`screenshot\`, \`video\` or \`none\``,
+          );
+        else if ((word === "screenshot" || word === "video") && surface === "api")
+          at(
+            ownCapture.n,
+            `${what} \`${word}\` is for a scenario with a screen, and this one drives \`api\`: use \`transcript\` or \`none\``,
+          );
+        else capture = word;
+      }
+      // What the merge-base shows (#233): right after Expected result. Its text is the
+      // scenario's, so it is read in full, as Expected result is.
+      /** @type {string | null} */
+      let expectedBefore = null;
+      const expectedBefores = found.filter((entry) => entry.label === SCENARIO_EXPECTED_BEFORE);
+      for (const extra of expectedBefores.slice(1))
+        at(extra.n, `${id}: a second **${SCENARIO_EXPECTED_BEFORE}:**: a scenario has at most one`);
+      const ownBefore = expectedBefores[0];
+      if (ownBefore) {
+        const what = `${id}: **${SCENARIO_EXPECTED_BEFORE}:**`;
+        if (plan.format < 3)
+          at(
+            ownBefore.n,
+            `${what} is a format=3 field: mark the plan \`format=3\`, or leave it out`,
+          );
+        else if (found[found.indexOf(ownBefore) - 1]?.label !== SCENARIO_LABELS[3])
+          at(
+            ownBefore.n,
+            `${what} is out of position: it goes right after **${SCENARIO_LABELS[3]}:**`,
+          );
+        else if (ownBefore.text === "") at(ownBefore.n, `${what} is empty`);
+        else expectedBefore = ownBefore.text;
+      }
       const steps = get("Steps");
       if (steps && steps.text !== "" && !/^\s*\d+\.\s+\S/m.test(steps.text))
         at(steps.n, `${id}: **Steps:** expected a numbered list`);
+      if (steps)
+        commandProblems(steps.n, found[position("Steps") + 1]?.n ?? heads[i + 1]?.n ?? to, {
+          where: id,
+          section: "Scenarios",
+          steps: true,
+          first: steps.inline,
+        });
       const signs = get("Signs in as");
       const who = signs ? plainWord(signs.inline) : null;
       /** @type {{name: string | null, id: string}[]} */
@@ -1546,6 +2117,11 @@ export function validatePlan(text) {
         signsInAs: named ? null : who || null,
         sessions,
         creates: [...new Set(made.filter((made) => made !== ""))],
+        surface,
+        observes,
+        capture,
+        captureGiven: Boolean(ownCapture),
+        expectedBefore,
       });
       accountLines.push({ signs: (named ?? signs)?.n, creates: creates?.n, made });
     });
@@ -1587,7 +2163,15 @@ export function validatePlan(text) {
         const line = accountLines[i].signs;
         const subject = name === null ? id : `${id}'s session ${name}`;
         const creator = creatorOf.get(who);
-        if (creator === undefined)
+        const stuck = stuckMark(
+          who,
+          (candidate) =>
+            candidate === "nobody" ||
+            plan.brief.roles.includes(candidate) ||
+            (creatorOf.get(candidate) ?? Infinity) < i,
+        );
+        if (stuck) at(line, `${subject} signs in as ${stuck}`);
+        else if (creator === undefined)
           at(
             line,
             `${subject} signs in as \`${who}\`, which is neither a role the Run brief's **Roles:** names nor a Scenario account an earlier scenario creates`,
@@ -1885,6 +2469,96 @@ function repoReader(repo) {
   };
 }
 
+// ── Which copy runs ─────────────────────────────────────────────────────────
+//
+// A harness can hand a session a user-level copy of this skill (under the home
+// folder) while the repository the run is for keeps its own pinned copy. The
+// two drift apart, and the user-level one would then run out-of-date rules.
+// `whichCopy` is the comparison SKILL.md asks for before anything else: it is
+// copied, not imported, into each Portable skill that runs it, so each one
+// carries it.
+
+/** The repository folders a harness reads skills from, in the order checked. */
+export const PROJECT_SKILL_DIRS = /** @type {const} */ ([
+  ".claude/skills",
+  ".agents/skills",
+  ".github/skills",
+  ".cursor/skills",
+]);
+
+const SKILL_NAME = /^[a-z0-9][a-z0-9-]*$/;
+
+const realOrSelf = (path) => {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
+};
+
+/**
+ * Whether the copy in `skillDir` is the repository's own, or the repository
+ * has its own copy of skill `name` to load instead.
+ * @param {string} name the skill's name, which is its folder's name
+ * @param {{skillDir: string, cwd: string, exists?: (path: string) => boolean,
+ *   real?: (path: string) => string, platform?: string}} at
+ */
+export function whichCopy(name, at) {
+  const exists = at.exists ?? existsSync;
+  const real = at.real ?? realOrSelf;
+  // Two spellings of one Windows path may differ only in case.
+  const key = (path) => ((at.platform ?? process.platform) === "win32" ? path.toLowerCase() : path);
+  const within = (dir, path) => {
+    const rel = relative(key(dir), key(path));
+    return rel === "" || (!/^\.\.(?:[\\/]|$)/.test(rel) && !isAbsolute(rel));
+  };
+  let repository = null;
+  for (let dir = resolve(at.cwd); ; dir = dirname(dir)) {
+    // `.git` is a folder in a clone and a file in a worktree.
+    if (exists(join(dir, ".git"))) {
+      repository = dir;
+      break;
+    }
+    if (dirname(dir) === dir) break;
+  }
+  const self = real(resolve(at.skillDir));
+  const copies =
+    repository === null
+      ? []
+      : PROJECT_SKILL_DIRS.map((dir) => `${dir}/${name}`).filter((dir) =>
+          exists(join(repository, dir, "SKILL.md")),
+        );
+  // A repository copy that is a link to this folder is this copy.
+  const ours =
+    repository !== null &&
+    (within(real(repository), self) ||
+      copies.some((dir) => key(real(join(repository, dir))) === key(self)));
+  const use = ours || copies.length === 0 ? "this" : "repository";
+  return {
+    skill: name,
+    this_copy: self,
+    repository,
+    repository_copies: copies,
+    use,
+    load: use === "repository" ? join(repository, copies[0], "SKILL.md") : null,
+  };
+}
+
+/**
+ * `where <name> [--repo <dir>]`: print `whichCopy` for the script's own
+ * folder; null on any other argument.
+ */
+function whichCopyCommand(argv, io) {
+  const [, name, ...rest] = argv;
+  if (name === undefined || !SKILL_NAME.test(name)) return null;
+  if (rest.length !== 0 && (rest.length !== 2 || rest[0] !== "--repo" || rest[1].startsWith("--")))
+    return null;
+  const cwd = resolve(io.cwd ?? process.cwd(), rest[1] ?? ".");
+  const skillDir = io.skillDir ?? dirname(fileURLToPath(import.meta.url));
+  const result = whichCopy(name, { skillDir, cwd });
+  return { code: 0, out: `${JSON.stringify(result, null, 2)}\n` };
+}
+
 function option(argv, name) {
   const values = [];
   argv.forEach((arg, n) => {
@@ -1903,7 +2577,8 @@ const readStdin = () => {
 
 /**
  * @param {string[]} argv the arguments after the script
- * @param {{read?: (path: string) => string | null, stdin?: () => string}} [io]
+ * @param {{read?: (path: string) => string | null, stdin?: () => string,
+ *   tools?: () => {chromium: boolean, ffmpeg: boolean}}} [io]
  * @returns {{code: number, out: string}}
  */
 export function main(argv, io = {}) {
@@ -1919,7 +2594,8 @@ export function main(argv, io = {}) {
       "usage: node adapter.mjs check --for plan | check --for run [--plan <file>] | " +
       "plan [<file>] < plan.md | host <url> [--target stack|url] [--confirmed <host>] | " +
       "hazards < changed-paths | " +
-      "delivery [--label <name>]… | render [--write [--drop-comments]] < answers.json   " +
+      "delivery [--label <name>]… | render [--write [--drop-comments]] < answers.json | " +
+      "where <skill>   " +
       "[--repo <dir>]\n",
   };
   // A plan is the person's file, wherever they keep it: read from the working
@@ -1939,6 +2615,7 @@ export function main(argv, io = {}) {
     return validatePlan(text);
   };
 
+  if (command === "where") return whichCopyCommand(argv, io) ?? usage;
   if (command === "plan") {
     const result = readPlan(argv[1] && !argv[1].startsWith("--") ? argv[1] : undefined);
     return { code: result.problems.length ? 1 : 0, out: json(result) };
@@ -1985,7 +2662,11 @@ export function main(argv, io = {}) {
     if (section === "run") {
       const planPath = option(argv, "--plan")[0];
       const planned = planPath === undefined ? null : readPlan(planPath);
-      const readiness = runReadiness(loaded, planned?.problems.length ? null : planned?.plan);
+      const readiness = runReadiness(
+        loaded,
+        planned?.problems.length ? null : planned?.plan,
+        io.tools ?? detectWebTools(repo),
+      );
       const failed = loaded.runProblems.length > 0 || (planned?.problems.length ?? 0) > 0;
       return {
         code: failed ? 1 : 0,

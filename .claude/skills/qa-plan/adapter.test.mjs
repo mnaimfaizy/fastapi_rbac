@@ -6,11 +6,24 @@
  */
 
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { after, test } from "node:test";
 
 import {
   CONFIG_FILES,
   DEFAULTS,
+  PROJECT_SKILL_DIRS,
   effectiveConfig,
   globToRegExp,
   main,
@@ -22,6 +35,7 @@ import {
   planReadiness,
   readQaConfig,
   renderConfigYaml,
+  whichCopy,
   yamlCommentLines,
 } from "./adapter.mjs";
 
@@ -243,7 +257,7 @@ test("unknown keys at every level are problems, with their line", () => {
   assert.deepEqual(problems, [
     "line 2: `workdir`: unknown key (ADAPTER.md documents: working_dir, plan, hazards, run)",
     "line 4: `plan.base`: unknown key (ADAPTER.md documents: base_ref, suites, publish, tracker)",
-    "line 6: `plan.suites[0].junit_path`: unknown key (ADAPTER.md documents: name, command, junit, surfaces)",
+    "line 6: `plan.suites[0].junit_path`: unknown key (ADAPTER.md documents: name, command, junit, surfaces, services)",
     "line 8: `plan.publish[0].when`: unknown key (ADAPTER.md documents: when_label, default, to, label)",
     "line 10: `hazards[0].globs`: unknown key (ADAPTER.md documents: pack)",
   ]);
@@ -256,7 +270,7 @@ test("wrong shapes are problems, with their line", () => {
     "  base_ref: []",
     "  tracker: jira",
     "  suites:",
-    "    - { command: x, junit: /abs/r.xml, surfaces: api }",
+    "    - { command: x, junit: /abs/r.xml, surfaces: api, services: redis }",
     "    - { name: b, command: y }",
     "    - { name: b, command: z }",
     "    - just-a-string",
@@ -269,6 +283,7 @@ test("wrong shapes are problems, with their line", () => {
     "line 6: `plan.suites[0].name`: required: expected a string",
     "line 6: `plan.suites[0].junit`: expected a relative path inside the repository",
     "line 6: `plan.suites[0].surfaces`: expected a list of globs",
+    "line 6: `plan.suites[0].services`: expected a list of service names",
     "line 8: `plan.suites[2].name`: duplicate suite name `b`",
     "line 9: `plan.suites[3]`: expected a mapping",
     "line 10: `hazards`: expected a list of `{ pack: <path> }`",
@@ -336,6 +351,26 @@ test("readiness notes a suite without a JUnit path, and is ready", () => {
   assert.deepEqual(readiness.needs, []);
   assert.equal(readiness.ready, true);
   assert.match(readiness.notes[0], /suite `e2e` has no `junit` path.*\[reconstructed\]/);
+});
+
+test("readiness notes when a QA Stack exists and no suite lists `services`", () => {
+  const config = (suite) =>
+    "plan:\n  base_ref: origin/main\n  suites:\n" +
+    `    - ${suite}\n` +
+    "run:\n  stack: { up: a, migrate: b, seed: c, down: d }\n";
+  const doubles = planReadiness(
+    readQaConfig(reader({ "qa.config.yml": config("{ name: unit, command: x, junit: r.xml }") })),
+  );
+  assert.equal(doubles.ready, true);
+  assert.match(doubles.notes[0], /no suite lists `services`.*Residue/);
+  const live = planReadiness(
+    readQaConfig(
+      reader({
+        "qa.config.yml": config("{ name: it, command: x, junit: r.xml, services: [postgres] }"),
+      }),
+    ),
+  );
+  assert.deepEqual(live.notes, []);
 });
 
 test("readiness is never ready over problems", () => {
@@ -495,6 +530,7 @@ test("a rendered config reads back unchanged, with no problems", () => {
           command: "pytest --junitxml=reports/backend.xml",
           junit: "reports/backend.xml",
           surfaces: ["backend/**", "shared/*.py"],
+          services: ["postgres", "redis"],
         },
         { name: "e2e", command: "npm run e2e -- --reporter=junit" },
       ],
@@ -828,4 +864,138 @@ test("check exits 1 and names the line for each out-of-subset input", () => {
       text,
     );
   }
+});
+
+// ── Which copy runs ─────────────────────────────────────────────────────────
+
+/** A home folder and a repository side by side, each with the files named. */
+function layout(files) {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "which-copy-")));
+  after(() => rmSync(root, { recursive: true, force: true }));
+  for (const path of files) {
+    mkdirSync(dirname(join(root, path)), { recursive: true });
+    writeFileSync(join(root, path), "");
+  }
+  return root;
+}
+
+test("a user-level copy gives way to the repository's own copy", () => {
+  const root = layout([
+    "home/skills/qa-plan/SKILL.md",
+    "repo/.git/HEAD",
+    "repo/.claude/skills/qa-plan/SKILL.md",
+  ]);
+  const result = whichCopy("qa-plan", {
+    skillDir: join(root, "home/skills/qa-plan"),
+    cwd: join(root, "repo"),
+  });
+  assert.equal(result.use, "repository");
+  assert.equal(result.repository, join(root, "repo"));
+  assert.deepEqual(result.repository_copies, [".claude/skills/qa-plan"]);
+  assert.equal(result.load, join(root, "repo/.claude/skills/qa-plan/SKILL.md"));
+});
+
+test("a repository copy in any harness's folder counts, the first one is loaded", () => {
+  const root = layout([
+    "home/qa-plan/SKILL.md",
+    "repo/.git",
+    "repo/.agents/skills/qa-plan/SKILL.md",
+    "repo/.github/skills/qa-plan/SKILL.md",
+  ]);
+  const result = whichCopy("qa-plan", {
+    skillDir: join(root, "home/qa-plan"),
+    cwd: join(root, "repo/src"),
+  });
+  assert.equal(result.use, "repository", "a `.git` file (a worktree) marks the root too");
+  assert.deepEqual(result.repository_copies, [".agents/skills/qa-plan", ".github/skills/qa-plan"]);
+  assert.equal(result.load, join(root, "repo/.agents/skills/qa-plan/SKILL.md"));
+});
+
+test("the repository's own copy, or a user-level one with no repository copy, runs", () => {
+  const root = layout([
+    "home/qa-plan/SKILL.md",
+    "repo/.git/HEAD",
+    "repo/.claude/skills/qa-plan/SKILL.md",
+  ]);
+  const own = whichCopy("qa-plan", {
+    skillDir: join(root, "repo/.claude/skills/qa-plan"),
+    cwd: join(root, "repo"),
+  });
+  assert.equal(own.use, "this");
+  assert.equal(own.load, null);
+  const other = whichCopy("other-skill", {
+    skillDir: join(root, "home/qa-plan"),
+    cwd: join(root, "repo"),
+  });
+  assert.equal(other.use, "this");
+  assert.deepEqual(other.repository_copies, []);
+  // Look no higher than the temp root: TMPDIR may sit inside a checkout.
+  const none = whichCopy("qa-plan", {
+    skillDir: join(root, "home/qa-plan"),
+    cwd: join(root, "home"),
+    exists: (path) => path.startsWith(root) && existsSync(path),
+  });
+  assert.equal(none.repository, null);
+  assert.equal(none.use, "this");
+});
+
+test("a repository copy that links outside the repository is still the repository's", () => {
+  const root = layout(["shared/qa-plan/SKILL.md", "repo/.git/HEAD"]);
+  mkdirSync(join(root, "repo/.claude/skills"), { recursive: true });
+  symlinkSync(join(root, "shared/qa-plan"), join(root, "repo/.claude/skills/qa-plan"), "dir");
+  const result = whichCopy("qa-plan", {
+    skillDir: join(root, "shared/qa-plan"),
+    cwd: join(root, "repo"),
+  });
+  assert.equal(result.use, "this");
+});
+
+test("on Windows, a repository copy linked to this copy matches whatever its case", () => {
+  // Drive letters dropped and slashes forward, so the same paths read on any platform.
+  const norm = (path) => path.replace(/^[A-Za-z]:/, "").replaceAll("\\", "/");
+  const files = new Set(["/C/Repo/.git", "/C/Repo/.claude/skills/qa-plan/SKILL.md"]);
+  const links = new Map([["/C/Repo/.claude/skills/qa-plan", "/D/Shared/qa-plan"]]);
+  const at = {
+    cwd: "/C/Repo",
+    skillDir: "/d/shared/qa-plan",
+    exists: (path) => files.has(norm(path)),
+    real: (path) => links.get(norm(path)) ?? norm(path),
+  };
+  assert.equal(whichCopy("qa-plan", { ...at, platform: "win32" }).use, "this");
+  assert.equal(whichCopy("qa-plan", { ...at, platform: "linux" }).use, "repository");
+});
+
+test("`where` names the skill it checks, and refuses any other argument", () => {
+  const root = layout([
+    "home/qa-plan/SKILL.md",
+    "repo/.git/HEAD",
+    "repo/.claude/skills/qa-plan/SKILL.md",
+    "other/.git/HEAD",
+  ]);
+  const io = { skillDir: join(root, "home/qa-plan"), cwd: join(root, "repo"), read: () => null };
+  const ran = main(["where", "qa-plan"], io);
+  assert.equal(ran.code, 0);
+  assert.equal(JSON.parse(ran.out).use, "repository");
+  assert.equal(main(["where", "qa-plan", "--repo", "."], io).code, 0);
+  assert.equal(
+    main(["where", "qa-plan", "--repo", join(root, "other")], io).out.includes('"use": "this"'),
+    true,
+  );
+  for (const argv of [
+    ["where"],
+    ["where", "../qa-plan"],
+    ["where", "Upper"],
+    ["where", "qa-plan", "extra"],
+    ["where", "qa-plan", "--repo"],
+    ["where", "qa-plan", "--repo", ".", "extra"],
+  ])
+    assert.equal(main(argv, io).code, 2, argv.join(" "));
+});
+
+test("SKILL.md checks which copy runs before its first step", () => {
+  const skill = readFileSync(new URL("./SKILL.md", import.meta.url), "utf8");
+  const check = skill.indexOf('adapter.mjs" where qa-plan');
+  assert.ok(check > 0, "SKILL.md runs `where qa-plan`");
+  assert.ok(check < skill.indexOf("## Workflow"), "before the workflow");
+  for (const dir of PROJECT_SKILL_DIRS) assert.ok(skill.includes(dir), `SKILL.md names ${dir}`);
 });

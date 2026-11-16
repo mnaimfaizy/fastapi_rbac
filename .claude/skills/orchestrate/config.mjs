@@ -34,9 +34,13 @@
 //       applied, answers merged in) and readiness: what the run still needs
 //       to ask for, and notes to say. Prints JSON; exits 1 on any problem,
 //       2 on bad usage.
+//   node config.mjs where orchestrate [--repo <dir>]
+//       whether this copy of the skill is the repository's own, or the
+//       repository has its own copy to load instead (`whichCopy`). Prints
+//       JSON; exits 0, 2 on bad usage.
 
-import { existsSync, readFileSync, realpathSync } from "node:fs";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** Lookup order: the first file present is the config (CONFIG.md). */
@@ -61,9 +65,15 @@ export const MODEL_KEYS = /** @type {const} */ (["analysis", "build", "review", 
 export const LIMIT_KEYS = /** @type {const} */ (["building", "shared"]);
 export const DECISION_KEYS = /** @type {const} */ (["to", "marker"]);
 export const DECISION_TARGETS = /** @type {const} */ (["pull-request", "issue-comment"]);
-export const READY_KEYS = /** @type {const} */ (["review", "qa", "qa_labels"]);
+export const READY_KEYS = /** @type {const} */ (["review", "qa", "qa_labels", "review_workflow"]);
 export const REVIEW_RULES = /** @type {const} */ (["settled", "approved"]);
 export const QA_RULES = /** @type {const} */ (["none", "report"]);
+/**
+ * `ready_to_merge.review_workflow`'s two words. Any other value is the path
+ * of the Caller of Agent-kit's review workflow, under `.github/workflows/`.
+ */
+export const REVIEW_WORKFLOW_RULES = /** @type {const} */ (["detect", "none"]);
+const CALLER_PATH = /^\.github\/workflows\/[^/]+\.ya?ml$/;
 /**
  * The QA config the `qa-plan` and `manual-qa` skills read, in their lookup
  * order. Its presence is a sign the repository runs QA, so `readiness` asks
@@ -74,6 +84,116 @@ export const QA_CONFIG_FILES = /** @type {const} */ ([
   "qa.config.yaml",
   "qa.config.json",
 ]);
+export const EXECUTOR_KEYS = /** @type {const} */ (["build", "analysis", "qa"]);
+export const SUPPORT_LEVELS = /** @type {const} */ (["verified", "tried", "documented"]);
+
+/**
+ * The harnesses this skill has a file for, read from `harnesses/<id>.md`
+ * beside this script (HARNESSES.md, "A harness file"): each one's Support
+ * Level, whether it has a headless run another harness's Chief of Staff can
+ * start, and whether that run can carry a QA Delegation. A harness file is the
+ * one source of all three; this reader only finds them. A file it cannot read
+ * them from is a **problem**, named, never a crash: `check` must still print
+ * JSON for step 1.
+ *
+ * @param {string} [dir]
+ * @returns {{harnesses: Record<string, {level: string, headless: boolean, headlessQa: boolean}>, problems: string[]}}
+ */
+export function harnessCatalog(dir = fileURLToPath(new URL("./harnesses/", import.meta.url))) {
+  const harnesses = {};
+  const problems = [];
+  let names;
+  try {
+    names = readdirSync(dir).sort();
+  } catch (error) {
+    return {
+      harnesses,
+      problems: [`the skill's \`harnesses/\` folder cannot be read (${error?.code ?? error})`],
+    };
+  }
+  for (const name of names) {
+    if (!name.endsWith(".md")) continue;
+    const id = name.slice(0, -3);
+    let text;
+    try {
+      text = readFileSync(join(dir, name), "utf8");
+    } catch (error) {
+      problems.push(`harnesses/${name} cannot be read (${error?.code ?? error})`);
+      continue;
+    }
+    const line = (label) => new RegExp(`^- \\*\\*${label}:\\*\\* (.*)$`, "m").exec(text)?.[1];
+    const level = /^`([a-z]+)`/.exec(line("Support Level") ?? "")?.[1];
+    const headless = line("Headless run");
+    const headlessQa = line("Headless QA");
+    const missing = [
+      line("Id") === `\`${id}\`` ? null : `\`- **Id:** \`${id}\`\``,
+      SUPPORT_LEVELS.includes(level)
+        ? null
+        : "`- **Support Level:**` with one of " + SUPPORT_LEVELS.join(", "),
+      headless === undefined ? "`- **Headless run:**`" : null,
+      headlessQa === undefined ? "`- **Headless QA:**`" : null,
+    ].filter(Boolean);
+    if (missing.length) {
+      problems.push(
+        `harnesses/${name}: not a harness file; it needs ${missing.join(", ")} (HARNESSES.md, "A harness file")`,
+      );
+      continue;
+    }
+    harnesses[id] = {
+      level,
+      headless: !headless.startsWith("none"),
+      headlessQa: !headlessQa.startsWith("none"),
+    };
+  }
+  return { harnesses, problems };
+}
+
+const CATALOG = harnessCatalog();
+export const HARNESSES = Object.freeze(CATALOG.harnesses);
+/** Problems in the skill's own harness files: every `check` reports them. */
+export const HARNESS_FILE_PROBLEMS = Object.freeze(CATALOG.problems);
+
+/**
+ * The environment variables a harness sets in the shells its agent runs, read
+ * from each harness's own documentation or source, cited beside each rule. A
+ * match makes the harness a **candidate** only: the Chief of Staff confirms it
+ * against the tools it has, since a terminal inside an editor can carry the
+ * editor's variables too.
+ *
+ * @type {ReadonlyArray<{harness: string, when: (env: Record<string, string | undefined>) => boolean}>}
+ */
+export const HARNESS_ENV = Object.freeze([
+  // Claude Code sets CLAUDECODE=1 in its agent's shells (code.claude.com/docs/en/env-vars);
+  // the desktop app adds CLAUDE_CODE_DESKTOP_APP_VERSION (observed, app 5.11492, 2026-11-14).
+  // Claude Code's IDE extensions also set CLAUDECODE in integrated terminals.
+  {
+    harness: "claude-code-desktop",
+    when: (env) => env.CLAUDECODE === "1" && nonEmpty(env.CLAUDE_CODE_DESKTOP_APP_VERSION),
+  },
+  {
+    harness: "claude-code-cli",
+    when: (env) => env.CLAUDECODE === "1" && !nonEmpty(env.CLAUDE_CODE_DESKTOP_APP_VERSION),
+  },
+  // Cursor 3.28 sets CURSOR_AGENT=1 on the agent's own terminal only
+  // (cursor.com/docs/agent/tools/terminal; the value read in the 3.28.7 build).
+  { harness: "cursor", when: (env) => env.CURSOR_AGENT === "1" },
+  // Codex rust-v0.169.0 sets CODEX_THREAD_ID on every command it spawns (codex-rs/core/src/exec_env.rs).
+  { harness: "codex-cli", when: (env) => nonEmpty(env.CODEX_THREAD_ID) },
+  // Copilot CLI sets COPILOT_CLI=1 (its changelog, 0.0.421).
+  { harness: "copilot-cli", when: (env) => env.COPILOT_CLI === "1" },
+  // Gemini CLI v0.68.0 sets GEMINI_CLI=1 (packages/core/src/services/shellExecutionService.ts).
+  { harness: "gemini-cli", when: (env) => env.GEMINI_CLI === "1" },
+  // OpenCode sets OPENCODE=1: v2 only in the agent's shell (packages/core/src/tool/plugin/shell.ts),
+  // v1 in every child of the process.
+  { harness: "opencode", when: (env) => env.OPENCODE === "1" },
+  // Antigravity and Devin document none: they are found by their tools alone.
+]);
+
+/** The harnesses this environment points to, in HARNESS_ENV's order. */
+export function harnessCandidates(env = process.env) {
+  return HARNESS_ENV.filter((rule) => rule.when(env)).map((rule) => rule.harness);
+}
+
 export const SPEC_KEYS = /** @type {const} */ (["landing", "integration_branch"]);
 export const LANDINGS = /** @type {const} */ (["ask", "integration-branch", "per-ticket"]);
 
@@ -84,6 +204,7 @@ export const DEFAULTS = Object.freeze({
   decisions: "pull-request",
   review: "settled",
   qa: "none",
+  review_workflow: "detect",
   landing: "ask",
   integration_branch: "orchestrate/spec-<n>",
 });
@@ -589,6 +710,34 @@ export const SECTIONS = {
   models(sink, value) {
     stringMapping(sink, value, "models", MODEL_KEYS);
   },
+  harness(sink, value) {
+    if (!nonEmpty(value)) return sink.add("harness", "expected a harness id");
+    if (!Object.hasOwn(HARNESSES, value))
+      sink.add(
+        "harness",
+        `\`${value}\` has no harness file; known: ${Object.keys(HARNESSES).join(", ")}`,
+      );
+  },
+  executors(sink, value, config) {
+    stringMapping(sink, value, "executors", EXECUTOR_KEYS);
+    if (!isMapping(value)) return;
+    for (const key of EXECUTOR_KEYS) {
+      const id = value[key];
+      if (!nonEmpty(id) || !Object.hasOwn(value, key)) continue;
+      if (!Object.hasOwn(HARNESSES, id))
+        sink.add(
+          `executors.${key}`,
+          `\`${id}\` has no harness file; known: ${Object.keys(HARNESSES).join(", ")}`,
+        );
+      else if (id !== config.harness && !HARNESSES[id].headless)
+        sink.add(`executors.${key}`, `\`${id}\` has no headless run another harness can start`);
+      else if (id !== config.harness && key === "qa" && !HARNESSES[id].headlessQa)
+        sink.add(
+          "executors.qa",
+          `\`${id}\`'s headless run cannot carry QA (its harness file's Headless QA line): QA there is a session the human starts`,
+        );
+    }
+  },
   limits(sink, value) {
     if (!isMapping(value)) return sink.add("limits", "expected a mapping");
     unknownKeys(sink, value, "limits", LIMIT_KEYS);
@@ -635,6 +784,15 @@ export const SECTIONS = {
           "only `qa: report` is limited to labels; set it, or delete this key",
         );
     }
+    if (
+      given(sink, value, "review_workflow", path("review_workflow")) &&
+      !REVIEW_WORKFLOW_RULES.includes(value.review_workflow) &&
+      !(typeof value.review_workflow === "string" && CALLER_PATH.test(value.review_workflow))
+    )
+      sink.add(
+        path("review_workflow"),
+        "expected `detect`, `none`, or a workflow file directly under `.github/workflows/`",
+      );
   },
   spec(sink, value) {
     if (!isMapping(value)) return sink.add("spec", "expected a mapping");
@@ -771,7 +929,7 @@ export function readConfig(read, { answers = null, exists } = {}) {
   }
 
   const shape = configProblems(config, where);
-  problems.push(...shape);
+  problems.push(...HARNESS_FILE_PROBLEMS, ...shape);
   if (!shape.length && exists) problems.push(...missingPaths(config, where, exists));
   return { path, config, problems, answers: answers?.path ?? null, qaConfig: qaConfig(read) };
 }
@@ -813,7 +971,7 @@ function qaConfig(read) {
   return QA_CONFIG_FILES.find(present) ?? null;
 }
 
-/** A document a brief sends every Delegation to must be there. */
+/** Every path the config names must be in the repository: the documents a brief sends every Delegation to, and the review Caller. */
 function missingPaths(config, where, exists) {
   const sink = problemSink(where);
   (config.read_first ?? []).forEach((path, n) => {
@@ -821,6 +979,9 @@ function missingPaths(config, where, exists) {
   });
   if (typeof config.triage_labels === "string" && !exists(config.triage_labels))
     sink.add("triage_labels", `\`${config.triage_labels}\` is not in the repository`);
+  const caller = isMapping(config.ready_to_merge) ? config.ready_to_merge.review_workflow : null;
+  if (typeof caller === "string" && CALLER_PATH.test(caller) && !exists(caller))
+    sink.add("ready_to_merge.review_workflow", `\`${caller}\` is not in the repository`);
   return sink.problems;
 }
 
@@ -847,6 +1008,8 @@ export function effectiveConfig(config) {
     skills: pick(section("skills"), SKILL_KEYS),
     triage_labels: triageLabels(config.triage_labels),
     models: pick(section("models"), MODEL_KEYS),
+    harness: config.harness ?? null,
+    executors: pick(section("executors"), EXECUTOR_KEYS),
     limits: {
       building: limits.building === undefined ? DEFAULTS.building : Number(limits.building),
       shared: limits.shared ?? [],
@@ -856,6 +1019,7 @@ export function effectiveConfig(config) {
       review: ready.review ?? DEFAULTS.review,
       qa: ready.qa ?? DEFAULTS.qa,
       qa_labels: ready.qa_labels ?? [],
+      review_workflow: ready.review_workflow ?? DEFAULTS.review_workflow,
     },
     spec: {
       landing: spec.landing ?? DEFAULTS.landing,
@@ -915,6 +1079,21 @@ export function readiness({ path, config, problems, qaConfig = null }) {
   for (const key of MODEL_KEYS)
     if (effective.models[key] === null)
       notes.push(`no \`models.${key}\`: that work runs on the harness's default model`);
+  const below = (id) => HARNESSES[id] && HARNESSES[id].level !== "verified";
+  if (effective.harness !== null && below(effective.harness))
+    notes.push(
+      `\`harness\` is \`${effective.harness}\`, at Support Level \`${HARNESSES[effective.harness].level}\`: ` +
+        "the Dispatch Plan says so, and waits for the human's go",
+    );
+  for (const key of EXECUTOR_KEYS) {
+    const id = effective.executors[key];
+    if (id === null || id === effective.harness) continue;
+    notes.push(
+      `\`executors.${key}\` runs that work on \`${id}\`` +
+        (below(id) ? `, at Support Level \`${HARNESSES[id].level}\`` : "") +
+        `: check its CLI is installed and signed in, and that \`models.${key}\` names a model there`,
+    );
+  }
   if (qaConfig !== null) {
     const qaSet = isMapping(config.ready_to_merge) && config.ready_to_merge.qa !== undefined;
     if (!qaSet)
@@ -943,6 +1122,96 @@ const SKILL_NOTES = {
   review: "a building brief's code-review phase names no skill to review with",
 };
 
+// ── Which copy runs ─────────────────────────────────────────────────────────
+//
+// A harness can hand a session a user-level copy of this skill (under the home
+// folder) while the repository the run is for keeps its own pinned copy. The
+// two drift apart, and the user-level one would then run out-of-date rules.
+// `whichCopy` is the comparison SKILL.md asks for before anything else: it is
+// copied, not imported, into each Portable skill that runs it, so each one
+// carries it.
+
+/** The repository folders a harness reads skills from, in the order checked. */
+export const PROJECT_SKILL_DIRS = /** @type {const} */ ([
+  ".claude/skills",
+  ".agents/skills",
+  ".github/skills",
+  ".cursor/skills",
+]);
+
+const SKILL_NAME = /^[a-z0-9][a-z0-9-]*$/;
+
+const realOrSelf = (path) => {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
+};
+
+/**
+ * Whether the copy in `skillDir` is the repository's own, or the repository
+ * has its own copy of skill `name` to load instead.
+ * @param {string} name the skill's name, which is its folder's name
+ * @param {{skillDir: string, cwd: string, exists?: (path: string) => boolean,
+ *   real?: (path: string) => string, platform?: string}} at
+ */
+export function whichCopy(name, at) {
+  const exists = at.exists ?? existsSync;
+  const real = at.real ?? realOrSelf;
+  // Two spellings of one Windows path may differ only in case.
+  const key = (path) => ((at.platform ?? process.platform) === "win32" ? path.toLowerCase() : path);
+  const within = (dir, path) => {
+    const rel = relative(key(dir), key(path));
+    return rel === "" || (!/^\.\.(?:[\\/]|$)/.test(rel) && !isAbsolute(rel));
+  };
+  let repository = null;
+  for (let dir = resolve(at.cwd); ; dir = dirname(dir)) {
+    // `.git` is a folder in a clone and a file in a worktree.
+    if (exists(join(dir, ".git"))) {
+      repository = dir;
+      break;
+    }
+    if (dirname(dir) === dir) break;
+  }
+  const self = real(resolve(at.skillDir));
+  const copies =
+    repository === null
+      ? []
+      : PROJECT_SKILL_DIRS.map((dir) => `${dir}/${name}`).filter((dir) =>
+          exists(join(repository, dir, "SKILL.md")),
+        );
+  // A repository copy that is a link to this folder is this copy.
+  const ours =
+    repository !== null &&
+    (within(real(repository), self) ||
+      copies.some((dir) => key(real(join(repository, dir))) === key(self)));
+  const use = ours || copies.length === 0 ? "this" : "repository";
+  return {
+    skill: name,
+    this_copy: self,
+    repository,
+    repository_copies: copies,
+    use,
+    load: use === "repository" ? join(repository, copies[0], "SKILL.md") : null,
+  };
+}
+
+/**
+ * `where <name> [--repo <dir>]`: print `whichCopy` for the script's own
+ * folder; null on any other argument.
+ */
+function whichCopyCommand(argv, io) {
+  const [, name, ...rest] = argv;
+  if (name === undefined || !SKILL_NAME.test(name)) return null;
+  if (rest.length !== 0 && (rest.length !== 2 || rest[0] !== "--repo" || rest[1].startsWith("--")))
+    return null;
+  const cwd = resolve(io.cwd ?? process.cwd(), rest[1] ?? ".");
+  const skillDir = io.skillDir ?? dirname(fileURLToPath(import.meta.url));
+  const result = whichCopy(name, { skillDir, cwd });
+  return { code: 0, out: `${JSON.stringify(result, null, 2)}\n` };
+}
+
 // ── CLI ─────────────────────────────────────────────────────────────────────
 
 /** A repository file's text, or null when it is not there; any other failure throws. */
@@ -962,16 +1231,18 @@ const inside = (dir, path) => {
   return rel !== "" && !/^\.\.(?:[\\/]|$)/.test(rel) && !isAbsolute(rel);
 };
 
-const USAGE = "usage: node config.mjs check [--answers <file.json>] [--repo <dir>]\n";
+const USAGE =
+  "usage: node config.mjs check [--answers <file.json>] [--repo <dir>] | where <skill> [--repo <dir>]\n";
 
 /**
  * @param {string[]} argv the arguments after the script
- * @param {{read?: (path: string) => string | null, exists?: (path: string) => boolean, cwd?: string}} [io]
+ * @param {{read?: (path: string) => string | null, exists?: (path: string) => boolean, cwd?: string, env?: Record<string, string | undefined>}} [io]
  * @returns {{code: number, out: string}}
  */
 export function main(argv, io = {}) {
   const usage = { code: 2, out: USAGE };
   const [command, ...rest] = argv;
+  if (command === "where") return whichCopyCommand(argv, io) ?? usage;
   if (command !== "check") return usage;
   const options = {};
   for (let n = 0; n < rest.length; n += 2) {
@@ -1019,9 +1290,25 @@ export function main(argv, io = {}) {
     problems: loaded.problems,
     effective: loaded.problems.length ? null : effectiveConfig(loaded.config),
     qa_config: loaded.qaConfig,
+    harness: harnessReport(loaded, io.env ?? process.env),
     readiness: readiness(loaded),
   };
   return { code: loaded.problems.length ? 1 : 0, out: `${JSON.stringify(result, null, 2)}\n` };
+}
+
+/**
+ * What step 1 needs to find the harness (HARNESSES.md, "Finding the
+ * harness"): the candidates the environment points to, the harness the config
+ * pins, and each known harness's Support Level.
+ */
+function harnessReport(loaded, env) {
+  const effective = loaded.problems.length ? null : effectiveConfig(loaded.config);
+  return {
+    candidates: harnessCandidates(env),
+    pinned: effective?.harness ?? null,
+    executors: effective?.executors ?? null,
+    levels: Object.fromEntries(Object.entries(HARNESSES).map(([id, h]) => [id, h.level])),
+  };
 }
 
 const real = (path) => {

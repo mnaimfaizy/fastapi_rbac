@@ -1,0 +1,28 @@
+{
+  "scenario": "S1",
+  "title": "Saving a profile lists the new name once",
+  "result": "PASS",
+  "after": {
+    "steps": "s1-web/steps.json",
+    "expected": "The members list shows Ada once",
+    "observed": "The members list showed Ada once",
+    "judged": "expected"
+  },
+  "before": {
+    "steps": "s1-before-web/steps.json",
+    "state": "matched",
+    "expected": "The members list shows Ada twice",
+    "observed": "The members list showed Ada twice",
+    "judged": "expected"
+  },
+  "commits": {
+    "base": "1111111aaaaaaa2222222bbbbbbb3333333ccccc",
+    "head": "4444444ddddddd5555555eeeeeee6666666fffff"
+  },
+  "context": {
+    "accounts": ["admin"],
+    "sessions": [{ "session": "A", "account": "admin" }]
+  },
+  "proves": { "session": "A", "index": 2 },
+  "variables": ["QA_A_EMAIL", "QA_A_PASSWORD"]
+}

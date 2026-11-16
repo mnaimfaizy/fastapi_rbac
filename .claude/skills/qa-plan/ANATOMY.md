@@ -21,16 +21,18 @@ A plan is one Markdown file. Its first line is the marker, then the title, then 
 No other `##` section. A section with nothing to say says so in one line (`None.`); it is never dropped.
 
 ```markdown
-<!-- qa-plan format=1 subject=#118 pr=#130 -->
+<!-- qa-plan format=3 subject=#118 pr=#130 -->
 
 # QA Plan: <the subject issue's title>
 ```
 
 The marker is how a revision finds the plan it replaces (on a tracker issue or a PR comment) and how `manual-qa` recognises a plan. `format` is this file's version; `subject` and `pr` are the anchors below.
 
+The composer writes `format=3`. This copy reads `format=1`, `format=2` and `format=3`, and refuses any other `format`, so a stale copy stops on a newer plan rather than ignoring a field it does not know. A `format=1` plan carries no per-scenario field: a scenario's [**Surface:**](#scenarios) and **Observes:** are `format=2` or later. A `format=2` plan carries no **Capture:** or **Expected before:**: they are `format=3` or later. The plan check refuses a field in a plan whose format is older than the field, naming the field and the format it needs.
+
 ### First-word values
 
-Some labels take a word from a fixed set: **Target:**, **Surface:** and **Signs in as:**, and each id in **Sessions:**. For **Signs in as:** and a session's id, the set is the Run brief's roles, `nobody`, and each [Scenario account](#scenario-accounts) an earlier scenario creates. For these, the value is the first word after the label, read like this:
+Some labels take a word from a fixed set: **Target:**, **Surface:** (the Run brief's, and a scenario's), **Capture:** and **Signs in as:**, and each id in **Sessions:**. For **Signs in as:** and a session's id, the set is the Run brief's roles, `nobody`, and each [Scenario account](#scenario-accounts) an earlier scenario creates. For these, the value is the first word after the label, read like this:
 
 1. Backticks are dropped.
 2. The word ends at the first space, comma, semicolon, colon or parenthesis. Anything after it is prose.
@@ -70,7 +72,7 @@ Failures the tester will see that are not caused by this change, so they are not
 Everything a run needs to start, from the plan alone. A bullet each, with these labels:
 
 - **Target:** `stack` (a local QA Stack the tester starts) or `url` (a hosted test environment someone else deployed). For `url`, also the expected test-environment label in its hostname (`staging`, `qa`, `preview`, …), never a full production-looking address. `stack` or `url` is a [first-word value](#first-word-values).
-- **Surface:** exactly one of `web`, `desktop`, `mobile` or `api`, as a [first-word value](#first-word-values).
+- **Surface:** exactly one of `web`, `desktop`, `mobile` or `api`, as a [first-word value](#first-word-values). It is the plan's default: the surface most scenarios drive. In a `format=2` or later plan, a scenario's own **Surface:** overrides it for that scenario ([Scenarios](#scenarios)).
 - **Build:** the head SHA, and the version endpoint (`/version`) when the app has one, so the tester can check they are testing the build this plan is about.
 - **Roles:** each role the scenarios sign in as, by id and purpose (`admin`: manages members). At most a role's email beside it; never a password or token.
 - **Credentials:** where the role values come from. With the repository: the config's `accounts.print` command. Without it: ask the developer, and paste them into chat, never into the plan.
@@ -84,20 +86,44 @@ Not even a public QA Account's values, which are fixtures anyone with the reposi
 
 What the tester does once before the first scenario, in order: data to put in place, flags to set, the account state to restore (`accounts.restore` for a role, when a scenario changes it). Steps only; the Run brief already says how to reach the build.
 
+Each line is a product action, never a shell command or a code block: `manual-qa` runs no command from a plan, so the plan check reports a fenced code block here, and a line or backticked span that starts with a `$ ` prompt, or with a command word and an argument (`docker`, `docker-compose`, `kubectl`, `redis-cli`, `psql`, `mysql`, `python`, `python3`, `node`, `npm`, `npx`, `curl`, `wget`, `env`, `export`, `bash`, `sh`). `export`, `node`, `env`, `python` and `sh` also name things in a product, so they count only before a flag (`-c`), a path that starts with `/`, `./`, `../` or `~/`, a script file (`.py`, `.js`, `.mjs`, `.cjs`, `.ts`, `.sh`), or one of `=`, `|`, `$`, `;`, `&`, `<`, `>`: `` `export FOO=1` `` is a command, `` `export` ``, `` `export started` ``, `` `export to CSV/PDF` `` and `` `node v20.x` `` are copy. Give data to type or paste as prose, in a backticked span, not in a code block. A promise that only a command can observe (a setting, a cache entry, internal state) is either observable through the product surface, or it is not Residue.
+
 ## Scenarios
 
 The **Residue**: only what a passing CI run does not establish. One `###` heading per scenario, numbered from `S1` with no gaps: `### S1: <what is verified>`. Each carries these labels, in this order:
 
-- **Why only a human can prove it:** what no suite in _What automation already proves_ covers, and why automation cannot or does not.
+- **Why only a human can prove it:** why no configured suite could reach the promise, not only that none covers it: what it needs that no test reaches (a real deployment, real infrastructure no suite starts, a real browser), beside what _What automation already proves_ leaves out.
 - **Signs in as:** a [first-word value](#first-word-values): a role id the Run brief's **Roles:** names, or `nobody` (signed out), or the id of a [Scenario account](#scenario-accounts) an earlier scenario creates. Prose may follow the word. Write `` `admin`, after S1 creates the new user ``, not `the new user from S1, then admin` (first word `the`), and not `` `manager`. `` (first word `manager.`).
 - **Sessions:** in place of **Signs in as:**, only in a scenario that needs two or more people signed in at once: `A = <id>, B = <id>`, one per [Session](#sessions). A scenario carries **Signs in as:** or **Sessions:**, never both and never neither.
 - **Creates:** only in a scenario that creates an account during the run, so a later scenario can sign in as it. The id of each [Scenario account](#scenario-accounts) it creates, then prose.
-- **Steps:** a numbered list. Each step quotes the real label, button text or copy from the source (`Click **Save changes**`), never an imagined one.
-- **Expected result:** what the tester sees when it works, in the product's own words.
+- **Surface:** when this scenario drives another surface than the Run brief's **Surface:** (one that repeats the Run brief's is accepted and changes nothing), chosen from what its expected result must observe: a response header, a cookie's attributes (`HttpOnly`), a status code or a response body is seen on `api`; rendered copy, a flow or a layout on `web`; the app itself on `desktop` or `mobile`. One of `web`, `desktop`, `mobile` or `api`, as a [first-word value](#first-word-values), right after the scenario's sign-in field (Signs in as or Sessions, then Creates when present) and before its steps, once at most. It overrides the Run brief's for this scenario only; a scenario without one drives the Run brief's. `format=2` or later.
+- **Observes:** only when the expected result needs something not every driver of its surface can see: in practice a response header, an `HttpOnly` cookie or a local file. One or more of `headers`, `cookies`, `httponly-cookies`, `status`, `body`, `screen`, `local-file`, read as **Creates:**'s ids are ([Scenario accounts](#scenario-accounts)): joined by commas, and any other space, a semicolon, a colon or a parenthesis ends the list, the rest prose. The plan check refuses any other value, naming it. Right after the scenario's **Surface:**, or after its sign-in field (Signs in as or Sessions, then Creates when present) when it has none, and before its steps, once at most. `manual-qa` leaves the scenario for a person when no one driver here observes all of them. Whether a driver can see a value is checked at run time, against what that run has, not by the plan check: a value no driver of the scenario's surface sees still passes the check. `format=2` or later.
+- **Capture:** what evidence the run keeps for this scenario, as a [first-word value](#first-word-values): `screenshot`, `video`, `transcript` or `none`. Prose may follow the word. `transcript` is for a scenario whose surface (its own **Surface:**, else the Run brief's) is `api`; `screenshot` and `video` are for one with a screen, never `api`; `none` is for any. Missing, it means `screenshot` on a screen surface and `transcript` on `api`. Right after the scenario's **Observes:**, or wherever **Observes:** would sit when it has none (after **Surface:**, else after the sign-in field), and before its steps, once at most. The plan check refuses any other value, or one the scenario's surface does not take, naming it. `format=3` or later.
+- **Steps:** a numbered list. Each step quotes the real label, button text or copy from the source (`Click **Save changes**`), never an imagined one. A step is a product action, never a shell command, and the plan check reports one as it does in [Setup](#setup): a promise that only a command can observe is either observable through the product surface, or it is not Residue.
+- **Expected result:** what the tester sees when it works, in the product's own words. Write it as a comparison between product outputs, or a value the product itself shows during the run; never a number or default read from source or a config file, since the stack the plan runs on may set it differently. For example: the session lifetime on **Settings** equals the one on **Profile**, not: the session lifetime is `144000` minutes.
+- **Expected before:** only in a [fix scenario](#fix-scenarios): what the tester sees at the merge-base, where the change is not yet made. In the product's own words, under the same rules as **Expected result:**. Right after **Expected result:**, once at most. `format=3` or later.
 - **A failure means:** what is broken if the expected result does not appear, so a failure is reported as a finding and not a symptom.
 - **If this fails, first rule out:** only in a scenario a Hazard pack matches. The pack's _Rule out first_ list, copied in under the pack's path.
 
-A plan with no scenarios is not written: an empty Residue means merge without a plan.
+A plan with no scenarios and no `Review:` box ([Sign-off checklist](#sign-off-checklist)) is not written: an empty Residue means merge without a plan. A plan whose Residue is only review boxes is still a plan: its Scenarios section says `None.`, and its run has no scenario to drive and starts no stack.
+
+### Fix scenarios
+
+A **fix scenario** proves that a defect is fixed. It is the scenario that carries **Expected before:**, the defect as the merge-base shows it; there is no other fix-or-feature mark. A scenario without one runs at the head only. On a `stack` target, `manual-qa` runs each fix scenario at the merge-base first (its Before), on the same QA Stack, then at the head; a `url` target runs it at the head only. The QA Report grades each scenario with one of five results: **PASS**, **FAIL: regression**, **FAIL: pre-existing** (only a scenario without **Expected before:**, with merge-base evidence), **Not proven** (a fix scenario whose Before already showed **Expected result:**) or **left for a person**.
+
+Write **Expected before:** from the issue's reproduction, or from what the merge-base does, never invented. Like **Expected result:**, it is a product output the tester sees, not a value read from source.
+
+```markdown
+### S1: An invite to an address already invited is refused
+
+- **Why only a human can prove it:** …
+- **Signs in as:** `admin`
+- **Capture:** `screenshot`, of the dialog after **Send invite**
+- **Steps:** …
+- **Expected result:** the dialog shows **Already invited**, and the list shows the address once.
+- **Expected before:** the dialog closes, and the list shows the address twice.
+- **A failure means:** a second invitation is saved for the same address.
+```
 
 ### Scenario accounts
 
@@ -150,7 +176,13 @@ A **Session** is one signed-in identity, with cookies and storage no other sessi
 
 ## Sign-off checklist
 
-One unticked box per scenario (`- [ ] S1: <what is verified>`), plus one per Setup step a person must confirm. Ticked by whoever runs the plan.
+One unticked box per scenario (`- [ ] S1: <what is verified>`), plus one per Setup step a person must confirm, plus one `Review:` box per promise only reading can check. Ticked by whoever runs the plan, except a `Review:` box, which the person who reads it ticks.
+
+A promise only reading can check (the copy of a doc, a static file the app does not serve, a code comment) has no surface to drive, so it is not a scenario. It is a box: `- [ ] Review: <what to read, and what it must say>`, such as `- [ ] Review: docs/x.html says the token lasts 30 days`. The text after `Review:` is required, and `Review:` is written exactly, with a space after it: the plan check reports a box that reads as one but is not (`review:`, `**Review:**`, `Review:docs`), since as an ordinary box it would reach no one.
+
+- A `Review:` box is no scenario's box: each scenario still needs its own.
+- `manual-qa` runs nothing for one. It is never a Results row or a PASS: the QA Report's **Follow-ups** lists each open one for a person.
+- No check reads the text it names: the box is the whole of it.
 
 ## Stop and do not merge if
 
@@ -158,4 +190,4 @@ The outcomes that block the merge whatever else passes: a regression against the
 
 ## Execution record
 
-Empty after compose: exactly the line `_Not run yet._`. Whoever runs the plan replaces it with one row per scenario (scenario, result, evidence, notes), the build they ran against, and when. `manual-qa` writes the full QA Report beside it; this section is the short record that stays with the plan.
+Empty after compose: exactly the line `_Not run yet._`. Whoever runs the plan replaces it with one row per scenario (scenario, result, evidence, notes), the build they ran against, and when. A result is one of the five under [Fix scenarios](#fix-scenarios). `manual-qa` writes the full QA Report beside it; this section is the short record that stays with the plan.

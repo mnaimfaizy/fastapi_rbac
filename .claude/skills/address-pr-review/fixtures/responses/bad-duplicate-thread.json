@@ -1,0 +1,6 @@
+{
+  "findings": [
+    { "thread_id": "PRRT_a", "verdict": "addressed", "reply": "Done." },
+    { "thread_id": "PRRT_a", "verdict": "declined", "reply": "No." }
+  ]
+}
