@@ -27,7 +27,7 @@ Everything lives in `.sandcastle/`. It is separate from the [Agent-kit pipeline]
 | `.sandcastle/agents.ts` | Agent choice, models and credential rules |
 | `.sandcastle/config.ts` | Container hardening, per-run network and Redis, the gate runner, branch-name check |
 | `.sandcastle/*.test.ts` | Unit tests for credentials, branch names, verdicts and the parallel pool: `npm test` |
-| `.sandcastle/gates.sh` | The fast gates. Keep in step with `verify_commands` in `.github/workflows/agent-kit-pipeline.yml` |
+| `.sandcastle/gates.sh` | The fast gates: black, isort, flake8, mypy, backend unit tests, ESLint, frontend unit tests (Vitest), Prettier, and the frontend build. Keep in step with `verify_commands` in `.github/workflows/agent-kit-pipeline.yml`, which leaves Vitest to PR CI |
 | `.sandcastle/Dockerfile` | The `sandcastle:fastapi-rbac` image |
 | `.sandcastle/secrets.env.example` | Template for credentials, settings and the 1Password Environment ID |
 

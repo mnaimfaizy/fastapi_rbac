@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Fast gates, run inside the sandbox after the agent finishes.
-# Keep in step with verify_commands in .github/workflows/agent-kit-pipeline.yml.
+# Keep in step with verify_commands in .github/workflows/agent-kit-pipeline.yml,
+# plus the frontend unit tests (vitest), which that list leaves to PR CI.
 # Each step prints a "==> gate:" line, so a failure's tail names the gate.
 set -euo pipefail
 
@@ -23,6 +24,8 @@ gate pytest; pytest test/unit/ -q -p no:cacheprovider
 cd ../react-frontend
 gate "npm ci"; npm ci --offline --legacy-peer-deps --no-audit --no-fund
 gate eslint;   npm run lint
+# Not in Agent-kit's verify_commands; PR CI runs it as test:coverage.
+gate vitest;   npx vitest run
 # Prettier directly, not an npm script: `format` is `prettier --write .`, so
 # `npm run format -- --check` rewrites files and can never fail, and the
 # `format:check` script does not exist on branches cut before it was added.
