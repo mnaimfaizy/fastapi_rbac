@@ -146,6 +146,8 @@ One checkout, in WSL, for editing, committing, the dev stack and Sandcastle. You
    cd react-frontend && npm ci --legacy-peer-deps
    ```
 
+   Run the dev server in a terminal that stays open, with `npm run dev -- --host 0.0.0.0`. Started from a one-off `wsl -- …` command, it dies when that command returns. Docker's ports don't have this problem, because Docker Desktop keeps them open. Windows then reaches it at `http://localhost:5173`.
+
 7. **Prove the toolchain.** ESLint, Vitest (about 16 seconds), and the backend unit tests natively (about 33 seconds). The unit tests need a Redis, which can run in a throwaway container:
 
    ```bash
@@ -171,6 +173,9 @@ One checkout, in WSL, for editing, committing, the dev stack and Sandcastle. You
      5. For pgAdmin, copy `pgadmin_dev_data` through a container so it stays owned by pgAdmin's user: `docker run --rm -v /mnt/d/…/backend/pgadmin_dev_data:/src:ro -v "$PWD/pgadmin_dev_data":/dst alpine sh -c 'cp -a /src/. /dst/ && chown -R 5050:5050 /dst'`.
    - **Redis keeps its data,** because it uses a named Docker volume (`fastapi_rbac_redis_dev_data`) that both checkouts share.
    - **Only one stack at a time.** Don't bring the stack up from both checkouts.
+   - **The build fails once the data is in WSL,** with `pgadmin_dev_data/sessions: permission denied`, until `backend/.dockerignore` excludes the data folders. The dev `Dockerfile` (`COPY . .`) and `queue.dockerfile` (`COPY . /app/`) send all of `backend/` as build context, including `postgres_dev_data`, `pgadmin_dev_data`, `redis-data` and `logs`. On `D:\` those got baked into the dev images silently; on ext4 they belong to the Postgres and pgAdmin users and can't be read. Add them to `backend/.dockerignore`.
+   - **Checked end to end from WSL:** after the build (about 5 minutes the first time), all eight containers ran with no restarts. The health endpoint reported the API, database, Redis and the Celery worker as healthy, and migrations were at head. The data matched the moved database, Flower, MailHog and pgAdmin answered, and the frontend's origin could reach the API.
+   - **`FIRST_SUPERUSER_PASSWORD` only seeds the first superuser.** If the password was later changed in the app, the env value no longer logs in. Use the current password, and don't keep guessing: the account locks after 10 failed attempts.
 9. **Editor.** Open the clone from WSL with `code ~/projects/fastapi_rbac`. VS Code's WSL extension, already installed on this machine, runs the language servers inside Linux, and the Python, ESLint and Prettier extensions get installed on the WSL side the first time. Windows apps can also reach the files at `\\wsl.localhost\Ubuntu\home\<you>\projects\fastapi_rbac`, but that path is slow for anything that scans the whole tree.
 10. **Claude Code: use the desktop app's WSL environment.** The Code tab can run a session inside a WSL 2 distribution ([docs](https://code.claude.com/docs/en/desktop-wsl.md)). Pick the distribution under **WSL** in the environment selector below the prompt box, then browse to `/home/<you>/projects/fastapi_rbac`. Opening the `\\wsl.localhost\…` folder from the normal picker also reopens it inside the distribution. Claude's tools and git then run in Linux, against native paths. Things to know:
     - **It needs `git` in the distribution,** which Ubuntu has. Trust is granted per distribution and folder.
