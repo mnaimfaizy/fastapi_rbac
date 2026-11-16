@@ -84,7 +84,8 @@ Authorization: Bearer <access_token>
 {
   "name": "manager",
   "description": "Manager role",
-  "role_group_id": "uuid-optional"
+  "role_group_id": "uuid-optional",
+  "permission_ids": ["uuid-optional"]
 }
 ```
 
@@ -98,7 +99,9 @@ Authorization: Bearer <access_token>
 
 ### PUT /api/v1/roles/{role_id}
 
-Update a role by its ID.
+Update a role by its ID. Omit `permission_ids` to leave the role's permissions alone; send it to replace them.
+
+A system role (`admin`, `system` or `superuser`) can't be renamed and its permissions can't be changed here, for any caller. Its description and role group can still be edited, and resending its current name and permissions is allowed.
 
 **Request Headers:**
 
@@ -145,7 +148,7 @@ Authorization: Bearer <access_token>
 
 ### POST /api/v1/roles/{role_id}/permissions
 
-Assign permissions to a role (replace all permissions).
+Add permissions to a role. Permissions already on the role are left as they are.
 
 **Request Headers:**
 
@@ -219,9 +222,23 @@ Authorization: Bearer <access_token>
 }
 ```
 
+## Role-permission ceiling
+
+Holding `role.update` or `role.create` lets a caller edit roles. It does not let them put more authority on a role than they have. These rules apply wherever a role's permissions are written: `POST /roles` and `PUT /roles/{role_id}` (through `permission_ids`), `POST /roles/{role_id}/permissions`, `DELETE /roles/{role_id}/permissions` and `DELETE /roles/{role_id}/permissions/{permission_id}`.
+
+- A superuser is not limited.
+- Anyone else can add or remove only permissions they already hold.
+- Anyone else cannot change the permissions of a role they hold.
+- Only changes are checked. Resending a role's current permissions, or assigning one already on it, is allowed.
+- Every rule is checked before anything is written, so a refused request changes nothing.
+
+Each refusal is a 403 Forbidden with a `detail` naming the rule.
+
+---
+
 ## Error Responses
 
-- 403 Forbidden: Cannot modify system role permissions
+- 403 Forbidden: Insufficient permissions, a system role's permissions or name changed, or refused by the [role-permission ceiling](#role-permission-ceiling)
 - 404 Not Found: Role or permission not found
 - 409 Conflict: Role has permissions or is assigned to users
 - 500 Internal Server Error: Unexpected error
