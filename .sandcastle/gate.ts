@@ -14,6 +14,6 @@ assertLocalBranchName(values.branch);
 // createSandbox would create a missing branch from HEAD; refuse instead.
 if (!branchExists(values.branch)) throw new Error(`No local branch ${values.branch}`);
 
-const { passed, seconds } = await runGates(values.branch, (l) => console.log(l));
-console.log(`\ngates ${passed ? "passed" : "FAILED"} on ${values.branch} (${seconds}s)`);
+const { passed, seconds, logPath, failedGate } = await runGates(values.branch, (l) => console.log(l));
+console.log(`\ngates ${passed ? "passed" : `FAILED at ${failedGate}`} on ${values.branch} (${seconds}s). Log: ${logPath}`);
 process.exit(passed ? 0 : 1);

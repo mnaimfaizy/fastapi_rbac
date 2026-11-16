@@ -64,5 +64,5 @@ test("ok needs commits, no error, and passing gates when gated", () => {
   assert.equal(ok(base), true);
   assert.equal(ok({ ...base, implementCommits: 0 }), false);
   assert.equal(ok({ ...base, error: "x" }), false);
-  assert.equal(ok({ ...base, gates: { passed: false, seconds: 1 } }), false);
+  assert.equal(ok({ ...base, gates: { passed: false, seconds: 1, logPath: "x" } }), false);
 });

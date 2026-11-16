@@ -224,7 +224,8 @@ Output lines are prefixed with the issue number. At the end a summary shows, per
 
 ## Gotchas
 
-- **The format gate is `npm run format:check`, not `npm run format -- --check`.** The `format` script is `prettier --write .`, so the second form rewrites files first and can never fail. CI uses `format:check` too.
+- **The format gate runs `npx prettier --check .` directly.** `npm run format -- --check` rewrites files first and can never fail, because `format` is `prettier --write .`. The `format:check` script that CI uses doesn't exist on branches cut before it was added.
+- **Gate output goes to a log file**, `.sandcastle/logs/<branch>--gates.log`. Live, you see each gate's name, and on a failure the gate that failed plus its last 40 lines.
 - **Sandcastle keeps a worktree that has uncommitted changes** when a sandbox closes. The smoke test and the gate runner remove worktrees they created, but never one that already existed. An agent's leftover worktree is kept so you can see what it did not commit, and the summary names it. The reviewer and the gates then run in that same worktree, uncommitted changes included, and the run says so.
 - **Sandbox creation is serialised.** Parallel `git worktree add` calls can collide on git's lock files, so containers start one after another, then run side by side.
 - **Redis needs `--user redis`.** Its entrypoint drops root with `setpriv`, which fails once all capabilities are dropped. `config.ts` starts it as the `redis` user for that reason.

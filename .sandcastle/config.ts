@@ -1,6 +1,6 @@
 // Shared settings and plumbing for main.ts, gate.ts, smoke.ts and e2e.ts.
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createSandbox, type Sandbox } from "@ai-hero/sandcastle";
@@ -104,20 +104,63 @@ export function removeWorktree(path: string): void {
   quiet("git", ["-C", REPO_DIR, "worktree", "remove", "--force", path]);
 }
 
+export interface GateResult {
+  readonly passed: boolean;
+  readonly seconds: number;
+  /** Full output, on the host. */
+  readonly logPath: string;
+  /** The gate that failed, from gates.sh's "==> gate:" markers. */
+  readonly failedGate?: string;
+}
+
+export const LOGS_DIR = resolve(SANDCASTLE_DIR, "logs");
+const TAIL_LINES = 40;
+
+/**
+ * Run gates.sh in an open sandbox. The full output goes to `logPath`; only
+ * the gate names are shown live, plus the last lines when a gate fails.
+ */
+export async function execGates(box: Sandbox, logPath: string, log: Log): Promise<GateResult> {
+  mkdirSync(dirname(logPath), { recursive: true });
+  writeFileSync(logPath, "");
+  const started = Date.now();
+  const tail: string[] = [];
+  let current: string | undefined;
+  const r = await box.exec("bash -s 2>&1", {
+    stdin: GATES,
+    onLine: (line) => {
+      appendFileSync(logPath, `${line}\n`);
+      tail.push(line);
+      if (tail.length > TAIL_LINES) tail.shift();
+      const m = /^==> gate: (.+)$/.exec(line);
+      if (m) {
+        current = m[1];
+        log(`  ${current === "all passed" ? "all gates passed" : current}`);
+      }
+    },
+  });
+  const passed = r.exitCode === 0;
+  if (!passed) {
+    log(`  FAILED at ${current ?? "start"}. Last ${tail.length} lines (full log: ${logPath}):`);
+    for (const l of tail) log(`    ${l}`);
+  }
+  return {
+    passed, seconds: Math.round((Date.now() - started) / 1000), logPath, failedGate: passed ? undefined : current,
+  };
+}
+
 /**
  * Gate a local branch in a fresh sandbox with its own Redis. A worktree that
  * already existed (an agent's uncommitted leftovers) is kept, not removed.
  */
-export async function runGates(branch: string, log: Log): Promise<{ passed: boolean; seconds: number }> {
+export async function runGates(branch: string, log: Log): Promise<GateResult> {
   const existing = worktreeFor(branch);
   if (existing) log(`note: gating the existing worktree ${existing}, uncommitted changes included`);
   const svc = startServices(`gate-${branch}`);
-  const started = Date.now();
   try {
     const box = await openSandbox(branch, svc.network);
     try {
-      const r = await box.exec("bash -s 2>&1", { stdin: GATES, onLine: (l) => log(`  ${l}`) });
-      return { passed: r.exitCode === 0, seconds: Math.round((Date.now() - started) / 1000) };
+      return await execGates(box, resolve(LOGS_DIR, `${branch.replace(/[^a-zA-Z0-9-]+/g, "-")}--gates.log`), log);
     } finally {
       await box.close();
       if (!existing) removeWorktree(box.worktreePath);

@@ -3,10 +3,12 @@
 //   npm run smoke            (from .sandcastle/)
 //   npm run smoke -- --skip-gates
 import { execFileSync } from "node:child_process";
+import { resolve } from "node:path";
 import type { Sandbox } from "@ai-hero/sandcastle";
 import { CREDENTIAL_KEYS, assertNoForwardedEnvFile } from "./agents.ts";
 import {
-  FORBIDDEN_ENV, GATES, REPO_DIR, SANDCASTLE_DIR, openSandbox, removeWorktree, startServices, stopServices,
+  FORBIDDEN_ENV, LOGS_DIR, REPO_DIR, SANDCASTLE_DIR, execGates, openSandbox, removeWorktree, startServices,
+  stopServices,
 } from "./config.ts";
 
 assertNoForwardedEnvFile(SANDCASTLE_DIR);
@@ -68,10 +70,9 @@ try {
 
   if (!skipGates) {
     console.log("\nrunning gates.sh ...");
-    const t = Date.now();
-    const r = await box.exec("bash -s 2>&1", { stdin: GATES, onLine: (l) => console.log(`  ${l}`) });
-    console.log(`${r.exitCode === 0 ? "PASS" : "FAIL"}  gates (${Math.round((Date.now() - t) / 1000)}s)`);
-    failed ||= r.exitCode !== 0;
+    const g = await execGates(box, resolve(LOGS_DIR, "smoke--gates.log"), (l) => console.log(l));
+    console.log(`${g.passed ? "PASS" : "FAIL"}  gates (${g.seconds}s, log: ${g.logPath})`);
+    failed ||= !g.passed;
   }
 } finally {
   await box.close();

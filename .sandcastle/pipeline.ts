@@ -5,7 +5,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { AgentProvider } from "@ai-hero/sandcastle";
 import {
-  type Log, SANDCASTLE_DIR, git, openSandbox, runGates, startServices, stopServices, worktreeFor,
+  type GateResult, type Log, SANDCASTLE_DIR, git, openSandbox, runGates, startServices, stopServices, worktreeFor,
 } from "./config.ts";
 import type { Issue } from "./issues.ts";
 
@@ -33,7 +33,7 @@ export interface IssueResult {
   reviewCommits: number;
   verdict: Verdict;
   reviewPath?: string;
-  gates?: { passed: boolean; seconds: number };
+  gates?: GateResult;
   leftoverWorktree?: string;
   logs: string[];
   error?: string;
@@ -178,7 +178,8 @@ export async function runIssue(issue: Issue, branch: string, opts: PipelineOptio
     if (opts.gates) {
       log("gates: running");
       result.gates = await runGates(branch, (l) => log(l));
-      log(`gates: ${result.gates.passed ? "passed" : "FAILED"} (${result.gates.seconds}s)`);
+      result.logs.push(result.gates.logPath);
+      log(`gates: ${result.gates.passed ? "passed" : `FAILED at ${result.gates.failedGate}`} (${result.gates.seconds}s)`);
     }
     result.leftoverWorktree = worktreeFor(branch);
     return result;
@@ -216,7 +217,7 @@ export function summary(results: readonly IssueResult[]): string {
       r.branch,
       r.error ? "error" : `${r.implementCommits}+${r.reviewCommits}`,
       r.verdict,
-      r.gates ? (r.gates.passed ? "passed" : "FAILED") : "skipped",
+      r.gates ? (r.gates.passed ? "passed" : `FAILED (${r.gates.failedGate})`) : "skipped",
       ok(r) ? "ok" : "check",
     ].join("  |  "),
   );
