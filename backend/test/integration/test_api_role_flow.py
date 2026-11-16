@@ -257,10 +257,18 @@ class TestRoleManagementFlow:
         assert response.status_code in (200, 201)
         perm2_id = response.json()["data"]["id"]
 
+        # The permission writes run as the seeded superuser: the admin role does
+        # not hold the permissions just created, so the role-permission ceiling
+        # refuses an admin who isn't a superuser.
+        superuser_token = await login_user(
+            client, str(settings.FIRST_SUPERUSER_EMAIL), settings.FIRST_SUPERUSER_PASSWORD
+        )
+        superuser_headers = {"Authorization": f"Bearer {superuser_token}"}
+
         # Step 1: Assign permissions to role
         permission_assignment_data = {"permission_ids": [perm1_id, perm2_id]}
         csrf_token, headers = await get_csrf_token(client)
-        headers.update(auth_headers)
+        headers.update(superuser_headers)
         response = await client.post(
             f"{settings.API_V1_STR}/roles/{role_id}/permissions",
             json=permission_assignment_data,
@@ -283,7 +291,7 @@ class TestRoleManagementFlow:
 
         # Step 3: Remove one permission from role
         csrf_token, headers = await get_csrf_token(client)
-        headers.update(auth_headers)
+        headers.update(superuser_headers)
         response = await client.delete(
             f"{settings.API_V1_STR}/roles/{role_id}/permissions/{perm1_id}",
             headers=headers,
