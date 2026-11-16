@@ -72,9 +72,9 @@ async def post_resend(client: AsyncClient, email: str) -> Tuple[int, Dict[str, A
 def observable(status_code: int, body: Dict[str, Any]) -> Tuple[int, str]:
     """Reduce a response to what a caller can actually distinguish.
 
-    The data payload is excluded deliberately: under MODE=testing the
-    verification code is exposed there so integration tests can drive the flow.
-    That exposure is test-only, and every other field must match.
+    The data payload is excluded deliberately: with EXPOSE_TOKENS_IN_RESPONSES
+    on, the verification code is exposed there so integration tests can drive
+    the flow. That exposure is test-only, and every other field must match.
     """
     return status_code, body.get("message", body.get("detail", ""))
 

@@ -20,6 +20,8 @@ services:
       - .env.test
     environment:
       - MODE=testing
+      # The integration suite reads reset and verification tokens from responses.
+      - EXPOSE_TOKENS_IN_RESPONSES=true
       - DATABASE_HOST=fastapi_rbac_db_test
       - DATABASE_PORT=5432
       - REDIS_HOST=fastapi_rbac_redis_test
@@ -65,6 +67,8 @@ services:
       - .env.test
     environment:
       - MODE=testing
+      # The integration suite reads reset and verification tokens from responses.
+      - EXPOSE_TOKENS_IN_RESPONSES=true
       - DATABASE_HOST=fastapi_rbac_db_test
       - DATABASE_PORT=5432
       - REDIS_HOST=fastapi_rbac_redis_test

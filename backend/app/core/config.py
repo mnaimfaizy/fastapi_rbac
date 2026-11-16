@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import secrets
 from enum import Enum
@@ -64,6 +65,12 @@ class Settings(BaseSettings):
     API_V1_STR: str = f"/api/{API_VERSION}"
     PROJECT_NAME: Optional[str] = "FastAPI RBAC"
     DEBUG: bool = False
+
+    # Return password-reset tokens and email verification codes in API
+    # response bodies, so automated tests can drive those flows without
+    # reading mail. Off by default in every mode, whatever MODE is, and
+    # refused in production (validate_mode_guards).
+    EXPOSE_TOKENS_IN_RESPONSES: bool = False
 
     # Security Settings
     SECRET_KEY: str = secrets.token_urlsafe(32)
@@ -557,6 +564,31 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
+    def validate_mode_guards(self) -> "Settings":
+        """Refuse the two configurations that would run a deployment unsafely.
+
+        These raise ValueError rather than assert, so ``python -O`` cannot
+        strip them.
+
+        A production image sets FASTAPI_ENV=production. MODE is read from the
+        process environment before any env file is chosen, so MODE written
+        only in .env.production is never applied; without this check such a
+        container would quietly run in development mode.
+        """
+        if os.getenv("FASTAPI_ENV") == "production" and self.MODE != ModeEnum.production:
+            raise ValueError(
+                f"FASTAPI_ENV=production but MODE is {self.MODE.value}. Set MODE=production in the "
+                "container environment (not only in .env.production, which is read only once MODE "
+                "is already production)."
+            )
+        if self.MODE == ModeEnum.production and self.EXPOSE_TOKENS_IN_RESPONSES:
+            raise ValueError(
+                "EXPOSE_TOKENS_IN_RESPONSES must be false in production: it returns account tokens "
+                "in API responses."
+            )
+        return self
+
+    @model_validator(mode="after")
     def validate_production_settings(self) -> "Settings":
         """Validate that critical settings are properly set in production mode"""
         if self.MODE == ModeEnum.production:
@@ -713,3 +745,23 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
+
+
+def log_mode_warnings(cfg: Settings, log: Optional[logging.Logger] = None) -> None:
+    """Warn at startup when this process is not running in production mode.
+
+    Development and testing modes relax production checks, so a deployment
+    that forgot to set MODE should say so loudly rather than run quietly.
+    """
+    log = log or logging.getLogger("fastapi_rbac")
+    if cfg.MODE != ModeEnum.production:
+        log.warning(
+            "MODE is %s, not production: production settings checks are off. "
+            "Set MODE=production for any deployment.",
+            cfg.MODE.value,
+        )
+    if cfg.EXPOSE_TOKENS_IN_RESPONSES:
+        log.warning(
+            "EXPOSE_TOKENS_IN_RESPONSES is on: password-reset tokens and email verification "
+            "codes are returned in API responses. Use it only for local testing."
+        )

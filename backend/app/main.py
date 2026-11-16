@@ -26,7 +26,7 @@ from app.api import deps  # Import deps to set CSRF instance
 from app.api.deps import get_redis_client
 from app.api.v1.api import api_router as api_router_v1
 from app.celery_app import celery_app
-from app.core.config import ModeEnum, settings
+from app.core.config import ModeEnum, log_mode_warnings, settings
 from app.core.rate_limit import limiter
 from app.core.service_config import service_settings
 from app.schemas.response_schema import ErrorDetail, create_error_response
@@ -133,6 +133,7 @@ celery = celery_app
 @asynccontextmanager
 async def lifespan(fastapi_instance: FastAPI) -> AsyncGenerator[None, None]:
     # Startup
+    log_mode_warnings(settings)
     redis_client = None
 
     # Get the Redis client using the async generator
