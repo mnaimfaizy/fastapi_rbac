@@ -253,7 +253,7 @@ asyncio.run(test())
 
 This implementation meets:
 - ✅ OWASP Transport Layer Protection requirements
-- ✅ PCI DSS cryptographic requirements  
+- ✅ PCI DSS cryptographic requirements
 - ✅ NIST TLS guidelines (SP 800-52r2)
 - ✅ SOC 2 encryption in transit requirements
 
@@ -299,6 +299,6 @@ This implementation is part of the FastAPI RBAC project and follows the same lic
 
 ---
 
-**Version:** 1.0  
-**Last Updated:** 2025-12-30  
+**Version:** 1.0
+**Last Updated:** 2025-12-30
 **Author:** FastAPI RBAC Development Team
