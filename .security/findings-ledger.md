@@ -12,4 +12,4 @@ Fingerprints of known findings from the Agent-kit security audit, so repeat runs
 | `login-account-enumeration-oracle` | untriaged; open | 2026-11-07 | GHSA-9p2m-g4cr-xqmx | Re-reported in GHSA-33c4-299h-9xc7 |
 | `ci-third-party-actions-unpinned` | untriaged; open | 2026-11-07 | GHSA-9p2m-g4cr-xqmx | Partly mitigated |
 | `non-production-mode-token-disclosure` | untriaged; open | 2026-11-09 | GHSA-33c4-299h-9xc7 | |
-| `role-permission-edit-ceiling` | confirmed; open | 2026-11-16 | pending | Manual triage |
+| `role-permission-edit-ceiling` | fixed; Release pending | 2026-11-16 | pending | Manual triage; fixed by #360 |
