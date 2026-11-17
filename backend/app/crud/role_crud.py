@@ -3,7 +3,7 @@ from uuid import UUID
 
 from fastapi import HTTPException
 from fastapi_pagination import Page, Params
-from fastapi_pagination.ext.sqlmodel import paginate
+from fastapi_pagination.ext.sqlmodel import apaginate
 from redis.asyncio import Redis
 from sqlalchemy import exc
 from sqlalchemy.orm import selectinload
@@ -364,7 +364,7 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
             stmt = query
 
         stmt = stmt.options(selectinload(Role.permissions))
-        return await paginate(db_session, stmt, params, unique=True)
+        return await apaginate(db_session, stmt, params, unique=True)
 
 
 role_crud = CRUDRole(Role)

@@ -281,7 +281,7 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
 
             # Instead of using base get_multi_paginated, create a custom query that joins with User table
             # to load creator data in a single query
-            from fastapi_pagination.ext.sqlalchemy import paginate
+            from fastapi_pagination.ext.sqlalchemy import apaginate
             from sqlalchemy.orm import selectinload
             from sqlmodel import select
 
@@ -294,7 +294,7 @@ class CRUDRoleGroup(CRUDBase[RoleGroup, IRoleGroupCreate, IRoleGroupUpdate]):
             )
 
             # Apply pagination using the paginate function from fastapi_pagination
-            paginated_result = await paginate(db_session, query, params)
+            paginated_result = await apaginate(db_session, query, params)
 
             if not paginated_result.data.items:
                 return paginated_result

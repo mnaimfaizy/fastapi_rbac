@@ -93,9 +93,9 @@ class CRUDPermissionGroup(CRUDBase[PermissionGroup, IPermissionGroupCreate, IPer
             base_query = base_query.where(query_filter)
 
         # Use the paginate function directly
-        from fastapi_pagination.ext.sqlmodel import paginate
+        from fastapi_pagination.ext.sqlmodel import apaginate
 
-        return await paginate(db_session, base_query, params, unique=True)
+        return await apaginate(db_session, base_query, params, unique=True)
 
 
 permission_group = CRUDPermissionGroup(PermissionGroup)
