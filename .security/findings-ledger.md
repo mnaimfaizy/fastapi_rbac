@@ -8,7 +8,7 @@ Fingerprints of known findings from the Agent-kit security audit, so repeat runs
 | `user-superuser-mass-assignment` | released (v0.3.0-beta) | 2026-11-07 | GHSA-9p2m-g4cr-xqmx | Triaged 2026-11-16; fixed by #356 |
 | `pending-user-self-verify-bypass` | released (v0.3.0-beta) | 2026-11-07 | GHSA-9p2m-g4cr-xqmx | Fixed by #339; follow-up hardening open |
 | `prod-seeded-demo-accounts-shared-password` | untriaged; open | 2026-11-07 | GHSA-9p2m-g4cr-xqmx | Partly mitigated |
-| `prod-accepts-example-secrets` | untriaged; open | 2026-11-07 | GHSA-9p2m-g4cr-xqmx | |
+| `prod-accepts-example-secrets` | confirmed; open | 2026-11-07 | GHSA-9p2m-g4cr-xqmx | |
 | `login-account-enumeration-oracle` | untriaged; open | 2026-11-07 | GHSA-9p2m-g4cr-xqmx | Re-reported in GHSA-33c4-299h-9xc7 |
 | `ci-third-party-actions-unpinned` | untriaged; open | 2026-11-07 | GHSA-9p2m-g4cr-xqmx | Partly mitigated |
 | `non-production-mode-token-disclosure` | confirmed; open | 2026-11-09 | GHSA-33c4-299h-9xc7 | |
