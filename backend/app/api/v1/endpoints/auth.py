@@ -39,6 +39,7 @@ from app.utils.background_tasks import (
 )
 from app.utils.client_address import get_client_ip
 from app.utils.emailed_links import LinkKind
+from app.utils.login_refusal import refuse_login, spend_password_check
 from app.utils.password_policy import (
     InitialPasswordReason,
     PasswordChangeReason,
@@ -79,6 +80,97 @@ _REFRESH_REFUSALS = {
 }
 
 
+async def _password_login(
+    *,
+    email: str,
+    password: str,
+    db_session: AsyncSession,
+    background_tasks: BackgroundTasks,
+    ip_address: str,
+    not_found_event: str,
+    locked_event: str,
+) -> User:
+    """Return the user this password belongs to, or raise the uniform refusal.
+
+    Every branch a caller without the right password can reach raises
+    ``refuse_login()``, and the security event records which branch it was
+    (ADR 0015). Each of them pays for one bcrypt check, so none answers sooner.
+
+    A locked account is refused before its own hash is consulted, whatever the
+    password: the lock is neither lifted nor reset and no session is opened.
+    Revealing the lock only to a correct password would make a locked account
+    confirm correct guesses, which is what the lock exists to stop.
+    """
+    user_record = await crud.user.get_by_email(db_session=db_session, email=email)
+    if not user_record or user_record.password is None:
+        spend_password_check(password)
+        await log_security_event(
+            background_tasks=background_tasks,
+            db_session=db_session,
+            event_type=not_found_event if not user_record else "oauth2_failed_login",
+            user_id=user_record.id if user_record else None,
+            details={
+                "email": email,
+                "reason": "user_not_found" if not user_record else "no_password_set",
+                "ip_address": ip_address,
+            },
+        )
+        raise refuse_login()
+    user_record = cast(User, user_record)
+    locked_until_utc = ensure_utc(user_record.locked_until)
+    if (
+        user_record.is_locked
+        and locked_until_utc is not None
+        and locked_until_utc > datetime.now(timezone.utc)
+    ):
+        spend_password_check(password)
+        await log_security_event(
+            background_tasks=background_tasks,
+            db_session=db_session,
+            event_type=locked_event,
+            user_id=user_record.id,
+            details={
+                "email": email,
+                "locked_until": locked_until_utc.isoformat(),
+                "ip_address": ip_address,
+            },
+        )
+        raise refuse_login()
+    try:
+        # Lifts an expired lock, then counts a wrong password toward
+        # MAX_LOGIN_ATTEMPTS or resets the count on a right one.
+        authenticated_user = await crud.user.authenticate(
+            db_session=db_session, email=email, password=password
+        )
+    except Exception as e:
+        await log_security_event(
+            background_tasks=background_tasks,
+            db_session=db_session,
+            event_type="authentication_error",
+            user_id=user_record.id,
+            details={"error": str(e), "email": email, "ip_address": ip_address},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while processing your request.",
+        )
+    if not authenticated_user:
+        # Both routes record a wrong password under this one event name.
+        await log_security_event(
+            background_tasks=background_tasks,
+            db_session=db_session,
+            event_type="oauth2_failed_login",
+            user_id=user_record.id,
+            details={
+                "email": email,
+                "attempt_number": user_record.number_of_failed_attempts,
+                "ip_address": ip_address,
+            },
+        )
+        raise refuse_login()
+    return cast(User, authenticated_user)
+
+
 @router.post("/login")
 @limiter.limit("5/minute")
 async def login(
@@ -92,278 +184,128 @@ async def login(
     db_session: AsyncSession = Depends(deps.get_db),
     _: None = Depends(deps.validate_csrf_token),
 ) -> IPostResponseBase[Token]:
-    ip_address = get_client_ip(request) or "Unknown"  # Sanitize inputs for security
-    try:
-        sanitized_email = sanitizer.sanitize(str(email), "email")
-        # Password should not be sanitized as it needs to remain exactly as entered
-        # but we can validate its length to prevent DoS attacks
-        if len(password) > sanitizer.max_length:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Password length exceeds maximum allowed size",
-            )
-    except ValueError as e:
-        await log_security_event(
-            background_tasks=background_tasks,
-            db_session=db_session,
-            event_type="login_input_sanitization_failed",
-            details={
-                "error": str(e),
-                "email": (str(email)[:50] + "..." if len(str(email)) > 50 else str(email)),
-                "ip_address": ip_address,
-            },
-        )
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid input format")
+    """Log in with email and password, and open a session.
 
-    try:
-        user_record = await crud.user.get_by_email(db_session=db_session, email=sanitized_email)
-        if not user_record:
-            # User doesn't exist, but don't reveal that information
-            await log_security_event(
-                background_tasks=background_tasks,
-                db_session=db_session,
-                event_type="failed_login",
-                details={
-                    "email": email,
-                    "reason": "user_not_found",
-                    "ip_address": ip_address,
-                },
-            )
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail={
-                    "field_name": "email",
-                    "message": "Email or password is incorrect",
-                },
-            )
-        user_record = cast(User, user_record)
-        locked_until_utc = ensure_utc(user_record.locked_until)
-        is_locked = (
-            user_record.is_locked
-            and locked_until_utc is not None
-            and locked_until_utc > datetime.now(timezone.utc)
-        )
-        if is_locked and locked_until_utc is not None:
-            remaining_time = locked_until_utc - datetime.now(timezone.utc)
-            remaining_hours = remaining_time.total_seconds() // 3600
-            remaining_minutes = (remaining_time.total_seconds() % 3600) // 60
-            await log_security_event(
-                background_tasks=background_tasks,
-                db_session=db_session,
-                event_type="locked_account_attempt",
-                user_id=user_record.id,
-                details={
-                    "email": email,
-                    "locked_until": user_record.locked_until.isoformat(),
-                    "ip_address": ip_address,
-                },
-            )
-            lock_message = "Account is locked due to multiple failed login attempts. "
-            if remaining_hours > 0:
-                lock_message += (
-                    f"Try again in {int(remaining_hours)} hours and " f"{int(remaining_minutes)} minutes."
-                )
-            else:
-                lock_message += f"Try again in {int(remaining_minutes)} minutes."
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail={
-                    "field_name": "email",
-                    "message": lock_message,
-                },
-            )
-        warning_message = None
-        attempts_count = user_record.number_of_failed_attempts or 0
-        max_login_attempts = settings.MAX_LOGIN_ATTEMPTS
-        # Show warning one attempt before lockout
-        if max_login_attempts > 1 and attempts_count == max_login_attempts - 1:
-            warning_message = "Warning: This is your last attempt before account lockout."
+    Every failure that does not prove the password gets one status and body,
+    and every outcome takes at least the response-time floor (ADR 0015).
+    """
+    ip_address = get_client_ip(request) or "Unknown"
+
+    async with response_time_floor():
         try:
-            authenticated_user = await crud.user.authenticate(
-                db_session=db_session, email=email, password=password
-            )
-        except Exception as e:
+            sanitized_email = sanitizer.sanitize(str(email), "email")
+            # Password should not be sanitized as it needs to remain exactly as entered
+            # but we can validate its length to prevent DoS attacks
+            if len(password) > sanitizer.max_length:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Password length exceeds maximum allowed size",
+                )
+        except ValueError as e:
             await log_security_event(
                 background_tasks=background_tasks,
                 db_session=db_session,
-                event_type="authentication_error",
-                user_id=user_record.id,
-                details={"error": str(e), "email": email, "ip_address": ip_address},
+                event_type="login_input_sanitization_failed",
+                details={
+                    "error": str(e),
+                    "email": (str(email)[:50] + "..." if len(str(email)) > 50 else str(email)),
+                    "ip_address": ip_address,
+                },
             )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="An error occurred while processing your request.",
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid input format")
+
+        try:
+            authenticated_user = await _password_login(
+                email=sanitized_email,
+                password=password,
+                db_session=db_session,
+                background_tasks=background_tasks,
+                ip_address=ip_address,
+                not_found_event="failed_login",
+                locked_event="locked_account_attempt",
             )
-        if not authenticated_user:
-            try:
-                updated_user = await crud.user.get_by_email(db_session=db_session, email=email)
-                if not updated_user:
-                    await log_security_event(
-                        background_tasks=background_tasks,
-                        db_session=db_session,
-                        event_type="failed_login_user_disappeared",
-                        details={
-                            "email": email,
-                            "reason": "User not found after failed auth attempt",
-                            "ip_address": ip_address,
-                        },
-                    )
-                    raise HTTPException(
-                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail="An unexpected error occurred. Please try again.",
-                    )
-                # Log failed login attempt as a background task
+            # The password is right from here on, so the account's state is the
+            # caller's own business.
+            if not crud.user.has_verified(authenticated_user):
                 await log_security_event(
                     background_tasks=background_tasks,
                     db_session=db_session,
-                    event_type="oauth2_failed_login",
-                    user_id=updated_user.id,
-                    details={
-                        "email": email,
-                        "attempt_number": updated_user.number_of_failed_attempts,
-                    },
+                    event_type="unverified_login_attempt",
+                    user_id=authenticated_user.id,
+                    details={"email": email, "ip_address": ip_address},
                 )
-                locked_until_utc = ensure_utc(updated_user.locked_until)
-                if updated_user.is_locked and locked_until_utc is not None:
-                    # increment_failed_attempts set and stored the lock window.
-                    remaining_time = locked_until_utc - datetime.now(timezone.utc)
-                    remaining_hours = remaining_time.total_seconds() // 3600
-                    remaining_minutes = (remaining_time.total_seconds() % 3600) // 60
-                    lock_message = "Account locked due to too many failed attempts. "
-                    if remaining_hours > 0:
-                        lock_message += (
-                            f"Try again in {int(remaining_hours)} hours and "
-                            f"{int(remaining_minutes)} minutes."
-                        )
-                    else:
-                        lock_message += f"Try again in {int(remaining_minutes)} minutes."
-                    raise HTTPException(
-                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                        detail={
-                            "field_name": "email",
-                            "message": lock_message,
-                        },
-                    )
-                else:
-                    failed_attempts = updated_user.number_of_failed_attempts or 0
-                    max_login_attempts = (
-                        settings.MAX_LOGIN_ATTEMPTS if hasattr(settings, "MAX_LOGIN_ATTEMPTS") else 3
-                    )
-                    attempts_left = max_login_attempts - failed_attempts
-                    message = "Email or password is incorrect"
-                    if attempts_left == 1:
-                        message = (
-                            f"{message}. Warning: This is your last attempt. "
-                            "Account will be locked after the next failed attempt."
-                        )
-                    elif attempts_left > 0:
-                        message = f"{message}. {attempts_left} attempts remaining before " "account lockout."
-                    raise HTTPException(
-                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                        detail={
-                            "field_name": "email",
-                            "message": message,
-                        },
-                    )
-            except HTTPException:
-                raise
-            except Exception as e:
-                user_id_for_log = user_record.id if user_record else None
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail={"field_name": "email", "message": "Email is not verified."},
+                )
+            if not authenticated_user.is_active:
                 await log_security_event(
                     background_tasks=background_tasks,
                     db_session=db_session,
-                    event_type="failed_login_error",
-                    user_id=user_id_for_log,
+                    event_type="inactive_user_login_attempt",
+                    user_id=authenticated_user.id,
+                    details={"email": email, "ip_address": ip_address},
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={"field_name": "email", "message": "Inactive user"},
+                )
+            try:
+                issued = await sessions.open(
+                    authenticated_user, get_client_ip(request), redis_client=redis_client
+                )
+                try:
+                    write_session_cookie(response, issued)
+                except Exception:
+                    await _end_unreturned_session(authenticated_user.id, issued, redis_client=redis_client)
+                    raise
+            except Exception as e:
+                await log_security_event(
+                    background_tasks=background_tasks,
+                    db_session=db_session,
+                    event_type="token_generation_error",
+                    user_id=authenticated_user.id,
                     details={"error": str(e), "email": email, "ip_address": ip_address},
                 )
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail="An error occurred while processing your request.",
                 )
-        authenticated_user = cast(User, authenticated_user)
-        if not crud.user.has_verified(authenticated_user):
-            await log_security_event(
-                background_tasks=background_tasks,
-                db_session=db_session,
-                event_type="unverified_login_attempt",
-                user_id=authenticated_user.id,
-                details={"email": email, "ip_address": ip_address},
-            )
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail={"field_name": "email", "message": "Email is not verified."},
-            )
-        if not authenticated_user.is_active:
-            await log_security_event(
-                background_tasks=background_tasks,
-                db_session=db_session,
-                event_type="inactive_user_login_attempt",
-                user_id=authenticated_user.id,
-                details={"email": email, "ip_address": ip_address},
-            )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,  # Changed from 422 to 403
-                detail={"field_name": "email", "message": "Inactive user"},
-            )
-        try:
-            issued = await sessions.open(
-                authenticated_user, get_client_ip(request), redis_client=redis_client
-            )
             try:
-                write_session_cookie(response, issued)
+                user_data = serialize_user(authenticated_user)
+                user_read = IUserRead(**user_data)
+                data = Token(
+                    access_token=issued.access_token,
+                    token_type="bearer",
+                    refresh_token=None,  # HttpOnly cookie; not exposed to JS
+                    user=user_read,
+                )
             except Exception:
+                # The client never receives this session; end it before answering.
                 await _end_unreturned_session(authenticated_user.id, issued, redis_client=redis_client)
                 raise
-        except Exception as e:
             await log_security_event(
                 background_tasks=background_tasks,
                 db_session=db_session,
-                event_type="token_generation_error",
+                event_type="successful_login",
                 user_id=authenticated_user.id,
-                details={"error": str(e), "email": email, "ip_address": ip_address},
+                details={"email": authenticated_user.email, "ip_address": ip_address},
+            )
+            return create_response(data=data, message="Login successful")
+        except HTTPException:
+            raise
+        except Exception as e:
+            traceback.print_exc()
+            await log_security_event(
+                background_tasks=background_tasks,
+                db_session=db_session,
+                event_type="login_unexpected_error",
+                details={"error": str(e), "ip_address": ip_address},
             )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="An error occurred while processing your request.",
             )
-        try:
-            user_data = serialize_user(authenticated_user)
-            user_read = IUserRead(**user_data)
-            data = Token(
-                access_token=issued.access_token,
-                token_type="bearer",
-                refresh_token=None,  # HttpOnly cookie; not exposed to JS
-                user=user_read,
-            )
-        except Exception:
-            # The client never receives this session; end it before answering.
-            await _end_unreturned_session(authenticated_user.id, issued, redis_client=redis_client)
-            raise
-        await log_security_event(
-            background_tasks=background_tasks,
-            db_session=db_session,
-            event_type="successful_login",
-            user_id=authenticated_user.id,
-            details={"email": authenticated_user.email, "ip_address": ip_address},
-        )
-        message = "Login successful"
-        if warning_message:
-            message = warning_message
-        return create_response(data=data, message=message)
-    except HTTPException:
-        raise
-    except Exception as e:
-        traceback.print_exc()
-        await log_security_event(
-            background_tasks=background_tasks,
-            db_session=db_session,
-            event_type="login_unexpected_error",
-            details={"error": str(e), "ip_address": ip_address},
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred while processing your request.",
-        )
 
 
 @router.post("/register")
@@ -840,172 +782,61 @@ async def login_access_token(
     No ``validate_csrf_token`` dependency, unlike ``/login``: this is the form
     Swagger's Authorize button posts, and it cannot send the CSRF header. Kept
     that way until the owner decides otherwise (#279).
+
+    Failures answer exactly as ``/login`` does, and take as long (ADR 0015).
     """
-    # Check if user exists and get their current status
-    user_record = await crud.user.get_by_email(email=form_data.username, db_session=db_session)
-    if not user_record:
-        # User doesn't exist, but don't reveal that information
-        # Log failed login attempt for non-existent user as a background task
-        await log_security_event(
-            background_tasks=background_tasks,
+    ip_address = get_client_ip(request) or "Unknown"
+
+    async with response_time_floor():
+        user = await _password_login(
+            email=form_data.username,
+            password=form_data.password,
             db_session=db_session,
-            event_type="oauth2_failed_login",
-            details={"email": form_data.username, "reason": "user_not_found"},
-        )
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"field_name": "email", "message": "Incorrect email or password"},
-        )  # Check for locked account before attempting authentication
-    locked_until_utc = ensure_utc(user_record.locked_until)
-    if (
-        user_record.is_locked
-        and user_record.locked_until
-        and locked_until_utc is not None
-        and locked_until_utc > datetime.now(timezone.utc)
-    ):
-        # Calculate remaining lock time
-        remaining_time = locked_until_utc - datetime.now(timezone.utc)
-        remaining_hours = remaining_time.total_seconds() // 3600
-        remaining_minutes = (remaining_time.total_seconds() % 3600) // 60
-        # Log locked account login attempt as a background task
-        await log_security_event(
             background_tasks=background_tasks,
-            db_session=db_session,
-            event_type="oauth2_locked_account_attempt",
-            user_id=user_record.id,
-            details={
-                "email": form_data.username,
-                "locked_until": user_record.locked_until.isoformat(),
-            },
+            ip_address=ip_address,
+            not_found_event="oauth2_failed_login",
+            locked_event="oauth2_locked_account_attempt",
         )
-        lock_message = "Account is locked due to multiple failed login attempts. "
-        if remaining_hours > 0:
-            lock_message += (
-                f"Try again in {int(remaining_hours)} hours and " f"{int(remaining_minutes)} minutes."
-            )
-        else:
-            lock_message += f"Try again in {int(remaining_minutes)} minutes."
-        raise HTTPException(
-            status_code=400,
-            detail={"field_name": "email", "message": lock_message},
-        )
-    # Check if this is the user's last attempt before locking
-    warning_message = None
-    attempts_count = (
-        0 if user_record.number_of_failed_attempts is None else user_record.number_of_failed_attempts
-    )
-    if attempts_count == 2:
-        warning_message = (
-            "Warning: This is your last attempt. "
-            "If you enter an incorrect password again, "
-            "your account will be locked for 24 hours."
-        )
-    # Now attempt to authenticate
-    user = await crud.user.authenticate(
-        email=form_data.username, password=form_data.password, db_session=db_session
-    )
-    if not user:
-        # Failed authentication attempt
-        # Pull the user data again to get the latest
-        # status after increment_failed_attempts was called
-        updated_user = await crud.user.get_by_email(email=form_data.username, db_session=db_session)
-        if not updated_user:
+        # The password is right from here on, so the account's state is the
+        # caller's own business.
+        if not crud.user.has_verified(user):
             await log_security_event(
                 background_tasks=background_tasks,
                 db_session=db_session,
-                event_type="oauth2_failed_login_user_disappeared",
-                details={"email": form_data.username, "reason": "User not found after failed auth attempt"},
+                event_type="unverified_login_attempt",
+                user_id=user.id,
+                details={"email": form_data.username, "ip_address": ip_address},
             )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="An unexpected error occurred. Please try again.",
-            )
-        # Log failed login attempt as a background task
-        await log_security_event(
-            background_tasks=background_tasks,
-            db_session=db_session,
-            event_type="oauth2_failed_login",
-            user_id=updated_user.id,
-            details={
-                "email": form_data.username,
-                "attempt_number": updated_user.number_of_failed_attempts,
-            },
-        )
-        failed_locked_until = ensure_utc(updated_user.locked_until)
-        if updated_user.is_locked and failed_locked_until is not None:
-            # increment_failed_attempts set and stored the lock window.
-            remaining_time = failed_locked_until - datetime.now(timezone.utc)
-            remaining_hours = remaining_time.total_seconds() // 3600
-            remaining_minutes = (remaining_time.total_seconds() % 3600) // 60
-            lock_message = "Your account has been locked due to too many failed login attempts. "
-            if remaining_hours > 0:
-                lock_message += (
-                    f"Try again in {int(remaining_hours)} hours and " f"{int(remaining_minutes)} minutes."
-                )
-            else:
-                lock_message += f"Try again in {int(remaining_minutes)} minutes."
-            raise HTTPException(
-                status_code=400,
-                detail={"field_name": "email", "message": lock_message},
-            )
-        else:
-            # Just a regular authentication failure
-            attempts_left = 3 - (
-                0
-                if updated_user.number_of_failed_attempts is None
-                else updated_user.number_of_failed_attempts
-            )
-            message = "Incorrect email or password"
-            if attempts_left == 1:
-                message = (
-                    f"{message}. Warning: This is your last attempt."
-                    "Account will be locked after the next failed attempt."
-                )
-            elif attempts_left > 0:
-                message = f"{message}. {attempts_left} attempts remaining before " "account lockout."
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail={"field_name": "email", "message": message},
+                detail={"field_name": "email", "message": "Email is not verified."},
             )
-    if not crud.user.has_verified(user):
+        if not user.is_active:
+            await log_security_event(
+                background_tasks=background_tasks,
+                db_session=db_session,
+                event_type="inactive_user_login_attempt",
+                user_id=user.id,
+                details={"email": form_data.username, "ip_address": ip_address},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"field_name": "email", "message": "Inactive user"},
+            )
+        # Form login issues no refresh cookie, so the access token is the session.
+        access_token = await sessions.open_access_only(
+            user, get_client_ip(request), redis_client=redis_client
+        )
+        # Log successful OAuth2 login
         await log_security_event(
             background_tasks=background_tasks,
             db_session=db_session,
-            event_type="unverified_login_attempt",
+            event_type="oauth2_successful_login",
             user_id=user.id,
-            details={"email": form_data.username},
+            details={"email": user.email},
         )
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"field_name": "email", "message": "Email is not verified."},
-        )
-    if not user.is_active:
-        await log_security_event(
-            background_tasks=background_tasks,
-            db_session=db_session,
-            event_type="inactive_user_login_attempt",
-            user_id=user.id,
-            details={"email": form_data.username},
-        )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"field_name": "email", "message": "Inactive user"},
-        )
-    # Form login issues no refresh cookie, so the access token is the session.
-    access_token = await sessions.open_access_only(user, get_client_ip(request), redis_client=redis_client)
-    # Log successful OAuth2 login
-    await log_security_event(
-        background_tasks=background_tasks,
-        db_session=db_session,
-        event_type="oauth2_successful_login",
-        user_id=user.id,
-        details={"email": user.email},
-    )
-    token_data = TokenRead(access_token=access_token, token_type="bearer")
-    response_message = "Login successful."
-    if warning_message:
-        response_message = warning_message
-    return create_response(data=token_data, message=response_message)
+        token_data = TokenRead(access_token=access_token, token_type="bearer")
+        return create_response(data=token_data, message="Login successful.")
 
 
 @router.post("/logout")

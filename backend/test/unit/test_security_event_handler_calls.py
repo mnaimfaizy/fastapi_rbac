@@ -20,6 +20,7 @@ from app.api.v1.endpoints.auth import login, login_access_token, register, reque
 from app.core.config import ModeEnum, settings
 from app.schemas.user_schema import PasswordResetRequest, UserRegister
 from app.utils.account_email_dispatch import AccountState, dispatch_account_email
+from app.utils.login_refusal import LOGIN_REFUSED_DETAIL, LOGIN_REFUSED_STATUS
 
 
 def _request() -> MagicMock:
@@ -148,11 +149,12 @@ async def test_login_authenticate_error_emits_authentication_error(
 
 
 @pytest.mark.asyncio
-async def test_login_user_disappears_after_failed_auth(
+async def test_login_wrong_password_is_refused_uniformly_without_a_second_lookup(
     monkeypatch: pytest.MonkeyPatch, recorded: list[str]
 ) -> None:
+    """The route used to re-read the user to word a countdown; ADR 0015 removed both."""
     user = _user()
-    get_by_email = AsyncMock(side_effect=[user, None])
+    get_by_email = AsyncMock(return_value=user)
     monkeypatch.setattr("app.api.v1.endpoints.auth.crud.user.get_by_email", get_by_email)
     monkeypatch.setattr(
         "app.api.v1.endpoints.auth.crud.user.authenticate",
@@ -170,8 +172,10 @@ async def test_login_user_disappears_after_failed_auth(
             db_session=MagicMock(),
             _=None,
         )
-    assert raised.value.status_code == 500
-    assert "failed_login_user_disappeared" in recorded
+    assert raised.value.status_code == LOGIN_REFUSED_STATUS
+    assert raised.value.detail == LOGIN_REFUSED_DETAIL
+    assert get_by_email.await_count == 1
+    assert recorded == ["oauth2_failed_login"]
 
 
 @pytest.mark.asyncio
@@ -183,33 +187,6 @@ async def test_login_wrong_password_emits_oauth2_failed_login(
         await _login(monkeypatch, user=user, authenticated=None)
     assert raised.value.status_code == 422
     assert "oauth2_failed_login" in recorded
-
-
-@pytest.mark.asyncio
-async def test_login_failed_auth_handling_error_emits_failed_login_error(
-    monkeypatch: pytest.MonkeyPatch, recorded: list[str]
-) -> None:
-    user = _user()
-    get_by_email = AsyncMock(side_effect=[user, RuntimeError("lookup failed")])
-    monkeypatch.setattr("app.api.v1.endpoints.auth.crud.user.get_by_email", get_by_email)
-    monkeypatch.setattr(
-        "app.api.v1.endpoints.auth.crud.user.authenticate",
-        AsyncMock(return_value=None),
-    )
-    with pytest.raises(HTTPException) as raised:
-        await login(
-            request=_request(),
-            response=MagicMock(),
-            email=user.email,
-            password="wrong",
-            background_tasks=BackgroundTasks(),
-            redis_client=MockRedisClient(),  # type: ignore[arg-type]
-            sanitizer=_sanitizer(),
-            db_session=MagicMock(),
-            _=None,
-        )
-    assert raised.value.status_code == 500
-    assert "failed_login_error" in recorded
 
 
 @pytest.mark.asyncio
@@ -322,11 +299,11 @@ async def test_oauth2_locked_user_emits_locked_attempt(
 
 
 @pytest.mark.asyncio
-async def test_oauth2_user_disappears_after_failed_auth(
+async def test_oauth2_wrong_password_is_refused_uniformly_without_a_second_lookup(
     monkeypatch: pytest.MonkeyPatch, recorded: list[str]
 ) -> None:
     user = _user(email="oauth@example.com")
-    get_by_email = AsyncMock(side_effect=[user, None])
+    get_by_email = AsyncMock(return_value=user)
     monkeypatch.setattr("app.api.v1.endpoints.auth.crud.user.get_by_email", get_by_email)
     monkeypatch.setattr(
         "app.api.v1.endpoints.auth.crud.user.authenticate",
@@ -335,7 +312,7 @@ async def test_oauth2_user_disappears_after_failed_auth(
     form = MagicMock()
     form.username = user.email
     form.password = "wrong"
-    with pytest.raises(HTTPException):
+    with pytest.raises(HTTPException) as raised:
         await login_access_token(
             request=_request(),
             form_data=form,
@@ -343,7 +320,10 @@ async def test_oauth2_user_disappears_after_failed_auth(
             redis_client=MockRedisClient(),  # type: ignore[arg-type]
             db_session=MagicMock(),
         )
-    assert "oauth2_failed_login_user_disappeared" in recorded
+    assert raised.value.status_code == LOGIN_REFUSED_STATUS
+    assert raised.value.detail == LOGIN_REFUSED_DETAIL
+    assert get_by_email.await_count == 1
+    assert recorded == ["oauth2_failed_login"]
 
 
 @pytest.mark.asyncio

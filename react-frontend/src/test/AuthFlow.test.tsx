@@ -142,6 +142,38 @@ describe('Authentication Flow Tests', () => {
       });
     });
 
+    it.each([
+      // The one refusal for every failure without the right password (ADR 0015).
+      'Email or password is incorrect, or the account is temporarily locked. Try again later or reset your password.',
+      // Reachable only with the right password.
+      'Email is not verified.',
+      'Inactive user',
+    ])('shows the API refusal "%s" as the form error', async (message) => {
+      mockAuthService.login = vi.fn().mockRejectedValue({
+        response: {
+          data: {
+            status: 'error',
+            message,
+            errors: [{ field: 'email', message }],
+          },
+        },
+      });
+
+      renderWithProviders(<LoginForm />);
+
+      fireEvent.change(screen.getByLabelText(/email/i), {
+        target: { value: 'test@example.com' },
+      });
+      fireEvent.change(screen.getByLabelText(/password/i), {
+        target: { value: 'any-password' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: /login/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText(message)).toBeInTheDocument();
+      });
+    });
+
     it('disables submit button during login process', async () => {
       // Mock login to return a successful response after a delay
       const mockLogin = vi.fn().mockImplementation(

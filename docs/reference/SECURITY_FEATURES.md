@@ -129,7 +129,7 @@ except sessions.SessionRejected:
 
 - **Password Strength**: Integration with `zxcvbn` for strength validation
 - **Password History**: Prevents reuse of last 5 passwords
-- **Account Locking**: 5 failed attempts trigger 15-minute lockout
+- **Account Locking**: `MAX_LOGIN_ATTEMPTS` (5) failed attempts lock the account for `ACCOUNT_LOCKOUT_MINUTES` (24 hours); login failures get one uniform response ([ADR 0015](../adr/0015-uniform-login-failure.md))
 - **Secure Hashing**: bcrypt with salt for password storage
 
 **Password Policy**:
@@ -251,8 +251,8 @@ REFRESH_TOKEN_EXPIRE_MINUTES=144000  # 100 days
 # Password Security
 PASSWORD_MIN_LENGTH=8
 PASSWORD_HISTORY_COUNT=5
-ACCOUNT_LOCKOUT_ATTEMPTS=5
-ACCOUNT_LOCKOUT_DURATION=15
+MAX_LOGIN_ATTEMPTS=5
+ACCOUNT_LOCKOUT_MINUTES=1440   # how long a lock lasts
 
 # Mode and token exposure
 MODE=production                    # defaults to development; set it for every deployment

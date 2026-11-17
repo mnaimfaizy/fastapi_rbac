@@ -112,7 +112,6 @@ class Settings(BaseSettings):
     VERIFICATION_TOKEN_EXPIRE_MINUTES: int = Field(default=1440)  # 24 hours
     UNVERIFIED_ACCOUNT_CLEANUP_HOURS: int = Field(default=72)  # 3 days
     MAX_LOGIN_ATTEMPTS: int = Field(default=5)
-    LOCKOUT_DURATION_MINUTES: int = Field(default=15)
     PASSWORD_HISTORY_SIZE: int = Field(default=5)  # Number of old passwords to store
     PREVENT_PASSWORD_REUSE: int = Field(default=5)  # Number of recent passwords to check against
     TOKEN_ISSUER: Optional[str] = None  # Added
@@ -180,8 +179,11 @@ class Settings(BaseSettings):
     # Logging settings
     LOG_LEVEL: str = "INFO"
 
-    # Feature Flags
-    ENABLE_ACCOUNT_LOCKOUT: bool = True
+    # Account lockout: MAX_LOGIN_ATTEMPTS wrong passwords lock the account for
+    # this long. The only lockout duration; LOCKOUT_DURATION_MINUTES,
+    # ACCOUNT_LOCKOUT_DURATION and the ENABLE_ACCOUNT_LOCKOUT switch were never
+    # read and are removed. extra="ignore" means an environment that still sets
+    # them starts normally and the values are unused.
     ACCOUNT_LOCKOUT_MINUTES: int = 60 * 24  # 24 hours
 
     # Registration Security Settings
@@ -245,7 +247,6 @@ class Settings(BaseSettings):
 
     # Account Security Settings
     MAX_PASSWORD_CHANGE_ATTEMPTS: int = 3  # Maximum password change attempts per hour
-    ACCOUNT_LOCKOUT_DURATION: int = 1800  # 30 minutes lockout
     REQUIRE_PASSWORD_CHANGE_DAYS: int = 90  # Force password change every 90 days
     ENABLE_BRUTE_FORCE_PROTECTION: bool = True
     BRUTE_FORCE_TIME_WINDOW: int = 3600  # 1 hour window for attempt counting

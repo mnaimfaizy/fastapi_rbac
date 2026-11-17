@@ -46,8 +46,25 @@ Sets an HttpOnly `refresh_token` cookie (path `/api/v1/auth`). The refresh token
 
 **Error Responses:**
 
-- 422 Unprocessable Entity: Invalid credentials, locked account, unverified email
+- 422 Unprocessable Entity, the uniform login refusal: an unknown address, a wrong password whatever the account's state, and any attempt on a locked account, including one with the right password. The body is always the same ([ADR 0015](../../adr/0015-uniform-login-failure.md)):
+
+  ```json
+  {
+    "detail": {
+      "field_name": "email",
+      "message": "Email or password is incorrect, or the account is temporarily locked. Try again later or reset your password."
+    }
+  }
+  ```
+
+  It carries no count of attempts left and no lock duration. Failed attempts still count: `MAX_LOGIN_ATTEMPTS` wrong passwords lock the account for `ACCOUNT_LOCKOUT_MINUTES`, and a password reset lifts the lock.
+- 422 Unprocessable Entity, `"Email is not verified."`: the password is right and the email address is not verified
+- 403 Forbidden, `"Inactive user"`: the password is right and the account is disabled
 - 400 Bad Request: Input sanitization failed
+
+Every response, success or failure, takes at least `UNIFORM_ACCOUNT_RESPONSE_FLOOR_SECONDS`.
+
+`POST /api/v1/auth/access-token` (the OAuth2 password form behind Swagger's Authorize button) answers failures with the same statuses and bodies as `/login`.
 
 ---
 
@@ -377,7 +394,7 @@ Get a CSRF token for use in state-changing operations (required for POST/PUT/DEL
 - 403 Forbidden: Not allowed. A user holding a temporary password gets `{"detail": {"code": "password_change_required", "message": "Password change required."}}` from every authenticated route except change password, logout, logout all and `GET /users/me` ([ADR 0014](../../adr/0014-temporary-password-restricts-account.md))
 - 404 Not Found: User not found
 - 409 Conflict: Email already registered
-- 422 Unprocessable Entity: Validation errors, locked account, unverified email
+- 422 Unprocessable Entity: Validation errors, the uniform login refusal, unverified email
 - 429 Too Many Requests: Rate limit exceeded
 - 500 Internal Server Error: Unexpected error
 

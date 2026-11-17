@@ -112,19 +112,19 @@ describe('api error body normalisation', () => {
         data: {
           detail: {
             field_name: 'email',
-            message: 'Incorrect email or password',
+            message: 'Email address is malformed',
           },
         },
       },
-      config: { url: '/auth/login', headers: {} },
+      config: { url: '/auth/register', headers: {} },
     };
 
     await expect(responseErrorHandler(error)).rejects.toBeDefined();
 
     expect(error.response.data).toEqual({
       status: 'error',
-      message: 'Incorrect email or password',
-      errors: [{ field: 'email', message: 'Incorrect email or password' }],
+      message: 'Email address is malformed',
+      errors: [{ field: 'email', message: 'Email address is malformed' }],
     });
   });
 
@@ -299,4 +299,46 @@ describe('api 403 password_change_required', () => {
     expect(store.dispatch).toHaveBeenCalledWith(markPasswordChangeRequired());
     expect(store.dispatch).not.toHaveBeenCalledWith(logout());
   });
+});
+
+// The backend answers every failed password login with one 422 body (ADR 0015).
+// Only a correct password learns more: unverified (422) or inactive (403).
+const LOGIN_REFUSED_MESSAGE =
+  'Email or password is incorrect, or the account is temporarily locked. ' +
+  'Try again later or reset your password.';
+
+const loginRejection = (status: number, message: string) => ({
+  response: {
+    status,
+    data: { detail: { field_name: 'email', message } },
+  },
+  config: { url: '/auth/login', headers: {} },
+});
+
+describe('api login refusals', () => {
+  beforeEach(() => {
+    vi.mocked(store.dispatch).mockClear();
+    vi.mocked(refreshAccessToken).mockClear();
+  });
+
+  it.each([
+    ['the uniform refusal', 422, LOGIN_REFUSED_MESSAGE],
+    ['an unverified account', 422, 'Email is not verified.'],
+    ['an inactive account', 403, 'Inactive user'],
+  ])(
+    'surfaces %s as the form error without a refresh or a logout',
+    async (_label, status, message) => {
+      const error = loginRejection(status, message);
+
+      await expect(responseErrorHandler(error)).rejects.toBeDefined();
+
+      expect(error.response.data).toEqual({
+        status: 'error',
+        message,
+        errors: [{ field: 'email', message }],
+      });
+      expect(refreshAccessToken).not.toHaveBeenCalled();
+      expect(store.dispatch).not.toHaveBeenCalled();
+    }
+  );
 });
