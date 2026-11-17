@@ -229,7 +229,7 @@ jobs:
           # not in the runner -- it is the only place integration coverage exists.
           # The data file is written by the flush step below, not by this one.
           # --no-build: the step above built fastapi_rbac:test, and compose
-          # must fail rather than quietly build its own uncached copy.
+          # must fail rather than quietly build a second, uncached copy.
           SERVER_COVERAGE=1 docker compose -f docker-compose.test.minimal.yml up --no-build --exit-code-from fastapi_rbac_test_runner fastapi_rbac_test_runner
 
       - name: Dump stack logs on failure
