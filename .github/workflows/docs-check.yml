@@ -1,7 +1,8 @@
 name: Docs Check
 
-# Runs on every pull request, not only docs changes: an explainer page goes stale when the code it
-# describes changes, so a backend or frontend change is exactly when this check must run.
+# Starts on every pull request. The explainer check runs when an explainer, its rules, or the code
+# an explainer cites (backend/app, react-frontend/src) changes; the MkDocs build when docs/ or
+# mkdocs.yml changes (#381).
 on:
   pull_request:
     branches: [main]
@@ -11,9 +12,37 @@ on:
 permissions:
   contents: read
 
+# A new push to a pull request cancels that PR's run still in progress. Pushes
+# to main get a group of their own (the run id), so they never queue behind
+# or cancel each other (#381).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  # Skips the jobs below when the change cannot affect the docs or the code
+  # an explainer cites (#381). A job skipped by `if` reports Success, so the
+  # required checks still resolve on a docs-only PR. If this job fails,
+  # everything runs instead (fail open).
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      explainers: ${{ steps.detect.outputs.explainers }}
+      mkdocs: ${{ steps.detect.outputs.mkdocs }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - id: detect
+        uses: ./.github/actions/detect-changes
+
   explainers:
     name: Explainer pages match the code
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.explainers == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -40,6 +69,8 @@ jobs:
 
   build:
     name: MkDocs build
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.mkdocs == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
