@@ -6,8 +6,7 @@
 
 <div align="center">
 
-[![Backend CI](https://github.com/mnaimfaizy/fastapi_rbac/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/mnaimfaizy/fastapi_rbac/actions/workflows/backend-ci.yml)
-[![React Frontend CI](https://github.com/mnaimfaizy/fastapi_rbac/actions/workflows/react-frontend-ci.yml/badge.svg)](https://github.com/mnaimfaizy/fastapi_rbac/actions/workflows/react-frontend-ci.yml)
+[![CI](https://github.com/mnaimfaizy/fastapi_rbac/actions/workflows/ci.yml/badge.svg)](https://github.com/mnaimfaizy/fastapi_rbac/actions/workflows/ci.yml)
 [![Docker Publish](https://github.com/mnaimfaizy/fastapi_rbac/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/mnaimfaizy/fastapi_rbac/actions/workflows/docker-publish.yml)
 [![Documentation](https://github.com/mnaimfaizy/fastapi_rbac/actions/workflows/docs.yml/badge.svg)](https://github.com/mnaimfaizy/fastapi_rbac/actions/workflows/docs.yml)
 [![Backend Coverage](https://img.shields.io/codecov/c/github/mnaimfaizy/fastapi_rbac?flag=backend&label=backend%20coverage&logo=codecov&logoColor=white)](https://codecov.io/gh/mnaimfaizy/fastapi_rbac?flags%5B0%5D=backend)

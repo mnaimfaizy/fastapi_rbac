@@ -18,7 +18,7 @@ Citations are read from the page's markup, its data block, and its script, inclu
 
 ## Where it runs
 
-- **Pull requests and pushes to `main`:** the `Docs Check` workflow (`.github/workflows/docs-check.yml`) runs on every pull request, not only docs changes, because a backend or frontend change is what makes a page stale. A failure annotates the changed source lines, and the job summary lists each problem with the diff inside the cited range, where on the page it is used, and the command that fixes it.
+- **Pull requests and pushes to `main`:** the `CI` workflow (`.github/workflows/ci.yml`) calls the `Docs Check` workflow (`.github/workflows/docs-check.yml`) whenever a change touches `backend/app/`, `react-frontend/src/`, `docs/explainers/` or `scripts/docs/`, not only on docs changes, because a backend or frontend change is what makes a page stale. A failure annotates the changed source lines, and the job summary lists each problem with the diff inside the cited range, where on the page it is used, and the command that fixes it.
 - **Docs deploy:** `.github/workflows/docs.yml` runs the check before `mkdocs build`, so a stale page is never published.
 - **Before a commit:** the `explainer-drift` pre-commit hook runs when you change `backend/app/`, `react-frontend/src/`, `docs/explainers/` or `scripts/docs/`.
 

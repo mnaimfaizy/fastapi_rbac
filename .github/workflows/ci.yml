@@ -1,0 +1,92 @@
+name: CI
+
+# The one entry point for pull request and main-branch CI (#381). It works out
+# which areas a change touches, calls only those workflows, and ends in the
+# `CI gate` job, the only required status check on main.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  # A manual run is a full run: change detection runs every area for any
+  # event other than pull_request or push.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A new push to a pull request cancels that PR's run still in progress. Pushes
+# to main get a group of their own (the run id), so they never queue behind
+# or cancel each other.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      backend: ${{ steps.detect.outputs.backend }}
+      frontend: ${{ steps.detect.outputs.frontend }}
+      explainers: ${{ steps.detect.outputs.explainers }}
+      mkdocs: ${{ steps.detect.outputs.mkdocs }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - id: detect
+        uses: ./.github/actions/detect-changes
+
+      # Milliseconds. A wrong gate verdict is the one failure that lets an
+      # untested change merge, so its cases run on every change.
+      - name: Test the CI gate logic
+        run: bash .github/scripts/ci-gate.test.sh
+
+  # Each area runs when detection says its files changed, and also whenever
+  # detection did not succeed (fail open). `!cancelled()` lets that happen
+  # after a failed `changes` job.
+  backend:
+    name: Backend CI
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.backend == 'true') }}
+    uses: ./.github/workflows/backend-ci.yml
+    secrets: inherit
+
+  frontend:
+    name: Frontend CI
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.frontend == 'true') }}
+    uses: ./.github/workflows/react-frontend-ci.yml
+    secrets: inherit
+
+  docs:
+    name: Docs Check
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.explainers == 'true' || needs.changes.outputs.mkdocs == 'true') }}
+    uses: ./.github/workflows/docs-check.yml
+    with:
+      explainers: ${{ needs.changes.result != 'success' || needs.changes.outputs.explainers == 'true' }}
+      mkdocs: ${{ needs.changes.result != 'success' || needs.changes.outputs.mkdocs == 'true' }}
+
+  # The only required status check. It always runs, and passes only when
+  # detection succeeded and every area either passed or was skipped as
+  # untouched. The rules and their tests are in .github/scripts/ci-gate*.sh.
+  # Keep the name: the main ruleset requires the check by this exact name.
+  gate:
+    name: CI gate
+    needs: [changes, backend, frontend, docs]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/scripts
+
+      - name: Decide
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: bash .github/scripts/ci-gate.sh
