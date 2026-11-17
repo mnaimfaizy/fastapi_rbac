@@ -6,6 +6,34 @@ This file serves as the single source of truth for release history and versionin
 
 ## Version History
 
+### v0.4.0-beta (2026-11-17)
+
+_Pre-release._
+
+**Bug Fixes:**
+
+- The hub-runtime bootstraps (`bootstrap.sh` and both split bootstraps) generate a `FIRST_SUPERUSER_PASSWORD` that meets the password policy, so a freshly bootstrapped stack seeds its superuser instead of stopping. A value that is already set is kept.
+
+**Breaking Changes:**
+
+- Development and testing modes no longer return password-reset tokens or verification codes in API responses. To get them back for local testing, set `EXPOSE_TOKENS_IN_RESPONSES=true`. The test compose stacks, the QA stack override and `.env.test.example` already set it. The setting is refused when `MODE=production`. The production images (`Dockerfile.prod`, `queue.dockerfile.prod` and the production stage of `Dockerfile`) now set `MODE=production`, and a container with `FASTAPI_ENV=production` refuses to start unless `MODE=production`. If you override `MODE` in a production deployment, set it to `production` before upgrading.
+- With `MODE=production`, the API refuses to start unless `SECRET_KEY`, `JWT_REFRESH_SECRET_KEY`, `JWT_RESET_SECRET_KEY`, `JWT_VERIFICATION_SECRET_KEY` and `ENCRYPT_KEY` are each set, at least 32 characters long and different from the other four. It also refuses a key that matches a value published in the repository's example or template files, or that contains a placeholder word. A deployment that never set `JWT_VERIFICATION_SECRET_KEY` now refuses to start too. Before upgrading, generate a separate key for each of the five, running this once per key: `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`. The startup error names every key that fails, by name only. Changing `SECRET_KEY` or `JWT_REFRESH_SECRET_KEY` ends every existing session, so users sign in again.
+- `JWT_SECRET_KEY` is removed because nothing was signed with it. If it is still set, the value is ignored.
+
+**Security:**
+
+- Tokens are returned in API responses only when the operator explicitly opts in with `EXPOSE_TOKENS_IN_RESPONSES`, and never in production. The API logs a startup warning when `MODE` is not `production`, and another when the opt-in is on. With the opt-in on, a password-reset request gets the same uniform response as every other request.
+- Production refuses missing, short, shared, placeholder and example signing and encryption keys. Every production settings check now raises an error instead of using `assert`, so the checks still run under `python -O`. Settings validation errors no longer echo input values.
+
+**Documentation:**
+
+- The security configuration reference, the auth API reference, the production setup guides and the backend env examples now document `EXPOSE_TOKENS_IN_RESPONSES`, the `MODE` checks, the five production keys and the command that generates them.
+
+**Technical Details:**
+
+- `backend/.env.example` ships a different placeholder for each key, and development and testing accept them. The hub-runtime bootstraps no longer generate `JWT_SECRET_KEY`, and they add any of the five keys missing from an older `.env`.
+- Upgraded Agent-kit to v1.0.0-beta.7 and added its review response flow. It stays off until `CLAUDE_REVIEW_RESPONSE_ENABLED` is true.
+
 ### v0.3.0-beta (2026-11-17)
 
 _Pre-release._
