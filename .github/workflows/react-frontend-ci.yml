@@ -13,10 +13,13 @@ defaults:
     working-directory: ./react-frontend
 
 jobs:
-  lint:
-    name: Frontend Lint
+  # One job, one `npm ci` (#381). Each check is its own step, and every check
+  # runs once the install succeeds, so one failing check does not hide the
+  # others. The job fails if any of them fails.
+  checks:
+    name: Frontend Checks
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -29,81 +32,30 @@ jobs:
           cache-dependency-path: react-frontend/package-lock.json
 
       - name: Install dependencies
+        id: install
         run: npm ci --legacy-peer-deps
 
-      - name: Run linter
+      - name: Lint
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run lint
 
-  format_check:
-    name: Frontend Format Check
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Set up Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: "npm"
-          cache-dependency-path: react-frontend/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
-
       - name: Check formatting
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run format:check
 
-  build:
-    name: Frontend Build
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    needs: [lint, format_check]
-    if: ${{ !cancelled() && needs.lint.result == 'success' && needs.format_check.result == 'success' }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Set up Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: "npm"
-          cache-dependency-path: react-frontend/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
-
-      - name: Build project
+      - name: Build
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run build
 
-  # Vitest unit/component tests. These need no backend stack, unlike the
-  # Playwright E2E job below, so they run on every PR.
-  unit_tests:
-    name: Frontend Unit Tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    needs: [lint, format_check]
-    if: ${{ !cancelled() && needs.lint.result == 'success' && needs.format_check.result == 'success' }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Set up Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: "npm"
-          cache-dependency-path: react-frontend/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
-
-      - name: Run unit tests with coverage
+      # Vitest unit/component tests. These need no backend stack, unlike the
+      # Playwright E2E job below, so they run on every frontend change.
+      - name: Unit tests with coverage
+        id: unit_tests
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run test:coverage
 
       - name: Upload coverage to Codecov
+        if: ${{ !cancelled() && steps.unit_tests.outcome == 'success' }}
         uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -127,7 +79,7 @@ jobs:
     if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: [build]
+    needs: [checks]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
