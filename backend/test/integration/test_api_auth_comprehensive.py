@@ -23,6 +23,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import settings
 from app.core.security import create_refresh_token, create_verification_token
+from app.utils.login_refusal import LOGIN_REFUSED_DETAIL, LOGIN_REFUSED_STATUS
 
 
 async def register_user_with_csrf(client: AsyncClient, user_data: dict) -> tuple[int, dict]:
@@ -324,17 +325,20 @@ class TestAuthenticationSecurity:
     async def test_account_lockout_after_failed_attempts(self, client: AsyncClient) -> None:
         """
         After MAX_LOGIN_ATTEMPTS wrong passwords the account is locked, and even
-        the correct password is refused until the lockout ends.
+        the correct password is refused until the lockout ends. Every one of
+        those refusals is the uniform login refusal (ADR 0015).
         """
         email, password = await _registered_user(client)
+        uniform = {"detail": LOGIN_REFUSED_DETAIL}
 
         for _ in range(settings.MAX_LOGIN_ATTEMPTS):
             response = await _login(client, email, random_strong_password())
-            assert response.status_code == 422, response.text
+            assert response.status_code == LOGIN_REFUSED_STATUS, response.text
+            assert response.json() == uniform
 
         response = await _login(client, email, password)
-        assert response.status_code == 422, response.text
-        assert "locked" in response.text.lower()
+        assert response.status_code == LOGIN_REFUSED_STATUS, response.text
+        assert response.json() == uniform
 
     @pytest.mark.asyncio
     async def test_rate_limiting_on_login(self, client: AsyncClient) -> None:
