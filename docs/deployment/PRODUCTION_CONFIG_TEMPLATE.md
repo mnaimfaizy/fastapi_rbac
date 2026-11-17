@@ -2,7 +2,13 @@
 
 ## Backend Environment (.env.production)
 
-Replace the following values with production-specific settings:
+Replace the following values with production-specific settings.
+
+`MODE` is read from the process environment before an env file is chosen, so
+`MODE=production` in this file is not enough on its own. The published backend
+and worker images set `MODE=production`, and the backend refuses to start when
+`FASTAPI_ENV=production` and `MODE` is anything else. Leave
+`EXPOSE_TOKENS_IN_RESPONSES` unset: the backend refuses it in production.
 
 ```bash
 #############################################

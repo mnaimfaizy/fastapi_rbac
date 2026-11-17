@@ -40,6 +40,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     ENVIRONMENT=prod \
     TESTING=0 \
     FASTAPI_ENV=production \
+    MODE=production \
     PYTHONPATH=/app
 
 # Install runtime dependencies

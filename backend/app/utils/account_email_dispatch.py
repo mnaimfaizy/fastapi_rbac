@@ -66,8 +66,9 @@ class DispatchResult:
     """Outcome of a dispatch, for the caller's logging and test-mode payload.
 
     Nothing here may reach an ordinary response body. ``verification_token`` is
-    exposed only under ``MODE == "testing"`` so integration tests can drive the
-    verification flow without reading mail.
+    exposed only when ``EXPOSE_TOKENS_IN_RESPONSES`` is on (off by default,
+    refused in production) so integration tests can drive the verification
+    flow without reading mail.
     """
 
     state: AccountState

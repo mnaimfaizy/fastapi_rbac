@@ -84,9 +84,10 @@ class TestComprehensiveAuth:
     async def test_complete_registration_and_login_flow(self, client: AsyncClient) -> None:
         """Register, verify, login, refresh, and logout through the HTTP API.
 
-        Registration no longer returns a user object (#113). In MODE=testing the
-        payload carries ``verification_code`` so the stack can finish the flow
-        without reading mail or the runner's own database.
+        Registration no longer returns a user object (#113). The test stack
+        turns on EXPOSE_TOKENS_IN_RESPONSES, so the payload carries
+        ``verification_code`` and the stack can finish the flow without reading
+        mail or the runner's own database.
         """
         email = random_email()
         password = "TestPassw0rd!47"
@@ -95,7 +96,9 @@ class TestComprehensiveAuth:
         status_code, response_data = await register_user_with_csrf(client, register_data)
         assert status_code == 200, response_data
         verification_token = (response_data.get("data") or {}).get("verification_code")
-        assert verification_token, "Testing-mode registration must return verification_code"
+        assert (
+            verification_token
+        ), "Registration returns verification_code only with EXPOSE_TOKENS_IN_RESPONSES"
 
         _, csrf_headers = await get_csrf_token(client)
         login_before = await client.post(
@@ -166,7 +169,9 @@ class TestComprehensiveAuth:
         )
         assert status_code == 200, response_data
         verification_token = (response_data.get("data") or {}).get("verification_code")
-        assert verification_token, "Testing-mode registration must return verification_code"
+        assert (
+            verification_token
+        ), "Registration returns verification_code only with EXPOSE_TOKENS_IN_RESPONSES"
 
         _, first_headers = await get_csrf_token(client)
         first = await client.post(
@@ -196,7 +201,7 @@ class TestComprehensiveAuth:
         )
         assert status_code == 200, response_data
         original_token = (response_data.get("data") or {}).get("verification_code")
-        assert original_token, "Testing-mode registration must return verification_code"
+        assert original_token, "Registration returns verification_code only with EXPOSE_TOKENS_IN_RESPONSES"
 
         other_token = create_verification_token(email)
         assert other_token != original_token

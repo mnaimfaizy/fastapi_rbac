@@ -87,6 +87,10 @@ would be rejected for the sequential run `123`.
 }
 ```
 
+The verification code is never in the response unless `EXPOSE_TOKENS_IN_RESPONSES`
+is on (off by default, refused in production). Test stacks turn it on to read
+`data.verification_code` instead of mail.
+
 **Error Responses:**
 
 - 400 Bad Request: Invalid input, password too long, rate limit exceeded, or a
@@ -275,7 +279,7 @@ Request a password reset email (public, rate-limited).
 }
 ```
 
-The same `200` and the same message are returned for an unknown address, a disabled account, and an active one (#137). Only `MODE=development` differs, where the reset token is echoed back for MailHog.
+The same `200` and the same message are returned for an unknown address, a disabled account, and an active one (#137). The reset token is never in the response unless `EXPOSE_TOKENS_IN_RESPONSES` is on (off by default, refused in production), which test stacks use to finish the flow without reading mail. With it on, an active account's response also carries `data.reset_token` and `data.reset_url`.
 
 Each request replaces any earlier reset link for the account: only the most recent reset email works (#283).
 

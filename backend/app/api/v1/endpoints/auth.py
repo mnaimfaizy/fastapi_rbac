@@ -498,11 +498,12 @@ async def register(
             # the next restart (#136). Celery Beat now sweeps them from the
             # database instead: app.worker.cleanup_unverified_users_task.
 
-            # Test mode only: integration tests drive the verification flow from
-            # this value rather than reading mail. It is absent in every other
-            # mode, so the payload is null for all four states in production.
+            # Opt-in only: integration tests drive the verification flow from
+            # this value rather than reading mail. EXPOSE_TOKENS_IN_RESPONSES is
+            # off by default and refused in production, so the payload is
+            # otherwise null for all four states.
             response_data = None
-            if getattr(settings, "MODE", None) == "testing" and result.verification_token:
+            if settings.EXPOSE_TOKENS_IN_RESPONSES and result.verification_token:
                 response_data = {"verification_code": result.verification_token}
 
             return create_response(data=response_data, message=ACCOUNT_EMAIL_UNIFORM_MESSAGE)
@@ -1198,16 +1199,17 @@ async def request_password_reset(
                 user_id=user.id,
                 details={"email": user.email, "ip_address": ip_address},
             )
-            if settings.MODE == "development":
+            # Opt-in only (EXPOSE_TOKENS_IN_RESPONSES, refused in production):
+            # lets automated tests finish the reset without reading mail.
+            if settings.EXPOSE_TOKENS_IN_RESPONSES:
                 return create_response(
                     data={
                         "reset_url": f"{reset_url}?token={reset_token}",
                         "reset_token": reset_token,
                     },
-                    message="Password reset email sent. Check the MailHog interface at http://localhost:8025",
+                    message=PASSWORD_RESET_REQUEST_UNIFORM_MESSAGE,
                 )
-            else:
-                return create_response(data={}, message=PASSWORD_RESET_REQUEST_UNIFORM_MESSAGE)
+            return create_response(data={}, message=PASSWORD_RESET_REQUEST_UNIFORM_MESSAGE)
         except HTTPException:
             raise
         except Exception as e:

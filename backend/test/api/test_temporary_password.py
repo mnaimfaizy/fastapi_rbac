@@ -184,7 +184,11 @@ async def test_admin_set_password_restricts_the_next_login(client: AsyncClient, 
     assert refused.json() == PASSWORD_CHANGE_REQUIRED
 
 
-async def test_self_registered_user_is_not_restricted(client: AsyncClient) -> None:
+async def test_self_registered_user_is_not_restricted(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The verification code comes back in the body only with the opt-in on.
+    monkeypatch.setattr(settings, "EXPOSE_TOKENS_IN_RESPONSES", True)
     email = f"self-{uuid4().hex[:8]}@example.com"
     _, headers = await get_csrf_token(client)
     registered = await client.post(

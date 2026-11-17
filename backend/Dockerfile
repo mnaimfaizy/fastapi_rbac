@@ -105,6 +105,8 @@ FROM base AS production
 ENV ENVIRONMENT=production
 ENV TESTING=0
 ENV FASTAPI_ENV=production
+# Settings refuse FASTAPI_ENV=production in any other mode.
+ENV MODE=production
 
 # Copy openssl config to Docker Container
 COPY ./.docker/openssl.cnf /etc/ssl/openssl.cnf

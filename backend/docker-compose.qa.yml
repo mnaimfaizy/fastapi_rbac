@@ -9,3 +9,6 @@ services:
     environment:
       ACCOUNT_LOCKOUT_MINUTES: "5"
       MAX_LOGIN_ATTEMPTS: "3"
+      # Lets a QA run finish password reset and email verification from the
+      # API response. Off in plain dev use, where the links are in MailHog.
+      EXPOSE_TOKENS_IN_RESPONSES: "true"
