@@ -67,9 +67,16 @@ Upgrade carefully (changelog review; prefer split PRs if needed):
 
 [Dependabot](https://docs.github.com/en/code-security/dependabot) is configured in [`.github/dependabot.yml`](../../.github/dependabot.yml):
 
-- Weekly updates for `pip` (`/backend`), `npm` (`/react-frontend`), and `github-actions`
+- Weekly updates for `pip` (`/backend`, `/docs`), `npm` (`/react-frontend`), and `github-actions`
 - Grouped patch/minor PRs per ecosystem
 - Major bumps ignored for high-blast packages until the matching lane runs
+
+### Pinned actions and CI tool installs
+
+- **Third-party actions are pinned to a full commit SHA**, with the release in a trailing comment: `uses: docker/login-action@<40-hex-sha> # v4.8.0`. A tag can be moved by its owner; a commit cannot. Dependabot's `github-actions` updates bump the SHA and the comment together. To add or change one by hand, resolve the release tag to its commit (`gh api repos/<owner>/<repo>/git/ref/tags/<tag>`, following an annotated tag to its commit) and pin that.
+- **Allowed on a tag:** GitHub's own `actions/*` and `github/*`, local `./` actions, and Agent-kit (`mnaimfaizy/agent-kit/...@<tag>`). Agent-kit's tag is the contract: the files copied into this repo must come from the same tag, so it moves by hand (see [Agent-kit integration](../agents/agent-kit.md)).
+- **The check:** [`.github/scripts/check-action-pins.py`](../../.github/scripts/check-action-pins.py) lists every third-party `uses:` in `.github/workflows/*.yml` and `.github/actions/**/action.yml` that is not a SHA. It runs in the `Detect changes` job of `ci.yml` on every change, and as the `action-pins` pre-commit hook when a workflow changes.
+- **Tool installs in workflows name an exact version:** the MkDocs build installs `docs/requirements.txt` (Dependabot `pip`, `/docs`), and the Agent-kit callers run `pipx run uv==<version>`, which is bumped by hand.
 
 Dependabot PRs are starting points; still apply the lane gates before merge. Prefer folding Dependabot bumps into the active lane PR when a human-owned upgrade is already in progress.
 
