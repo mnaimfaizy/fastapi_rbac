@@ -15,6 +15,8 @@ SCRIPT_NAME="$(basename "$0")"
 
 # shellcheck source=_bootstrap_cli.sh
 source "${ROOT_DIR}/_bootstrap_cli.sh"
+# shellcheck source=_superuser_password.sh
+source "${ROOT_DIR}/_superuser_password.sh"
 
 env_get() {
   local key="$1"
@@ -76,9 +78,11 @@ prepare_env() {
     echo "Created ${ENV_FILE} from ${EXAMPLE_FILE}"
   fi
 
-  for key in SECRET_KEY JWT_REFRESH_SECRET_KEY JWT_RESET_SECRET_KEY JWT_VERIFICATION_SECRET_KEY ENCRYPT_KEY DATABASE_PASSWORD FIRST_SUPERUSER_PASSWORD; do
+  for key in SECRET_KEY JWT_REFRESH_SECRET_KEY JWT_RESET_SECRET_KEY JWT_VERIFICATION_SECRET_KEY ENCRYPT_KEY DATABASE_PASSWORD; do
     set_kv_if_empty "$key" "$(gen_secret)"
   done
+  # Hex never passes the password policy that seeding enforces.
+  set_kv_if_empty FIRST_SUPERUSER_PASSWORD "$(gen_superuser_password)"
 
   db_user="$(env_get DATABASE_USER)"
   db_pass="$(env_get DATABASE_PASSWORD)"

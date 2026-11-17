@@ -17,6 +17,7 @@ This is the same topology for staging and production-style validation. Admin UI 
 | [`env.example`](./env.example) | Copy to `.env` on the host (never commit `.env`) |
 | [`bootstrap.sh`](./bootstrap.sh) | CLI: prepare `.env`, pull/start/stop, status, logs, health (default: `up`) |
 | [`_bootstrap_cli.sh`](./_bootstrap_cli.sh) | Shared subcommands/flags (sourced by one-box + split bootstraps) |
+| [`_superuser_password.sh`](./_superuser_password.sh) | Generates a `FIRST_SUPERUSER_PASSWORD` the password policy accepts (sourced by one-box + split bootstraps) |
 | [`Caddyfile`](./Caddyfile) | TLS for `DOMAIN` → `api:8000` |
 | [Oracle Always Free first-time setup](./oracle-always-free-setup.md) | Free VM path for maintainers (single-VM Compose) |
 | [Split + managed data (alternative)](./split-managed-data.md) | Two AMD micros + Neon + Upstash; stop worker when idle |
