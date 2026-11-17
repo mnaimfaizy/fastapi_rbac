@@ -20,9 +20,10 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Skips the jobs below when the change cannot affect the docs or the code an explainer cites (#381). A job
-  # skipped by `if` reports Success, so the required checks still resolve on
-  # a docs-only PR. If this job fails, everything runs instead (fail open).
+  # Skips the jobs below when the change cannot affect the docs or the code
+  # an explainer cites (#381). A job skipped by `if` reports Success, so the
+  # required checks still resolve on a docs-only PR. If this job fails,
+  # everything runs instead (fail open).
   changes:
     name: Detect changes
     runs-on: ubuntu-latest
