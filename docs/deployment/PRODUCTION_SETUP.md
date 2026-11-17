@@ -11,7 +11,7 @@
 
 2. Edit the `.env.production` file:
 
-   - Set strong passwords for `ENCRYPT_KEY`, `JWT_REFRESH_SECRET_KEY`, `JWT_RESET_SECRET_KEY`
+   - Generate `SECRET_KEY`, `JWT_REFRESH_SECRET_KEY`, `JWT_RESET_SECRET_KEY`, `JWT_VERIFICATION_SECRET_KEY` and `ENCRYPT_KEY`, one distinct key each, with `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`
    - Configure your database connection details
    - Set up your SMTP settings for production email service
    - Update Redis configuration
@@ -72,11 +72,14 @@ If you see errors during application startup:
 
 ### Security Settings
 
-1. Ensure all security keys are strong and unique:
+1. Ensure all security keys are strong and unique. With `MODE=production` the
+   backend refuses to start if any is unset, shorter than 32 characters, equal
+   to another, or an example or placeholder value:
 
    - `ENCRYPT_KEY`
    - `JWT_REFRESH_SECRET_KEY`
    - `JWT_RESET_SECRET_KEY`
+   - `JWT_VERIFICATION_SECRET_KEY`
    - `SECRET_KEY`
 
 2. Configure CORS for your production domain:

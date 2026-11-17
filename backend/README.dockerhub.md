@@ -43,7 +43,11 @@ docker run -d \
   -e REDIS_HOST=your_redis_host \
   -e REDIS_PORT=6379 \
   -e REDIS_PASSWORD=your_redis_password \
-  -e SECRET_KEY=a_very_strong_and_unique_secret_key \
+  -e SECRET_KEY="$SECRET_KEY" \
+  -e JWT_REFRESH_SECRET_KEY="$JWT_REFRESH_SECRET_KEY" \
+  -e JWT_RESET_SECRET_KEY="$JWT_RESET_SECRET_KEY" \
+  -e JWT_VERIFICATION_SECRET_KEY="$JWT_VERIFICATION_SECRET_KEY" \
+  -e ENCRYPT_KEY="$ENCRYPT_KEY" \
   -e ACCESS_TOKEN_EXPIRE_MINUTES=30 \
   -e REFRESH_TOKEN_EXPIRE_MINUTES=144000 \
   -e FIRST_SUPERUSER_EMAIL=admin@example.com \
@@ -63,7 +67,7 @@ This image is configured using environment variables. For a comprehensive list a
 - **Redis Connection:**
   - `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`
 - **Security & JWT:**
-  - `SECRET_KEY`: **Critical for security.** A strong, unique key for signing JWTs.
+  - `SECRET_KEY`, `JWT_REFRESH_SECRET_KEY`, `JWT_RESET_SECRET_KEY`, `JWT_VERIFICATION_SECRET_KEY`, `ENCRYPT_KEY`: **Critical for security.** The image runs with `MODE=production`, which refuses to start unless all five are set, at least 32 characters, different from each other, and not an example or placeholder value. Generate each separately with `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`.
   - `ACCESS_TOKEN_EXPIRE_MINUTES`
   - `REFRESH_TOKEN_EXPIRE_MINUTES`
 - **Initial Superuser:**

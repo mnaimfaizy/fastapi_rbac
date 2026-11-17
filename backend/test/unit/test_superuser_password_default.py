@@ -5,7 +5,7 @@ work, which also means seeding would not stop a production deployment that
 forgot to set its own. The production settings check does.
 """
 
-from test.utils import random_strong_password
+from test.utils import random_production_keys, random_strong_password
 
 import pytest
 
@@ -15,14 +15,10 @@ from app.core.security import PasswordValidator
 
 def _production_copy(**overrides: object) -> Settings:
     """The loaded settings switched to production, with every other production check satisfied."""
-    strong = "p" * 40
     return settings.model_copy(
         update={
             "MODE": ModeEnum.production,
-            "SECRET_KEY": strong,
-            "JWT_REFRESH_SECRET_KEY": strong,
-            "JWT_RESET_SECRET_KEY": strong,
-            "ENCRYPT_KEY": strong,
+            **random_production_keys(),
             "DATABASE_HOST": "db.internal",
             **overrides,
         }
@@ -37,7 +33,7 @@ def test_the_default_passes_the_policy() -> None:
 def test_production_refuses_the_default() -> None:
     production = _production_copy(FIRST_SUPERUSER_PASSWORD=DEFAULT_FIRST_SUPERUSER_PASSWORD)
 
-    with pytest.raises(AssertionError, match="FIRST_SUPERUSER_PASSWORD"):
+    with pytest.raises(ValueError, match="FIRST_SUPERUSER_PASSWORD"):
         production.validate_production_settings()
 
 

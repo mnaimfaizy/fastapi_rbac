@@ -20,6 +20,8 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 # Add these imports for settings sources
 from pydantic_settings.sources import DotEnvSettingsSource, PydanticBaseSettingsSource
 
+from app.core.production_keys import PRODUCTION_KEY_FIELDS, check_production_keys
+
 
 def get_project_root() -> str:
     """Get the project root path based on environment"""
@@ -73,8 +75,11 @@ class Settings(BaseSettings):
     EXPOSE_TOKENS_IN_RESPONSES: bool = False
 
     # Security Settings
+    # Development and testing fall back to a random key per process when one
+    # is unset; production requires all five (check_production_keys).
+    # JWT_SECRET_KEY is removed: nothing signed with it. extra="ignore" means a
+    # deployment that still sets it starts normally and the value is unused.
     SECRET_KEY: str = secrets.token_urlsafe(32)
-    JWT_SECRET_KEY: str = secrets.token_urlsafe(32)
     JWT_REFRESH_SECRET_KEY: str = secrets.token_urlsafe(32)
     JWT_RESET_SECRET_KEY: str = secrets.token_urlsafe(32)
     JWT_VERIFICATION_SECRET_KEY: str = secrets.token_urlsafe(32)
@@ -590,40 +595,31 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production_settings(self) -> "Settings":
-        """Validate that critical settings are properly set in production mode"""
-        if self.MODE == ModeEnum.production:
-            # Ensure critical settings are set for production
-            assert self.SECRET_KEY != "development_secret", "Change the SECRET_KEY for production"
-            assert len(self.SECRET_KEY) >= 32, "SECRET_KEY should be at least 32 characters in production"
+        """Refuse production settings that are unsafe to run with.
 
-            # Validate database configuration if using PostgreSQL
-            if self.DATABASE_TYPE == DatabaseTypeEnum.postgresql:
-                assert self.DATABASE_HOST != "localhost", "Use a proper DATABASE_HOST in production"
+        These raise ValueError rather than assert, so ``python -O`` cannot
+        strip them. Development and testing modes skip them.
+        """
+        if self.MODE != ModeEnum.production:
+            return self
 
-            # Validate security settings
-            assert (
-                self.JWT_REFRESH_SECRET_KEY is not None
-            ), "JWT_REFRESH_SECRET_KEY must be set in .env for production mode"
-            assert (
-                len(self.JWT_REFRESH_SECRET_KEY) >= 32
-            ), "JWT_REFRESH_SECRET_KEY should be at least 32 characters in production"
+        # A key no source supplied holds a per-process random default, which
+        # would differ between the API and worker processes.
+        check_production_keys(
+            {
+                name: (getattr(self, name) if name in self.model_fields_set else None)
+                for name in PRODUCTION_KEY_FIELDS
+            }
+        )
 
-            assert (
-                self.JWT_RESET_SECRET_KEY is not None
-            ), "JWT_RESET_SECRET_KEY must be set in .env for production mode"
-            assert (
-                len(self.JWT_RESET_SECRET_KEY) >= 32
-            ), "JWT_RESET_SECRET_KEY should be at least 32 characters in production"
+        if self.DATABASE_TYPE == DatabaseTypeEnum.postgresql and self.DATABASE_HOST == "localhost":
+            raise ValueError("Use a proper DATABASE_HOST in production, not localhost")
 
-            assert self.ENCRYPT_KEY is not None, "ENCRYPT_KEY must be set in .env for production mode"
-            assert len(self.ENCRYPT_KEY) >= 32, "ENCRYPT_KEY should be at least 32 characters in production"
-
-            # The default passes the password policy so development seeding
-            # works, which also means seeding would not stop a production
-            # deployment that forgot to set its own (#272).
-            assert (
-                self.FIRST_SUPERUSER_PASSWORD != DEFAULT_FIRST_SUPERUSER_PASSWORD
-            ), "Set FIRST_SUPERUSER_PASSWORD for production; the shipped default is public"
+        # The default passes the password policy so development seeding
+        # works, which also means seeding would not stop a production
+        # deployment that forgot to set its own (#272).
+        if self.FIRST_SUPERUSER_PASSWORD == DEFAULT_FIRST_SUPERUSER_PASSWORD:
+            raise ValueError("Set FIRST_SUPERUSER_PASSWORD for production; the shipped default is public")
         return self
 
     @model_validator(mode="after")
@@ -663,6 +659,9 @@ class Settings(BaseSettings):
         case_sensitive=True,
         env_file_encoding="utf-8",
         extra="ignore",
+        # A validation error is printed at startup; keep configured values,
+        # keys among them, out of it.
+        hide_input_in_errors=True,
         # env_file is now handled by settings_customise_sources
     )
 

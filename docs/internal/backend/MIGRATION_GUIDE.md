@@ -96,7 +96,9 @@ cp .env.example .env
 # DEBUG=false
 # LOG_LEVEL=INFO
 # USERS_OPEN_REGISTRATION=false
-# Generate new SECRET_KEY, JWT_SECRET_KEY, etc.
+# Generate SECRET_KEY, JWT_REFRESH_SECRET_KEY, JWT_RESET_SECRET_KEY,
+# JWT_VERIFICATION_SECRET_KEY and ENCRYPT_KEY, one distinct key each:
+#   python3 -c "import secrets; print(secrets.token_urlsafe(48))"
 # Configure production database
 # Set up production Redis with SSL
 # Configure production email SMTP

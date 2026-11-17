@@ -44,6 +44,10 @@ set_kv_if_empty() {
     sed -i.bak "s|^${key}=.*|${key}=${escaped}|" "$ENV_FILE"
     rm -f "${ENV_FILE}.bak"
     echo "Generated ${key}"
+  elif ! grep -qE "^${key}=" "$ENV_FILE"; then
+    # An .env made from an older env.example may lack the line entirely.
+    printf '%s=%s\n' "$key" "$value" >>"$ENV_FILE"
+    echo "Generated ${key}"
   fi
 }
 
@@ -72,7 +76,7 @@ prepare_env() {
     echo "Created ${ENV_FILE} from ${EXAMPLE_FILE}"
   fi
 
-  for key in SECRET_KEY JWT_SECRET_KEY JWT_REFRESH_SECRET_KEY JWT_RESET_SECRET_KEY JWT_VERIFICATION_SECRET_KEY ENCRYPT_KEY DATABASE_PASSWORD FIRST_SUPERUSER_PASSWORD; do
+  for key in SECRET_KEY JWT_REFRESH_SECRET_KEY JWT_RESET_SECRET_KEY JWT_VERIFICATION_SECRET_KEY ENCRYPT_KEY DATABASE_PASSWORD FIRST_SUPERUSER_PASSWORD; do
     set_kv_if_empty "$key" "$(gen_secret)"
   done
 
