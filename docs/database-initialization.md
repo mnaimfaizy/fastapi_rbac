@@ -56,8 +56,13 @@ docker-compose -f docker-compose.prod.yml up --build
 1. Waits for PostgreSQL to be ready (with longer timeout)
 2. Runs `backend_pre_start.py` to validate connections
 3. Runs `alembic upgrade head` to apply migrations
-4. Runs `initial_data.py` to create default data
+4. Runs `initial_data.py` to create the superuser, roles and permissions
 5. Starts FastAPI with gunicorn for production
+
+Production does not seed the `manager@example.com` and `user@example.com`
+demo accounts; development and testing do. A database first seeded by v0.4.0-beta
+or earlier still holds them: see
+[Upgrading from v0.4.0-beta or earlier](deployment/production-deployment-guide.md#upgrading-from-v040-beta-or-earlier-retire-the-demo-accounts).
 
 ### Testing Environment
 

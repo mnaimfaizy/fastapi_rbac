@@ -77,6 +77,14 @@ docker-compose -f docker-compose.prod.yml exec backend alembic upgrade head
 docker-compose -f docker-compose.prod.yml exec backend python app/initial_data.py
 ```
 
+In production (`MODE=production`) this creates the superuser
+(`FIRST_SUPERUSER_EMAIL` with `FIRST_SUPERUSER_PASSWORD`) and the default
+roles and permissions. It does not create the `manager@example.com` and
+`user@example.com` demo accounts: development and testing seed those for local
+sign-in, production does not. Create real accounts for your managers and users,
+or use the [QA Accounts](../reference/qa-accounts.md) seeder on a local
+database for fixture users.
+
 ### 5. Configure Nginx Reverse Proxy
 
 Set up an Nginx reverse proxy to handle SSL termination and routing:
@@ -161,6 +169,40 @@ docker-compose -f docker-compose.prod.yml build
 docker-compose -f docker-compose.prod.yml up -d
 docker-compose -f docker-compose.prod.yml exec backend alembic upgrade head
 ```
+
+### Upgrading from v0.4.0-beta or earlier: retire the demo accounts
+
+Releases up to v0.4.0-beta seeded two demo accounts in every mode, production
+included: `manager@example.com` (Manager role) and `user@example.com` (User
+role), both signing in with the `FIRST_SUPERUSER_PASSWORD` the database was
+first seeded with. Later releases no longer seed them in production, but start-up
+never changes users that already exist, so a database created by an earlier
+release still holds them until you retire them.
+
+Run this once, after the upgrade, in the API container:
+
+```bash
+# docker-compose.prod.yml
+docker-compose -f docker-compose.prod.yml exec backend python -m app.db.retire_demo_accounts
+# Hub runtime (docs/deployment/hub-runtime)
+./bootstrap.sh exec api python -m app.db.retire_demo_accounts
+```
+
+The command:
+
+- runs only when `MODE=production`, and refuses otherwise, because development
+  and tests sign in as these accounts;
+- deactivates each demo account that exists, ends its sessions and revokes any
+  pending verification or password-reset link;
+- deletes nothing, so the accounts' audit history stays, and never touches a
+  superuser;
+- prints one line per address (`deactivated`, `already inactive`, `not present`
+  or `skipped, it is a superuser`) and no password. Running it again changes
+  nothing.
+
+If you use either address as a real account, move that person to their own
+account first. An administrator can later re-enable a deactivated account from
+the user management screens, but give it a new password when you do.
 
 ### Monitoring
 

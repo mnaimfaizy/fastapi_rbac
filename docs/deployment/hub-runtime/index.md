@@ -44,6 +44,10 @@ chmod +x bootstrap.sh
 - Default public host: `https://rbac-api.mnfprofile.com`
 - API health: `https://rbac-api.mnfprofile.com/api/v1/health`
 - Global flags: `--env-file`, `--no-pull`, `--no-wait`
+- Upgrading a database first seeded by v0.4.0-beta or earlier: run
+  `./bootstrap.sh exec api python -m app.db.retire_demo_accounts` once to
+  deactivate the demo accounts those releases seeded. See
+  [the upgrade note](../production-deployment-guide.md#upgrading-from-v040-beta-or-earlier-retire-the-demo-accounts).
 
 ## Related
 
