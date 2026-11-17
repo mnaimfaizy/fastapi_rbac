@@ -54,8 +54,11 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run test:coverage
 
+      # Dependabot runs get no Actions secrets, and Codecov refuses a tokenless
+      # upload here ("Token required because branch is protected"). The tests
+      # and coverage above still run and gate; only the upload is skipped.
       - name: Upload coverage to Codecov
-        if: ${{ !cancelled() && steps.unit_tests.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.unit_tests.outcome == 'success' && github.actor != 'dependabot[bot]' }}
         uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}

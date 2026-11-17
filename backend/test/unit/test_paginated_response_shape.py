@@ -63,9 +63,10 @@ def test_paginated_response_has_no_top_level_items() -> None:
 def paginated_result_names(tree: ast.AST) -> set[str]:
     """Names bound to a paginated result.
 
-    Tracks both ``paginate(...)`` itself and the ``get_multi_paginated*``
-    wrappers around it. Tracking only the wrappers is what let the CRUD layer
-    slip through: role_group_crud calls ``paginate`` directly.
+    Tracks ``apaginate(...)`` (and the sync ``paginate``) itself and the
+    ``get_multi_paginated*`` wrappers around it. Tracking only the wrappers is
+    what let the CRUD layer slip through: role_group_crud calls ``apaginate``
+    directly.
     """
     names: set[str] = set()
     for node in ast.walk(tree):
@@ -80,7 +81,7 @@ def paginated_result_names(tree: ast.AST) -> set[str]:
         called = (
             func.attr if isinstance(func, ast.Attribute) else func.id if isinstance(func, ast.Name) else None
         )
-        if called and (called.startswith("get_multi_paginated") or called == "paginate"):
+        if called and (called.startswith("get_multi_paginated") or called in ("paginate", "apaginate")):
             for target in node.targets:
                 if isinstance(target, ast.Name):
                     names.add(target.id)

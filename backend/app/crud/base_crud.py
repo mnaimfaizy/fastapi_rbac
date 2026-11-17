@@ -3,7 +3,7 @@ from uuid import UUID
 
 from fastapi import HTTPException
 from fastapi_pagination import Page, Params
-from fastapi_pagination.ext.sqlmodel import paginate
+from fastapi_pagination.ext.sqlmodel import apaginate
 from pydantic import BaseModel
 from sqlalchemy import exc
 from sqlalchemy.sql import Executable
@@ -94,7 +94,7 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             if query is None:
                 query = select(self.model)
 
-            return await paginate(db_session, query, params, unique=True)
+            return await apaginate(db_session, query, params, unique=True)
         except Exception as e:
             import logging
 
@@ -126,7 +126,7 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         else:
             query_obj = query
 
-        return await paginate(db_session, query_obj, params, unique=True)
+        return await apaginate(db_session, query_obj, params, unique=True)
 
     async def get_multi_ordered(
         self,

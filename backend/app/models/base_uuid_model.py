@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from pydantic import field_validator  # Updated to use field_validator from Pydantic V2
+from sqlalchemy import DateTime
 from sqlalchemy.orm import declared_attr
 from sqlmodel import Field
 from sqlmodel import SQLModel as _SQLModel
@@ -24,11 +25,17 @@ class BaseUUIDModel(SQLModel):
         nullable=False,
     )
 
+    # Naive UTC storage: these columns are TIMESTAMP WITHOUT TIME ZONE and the app
+    # writes naive UTC values. sqlmodel 0.0.49+ maps a bare `datetime` field to its
+    # timezone-aware UTCDateTime, which rejects naive values, so the column type is
+    # stated explicitly here (no schema change).
     updated_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        sa_type=DateTime,
     )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        sa_type=DateTime,
     )
 
     @field_validator("created_at", "updated_at", mode="before")  # Updated to use field_validator
