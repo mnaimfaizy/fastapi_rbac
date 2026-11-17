@@ -5,13 +5,14 @@
 # The skills read a YAML subset: no tabs, anchors or multi-line values.
 # Never put a password, token or hosted address in this file.
 #
-# plan.suites mirror CI's Backend Test and Frontend Unit Tests jobs. qa-plan
-# runs each at the head and in a tracked-files-only worktree at the merge-base,
-# in cmd.exe on Windows and /bin/sh elsewhere, so each command installs what it
-# needs and reads the same in both shells. The backend suite loads the
-# throwaway test settings from the tracked backend/.env.test.example through
-# python-dotenv's CLI, the parser the app itself uses (uv's --env-file misreads
-# BACKEND_CORS_ORIGINS=["*"]); tests use in-memory SQLite.
+# plan.suites mirror CI's Backend Test job and the unit-test step of the
+# Frontend Checks job. qa-plan runs each at the head and in a tracked-files-only
+# worktree at the merge-base, in cmd.exe on Windows and /bin/sh elsewhere, so
+# each command installs what it needs and reads the same in both shells. The
+# backend suite loads the throwaway test settings from the tracked
+# backend/.env.test.example through python-dotenv's CLI, the parser the app
+# itself uses (uv's --env-file misreads BACKEND_CORS_ORIGINS=["*"]); tests use
+# in-memory SQLite.
 #
 # The QA Plan and the QA Report both go on the pull request as one comment
 # each, and only after the person running the skill says yes.
