@@ -6,6 +6,24 @@ This file serves as the single source of truth for release history and versionin
 
 ## Version History
 
+### v0.5.0-beta (2026-11-17)
+
+_Pre-release._
+
+**Breaking Changes:**
+
+- Production no longer seeds the demo accounts `manager@example.com` and `user@example.com`. It seeds only the superuser, roles and permissions. Development and testing still seed both demo accounts, so local sign-in and the tests are unchanged. Start-up never changes existing users, so if you are upgrading a production database first seeded by v0.4.0-beta or earlier, run `python -m app.db.retire_demo_accounts` once in the production API container after the upgrade. It deactivates any demo accounts that exist. See "Upgrading from v0.4.0-beta or earlier: retire the demo accounts" in `docs/deployment/production-deployment-guide.md`. For other accounts, use real accounts, or the QA Accounts seeder on a local database for fixture users.
+
+**Security:**
+
+- A caller who is not a superuser can no longer change or remove a superuser, or a user who holds a permission the caller does not hold. This applies to `PUT /users/{user_id}`, `PUT /users/bulk-update`, `DELETE /users/{user_id}` and `POST /users/{user_id}/roles`. Admins who are not superusers now get a 403 on these routes for such targets. The response names the rule, not the target's permissions. Every target in a bulk update is checked before any write, so a refused bulk update changes nobody. Users whose permissions the caller all holds, peers included, can still be edited. The caller's own record and superusers are not affected.
+- Added `python -m app.db.retire_demo_accounts`, an opt-in, one-off command. It runs only when `MODE=production`. It deactivates each demo account that exists, ends its sessions and revokes its pending verification and password-reset links. It deletes nothing, skips a superuser, prints one line per address and no password, and changes nothing if you run it again.
+
+**Documentation:**
+
+- The Users API reference now explains which users a caller can change or remove and when the API refuses with a 403. The update, bulk update, delete and role-assignment routes link to that explanation.
+- The production deployment guide has a new upgrade step for retiring the demo accounts. The database initialization guide and the Hub runtime quick start link to it.
+
 ### v0.4.0-beta (2026-11-17)
 
 _Pre-release._
