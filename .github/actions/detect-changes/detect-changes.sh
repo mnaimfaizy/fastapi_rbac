@@ -27,6 +27,13 @@ run_everything() {
   exit 0
 }
 
+# Both sides of a rename (--no-renames lists the old path as deleted), and
+# paths verbatim rather than C-quoted (core.quotepath=false), so a file moved
+# out of an area, or a non-ASCII name inside one, still counts for that area.
+git_changed_files() { # git_changed_files <base> <head>
+  git -c core.quotepath=false diff --name-only --no-renames "$1" "$2"
+}
+
 changed_files() {
   if [ -n "${CHANGED_FILES_FILE:-}" ]; then
     cat "$CHANGED_FILES_FILE"
@@ -37,14 +44,14 @@ changed_files() {
       # actions/checkout puts the PR's merge commit at HEAD; its first parent
       # is the base branch tip, so this diff is exactly what the PR changes.
       git rev-parse --verify --quiet HEAD^2 >/dev/null || return 1
-      git diff --name-only HEAD^1 HEAD
+      git_changed_files HEAD^1 HEAD
       ;;
     push)
       local before="${BEFORE_SHA:-}"
       if [ -z "$before" ] || [[ "$before" =~ ^0+$ ]]; then return 1; fi
       git cat-file -e "$before^{commit}" 2>/dev/null ||
         git fetch --quiet --no-tags --depth=1 origin "$before" || return 1
-      git diff --name-only "$before" HEAD
+      git_changed_files "$before" HEAD
       ;;
     *)
       return 1
