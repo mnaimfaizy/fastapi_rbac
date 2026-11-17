@@ -68,7 +68,7 @@ while IFS= read -r f; do echo "  $f"; done <<<"$files"
 matches() { grep -qE "$1" <<<"$files" && echo true || echo false; }
 
 # The CI definition: a change here must prove itself on every area.
-if [ "$(matches '^(\.github/workflows/(backend-ci|react-frontend-ci|docs-check)\.yml|\.github/actions/|codecov\.yml$)')" = true ]; then
+if [ "$(matches '^(\.github/workflows/(ci|backend-ci|react-frontend-ci|docs-check)\.yml|\.github/actions/|\.github/scripts/ci-gate|codecov\.yml$)')" = true ]; then
   run_everything "the CI definition changed"
 fi
 
