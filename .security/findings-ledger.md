@@ -11,5 +11,5 @@ Fingerprints of known findings from the Agent-kit security audit, so repeat runs
 | `prod-accepts-example-secrets` | untriaged; open | 2026-11-07 | GHSA-9p2m-g4cr-xqmx | |
 | `login-account-enumeration-oracle` | untriaged; open | 2026-11-07 | GHSA-9p2m-g4cr-xqmx | Re-reported in GHSA-33c4-299h-9xc7 |
 | `ci-third-party-actions-unpinned` | untriaged; open | 2026-11-07 | GHSA-9p2m-g4cr-xqmx | Partly mitigated |
-| `non-production-mode-token-disclosure` | untriaged; open | 2026-11-09 | GHSA-33c4-299h-9xc7 | |
+| `non-production-mode-token-disclosure` | confirmed; open | 2026-11-09 | GHSA-33c4-299h-9xc7 | |
 | `role-permission-edit-ceiling` | released (v0.3.0-beta) | 2026-11-16 | pending | Manual triage; fixed by #360 |
