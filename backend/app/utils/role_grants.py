@@ -23,6 +23,23 @@ role-permission ceiling:
 Only values that change are checked. Resending a user's current roles or flag,
 or a role's current permissions, is a no-op and is allowed, so an edit that
 leaves them alone never fails here.
+
+The rules above limit the authority a caller hands out. The user-target
+ceiling limits who they hand it to, or change at all. Every route that changes
+or removes another user (``user.update`` or ``user.delete``) checks the target
+first, with ``ensure_can_manage_user``:
+
+- A superuser is not limited.
+- Anyone else may not change or remove a superuser.
+- Anyone else may not change or remove a user who holds a permission they do
+  not hold. A user whose permissions are all held by the caller, a peer with
+  the same permissions included, stays editable. That is deliberate: the
+  ceiling stops a caller from reaching above themselves, not sideways.
+- The caller's own record is not judged by this rule. The rules above still
+  stop them changing their own roles or ``is_superuser``.
+
+The target's roles and permissions are read fresh from the database, as
+``load_roles`` does, and every target is checked before anything is written.
 """
 
 from collections.abc import Iterable, Sequence
@@ -40,6 +57,8 @@ from app.models.user_model import User
 OWN_ROLES_DETAIL = "You cannot change your own roles."
 SUPERUSER_DETAIL = "Only a superuser can change whether a user is a superuser."
 OWN_ROLE_PERMISSIONS_DETAIL = "You cannot change the permissions of a role you hold."
+SUPERUSER_TARGET_DETAIL = "Only a superuser can change or remove a superuser."
+HIGHER_TARGET_DETAIL = "You cannot change or remove a user who has permissions you do not hold."
 
 
 def _permission_names(roles: Iterable[Role]) -> set[str]:
@@ -187,3 +206,35 @@ def ensure_can_set_permissions(
                     f"You cannot grant or remove the permission '{permission.name}': " "you do not hold it."
                 ),
             )
+
+
+async def load_user(user_id: UUID, *, db_session: AsyncSession) -> User:
+    """The user ``user_id`` names, with roles and their permissions loaded; 404 if missing."""
+    # populate_existing: see load_roles. The target, or a role it shares with
+    # the caller, may already sit in this session with stale collections.
+    result = await db_session.exec(
+        select(User)
+        .where(User.id == user_id)
+        .options(selectinload(User.roles).selectinload(Role.permissions))  # type: ignore[arg-type]
+        .execution_options(populate_existing=True)
+    )
+    user = result.first()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return user
+
+
+def ensure_can_manage_user(*, actor: User, target: User) -> None:
+    """Refuse with 403 unless ``actor`` may change or remove ``target``.
+
+    ``target`` must have its roles and their permissions loaded fresh, as
+    ``load_user`` does. ``actor`` must have them loaded as
+    ``deps.get_current_user`` does. The refusal names the rule, never the
+    permissions the target holds.
+    """
+    if actor.is_superuser or target.id == actor.id:
+        return
+    if target.is_superuser:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=SUPERUSER_TARGET_DETAIL)
+    if not _permission_names(target.roles or []) <= _permission_names(actor.roles or []):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=HIGHER_TARGET_DETAIL)
