@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app import crud
-from app.core.config import settings
+from app.core.config import ModeEnum, settings
 from app.models import Permission as PermissionModel
 from app.models import PermissionGroup as PermissionGroupModel
 from app.models import Role as RoleModel
@@ -24,6 +24,11 @@ current_date = datetime.now(timezone.utc).replace(tzinfo=None)
 
 SUPERUSER_EMAIL = settings.FIRST_SUPERUSER_EMAIL
 
+# Entries marked "demo" are the Manager and User demo accounts: public
+# addresses that share FIRST_SUPERUSER_PASSWORD, for local development and
+# tests. init_db seeds them outside production only; the superuser and the
+# roles are seeded in every mode. python -m app.db.retire_demo_accounts
+# deactivates any an earlier release left in a production database.
 INITIAL_USERS_DATA: List[Dict[str, Any]] = [
     {
         "user_data": IUserCreateFields(
@@ -54,6 +59,7 @@ INITIAL_USERS_DATA: List[Dict[str, Any]] = [
             roles=[],
         ),
         "role_names": ["Manager"],
+        "demo": True,
     },
     {
         "user_data": IUserCreateFields(
@@ -69,8 +75,21 @@ INITIAL_USERS_DATA: List[Dict[str, Any]] = [
             roles=[],
         ),
         "role_names": ["User"],
+        "demo": True,
     },
 ]
+
+DEMO_ACCOUNT_EMAILS: tuple[str, ...] = tuple(
+    entry["user_data"].email for entry in INITIAL_USERS_DATA if entry.get("demo")
+)
+
+
+def users_to_seed(mode: ModeEnum) -> List[Dict[str, Any]]:
+    """The INITIAL_USERS_DATA entries init_db creates in ``mode``: no demo account in production."""
+    if mode == ModeEnum.production:
+        return [entry for entry in INITIAL_USERS_DATA if not entry.get("demo")]
+    return list(INITIAL_USERS_DATA)
+
 
 INITIAL_PERMISSION_GROUPS: List[Dict[str, Any]] = [
     {"name": "User", "description": "Permissions for managing users"},
@@ -378,7 +397,7 @@ async def init_db(db_session: AsyncSession) -> None:
         else:
             print(f"Warning: Could not create/retrieve role {role_data['name']}")
 
-    for user_entry in INITIAL_USERS_DATA:
+    for user_entry in users_to_seed(settings.MODE):
         user_data_schema = user_entry["user_data"]
         user_obj = await crud.user.get_by_email(email=user_data_schema.email, db_session=db_session)
 
