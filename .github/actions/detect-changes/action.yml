@@ -1,0 +1,31 @@
+name: Detect changes
+description: >-
+  Work out which CI areas a pull request or a push to main touches, so each
+  workflow can skip the jobs a change cannot affect (#381). It fails open:
+  anything it cannot decide runs every area. Needs a checkout with
+  fetch-depth 2 first.
+
+outputs:
+  backend:
+    description: "'true' when Backend CI must run"
+    value: ${{ steps.detect.outputs.backend }}
+  frontend:
+    description: "'true' when React Frontend CI must run"
+    value: ${{ steps.detect.outputs.frontend }}
+  explainers:
+    description: "'true' when the explainer drift check must run"
+    value: ${{ steps.detect.outputs.explainers }}
+  mkdocs:
+    description: "'true' when the MkDocs build must run"
+    value: ${{ steps.detect.outputs.mkdocs }}
+
+runs:
+  using: composite
+  steps:
+    - id: detect
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        BEFORE_SHA: ${{ github.event.before }}
+      run: bash "$GITHUB_ACTION_PATH/detect-changes.sh"

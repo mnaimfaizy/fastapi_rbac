@@ -6,9 +6,35 @@ on:
   pull_request:
     branches: [main]
 
+# A new push to a pull request cancels that PR's run still in progress. Pushes
+# to main get a group of their own (the run id), so they never queue behind
+# or cancel each other (#381).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  # Skips the jobs below when the change cannot affect the backend (#381). A job
+  # skipped by `if` reports Success, so the required checks still resolve on
+  # a docs-only PR. If this job fails, everything runs instead (fail open).
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.detect.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - id: detect
+        uses: ./.github/actions/detect-changes
+
   lint:
     name: Backend Lint
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.run == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -59,6 +85,8 @@ jobs:
 
   test:
     name: Backend Test
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.run == 'true') }}
     runs-on: ubuntu-latest
     # The pytest step used to take ~22 minutes because every test rebuilt the
     # schema and re-ran the init_db seed (~2.7s of setup each). The fixtures
@@ -168,6 +196,8 @@ jobs:
 
   integration-test:
     name: Backend Integration Test
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.run == 'true') }}
     runs-on: ubuntu-latest
     # The suite takes ~9 minutes against the stack, plus the image build.
     timeout-minutes: 45
@@ -256,6 +286,8 @@ jobs:
     name: Backend Coverage
     runs-on: ubuntu-latest
     needs: [test, integration-test]
+    # Explicit, so a skipped or failed suite skips the combine as before.
+    if: ${{ !cancelled() && needs.test.result == 'success' && needs.integration-test.result == 'success' }}
     timeout-minutes: 10
 
     steps:
@@ -311,7 +343,10 @@ jobs:
           coverage xml -o coverage-combined.xml
           ls -l coverage-combined.xml
 
+      # Dependabot runs get no Actions secrets, and Codecov refuses a tokenless
+      # upload here ("Token required because branch is protected").
       - name: Upload combined coverage to Codecov
+        if: github.actor != 'dependabot[bot]'
         uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}

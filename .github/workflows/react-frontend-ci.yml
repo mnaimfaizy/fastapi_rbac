@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [main]
 
+# A new push to a pull request cancels that PR's run still in progress. Pushes
+# to main get a group of their own (the run id), so they never queue behind
+# or cancel each other (#381).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   NODE_VERSION: "22.x"
 
@@ -14,8 +21,27 @@ defaults:
     working-directory: ./react-frontend
 
 jobs:
+  # Skips the jobs below when the change cannot affect the frontend (#381). A job
+  # skipped by `if` reports Success, so the required checks still resolve on
+  # a docs-only PR. If this job fails, everything runs instead (fail open).
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.detect.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - id: detect
+        uses: ./.github/actions/detect-changes
+
   lint:
     name: Frontend Lint
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.run == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -37,6 +63,8 @@ jobs:
 
   format_check:
     name: Frontend Format Check
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.run == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -61,6 +89,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [lint, format_check]
+    if: ${{ !cancelled() && needs.lint.result == 'success' && needs.format_check.result == 'success' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -85,6 +114,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [lint, format_check]
+    if: ${{ !cancelled() && needs.lint.result == 'success' && needs.format_check.result == 'success' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
