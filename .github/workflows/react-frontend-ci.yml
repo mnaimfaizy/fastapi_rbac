@@ -59,7 +59,7 @@ jobs:
       # and coverage above still run and gate; only the upload is skipped.
       - name: Upload coverage to Codecov
         if: ${{ !cancelled() && steps.unit_tests.outcome == 'success' && github.actor != 'dependabot[bot]' }}
-        uses: codecov/codecov-action@v7
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           # Report exactly one file. `files` alone only adds to the action's

@@ -131,6 +131,16 @@ repos:
         language: python
         pass_filenames: false
         files: ^(backend/app/|react-frontend/src/|docs/explainers/|scripts/docs/)
+  # Third-party actions must be pinned to a full commit SHA. ci.yml runs the
+  # same check on every change. See docs/development/DEPENDENCY_UPGRADES.md.
+  - repo: local
+    hooks:
+      - id: action-pins
+        name: third-party actions are pinned to a commit SHA
+        entry: python .github/scripts/check-action-pins.py
+        language: python
+        pass_filenames: false
+        files: ^\.github/(workflows/|actions/|scripts/check-action-pins\.py$)
   # Refresh the local graphify graph after commits and merges/pulls that touch
   # source. Runs in the background and never fails the git command. No-op for
   # anyone without graphify installed and a graph built. See docs/agents/graphify.md.

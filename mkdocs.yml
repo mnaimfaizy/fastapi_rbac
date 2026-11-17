@@ -4,6 +4,10 @@ site_author: "FastAPI RBAC Team"
 repo_url: "https://github.com/mnaimfaizy/fastapi_rbac"
 repo_name: "mnaimfaizy/fastapi_rbac"
 
+# The pinned MkDocs install for CI (docs/requirements.txt), not a page.
+exclude_docs: |
+  /requirements.txt
+
 theme:
   name: material
   palette:

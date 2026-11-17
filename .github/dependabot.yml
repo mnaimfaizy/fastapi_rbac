@@ -44,6 +44,23 @@ updates:
       # requirements.txt unresolvable. Let pydantic drive it.
       - dependency-name: pydantic_core
 
+  # The MkDocs build's pinned install (docs.yml, docs-check.yml).
+  - package-ecosystem: pip
+    directory: /docs
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 2
+    labels:
+      - dependencies
+      - maintenance
+    groups:
+      docs-patch-minor:
+        applies-to: version-updates
+        update-types:
+          - patch
+          - minor
+
   - package-ecosystem: npm
     directory: /react-frontend
     schedule:

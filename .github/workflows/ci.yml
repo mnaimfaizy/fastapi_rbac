@@ -45,6 +45,10 @@ jobs:
       - name: Test the CI gate logic
         run: bash .github/scripts/ci-gate.test.sh
 
+      # Third-party actions must name a full commit SHA, not a movable tag.
+      - name: Third-party actions are pinned
+        run: python3 .github/scripts/check-action-pins.py
+
   # Each area runs when detection says its files changed, and also whenever
   # detection did not succeed (fail open). `!cancelled()` lets that happen
   # after a failed `changes` job.
