@@ -255,10 +255,14 @@ async def bulk_update_users(
     update_obj = IUserUpdate(**updates)
     targets = []
     for user_id in parsed_ids:
-        user = await crud.user.get_with_roles_permissions(id=user_id, db_session=db_session)
-        if user:
-            targets.append(user)
+        try:
+            targets.append(await role_grants.load_user(user_id, db_session=db_session))
+        except HTTPException as missing:
+            if missing.status_code != status.HTTP_404_NOT_FOUND:
+                raise
     # Check every target before writing any, so a refusal changes nobody.
+    for user in targets:
+        role_grants.ensure_can_manage_user(actor=current_user, target=user)
     if "is_superuser" in update_obj.model_fields_set:
         for user in targets:
             role_grants.ensure_can_set_superuser(
@@ -297,18 +301,22 @@ async def update_user(
     response is written (#240, #206). The acting administrator's session is
     not touched. The password is a temporary one, so the user is flagged to
     change it.
+
+    A caller who isn't a superuser cannot change a user above them: see the
+    user-target ceiling in ``role_grants``.
     """
     update_data = user_update.model_dump(exclude_unset=True)
     # Before any write, the password change included, so a refusal changes nothing.
+    target = await role_grants.load_user(user.id, db_session=db_session)
+    role_grants.ensure_can_manage_user(actor=current_user, target=target)
     if "is_superuser" in update_data:
         role_grants.ensure_can_set_superuser(
             actor=current_user, current=user.is_superuser, new=update_data["is_superuser"]
         )
     if "role_id" in update_data:
-        target = await crud.user.get_with_roles_permissions(id=user.id, db_session=db_session)
         new_roles = await role_grants.load_roles(update_data["role_id"] or [], db_session=db_session)
         role_grants.ensure_can_set_roles(
-            actor=current_user, target_id=user.id, current=list(target.roles if target else []), new=new_roles
+            actor=current_user, target_id=user.id, current=list(target.roles), new=new_roles
         )
     # Popped whether or not it is blank: crud.user.update refuses a password
     # key outright, and blank / omitted means leave the password as-is.
@@ -343,9 +351,14 @@ async def remove_user(
 
     Required roles:
     - admin
+
+    A caller who isn't a superuser cannot remove a user above them: see the
+    user-target ceiling in ``role_grants``.
     """
     if current_user.id == user_id:
         raise UserSelfDeleteException()
+    target = await role_grants.load_user(user_id, db_session=db_session)
+    role_grants.ensure_can_manage_user(actor=current_user, target=target)
 
     deleted_user = await crud.user.remove(id=user_id, db_session=db_session)
     return create_response(data=serialize_user(deleted_user), message="User removed")
@@ -359,11 +372,10 @@ async def assign_roles_to_user(
     current_user: User = Depends(deps.get_current_user(required_permissions=["user.update"])),
 ) -> JSONResponse:
     """
-    Replace a user's roles. Subject to the role-grant ceiling (``role_grants``).
+    Replace a user's roles. Subject to the role-grant and user-target ceilings (``role_grants``).
     """
-    user = await crud.user.get_with_roles_permissions(id=user_id, db_session=db_session)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    user = await role_grants.load_user(user_id, db_session=db_session)
+    role_grants.ensure_can_manage_user(actor=current_user, target=user)
     roles = await role_grants.load_roles(role_assign.role_ids, db_session=db_session)
     role_grants.ensure_can_set_roles(
         actor=current_user, target_id=user.id, current=list(user.roles), new=roles

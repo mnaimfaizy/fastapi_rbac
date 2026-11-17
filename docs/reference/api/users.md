@@ -263,7 +263,7 @@ Authorization: Bearer <access_token>
 }
 ```
 
-**Permissions:** `users.update` (admin)
+**Permissions:** `users.update` (admin), subject to the [role-grant ceiling](#role-grant-ceiling), including the target rule.
 
 ---
 
@@ -339,7 +339,7 @@ Authorization: Bearer <access_token>
 }
 ```
 
-**Permissions:** `users.update` (admin)
+**Permissions:** `users.update` (admin), subject to the [role-grant ceiling](#role-grant-ceiling), including the target rule.
 
 ---
 
@@ -367,10 +367,10 @@ Authorization: Bearer <access_token>
 **Error Responses:**
 
 - 409 Conflict: User has roles assigned ("User has N role(s) assigned and cannot be deleted. Please remove all roles first.")
-- 403 Forbidden: Cannot delete self
+- 403 Forbidden: Cannot delete self, or the target is above the caller (see the [target rule](#who-can-be-changed-or-removed))
 - 404 Not Found: User does not exist
 
-**Permissions:** `users.delete` (admin)
+**Permissions:** `users.delete` (admin), subject to the [target rule](#who-can-be-changed-or-removed).
 
 ---
 
@@ -404,7 +404,7 @@ Authorization: Bearer <access_token>
 
 **Error Responses:**
 
-- 403 Forbidden: a role being granted or removed has a permission the caller does not hold, or the caller is changing their own roles
+- 403 Forbidden: a role being granted or removed has a permission the caller does not hold, the caller is changing their own roles, or the target is above the caller (see the [target rule](#who-can-be-changed-or-removed))
 - 404 Not Found: user or role not found
 - 422 Unprocessable Entity: invalid user or role id
 
@@ -422,6 +422,17 @@ Holding `user.update` or `user.create` lets a caller edit users. It does not let
 - `PUT /users/bulk-update` checks every target first, so a refused request changes no user.
 
 Each refusal is a 403 Forbidden with a `detail` naming the rule.
+
+### Who can be changed or removed
+
+The rules above limit the authority a caller hands out. This rule limits whose record they can touch at all. It applies to `PUT /users/{user_id}`, `PUT /users/bulk-update`, `DELETE /users/{user_id}` and `POST /users/{user_id}/roles`, whatever the request changes: password, email, `is_active` or any other field, as well as roles.
+
+- A superuser is not limited.
+- Anyone else cannot change or remove a superuser. The `detail` is "Only a superuser can change or remove a superuser."
+- Anyone else cannot change or remove a user who holds a permission they do not hold, counting the permissions of all the target's roles. The `detail` is "You cannot change or remove a user who has permissions you do not hold." It does not name the permissions.
+- A user whose permissions the caller all holds stays editable. That includes a peer with exactly the caller's permissions. This is deliberate: the rule stops a caller from reaching above themselves, not sideways.
+- The caller's own record is not judged by this rule. The rules above still stop them changing their own roles or `is_superuser`, and `DELETE` still refuses self-deletion.
+- The target is checked before anything is written, the password change included. `PUT /users/bulk-update` checks every target first, so if one is refused, no user changes.
 
 ---
 
