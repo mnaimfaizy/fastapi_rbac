@@ -17,6 +17,8 @@ SCRIPT_NAME="$(basename "$0")"
 source "${ROOT_DIR}/_common.sh"
 # shellcheck source=../_bootstrap_cli.sh
 source "${ROOT_DIR}/../_bootstrap_cli.sh"
+# shellcheck source=../_superuser_password.sh
+source "${ROOT_DIR}/../_superuser_password.sh"
 
 prepare_env() {
   ensure_env_file

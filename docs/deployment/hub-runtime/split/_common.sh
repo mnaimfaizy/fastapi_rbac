@@ -51,9 +51,12 @@ ensure_env_file() {
 
 fill_secrets_and_tokens() {
   local domain
-  for key in SECRET_KEY JWT_REFRESH_SECRET_KEY JWT_RESET_SECRET_KEY JWT_VERIFICATION_SECRET_KEY ENCRYPT_KEY FIRST_SUPERUSER_PASSWORD; do
+  for key in SECRET_KEY JWT_REFRESH_SECRET_KEY JWT_RESET_SECRET_KEY JWT_VERIFICATION_SECRET_KEY ENCRYPT_KEY; do
     set_kv_if_empty "$key" "$(gen_secret)"
   done
+  # Hex never passes the password policy that seeding enforces.
+  # gen_superuser_password comes from ../_superuser_password.sh.
+  set_kv_if_empty FIRST_SUPERUSER_PASSWORD "$(gen_superuser_password)"
 
   domain="$(env_get DOMAIN)"
   domain="${domain:-rbac-api.mnfprofile.com}"

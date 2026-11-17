@@ -45,6 +45,7 @@ Admin UI                        [Admin UI host](../admin-ui/index.md) (unchanged
 | [`split/bootstrap-worker.sh`](./split/bootstrap-worker.sh) | Same CLI for worker + Beat |
 | [`split/_common.sh`](./split/_common.sh) | Shared env/CA helpers (sourced by both bootstraps) |
 | [`_bootstrap_cli.sh`](./_bootstrap_cli.sh) | Shared subcommands/flags (parent of `split/`) |
+| [`_superuser_password.sh`](./_superuser_password.sh) | Policy-compliant `FIRST_SUPERUSER_PASSWORD` generator (parent of `split/`) |
 | [`Caddyfile`](./Caddyfile) | Shared with single-VM path (mounted as `../Caddyfile`) |
 
 Default single-VM [`bootstrap.sh`](./bootstrap.sh) still forces `CELERY_*` → `redis://redis:6379/0` for Compose Redis. **Split bootstraps never do that** — they require your managed URLs.
