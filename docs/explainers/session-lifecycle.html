@@ -777,7 +777,7 @@ ZADD user:{id}:access_token           eyJ…·E1
 HSET user:{id}:access_token:meta      eyJ…·E1 {&quot;session_id&quot;: &quot;sha256(R·E)&quot;, &quot;origin_ip&quot;: &quot;&quot;, …}
 INSERT AuditLog                       action = &quot;successful_login&quot;
 ← 200 {access_token: &quot;eyJ…·E1&quot;, refresh_token: null, user}
-  Set-Cookie: refresh_token=eyJ…·R·E; HttpOnly; Path=/api/v1/auth</pre></div></li><li class="bl-beat" data-ch="3" data-b="4" data-zones="redis"><span class="bi">5</span><button type="button" class="bl-go">Five live refresh entries: the cap is full, not exceeded.</button><div class="bl-meta"><span class="bl-zone-dots" aria-hidden="true"><span class="zd zd-redis"></span></span><span class="bl-hop">in Redis</span><span class="bl-refs"><code title="backend/app/utils/allowlist.py:240-246">allowlist.py:240-246</code> <code title="backend/app/core/config.py:253">config.py:253</code></span></div><div class="bl-detail"><p class="bl-delta"><b>Δ</b>none</p><h4>Cap</h4><pre>_enforce_concurrent_session_limit counts live sessions: refresh tokens, plus form-login access tokens
+  Set-Cookie: refresh_token=eyJ…·R·E; HttpOnly; Path=/api/v1/auth</pre></div></li><li class="bl-beat" data-ch="3" data-b="4" data-zones="redis"><span class="bi">5</span><button type="button" class="bl-go">Five live refresh entries: the cap is full, not exceeded.</button><div class="bl-meta"><span class="bl-zone-dots" aria-hidden="true"><span class="zd zd-redis"></span></span><span class="bl-hop">in Redis</span><span class="bl-refs"><code title="backend/app/utils/allowlist.py:240-246">allowlist.py:240-246</code> <code title="backend/app/core/config.py:258">config.py:258</code></span></div><div class="bl-detail"><p class="bl-delta"><b>Δ</b>none</p><h4>Cap</h4><pre>_enforce_concurrent_session_limit counts live sessions: refresh tokens, plus form-login access tokens
 CONCURRENT_SESSION_LIMIT = 5; overflow = 5 − 5 = 0 → nothing to evict</pre></div></li></ol></li><li class="bl-ch" data-ch="4" id="log-evict"><h4 class="bl-h"><span class="n">5</span>The sixth login succeeds, and the oldest session is evicted.</h4><p class="bl-settles">POST /auth/login · a sixth device · settles: Who loses a session at the cap? · 5 live sessions · A evicted</p><ol class="bl-beats"><li class="bl-beat" data-ch="4" data-b="0" data-zones="edge api spa"><span class="bi">1</span><button type="button" class="bl-go">New laptop F runs the login path: CSRF, credentials, then Redis.</button><div class="bl-meta"><span class="bl-zone-dots" aria-hidden="true"><span class="zd zd-edge"></span><span class="zd zd-api"></span><span class="zd zd-spa"></span></span><span class="bl-hop">SPA → API (fast-forward)</span><span class="bl-refs"><code title="backend/app/api/v1/endpoints/auth.py:83">auth.py:83</code> <code title="backend/app/api/v1/endpoints/auth.py:284-307">auth.py:284-307</code></span></div><div class="bl-detail"><p class="bl-delta"><b>Δ</b>new laptop: CSRF cookie set; credentials verified</p><h4>Condensed</h4><pre>GET /api/v1/auth/csrf-token → Set-Cookie: fastapi-csrf-token
 POST /api/v1/auth/login → edge, CSRF, credentials, verified, active (as in chapter 1)</pre></div></li><li class="bl-beat" data-ch="4" data-b="1" data-zones="redis api"><span class="bi">2</span><button type="button" class="bl-go">ZADD R·F: six live refresh entries, one over the cap of 5.</button><div class="bl-meta"><span class="bl-zone-dots" aria-hidden="true"><span class="zd zd-redis"></span><span class="zd zd-api"></span></span><span class="bl-hop">API → Redis</span><span class="bl-refs"><code title="backend/app/utils/allowlist.py:269-281">allowlist.py:269-281</code></span></div><div class="bl-detail"><p class="bl-delta"><b>Δ</b>+ R·F live; 6 live refresh entries</p><h4>Redis</h4><pre>ZADD user:{id}:refresh_token ‹expiry› eyJ…·R·F
 HSET user:{id}:refresh_token:meta eyJ…·R·F {&quot;session_id&quot;: &quot;sha256(R·F)&quot;, &quot;origin_ip&quot;: &quot;‹login address›&quot;, …}
@@ -833,7 +833,7 @@ no match → 400 &quot;Invalid Current Password&quot;</pre></div></li><li class=
   DEL user:{id}:{token_type.value}:meta
 emailed_links.revoke(PASSWORD_RESET, user_id)
 both run before the password commit, the caller’s own session and any reset link included</pre></div></li><li class="bl-beat" data-ch="9" data-b="3" data-zones="pg api"><span class="bi">4</span><button type="button" class="bl-go">The new hash is committed, then the change is audited.</button><div class="bl-meta"><span class="bl-zone-dots" aria-hidden="true"><span class="zd zd-pg"></span><span class="zd zd-api"></span></span><span class="bl-hop">API → Postgres</span><span class="bl-refs"><code title="backend/app/utils/password_policy.py:265">password_policy.py:265</code> <code title="backend/app/utils/password_policy.py:271">password_policy.py:271</code></span></div><div class="bl-detail"><p class="bl-delta"><b>Δ</b>User.password = new hash; + AuditLog row (password change)</p><h4>Postgres</h4><pre>await db_session.commit()        # the new hash
-log_security_event(…)            # the password policy's own success event</pre></div></li><li class="bl-beat" data-ch="9" data-b="4" data-zones="redis api"><span class="bi">5</span><button type="button" class="bl-go">Fresh session F′: R·F′ lives 100 days, origin recorded; then F′1.</button><div class="bl-meta"><span class="bl-zone-dots" aria-hidden="true"><span class="zd zd-redis"></span><span class="zd zd-api"></span></span><span class="bl-hop">API → Redis</span><span class="bl-refs"><code title="backend/app/api/v1/endpoints/auth.py:696-702">auth.py:696-702</code> <code title="backend/app/core/config.py:101">config.py:101</code></span></div><div class="bl-detail"><p class="bl-delta"><b>Δ</b>+ R·F′ live, 100 d; + F′1 live</p><h4>Redis</h4><pre>refresh_token_expires = timedelta(minutes=REFRESH_TOKEN_EXPIRE_MINUTES)   # default 100 days
+log_security_event(…)            # the password policy's own success event</pre></div></li><li class="bl-beat" data-ch="9" data-b="4" data-zones="redis api"><span class="bi">5</span><button type="button" class="bl-go">Fresh session F′: R·F′ lives 100 days, origin recorded; then F′1.</button><div class="bl-meta"><span class="bl-zone-dots" aria-hidden="true"><span class="zd zd-redis"></span><span class="zd zd-api"></span></span><span class="bl-hop">API → Redis</span><span class="bl-refs"><code title="backend/app/api/v1/endpoints/auth.py:696-702">auth.py:696-702</code> <code title="backend/app/core/config.py:106">config.py:106</code></span></div><div class="bl-detail"><p class="bl-delta"><b>Δ</b>+ R·F′ live, 100 d; + F′1 live</p><h4>Redis</h4><pre>refresh_token_expires = timedelta(minutes=REFRESH_TOKEN_EXPIRE_MINUTES)   # default 100 days
 ZADD user:{id}:refresh_token ‹now + 100 d› eyJ…·R·F′   meta: {&quot;session_id&quot;: &quot;sha256(R·F′)&quot;, &quot;origin_ip&quot;: &quot;‹client address›&quot;, …}
 ZADD user:{id}:access_token ‹expiry› eyJ…·F′1        meta: {&quot;session_id&quot;: &quot;sha256(R·F′)&quot;, &quot;origin_ip&quot;: &quot;&quot;, …}</pre></div></li><li class="bl-beat" data-ch="9" data-b="5" data-zones="edge spa api"><span class="bi">6</span><button type="button" class="bl-go">200 with F′1. Its cookie lasts 100 days, the same as a /login cookie.</button><div class="bl-meta"><span class="bl-zone-dots" aria-hidden="true"><span class="zd zd-edge"></span><span class="zd zd-spa"></span><span class="zd zd-api"></span></span><span class="bl-hop">API → SPA</span><a class="tagchip" href="https://github.com/mnaimfaizy/fastapi_rbac/issues/274">fixed in #274</a><span class="bl-refs"><code title="backend/app/api/v1/endpoints/auth.py:710-716">auth.py:710-716</code></span></div><div class="bl-detail"><p class="bl-delta"><b>Δ</b>new laptop: cookie R·F′ (Max-Age 100 days), memory F′1</p><h4>Response</h4><pre>200
 Set-Cookie: refresh_token=eyJ…·R·F′; HttpOnly; Path=/api/v1/auth; Max-Age=REFRESH_TOKEN_EXPIRE_MINUTES×60
@@ -1140,7 +1140,7 @@ logoutAllUser … finally dispatch(logout())   // local state cleared even if th
   <div class="ref-body">
   <ul class="tight">
     <li>The check runs at refresh only. Access tokens are never checked against the origin (<code>allowlist.py:136-138</code>).</li>
-    <li>It is gated by <code>VALIDATE_TOKEN_IP</code>, default <code>true</code> (<code>allowlist.py:140-143</code>; <code>config.py:336</code>).</li>
+    <li>It is gated by <code>VALIDATE_TOKEN_IP</code>, default <code>true</code> (<code>allowlist.py:140-143</code>; <code>config.py:341</code>).</li>
     <li>The origin is the full client address, stored on the refresh entry only, and compared by network.</li>
     <li>IPv4 addresses are compared as <code>/24</code> networks, IPv6 as <code>/64</code> (<code>origin_network.py:21-22</code>).</li>
     <li>IPv4-mapped IPv6 is normalised to IPv4 first (<code>origin_network.py:43-44</code>).</li>
@@ -1163,11 +1163,11 @@ logoutAllUser … finally dispatch(logout())   // local state cleared even if th
     <table>
       <thead><tr><th>Attribute</th><th>Value</th><th>Source</th></tr></thead>
       <tbody>
-        <tr><td>Name</td><td><code>settings.REFRESH_TOKEN_COOKIE_NAME</code>, default <code>"refresh_token"</code></td><td class="src-cell"><code>config.py:117</code></td></tr>
+        <tr><td>Name</td><td><code>settings.REFRESH_TOKEN_COOKIE_NAME</code>, default <code>"refresh_token"</code></td><td class="src-cell"><code>config.py:122</code></td></tr>
         <tr><td>HttpOnly</td><td>always</td><td class="src-cell"><code>auth_cookies.py:35</code></td></tr>
-        <tr><td>Path</td><td><code>/api/v1/auth</code> (<code>{API_V1_STR}/auth</code>)</td><td class="src-cell"><code>auth_cookies.py:13-15</code>; <code>config.py:65</code></td></tr>
+        <tr><td>Path</td><td><code>/api/v1/auth</code> (<code>{API_V1_STR}/auth</code>)</td><td class="src-cell"><code>auth_cookies.py:13-15</code>; <code>config.py:67</code></td></tr>
         <tr><td>Secure</td><td><code>REFRESH_COOKIE_SECURE</code> if set, else true only when <code>MODE == production</code></td><td class="src-cell"><code>auth_cookies.py:18-22</code></td></tr>
-        <tr><td>SameSite</td><td><code>REFRESH_COOKIE_SAMESITE</code>, default <code>lax</code>; invalid values fall back to <code>lax</code></td><td class="src-cell"><code>auth_cookies.py:25-29</code>; <code>config.py:121</code></td></tr>
+        <tr><td>SameSite</td><td><code>REFRESH_COOKIE_SAMESITE</code>, default <code>lax</code>; invalid values fall back to <code>lax</code></td><td class="src-cell"><code>auth_cookies.py:25-29</code>; <code>config.py:126</code></td></tr>
         <tr><td>Max-Age</td><td>The session's own refresh lifetime, <code>REFRESH_TOKEN_EXPIRE_MINUTES * 60</code>, carried on the issued session. <code>/login</code> and <code>POST /auth/change_password</code> both write the cookie from it, so neither can differ.</td><td class="src-cell"><code>auth_cookies.py:48-54</code>; <code>sessions.py:133</code>; <code>auth.py:710</code></td></tr>
       </tbody>
     </table>
@@ -1193,12 +1193,12 @@ logoutAllUser … finally dispatch(logout())   // local state cleared even if th
     <table>
       <thead><tr><th>Setting</th><th>Default</th><th>Scope</th><th>Source</th></tr></thead>
       <tbody>
-        <tr><td><code>ACCESS_TOKEN_EXPIRE_MINUTES</code></td><td>60 minutes by default; deployments set their own</td><td>Every access token</td><td class="src-cell"><code>config.py:100</code></td></tr>
-        <tr><td><code>REFRESH_TOKEN_EXPIRE_MINUTES</code></td><td><code>144000</code> minutes (100 days)</td><td>Every refresh token, from <code>/login</code> and <code>POST /auth/change_password</code> alike, and the cookie's max-age</td><td class="src-cell"><code>config.py:101</code>; <code>sessions.py:121-133</code></td></tr>
-        <tr><td><code>CONCURRENT_SESSION_LIMIT</code></td><td><code>5</code></td><td>Live sessions per user, form-login sessions included. <code>0</code> or less disables the cap.</td><td class="src-cell"><code>config.py:253</code>; <code>allowlist.py:241</code></td></tr>
-        <tr><td><code>VALIDATE_TOKEN_IP</code></td><td><code>true</code></td><td>The origin check at refresh</td><td class="src-cell"><code>config.py:336</code></td></tr>
-        <tr><td><code>REFRESH_TOKEN_COOKIE_NAME</code></td><td><code>"refresh_token"</code></td><td>The cookie's name only, not the Redis key</td><td class="src-cell"><code>config.py:117</code></td></tr>
-        <tr><td><code>REFRESH_COOKIE_SAMESITE</code></td><td><code>"lax"</code></td><td>The cookie</td><td class="src-cell"><code>config.py:121</code></td></tr>
+        <tr><td><code>ACCESS_TOKEN_EXPIRE_MINUTES</code></td><td>60 minutes by default; deployments set their own</td><td>Every access token</td><td class="src-cell"><code>config.py:105</code></td></tr>
+        <tr><td><code>REFRESH_TOKEN_EXPIRE_MINUTES</code></td><td><code>144000</code> minutes (100 days)</td><td>Every refresh token, from <code>/login</code> and <code>POST /auth/change_password</code> alike, and the cookie's max-age</td><td class="src-cell"><code>config.py:106</code>; <code>sessions.py:121-133</code></td></tr>
+        <tr><td><code>CONCURRENT_SESSION_LIMIT</code></td><td><code>5</code></td><td>Live sessions per user, form-login sessions included. <code>0</code> or less disables the cap.</td><td class="src-cell"><code>config.py:258</code>; <code>allowlist.py:241</code></td></tr>
+        <tr><td><code>VALIDATE_TOKEN_IP</code></td><td><code>true</code></td><td>The origin check at refresh</td><td class="src-cell"><code>config.py:341</code></td></tr>
+        <tr><td><code>REFRESH_TOKEN_COOKIE_NAME</code></td><td><code>"refresh_token"</code></td><td>The cookie's name only, not the Redis key</td><td class="src-cell"><code>config.py:122</code></td></tr>
+        <tr><td><code>REFRESH_COOKIE_SAMESITE</code></td><td><code>"lax"</code></td><td>The cookie</td><td class="src-cell"><code>config.py:126</code></td></tr>
       </tbody>
     </table>
   </div>
@@ -1332,13 +1332,13 @@ logoutAllUser … finally dispatch(logout())   // local state cleared even if th
     "backend/app/api/v1/endpoints/auth.py:83": {"file": "backend/app/api/v1/endpoints/auth.py", "start": "@limiter.limit(\"5/minute\")", "n": 1, "sha": "2a37d64981f04500"},
     "backend/app/api/v1/endpoints/auth.py:994-995": {"file": "backend/app/api/v1/endpoints/auth.py", "start": "# Form login issues no refresh cookie, so the access token is the session.", "n": 2, "sha": "008cfa1b8d249b8b", "end": "access_token = await sessions.open_access_only(user, get_client_ip(request), redis_client=redis_client)"},
     "backend/app/api/v1/endpoints/user.py:100": {"file": "backend/app/api/v1/endpoints/user.py", "start": "current_user: User = Depends(deps.get_current_user(allow_pending_password_change=True)),", "n": 1, "sha": "dde3ce9bc84c7cd1"},
-    "backend/app/core/config.py:100": {"file": "backend/app/core/config.py", "start": "ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 1 # 1 hour", "n": 1, "sha": "9453c3cacb734fd3"},
-    "backend/app/core/config.py:101": {"file": "backend/app/core/config.py", "start": "REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 100 # 100 days", "n": 1, "sha": "66bf1ede0facd289"},
-    "backend/app/core/config.py:117": {"file": "backend/app/core/config.py", "start": "REFRESH_TOKEN_COOKIE_NAME: str = \"refresh_token\"", "n": 1, "sha": "97ec9e5c6bc4b4e3"},
-    "backend/app/core/config.py:121": {"file": "backend/app/core/config.py", "start": "REFRESH_COOKIE_SAMESITE: str = \"lax\" # lax | strict | none (none requires Secure)", "n": 1, "sha": "2d043d218ecf906b"},
-    "backend/app/core/config.py:253": {"file": "backend/app/core/config.py", "start": "CONCURRENT_SESSION_LIMIT: int = 5 # Maximum concurrent sessions", "n": 1, "sha": "ec81d95e217daf72"},
-    "backend/app/core/config.py:336": {"file": "backend/app/core/config.py", "start": "VALIDATE_TOKEN_IP: bool = True", "n": 1, "sha": "fa4e7a885a457c80"},
-    "backend/app/core/config.py:65": {"file": "backend/app/core/config.py", "start": "API_V1_STR: str = f\"/api/{API_VERSION}\"", "n": 1, "sha": "03b6038ee6c9c103"},
+    "backend/app/core/config.py:105": {"file": "backend/app/core/config.py", "start": "ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 1 # 1 hour", "n": 1, "sha": "9453c3cacb734fd3"},
+    "backend/app/core/config.py:106": {"file": "backend/app/core/config.py", "start": "REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 100 # 100 days", "n": 1, "sha": "66bf1ede0facd289"},
+    "backend/app/core/config.py:122": {"file": "backend/app/core/config.py", "start": "REFRESH_TOKEN_COOKIE_NAME: str = \"refresh_token\"", "n": 1, "sha": "97ec9e5c6bc4b4e3"},
+    "backend/app/core/config.py:126": {"file": "backend/app/core/config.py", "start": "REFRESH_COOKIE_SAMESITE: str = \"lax\" # lax | strict | none (none requires Secure)", "n": 1, "sha": "2d043d218ecf906b"},
+    "backend/app/core/config.py:258": {"file": "backend/app/core/config.py", "start": "CONCURRENT_SESSION_LIMIT: int = 5 # Maximum concurrent sessions", "n": 1, "sha": "ec81d95e217daf72"},
+    "backend/app/core/config.py:341": {"file": "backend/app/core/config.py", "start": "VALIDATE_TOKEN_IP: bool = True", "n": 1, "sha": "fa4e7a885a457c80"},
+    "backend/app/core/config.py:67": {"file": "backend/app/core/config.py", "start": "API_V1_STR: str = f\"/api/{API_VERSION}\"", "n": 1, "sha": "03b6038ee6c9c103"},
     "backend/app/core/rate_limit.py:69-79": {"file": "backend/app/core/rate_limit.py", "start": "def _storage_uri() -> str:", "n": 11, "sha": "b487ee3224c642c6", "end": "limiter.enabled = False"},
     "backend/app/core/security.py:192-194": {"file": "backend/app/core/security.py", "start": "except ExpiredSignatureError as e:", "n": 3, "sha": "3ae6f0aa8b4d0f72", "end": "raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=\"Token has expired\")"},
     "backend/app/crud/user_crud.py:349-364": {"file": "backend/app/crud/user_crud.py", "start": "# locked_until is stored naive UTC (increment_failed_attempts); compare it as UTC.", "n": 16, "sha": "9d229dd8a0974685", "end": "await self.reset_failed_attempts(user=user, db_session=db_session)"},
@@ -2910,7 +2910,7 @@ logoutAllUser … finally dispatch(logout())   // local state cleared even if th
      ],
      "refs": [
       "backend/app/utils/allowlist.py:240-246",
-      "backend/app/core/config.py:253"
+      "backend/app/core/config.py:258"
      ],
      "detail": [
       [
@@ -4483,7 +4483,7 @@ logoutAllUser … finally dispatch(logout())   // local state cleared even if th
      "link": "F′",
      "refs": [
       "backend/app/api/v1/endpoints/auth.py:696-702",
-      "backend/app/core/config.py:101"
+      "backend/app/core/config.py:106"
      ],
      "detail": [
       [
@@ -6049,7 +6049,7 @@ logoutAllUser … finally dispatch(logout())   // local state cleared even if th
       return ['Redis key', 'user:{id}:' + nm, h];
     }
     if (kind === 'cap') {
-      h += '<p><b>' + liveCount(st) + ' of ' + CAP + '</b> live refresh entries. The cap counts live sessions: each refresh token, plus each form-login access token, which is a session of its own. It is enforced when a session is recorded. At overflow, the oldest by <code>issued_at</code> is revoked; the new login is never refused.</p>' + refList([P.allowlist + ':233-253', P.cfg + ':253']);
+      h += '<p><b>' + liveCount(st) + ' of ' + CAP + '</b> live refresh entries. The cap counts live sessions: each refresh token, plus each form-login access token, which is a session of its own. It is enforced when a session is recorded. At overflow, the oldest by <code>issued_at</code> is revoked; the new login is never refused.</p>' + refList([P.allowlist + ':233-253', P.cfg + ':258']);
       return ['Cap', 'CONCURRENT_SESSION_LIMIT', h];
     }
     if (kind === 'cookie') {

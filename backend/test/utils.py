@@ -1,4 +1,5 @@
 import random
+import secrets
 import string
 from typing import Any, Dict, Tuple
 
@@ -39,6 +40,54 @@ def random_strong_password() -> str:
 # fixtures use it because user creation goes through
 # password_policy.accept_initial_password (#272).
 STRONG_TEST_PASSWORD = random_strong_password()
+
+# The five settings that sign or encrypt something. Production requires each
+# to be set, long enough and distinct from the others.
+PRODUCTION_KEY_NAMES = (
+    "SECRET_KEY",
+    "JWT_REFRESH_SECRET_KEY",
+    "JWT_RESET_SECRET_KEY",
+    "JWT_VERIFICATION_SECRET_KEY",
+    "ENCRYPT_KEY",
+)
+
+
+def random_production_keys() -> Dict[str, str]:
+    """Five distinct random keys, generated per call so no key literal is committed."""
+    return {name: secrets.token_urlsafe(48) for name in PRODUCTION_KEY_NAMES}
+
+
+def production_kwargs(**overrides: object) -> Dict[str, object]:
+    """Constructor arguments that satisfy every production check on their own.
+
+    Every value the production validators need is supplied here, so a test
+    reads nothing from env files or the ambient environment: init arguments
+    outrank both. Keys are random; the other values are placeholders.
+    """
+    from app.core.config import DatabaseTypeEnum, ModeEnum
+
+    return {
+        "MODE": ModeEnum.production,
+        # validate_production_settings
+        **random_production_keys(),
+        "DATABASE_TYPE": DatabaseTypeEnum.postgresql,
+        "DATABASE_HOST": "db.invalid",
+        "FIRST_SUPERUSER_PASSWORD": random_strong_password(),
+        # set_email_values_based_on_mode refuses these unset in production
+        "SMTP_HOST": "smtp.invalid",
+        "SMTP_PORT": 587,
+        # ensure_required_fields_are_loaded
+        "PROJECT_NAME": "fastapi-rbac-test",
+        "TOKEN_ISSUER": "fastapi-rbac-test",
+        "TOKEN_AUDIENCE": "fastapi-rbac-test",
+        "REDIS_HOST": "redis.invalid",
+        "REDIS_PORT": "6379",
+        "FIRST_SUPERUSER_EMAIL": "admin@example.com",
+        "USER_CHANGED_PASSWORD_DATE": "2025-01-01",
+        # validate_mode_guards: explicit, so an environment that turns it on cannot leak in
+        "EXPOSE_TOKENS_IN_RESPONSES": False,
+        **overrides,
+    }
 
 
 async def accepted_password(

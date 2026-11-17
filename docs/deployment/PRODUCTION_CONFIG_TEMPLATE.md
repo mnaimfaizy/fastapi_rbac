@@ -19,9 +19,8 @@ PROJECT_NAME=your-project-name
 DEBUG=false
 LOG_LEVEL=INFO
 
-# Security Keys - CHANGE ALL OF THESE IN PRODUCTION
+# Security Keys - replace each with its own generated key (see Generate Strong Secrets)
 SECRET_KEY=your_strong_production_secret_key_here
-JWT_SECRET_KEY=your_strong_jwt_secret_key_here
 JWT_VERIFICATION_SECRET_KEY=your_strong_jwt_verification_secret_key
 JWT_REFRESH_SECRET_KEY=your_strong_jwt_refresh_secret_key
 JWT_RESET_SECRET_KEY=your_strong_jwt_reset_secret_key
@@ -73,7 +72,7 @@ VITE_ENABLE_ADVANCED_FEATURES=true
 ## Security Checklist
 
 - [ ] All default passwords changed
-- [ ] Strong, random secret keys generated
+- [ ] Five distinct random keys generated (the backend refuses to start otherwise)
 - [ ] CORS origins restricted to production domain only
 - [ ] Database port not exposed to host
 - [ ] Redis port not exposed to host (unless needed)
@@ -86,27 +85,16 @@ VITE_ENABLE_ADVANCED_FEATURES=true
 
 ## Generate Strong Secrets
 
-Use these commands to generate secure values:
+Run this once for each of `SECRET_KEY`, `JWT_REFRESH_SECRET_KEY`,
+`JWT_RESET_SECRET_KEY`, `JWT_VERIFICATION_SECRET_KEY` and `ENCRYPT_KEY`, and
+use a different output for each:
 
-```powershell
-# Generate random 32-byte key for encryption
-[System.Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
-
-# Generate random 64-character secret
--join ((1..64) | ForEach-Object { '{0:X}' -f (Get-Random -Maximum 16) })
+```bash
+python3 -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-Or use Python:
-
-```python
-import secrets
-import base64
-
-# For encryption key (32 bytes)
-encryption_key = base64.b64encode(secrets.token_bytes(32)).decode()
-print(f"ENCRYPT_KEY={encryption_key}")
-
-# For JWT secrets (64 characters)
-jwt_secret = secrets.token_urlsafe(48)
-print(f"JWT_SECRET_KEY={jwt_secret}")
-```
+With `MODE=production` the backend refuses to start when any of the five is
+unset, shorter than 32 characters, the same as another of the five, a value
+published in this repository's examples, or a placeholder (it contains
+`change`, `your-`, `your_`, `replace`, `example`, `placeholder` or `generate`).
+The error names the keys at fault, never their values.

@@ -234,14 +234,17 @@ if user.failed_attempts >= 5:
 ### Environment Variables
 
 ```bash
-# CSRF Protection
-CSRF_SECRET_KEY=your-csrf-secret-key
-
 # Rate Limiting
 RATE_LIMIT_STORAGE_URL=redis://localhost:6379
 
-# JWT Security
-JWT_SECRET_KEY=your-jwt-secret-key
+# Signing and encryption keys: five distinct generated values (see below)
+SECRET_KEY=
+JWT_REFRESH_SECRET_KEY=
+JWT_RESET_SECRET_KEY=
+JWT_VERIFICATION_SECRET_KEY=
+ENCRYPT_KEY=
+
+# Token lifetimes
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 REFRESH_TOKEN_EXPIRE_MINUTES=144000  # 100 days
 
@@ -264,6 +267,35 @@ backend refuses to start with it on in production, and refuses to start when
 `FASTAPI_ENV=production` (set by the production images) and `MODE` is not
 `production`. At startup the API logs a warning when `MODE` is not
 `production` and another when the opt-in is on.
+
+### Signing and encryption keys
+
+| Setting | What it protects |
+| --- | --- |
+| `SECRET_KEY` | Signs access tokens; also the CSRF secret and Celery's message-signing key |
+| `JWT_REFRESH_SECRET_KEY` | Signs refresh tokens |
+| `JWT_RESET_SECRET_KEY` | Signs password-reset tokens |
+| `JWT_VERIFICATION_SECRET_KEY` | Signs email verification tokens |
+| `ENCRYPT_KEY` | The Fernet key for `get_data_encrypt` and `get_content` (hashed into one when it is not a valid Fernet key) |
+
+With `MODE=production` the backend refuses to start unless each of the five
+is set, at least 32 characters, and different from the other four. It also
+refuses any of them that is a value published in this repository's example or
+template files, or that contains an obvious placeholder word (`change`,
+`your-`, `your_`, `replace`, `example`, `placeholder` or `generate`, in any
+case). The error names the keys at fault, never their values. Development and
+testing modes skip these checks, so the placeholders in `backend/.env.example`
+keep working there.
+
+Generate a separate key for each, running the command once per key:
+
+```bash
+python3 -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+`JWT_SECRET_KEY` is removed: nothing signed with it. A deployment that still
+sets it starts normally and the value is ignored. CSRF uses `SECRET_KEY`;
+there is no separate `CSRF_SECRET_KEY`.
 
 ### Docker Security
 
@@ -292,6 +324,7 @@ read_only: true
 - [ ] **Audit Logging**: Confirm security events are being logged
 - [ ] **HTTPS**: Ensure all communications are encrypted in production
 - [ ] **Mode**: `MODE=production` is set in the container environment, and `EXPOSE_TOKENS_IN_RESPONSES` is unset or false
+- [ ] **Keys**: the five signing and encryption keys are separately generated values
 
 ### Security Testing Commands
 

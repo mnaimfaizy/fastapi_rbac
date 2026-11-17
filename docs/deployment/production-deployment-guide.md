@@ -35,8 +35,16 @@ POSTGRES_USER=postgres
 POSTGRES_PASSWORD=<secure-password>
 POSTGRES_DB=app
 
-# JWT settings
-SECRET_KEY=<your-secret-key>
+# Signing and encryption keys. Production refuses to start unless all five are
+# set, 32+ characters and distinct. Run this once per key:
+#   python3 -c "import secrets; print(secrets.token_urlsafe(48))"
+SECRET_KEY=
+JWT_REFRESH_SECRET_KEY=
+JWT_RESET_SECRET_KEY=
+JWT_VERIFICATION_SECRET_KEY=
+ENCRYPT_KEY=
+
+# Token lifetimes
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 REFRESH_TOKEN_EXPIRE_MINUTES=144000  # 100 days
 

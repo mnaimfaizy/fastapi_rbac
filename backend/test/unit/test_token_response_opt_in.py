@@ -9,48 +9,12 @@ API logs a warning at startup whenever ``MODE`` is not production.
 """
 
 import logging
-from test.utils import random_strong_password
+from test.utils import production_kwargs
 
 import pytest
 from pydantic import ValidationError
 
-from app.core.config import DatabaseTypeEnum, ModeEnum, Settings, log_mode_warnings, settings
-
-STRONG = "p" * 40
-
-
-def production_kwargs(**overrides: object) -> dict:
-    """Constructor arguments that satisfy every production check on their own.
-
-    Every value the production validators need is supplied here, so these
-    tests read nothing from env files or the ambient environment. Init
-    arguments outrank both. Values are placeholders, not secrets.
-    """
-    return {
-        "MODE": ModeEnum.production,
-        # validate_production_settings
-        "SECRET_KEY": STRONG,
-        "JWT_REFRESH_SECRET_KEY": STRONG,
-        "JWT_RESET_SECRET_KEY": STRONG,
-        "ENCRYPT_KEY": STRONG,
-        "DATABASE_TYPE": DatabaseTypeEnum.postgresql,
-        "DATABASE_HOST": "db.invalid",
-        "FIRST_SUPERUSER_PASSWORD": random_strong_password(),
-        # set_email_values_based_on_mode refuses these unset in production
-        "SMTP_HOST": "smtp.invalid",
-        "SMTP_PORT": 587,
-        # ensure_required_fields_are_loaded
-        "PROJECT_NAME": "fastapi-rbac-test",
-        "TOKEN_ISSUER": "fastapi-rbac-test",
-        "TOKEN_AUDIENCE": "fastapi-rbac-test",
-        "REDIS_HOST": "redis.invalid",
-        "REDIS_PORT": "6379",
-        "FIRST_SUPERUSER_EMAIL": "admin@example.com",
-        "USER_CHANGED_PASSWORD_DATE": "2025-01-01",
-        # validate_mode_guards: explicit, so an environment that turns it on cannot leak in
-        "EXPOSE_TOKENS_IN_RESPONSES": False,
-        **overrides,
-    }
+from app.core.config import ModeEnum, Settings, log_mode_warnings, settings
 
 
 @pytest.fixture
