@@ -67,14 +67,18 @@ coverage:
 
 # Two independent suites, kept as separate numbers. Blending a TypeScript
 # frontend and a Python backend into one percentage produces a figure that
-# describes neither. Both workflows run on every PR, so no carryforward.
+# describes neither. Since #381 a workflow skips its tests when a change cannot
+# affect it, so a backend-only commit uploads no frontend report and the other
+# way round. carryforward keeps the flag's last report for those commits.
 flags:
   backend:
     paths:
       - backend/app/
+    carryforward: true
   frontend:
     paths:
       - react-frontend/src/
+    carryforward: true
 
 comment:
   layout: "reach, diff, flags, files"
