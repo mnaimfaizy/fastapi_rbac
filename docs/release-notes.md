@@ -6,6 +6,35 @@ This file serves as the single source of truth for release history and versionin
 
 ## Version History
 
+### v0.6.0-beta (2026-11-17)
+
+_Pre-release._
+
+**Breaking Changes:**
+
+- Every failed login on `POST /auth/login` and `POST /auth/access-token` now returns the same `422` with one body: `{"detail": {"field_name": "email", "message": "Email or password is incorrect, or the account is temporarily locked. Try again later or reset your password."}}`. This covers an unknown address, a wrong password in any account state, an account with no password set, and any attempt on a locked account. API clients must not rely on these any more:
+  - the attempts-remaining countdown and the "last attempt" warning on a successful login;
+  - the locked-account messages and the time left on a lock;
+  - the separate `400` that `/auth/access-token` returned for a locked account.
+- An unverified or inactive account is reported only after a correct password: `422 "Email is not verified."` or `403 "Inactive user"`, as before. A locked account is never reported, even with the right password. It gets the uniform refusal, the lock stays in place, and no session opens. A password reset clears the lock.
+- Every login, successful ones included, now takes at least the response-time floor (`UNIFORM_ACCOUNT_RESPONSE_FLOOR_SECONDS`, 0.5 s by default).
+- The unused settings `LOCKOUT_DURATION_MINUTES`, `ACCOUNT_LOCKOUT_DURATION` and `ENABLE_ACCOUNT_LOCKOUT` are removed from Settings and the example env files. An environment that still sets them starts normally and the values are ignored. Lockout is still controlled by `MAX_LOGIN_ATTEMPTS` and `ACCOUNT_LOCKOUT_MINUTES`, which work as before.
+
+**Security:**
+
+- Both password login routes now give every failure that does not prove the password the same response and the same minimum response time. Paths with no usable password hash still run one bcrypt check. A locked account is refused before its password is checked, so its lock is not lifted or reset and its attempt count does not change. Lockout counting and the per-IP rate limit are unchanged. The audit log still records which kind of failure each refusal was (`failed_login`, `oauth2_failed_login`, `locked_account_attempt`, `oauth2_locked_account_attempt`).
+
+**Documentation:**
+
+- ADR 0015 records the uniform login failure. The auth API reference lists the uniform refusal body and the two responses that need a correct password, and the architecture page links the ADR.
+- `SECURITY_FEATURES.md` now names the real lockout settings and their default duration.
+
+**Technical Details:**
+
+- Third-party GitHub Actions are pinned to the full commit SHA of a release, with the release named beside it. The MkDocs build installs an exact-version `docs/requirements.txt`, and the Agent-kit workflows run a pinned uv version. A new check (`.github/scripts/check-action-pins.py`) fails CI and pre-commit when a third-party action is not pinned to a SHA. Dependabot now updates the pins and the docs requirements.
+- CI now runs through one workflow, `ci.yml`. It runs only the backend, frontend and docs jobs a change can affect, and falls back to running all of them when it cannot tell. It ends in one required `CI gate` check, so Backend Integration Test and Backend Coverage now block a merge. The frontend lint, format, build and unit tests now run in one `Frontend Checks` job. The backend integration image reuses cached layers, and backend installs use uv. A new push cancels a pull request's run that is still in progress, Codecov carries coverage forward for areas a change does not touch, and Dependabot runs skip the Codecov upload.
+- Backend and frontend dependencies were updated, combining the open Dependabot updates. Among them, vitest and `@vitest/coverage-v8` move to 5.1 together. For fastapi-pagination 0.16, the CRUD layer now calls the async `apaginate`. For sqlmodel 0.0.49, table-model datetime fields now state `sa_type=DateTime`, which keeps their existing column type, so there is no schema change or migration.
+
 ### v0.5.0-beta (2026-11-17)
 
 _Pre-release._
