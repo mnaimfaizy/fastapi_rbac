@@ -189,7 +189,9 @@ The project now uses a single consolidated `.env.example` file for all environme
 - For development, defaults in `.env.example` are ready to use.
 - For production, you must:
   - Set `MODE=production`, `DEBUG=false`, `LOG_LEVEL=INFO`, `USERS_OPEN_REGISTRATION=false`
-  - Generate new secrets (`SECRET_KEY`, `JWT_SECRET_KEY`, etc.)
+  - Generate five distinct keys (`SECRET_KEY`, `JWT_REFRESH_SECRET_KEY`, `JWT_RESET_SECRET_KEY`,
+    `JWT_VERIFICATION_SECRET_KEY`, `ENCRYPT_KEY`), each with
+    `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`
   - Configure production database, Redis (with SSL), email SMTP, and CORS origins
 
 **Troubleshooting:**
