@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List
 
 from pydantic import EmailStr, field_validator  # Modified import
-from sqlmodel import Column, Field, Relationship, String
+from sqlmodel import Column, DateTime, Field, Relationship, String
 
 from app.models.base_uuid_model import BaseUUIDModel, SQLModel
 from app.models.user_role_model import UserRole
@@ -27,7 +27,8 @@ class UserBase(SQLModel):
     last_changed_password_date: datetime | None = None
     number_of_failed_attempts: int | None = None
     is_locked: bool = False
-    locked_until: datetime | None = None
+    # Naive UTC storage; see BaseUUIDModel.updated_at.
+    locked_until: datetime | None = Field(default=None, sa_type=DateTime)
     verified: bool = False
     verification_code: str | None = None
 
@@ -47,11 +48,12 @@ class User(BaseUUIDModel, UserBase, table=True):
     first_name: str | None = Field(default=None, index=True)
     last_name: str | None = Field(default=None, index=True)
     password: str | None = Field(default=None)  # Store the hashed password
+    # Naive UTC storage; see BaseUUIDModel.updated_at.
     expiry_date: datetime | None = Field(
-        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None), sa_type=DateTime
     )
     last_changed_password_date: datetime | None = Field(
-        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None), sa_type=DateTime
     )
 
     # Roles
