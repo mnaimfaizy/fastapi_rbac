@@ -221,7 +221,10 @@ async def refresh(
     session only (ADR 0011 decision 5); then the user row must still exist.
     An inactive user is not a second check: disable ends their sessions, and
     the allowlist is the only revocation mechanism (ADR 0011 decision 1,
-    #281). A JWT decode failure is recorded and its ``HTTPException`` from
+    #281). After the derived access token is written, the refresh token is
+    checked again. A disable that finished in between leaves that token
+    dead, so the derived access token is revoked and the refresh is refused.
+    A JWT decode failure is recorded and its ``HTTPException`` from
     ``decode_token`` propagates.
     """
     ip_address = client_address or "Unknown"
@@ -277,6 +280,12 @@ async def refresh(
         await allowlist.add_derived_access_token(
             redis_client, user.id, access_token, refresh_token, _access_minutes()
         )
+        # Disable can finish both endings after the first is_live check and
+        # before this write. The new access token would otherwise stay usable.
+        if not await allowlist.is_live(redis_client, user.id, TokenType.REFRESH, refresh_token):
+            await allowlist.revoke_session(redis_client, user.id, refresh_token)
+            await _record(db_session, "refresh_token_invalid", {"user_id": subject, "ip_address": ip_address})
+            raise SessionRejected(RejectReason.NOT_ACCEPTED)
         return RefreshedSession(access_token=access_token, user=user)
     except SessionRejected:
         raise

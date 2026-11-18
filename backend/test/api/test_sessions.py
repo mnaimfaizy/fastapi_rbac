@@ -262,6 +262,27 @@ async def test_a_session_opened_during_disable_commit_does_not_survive(
 
 
 @pytest.mark.asyncio
+async def test_a_refresh_whose_session_ends_before_the_access_token_is_written_is_refused(
+    db: AsyncSession, user_factory: Any, redis_mock: MockRedisClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Disable can finish after is_live and before the derived access token is stored."""
+    user = await _user(user_factory)
+    issued = await sessions.open(user, HOME, redis_client=redis_mock)  # type: ignore[arg-type]
+    real_add = sessions.allowlist.add_derived_access_token
+
+    async def end_then_add(*args: Any, **kwargs: Any) -> None:
+        await sessions.end_all(user.id, redis_client=redis_mock)  # type: ignore[arg-type]
+        await real_add(*args, **kwargs)
+
+    monkeypatch.setattr(sessions.allowlist, "add_derived_access_token", end_then_add)
+
+    assert await _refused(redis_mock, db, issued.refresh_token) is RejectReason.NOT_ACCEPTED
+    for token_type in (TokenType.ACCESS, TokenType.REFRESH):
+        assert await get_valid_tokens(redis_mock, user.id, token_type) == set()
+    assert "refresh_token_invalid" in await _event_names(db)
+
+
+@pytest.mark.asyncio
 async def test_a_refreshed_access_token_is_evicted_with_its_session(
     db: AsyncSession, user_factory: Any, redis_mock: MockRedisClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
