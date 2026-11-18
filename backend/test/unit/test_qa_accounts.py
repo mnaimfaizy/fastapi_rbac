@@ -419,10 +419,14 @@ async def test_a_refused_password_writes_no_other_repair(
     user = await _user(db, "manager")
     user.password = PasswordValidator.get_password_hash("Someone-Else-9x")
     user.roles = [roles["Admin"]]
+    db.add(user)
+    await db.commit()
+    # Open while the account is still active. A new session is refused once
+    # the flag is false; these two stand in for sessions opened before that.
+    await _give_sessions(redis_mock, user)
     user.is_active = False
     db.add(user)
     await db.commit()
-    await _give_sessions(redis_mock, user)
     monkeypatch.setattr(settings, "PASSWORD_MIN_LENGTH", 40)
 
     with pytest.raises(PasswordRefused):
