@@ -17,6 +17,7 @@ from uuid import UUID
 
 from fastapi import BackgroundTasks
 from redis.asyncio import Redis
+from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models.user_model import User
@@ -36,6 +37,28 @@ async def end_sessions_and_emailed_links(user_id: UUID, *, redis_client: Redis) 
     await sessions.end_all(user_id, redis_client=redis_client)
     for kind in LinkKind:
         await emailed_links.revoke(kind, user_id, redis=redis_client)
+
+
+async def end_access_for_inactive_users(db_session: AsyncSession, redis_client: Redis) -> int:
+    """End sessions and emailed links for every user who is already inactive.
+
+    Startup calls this once per process. A user disabled before the allowlist
+    was the only revocation mechanism would otherwise keep those sessions
+    (#281). This does not change ``is_active`` and does not write
+    ``user_disabled``. A direct edit after the process has started is not seen
+    until the next start.
+    """
+    inactive = User.is_active.is_(False)  # type: ignore[attr-defined]
+    result = await db_session.exec(select(User).where(inactive))
+    user_ids = [row.id for row in result.all()]
+    for user_id in user_ids:
+        await end_sessions_and_emailed_links(user_id, redis_client=redis_client)
+    if user_ids:
+        logger.info(
+            "Ended sessions and emailed links for %s inactive user(s) at startup",
+            len(user_ids),
+        )
+    return len(user_ids)
 
 
 async def disable_user(

@@ -226,6 +226,12 @@ and refresh tokens before the response is written. The acting
 administrator's session is not affected. A rejected change (complexity,
 reuse, unknown user) revokes nothing.
 
+Setting `is_active` to false disables the user. That ends every allowlist
+session and every emailed verification or reset link before the response,
+then writes one `user_disabled` audit row whose actor is the administrator.
+The caller cannot disable themselves (`403`), so their own sessions stay.
+Re-enabling (`is_active` true) restores nothing; the user logs in again.
+
 **Request Headers:**
 
 ```
@@ -310,6 +316,11 @@ Authorization: Bearer <access_token>
 Bulk update users (admin only). A `password` key in `updates` is refused with
 `400` -- set a password on each user individually.
 
+Setting `is_active` to false does the same as a single disable, for each
+target: every session and emailed link ends before the response, and each
+target gets one `user_disabled` audit row. If the caller is one of the
+targets, the whole update is refused with `403` and nobody is changed.
+
 **Request Headers:**
 
 ```
@@ -346,6 +357,8 @@ Authorization: Bearer <access_token>
 ### DELETE /api/v1/users/{user_id}
 
 Delete a user by ID (admin only). Cannot delete self or users with roles assigned.
+
+Before the row is removed, every allowlist session and every emailed verification or reset link for that user is ended, and one `user_deleted` audit row is written with the acting administrator as the actor. The 409 for assigned roles is raised before anything is revoked, so a refused delete leaves the user's sessions and links in place.
 
 Password history is deleted with the user. Roles, permissions, and groups they created remain, with `created_by_id` set to null. Audit log rows remain, including the original `actor_id`. See [ADR 0013](../../adr/0013-user-deletion-foreign-keys.md).
 

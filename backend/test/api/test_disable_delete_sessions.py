@@ -22,6 +22,7 @@ from app.core.config import settings
 from app.models.audit_log_model import AuditLog
 from app.schemas.common_schema import TokenType
 from app.utils import emailed_links, sessions
+from app.utils.account_disable import end_access_for_inactive_users
 from app.utils.allowlist import get_valid_tokens
 from app.utils.emailed_links import LinkKind
 from app.utils.sessions import SessionRejected
@@ -279,6 +280,32 @@ async def test_bulk_disable_refuses_when_the_caller_is_included(
     assert admin.is_active is True
     assert other.is_active is True
     assert await accepted(redis_mock, other_session.access_token) is True
+
+
+async def test_startup_cleanup_ends_sessions_of_users_already_inactive(
+    db: AsyncSession, user_factory: Any, redis_mock: Any
+) -> None:
+    """A process start ends access for users who are already inactive, and leaves active users alone."""
+    inactive = await user_factory.create(verified=True, is_active=True)
+    active = await user_factory.create(verified=True, is_active=True)
+    planted = await sessions.open(inactive, "198.51.100.30", redis_client=redis_mock)
+    active_session = await sessions.open(active, "198.51.100.31", redis_client=redis_mock)
+    await emailed_links.issue(LinkKind.PASSWORD_RESET, inactive, redis=redis_mock)
+    await emailed_links.issue(LinkKind.VERIFICATION, inactive, redis=redis_mock)
+    inactive.is_active = False
+    db.add(inactive)
+    await db.commit()
+
+    ended = await end_access_for_inactive_users(db, redis_mock)
+
+    assert ended >= 1
+    assert await accepted(redis_mock, planted.access_token) is False
+    assert await allowlist_count(redis_mock, inactive.id) == 0
+    assert await link_is_live(redis_mock, LinkKind.PASSWORD_RESET, inactive.id) is False
+    assert await link_is_live(redis_mock, LinkKind.VERIFICATION, inactive.id) is False
+    assert await accepted(redis_mock, active_session.access_token) is True
+    await db.refresh(inactive)
+    assert inactive.is_active is False
 
 
 async def test_disable_records_one_audit_row_by_the_administrator(

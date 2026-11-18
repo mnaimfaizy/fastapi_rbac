@@ -143,6 +143,13 @@ async def lifespan(fastapi_instance: FastAPI) -> AsyncGenerator[None, None]:
 
     if redis_client:
         FastAPICache.init(RedisBackend(redis_client), prefix="fastapi-cache")
+        # Once per process. Users disabled before the allowlist was the only
+        # revocation mechanism still hold sessions until this runs (#281).
+        from app.db.session import SessionLocal
+        from app.utils.account_disable import end_access_for_inactive_users
+
+        async with SessionLocal() as db_session:
+            await end_access_for_inactive_users(db_session, redis_client)
 
     yield
     # shutdown
