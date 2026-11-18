@@ -2,9 +2,11 @@ name: Agent-kit pipeline
 
 # Caller for the Agent-kit plan -> implement -> review flow.
 #
-# Off until the repository variable CLAUDE_PIPELINE_ENABLED is exactly "true"
+# Off until the repository variable CLAUDE_AGENT_FLOW_ENABLED is exactly "true"
 # (the Kill switch). Do not set it before every Stage 2 prerequisite in
 # docs/agents/agent-kit.md is done (rulesets, Claude GitHub App, labels).
+# Inside the flow, CLAUDE_PLAN_ENABLED, CLAUDE_IMPLEMENT_ENABLED or
+# CLAUDE_REVIEW_ENABLED set to "false" turns off that one Stage.
 #
 # Trigger labels: agent:plan and agent:implement on an issue, agent:review on a
 # pull request. Each run removes its label. Only logins on the actor allowlist
@@ -61,10 +63,11 @@ jobs:
     permissions:
       contents: read
       issues: write
-    uses: mnaimfaizy/agent-kit/.github/workflows/agent-plan-reusable.yml@v1.0.0-beta.7
+    uses: mnaimfaizy/agent-kit/.github/workflows/agent-plan-reusable.yml@v1.0.0-beta.8
     with:
-      kill_switch: ${{ vars.CLAUDE_PIPELINE_ENABLED != 'true' }}
-      model: ${{ vars.CLAUDE_MODEL_PLAN || vars.CLAUDE_MODEL || 'claude-opus-5' }}
+      kill_switch: ${{ vars.CLAUDE_AGENT_FLOW_ENABLED != 'true' || vars.CLAUDE_PLAN_ENABLED == 'false' }}
+      model: ${{ vars.CLAUDE_PLAN_MODEL || vars.CLAUDE_MODEL || 'claude-opus-5-5' }}
+      effort: ${{ vars.CLAUDE_PLAN_EFFORT || vars.CLAUDE_EFFORT || '' }}
       allowlist_actors: '["mnaimfaizy"]'
       trigger_label: "agent:plan"
       issue_number: ${{ github.event_name == 'issues' && github.event.issue.number || inputs.issue_number }}
@@ -84,10 +87,11 @@ jobs:
       issues: write
       pull-requests: write
       id-token: write
-    uses: mnaimfaizy/agent-kit/.github/workflows/agent-implement-reusable.yml@v1.0.0-beta.7
+    uses: mnaimfaizy/agent-kit/.github/workflows/agent-implement-reusable.yml@v1.0.0-beta.8
     with:
-      kill_switch: ${{ vars.CLAUDE_PIPELINE_ENABLED != 'true' }}
-      model: ${{ vars.CLAUDE_MODEL_IMPLEMENT || vars.CLAUDE_MODEL || 'claude-opus-5' }}
+      kill_switch: ${{ vars.CLAUDE_AGENT_FLOW_ENABLED != 'true' || vars.CLAUDE_IMPLEMENT_ENABLED == 'false' }}
+      model: ${{ vars.CLAUDE_IMPLEMENT_MODEL || vars.CLAUDE_MODEL || 'claude-opus-5-5' }}
+      effort: ${{ vars.CLAUDE_IMPLEMENT_EFFORT || vars.CLAUDE_EFFORT || '' }}
       allowlist_actors: '["mnaimfaizy"]'
       trigger_label: "agent:implement"
       issue_number: ${{ github.event_name == 'issues' && github.event.issue.number || inputs.issue_number }}
@@ -168,17 +172,18 @@ jobs:
       group: agent-kit-review-${{ github.event.pull_request.number || inputs.pr_number }}
       cancel-in-progress: true
     # What agent-review-reusable.yml's jobs request: its handoff job needs
-    # actions: write (Agent-kit v1.0.0-beta.7), and GitHub refuses the run if
+    # actions: write (Agent-kit v1.0.0-beta.7 and later), and GitHub refuses the run if
     # the Caller grants less, even in manual mode.
     permissions:
       contents: read
       issues: read
       pull-requests: write
       actions: write
-    uses: mnaimfaizy/agent-kit/.github/workflows/agent-review-reusable.yml@v1.0.0-beta.7
+    uses: mnaimfaizy/agent-kit/.github/workflows/agent-review-reusable.yml@v1.0.0-beta.8
     with:
-      kill_switch: ${{ vars.CLAUDE_PIPELINE_ENABLED != 'true' }}
-      model: ${{ vars.CLAUDE_MODEL_REVIEW || vars.CLAUDE_MODEL || 'claude-opus-5' }}
+      kill_switch: ${{ vars.CLAUDE_AGENT_FLOW_ENABLED != 'true' || vars.CLAUDE_REVIEW_ENABLED == 'false' }}
+      model: ${{ vars.CLAUDE_REVIEW_MODEL || vars.CLAUDE_MODEL || 'claude-opus-5-5' }}
+      effort: ${{ vars.CLAUDE_REVIEW_EFFORT || vars.CLAUDE_EFFORT || '' }}
       allowlist_actors: '["mnaimfaizy"]'
       trigger_label: "agent:review"
       pr_number: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || inputs.pr_number }}

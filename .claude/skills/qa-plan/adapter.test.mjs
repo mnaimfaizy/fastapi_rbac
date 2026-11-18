@@ -575,6 +575,147 @@ test("check --for plan prints the effective config and readiness", () => {
   assert.equal(result.readiness.ready, false);
 });
 
+// ── check --for plan --answers (answers given up front) ─────────────────────
+
+/** A repository folder holding `files`, removed after the suite. */
+function answersRepo(files) {
+  const repo = realpathSync(mkdtempSync(join(tmpdir(), "check-answers-")));
+  after(() => rmSync(repo, { recursive: true, force: true }));
+  for (const [path, text] of Object.entries(files)) {
+    mkdirSync(dirname(join(repo, path)), { recursive: true });
+    writeFileSync(join(repo, path), typeof text === "string" ? text : JSON.stringify(text));
+  }
+  return repo;
+}
+
+const UNIT_SUITE = { name: "unit", command: "npm test", junit: "reports/unit.xml" };
+
+test("check --for plan --answers asks only for what the file does not answer", () => {
+  const repo = answersRepo({ "tmp/qa/qa-readiness.json": { plan: { base_ref: "origin/main" } } });
+  const { code, out } = main([
+    "check",
+    "--for",
+    "plan",
+    "--answers",
+    "tmp/qa/qa-readiness.json",
+    "--repo",
+    repo,
+  ]);
+  const result = JSON.parse(out);
+  assert.equal(code, 0);
+  assert.equal(result.effective.plan.base_ref, "origin/main");
+  assert.equal(result.readiness.ready, false);
+  assert.deepEqual(
+    result.readiness.needs.map((need) => need.split(":")[0]),
+    ["plan.suites"],
+    "the base ref came from the file, so only the suites are asked for",
+  );
+});
+
+test("check --for plan --answers is ready when the file answers every need, and writes no config", () => {
+  const answers = { plan: { base_ref: "origin/main", suites: [UNIT_SUITE] } };
+  const repo = answersRepo({ "tmp/qa/qa-readiness.json": answers });
+  const { code, out } = main([
+    "check",
+    "--for",
+    "plan",
+    "--answers",
+    "tmp/qa/qa-readiness.json",
+    "--repo",
+    repo,
+  ]);
+  const result = JSON.parse(out);
+  assert.equal(code, 0);
+  assert.equal(result.readiness.ready, true);
+  assert.deepEqual(result.readiness.needs, []);
+  assert.equal(result.effective.plan.suites[0].command, "npm test");
+  for (const file of CONFIG_FILES) assert.equal(existsSync(join(repo, file)), false, file);
+});
+
+test("check --for plan --answers prints the reused-answers line the draft carries", () => {
+  const answers = { plan: { base_ref: "origin/main", suites: [UNIT_SUITE] } };
+  const repo = answersRepo({ "tmp/qa/qa-readiness.json": answers });
+  const { out } = main([
+    "check",
+    "--for",
+    "plan",
+    "--answers",
+    "tmp/qa/qa-readiness.json",
+    "--repo",
+    repo,
+  ]);
+  assert.equal(
+    JSON.parse(out).answers.reused,
+    'Readiness answers reused from tmp/qa/qa-readiness.json: plan.base_ref="origin/main"; ' +
+      `plan.suites=${JSON.stringify([UNIT_SUITE])}`,
+  );
+});
+
+test("check --for plan --answers merges over the config found, key by key, as render does", () => {
+  const repo = answersRepo({
+    "qa.config.yml": "plan:\n  base_ref: origin/develop\n  tracker: none\n",
+    "tmp/qa/qa-readiness.json": { plan: { suites: [UNIT_SUITE] } },
+  });
+  const { code, out } = main([
+    "check",
+    "--for",
+    "plan",
+    "--answers",
+    "tmp/qa/qa-readiness.json",
+    "--repo",
+    repo,
+  ]);
+  const result = JSON.parse(out);
+  assert.equal(code, 0);
+  assert.equal(result.effective.plan.base_ref, "origin/develop", "a key the answers leave is kept");
+  assert.equal(result.effective.plan.tracker, "none");
+  assert.equal(result.effective.plan.suites[0].name, "unit");
+  assert.equal(result.readiness.ready, true);
+});
+
+test("check --for plan --answers takes the file only from inside working_dir, after the merge", () => {
+  const answers = { plan: { base_ref: "origin/main", suites: [UNIT_SUITE] } };
+  const repo = answersRepo({
+    "answers.json": answers,
+    "tmp/qa/qa-readiness.json": answers,
+    "tmp/chat/moved.json": { ...answers, working_dir: "tmp/chat" },
+  });
+  const check = (file) => main(["check", "--for", "plan", "--answers", file, "--repo", repo]);
+  const outside = check("answers.json");
+  assert.equal(outside.code, 2);
+  assert.match(outside.out, /must be inside `working_dir` \(`tmp\/qa`\)/);
+  assert.equal(check("tmp/qa/qa-readiness.json").code, 0);
+  // An answer that sets `working_dir` moves where the file must be.
+  assert.equal(check("tmp/chat/moved.json").code, 0);
+});
+
+test("check --for plan --answers exits 2 on a missing, non-JSON or non-object file", () => {
+  const repo = answersRepo({ "tmp/qa/bad.json": "{not json", "tmp/qa/list.json": "[1]" });
+  const check = (file) => main(["check", "--for", "plan", "--answers", file, "--repo", repo]);
+  assert.match(check("tmp/qa/missing.json").out, /no answers file at `tmp\/qa\/missing\.json`/);
+  assert.match(check("tmp/qa/bad.json").out, /is not valid JSON/);
+  assert.match(check("tmp/qa/list.json").out, /must hold a JSON object/);
+  for (const file of ["tmp/qa/missing.json", "tmp/qa/bad.json", "tmp/qa/list.json"])
+    assert.equal(check(file).code, 2, file);
+  assert.equal(main(["check", "--for", "plan", "--answers"], { read: reader({}) }).code, 2);
+});
+
+test("check --for plan --answers names the answers' problems and exits 1", () => {
+  const repo = answersRepo({ "tmp/qa/qa-readiness.json": { plan: { suites: [{ name: "a" }] } } });
+  const { code, out } = main([
+    "check",
+    "--for",
+    "plan",
+    "--answers",
+    "tmp/qa/qa-readiness.json",
+    "--repo",
+    repo,
+  ]);
+  assert.equal(code, 1);
+  assert.ok(JSON.parse(out).problems.length > 0);
+  assert.equal(JSON.parse(out).effective, null);
+});
+
 test("hazards reads changed paths from stdin", () => {
   const { code, out } = main(["hazards"], {
     read: reader({ "qa.config.yml": "hazards:\n  - { pack: p.md }\n", "p.md": PACK }),

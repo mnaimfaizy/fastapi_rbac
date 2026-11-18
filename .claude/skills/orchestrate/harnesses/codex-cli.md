@@ -7,15 +7,16 @@
 - **Headless QA:** yes, with a browser MCP server; else a session the human starts.
 - **Facts from:** `openai/codex` rust-v0.169.0 and its docs at learn.chatgpt.com/docs, read on 2026-11-14. Codex was not run with a prompt.
 - **Executors:** building and QA, a headless run in a worktree the Chief of Staff makes ([HARNESSES.md](../HARNESSES.md#a-headless-run-in-a-worktree)); analysis, a sub-agent; QA falls back to a session the human starts.
+- **Notify:** none known: the sources in **Facts from** name no way for the Chief of Staff to notify the human. A queued question waits in its session and on the board.
 
 ## Verbs
 
 - `spawn`: `codex exec -C <worktree> -m <model> --json --add-dir <run folder> "<brief>"` in the background, with stdout to `delegations/<id>/output.jsonl`. The handle is the `thread_id` in its `thread.started` event, with the process id.
 - `message`: `codex exec resume <thread_id> "<text>"` from inside the worktree, once the run has ended.
-- `await`: the process's end.
+- `await`: the process's end. The heartbeat is the foreground watch ([HARNESSES.md](../HARNESSES.md#waiting-an-event-and-a-heartbeat)): while the run waits on a Delegation, the Chief of Staff does not end its turn, and the process's end is one more change the watch sees.
 - `report`: the report file, which `--add-dir` makes writable.
 - Analysis: a sub-agent (`spawn_agent`); `send_input` reaches it running or ended, and its end is announced. It shares the Chief of Staff's checkout.
-- A QA Delegation: a headless run, with `$qa-plan <n>` and later `$manual-qa <plan file>` sent by `resume`, and a browser through an MCP server. Else a session the human starts: a Codex desktop-app chat in that worktree, which has a browser.
+- A QA Delegation: a headless run, with `$qa-plan <n> [--answers <working_dir>/qa-readiness.json]` and later `$manual-qa <plan file>` sent by `resume`, and a browser through an MCP server. Else a session the human starts: a Codex desktop-app chat in that worktree, which has a browser. With `go`, that is the typed route; with `go autonomous`, on a `stack` target, the same session follows its brief instead, reading each QA skill's `SKILL.md` from the paths the brief gives, so no command is sent or typed. A `url` target stays on the typed route.
 
 ## Limits
 
@@ -27,6 +28,8 @@
 
 ## Check before use
 
+- How long a foreground shell command, and a turn, may run, since the foreground watch depends on both. A shell tool's own time limit could cut the watch short (not yet confirmed).
 - Whether `$qa-plan` in a resumed prompt counts as the user's own invocation.
 - Whether `--approve-for-me`, or an allow rule, approves a `git push`.
 - Whether `codex queue` reaches a running `exec` run, which would let a `message` arrive while it works.
+- Whether the harness can notify the human that a question is queued, and how: record what was found.

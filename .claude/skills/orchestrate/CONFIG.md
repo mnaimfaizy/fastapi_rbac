@@ -65,7 +65,7 @@ Tabs, anchors, aliases, multi-line scalars, flow collections that span lines, a 
 | `executors`      | this harness        | Another harness for one kind of Delegation. Not the default. See below.                                                                                                                                                   |
 | `limits`         | see below           | How many building Delegations run at once, and the shared resources that have one holder at a time.                                                                                                                       |
 | `decisions`      | see below           | Where a human decision is recorded, so a reviewer of the pull request can see it.                                                                                                                                         |
-| `ready_to_merge` | see below           | What Ready to Merge requires beyond green CI and a clean merge.                                                                                                                                                           |
+| `ready_to_merge` | see below           | What Ready to Merge requires beyond green CI and a clean merge into the default branch as it now is.                                                                                                                      |
 | `spec`           | see below           | How a spec run (`--spec <n>`) lands its work. A run on a set of issues reads none of it.                                                                                                                                  |
 
 A value in any route, command or skill name is free text: the brief carries it as written, so a route can be a command, a skill to use, or a sentence of convention.
@@ -143,7 +143,7 @@ The **QA Stack** is a shared resource whether or not `shared` names it: every QA
 
 ### `ready_to_merge`
 
-A Delegation is Ready to Merge only when every check on its head has passed and its branch merges cleanly. These keys add to that; they never take either away.
+A Delegation is Ready to Merge only when every check on its head has passed and its branch merges cleanly into the default branch as it now is, and is not behind it where the repository requires branches to be up to date, unless the human chose to merge it as it is ([SKILL.md](SKILL.md#the-default-branch-check)). These keys add to that; they never take either away.
 
 | Key               | Default   | Meaning                                                                                                                                                                                                                                                                                                                                                                                                             |
 | ----------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

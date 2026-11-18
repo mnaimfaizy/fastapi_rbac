@@ -45,11 +45,19 @@
 //   run was interrupted; nothing was compared.
 
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync } from "node:fs";
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { configProblems, effectiveConfig, mergeAnswers, readQaConfig } from "./adapter.mjs";
+import {
+  AnswersError,
+  configProblems,
+  effectiveConfig,
+  answersPlaceProblem,
+  mergeAnswers,
+  readAnswersFile,
+  readQaConfig,
+} from "./adapter.mjs";
 
 export const DEFAULT_TIMEOUT_SECONDS = 1800;
 
@@ -604,45 +612,6 @@ function option(argv, name) {
 const USAGE =
   "usage: node two-point.mjs [--answers <file.json>] [--base <ref>] [--suite <name>]… [--timeout <seconds>] [--json] [--repo <dir>]\n";
 
-/** Whether `path` is `dir` or inside it, compared as real paths (Windows ignores case). */
-function isInside(path, dir) {
-  const key = (p) => {
-    let full = resolve(p);
-    try {
-      full = realpathSync.native(full);
-    } catch {
-      // not there: compare as given
-    }
-    return process.platform === "win32" ? full.toLowerCase() : full;
-  };
-  const rel = relative(key(dir), key(path));
-  return rel === "" || (!isAbsolute(rel) && rel.split(/[\\/]/)[0] !== "..");
-}
-
-/**
- * The answers given in chat, read from `file` (relative to `repo`): the JSON
- * object `adapter.mjs render` takes. Throws a one-line message when the file
- * is missing, is not JSON, or does not hold an object.
- *
- * @returns {{path: string, answers: Record<string, unknown>}}
- */
-function readAnswers(repo, file) {
-  const path = resolve(repo, file);
-  if (!existsSync(path) || !statSync(path).isFile())
-    throw new TwoPointError(`no answers file at \`${file}\``);
-  let answers;
-  try {
-    answers = JSON.parse(readFileSync(path, "utf8"));
-  } catch (error) {
-    throw new TwoPointError(`the answers file \`${file}\` is not valid JSON (${error.message})`);
-  }
-  if (answers === null || typeof answers !== "object" || Array.isArray(answers))
-    throw new TwoPointError(
-      `the answers file \`${file}\` must hold a JSON object, the one \`adapter.mjs render\` takes`,
-    );
-  return { path, answers };
-}
-
 /**
  * @param {string[]} argv the arguments after the script
  * @param {{signal?: AbortSignal, exec?: typeof shellExec}} [io]
@@ -674,11 +643,11 @@ export async function main(argv, io = {}) {
   const answersFile = option(argv, "--answers")[0];
   if (answersFile !== undefined) {
     try {
-      const { path, answers } = readAnswers(repo, answersFile);
+      const { path, answers } = readAnswersFile(repo, answersFile);
       answersPath = path;
       merged = mergeAnswers(loaded.config, answers);
     } catch (error) {
-      if (error instanceof TwoPointError) return { code: 2, out: `two-point: ${error.message}\n` };
+      if (error instanceof AnswersError) return { code: 2, out: `two-point: ${error.message}\n` };
       throw error;
     }
     const problems = configProblems(merged);
@@ -689,14 +658,9 @@ export async function main(argv, io = {}) {
       };
   }
   const config = effectiveConfig(merged);
-  if (isAbsolute(config.working_dir) || config.working_dir.split(/[\\/]/).includes(".."))
-    return { code: 2, out: "`working_dir` must be a relative path inside the repository\n" };
   // After the merge: an answer may set `working_dir` itself.
-  if (answersPath && !isInside(answersPath, resolve(repo, config.working_dir)))
-    return {
-      code: 2,
-      out: `two-point: the answers file must be inside \`working_dir\` (\`${config.working_dir}\`)\n`,
-    };
+  const misplaced = answersPlaceProblem(repo, config.working_dir, answersPath);
+  if (misplaced) return { code: 2, out: `two-point: ${misplaced}\n` };
   const base = option(argv, "--base")[0] ?? config.plan.base_ref;
   if (!base)
     return {

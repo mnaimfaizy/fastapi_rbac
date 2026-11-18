@@ -6,7 +6,7 @@ Why the skill is shaped the way it is. The skill carries this file so its rules 
 
 These are word for word the definitions in Agent-kit's root glossary, where a contract test keeps the two the same.
 
-**Chief of Staff**: The session that runs `orchestrate`: it analyses the work, proposes the Dispatch Plan, hands out each Delegation, relays every Decision Request and verifies every report, and never builds a Delegation's work or merges.
+**Chief of Staff**: The session that runs `orchestrate`: it analyses the work, proposes the Dispatch Plan, hands out each Delegation, relays every Decision Request (or, in an autonomous run, makes a Ruling on those it may) and verifies every report, and never builds a Delegation's work or merges.
 
 **Delegation**: One piece of a run, an issue to build, an issue to analyse, or a pull request head to QA, handed to one Executor with one brief.
 
@@ -20,15 +20,25 @@ These are word for word the definitions in Agent-kit's root glossary, where a co
 
 **Brief Contract**: The eight items every Delegation's brief carries: what to read first, the goal and what done means, phases with explicit stop points, scope fences, the repository's command routes, the rules for writes, the Decision Request form, and the Delegation's report and log files.
 
-**Decision Request**: A question a Delegation cannot settle from its brief, raised to the human through the Chief of Staff, self-contained, with options, evidence and a recommendation.
+**Decision Request**: A question a Delegation cannot settle from its brief, raised to the human through the Chief of Staff (or, in an autonomous run, answered by a Ruling), self-contained, with options, evidence and a recommendation.
+
+**Ruling**: A Decision Request the Chief of Staff answers itself in an autonomous run, because the human handed it that kind at "go" and the evidence it cites picks one option; it stands until the Ruling Review.
+
+**Ruling Ledger**: The ordered list of every Ruling in a run, each with its question, options, choice and evidence, kept in the run folder for the Ruling Review.
+
+**Ruling Review**: The human's pass over a run's Ruling Ledger, in which each Ruling ends upheld or overturned; overturning one sends every Ruling that cited it back for review.
 
 **Dispatch Plan**: The one table the Chief of Staff shows before any Delegation starts, giving each one's scope, Executor, model and wave, with the kinds of routine write the human may approve; one "go" approves it whole.
 
 **Activity Log**: An append-only record of what was done in a run and why, kept by the Chief of Staff and by each Delegation in the run folder.
 
+**Heartbeat**: A check on every Delegation the run waits on that comes again at a set interval, whatever happened since the last one, so that a run never waits on one signal alone.
+
+**Foreground watch**: The Heartbeat on a harness with nothing to schedule it: the Chief of Staff keeps its turn open, waiting for a change in any Delegation or for a time cap, then waits again.
+
 **Run Summary**: The account of a finished run, offered after the human merges, for the issue that groups the run's work.
 
-**Ready to Merge**: A Delegation whose CI is green, whose review is settled, whose QA requirement is met on its current head and whose branch merges cleanly; the only Delegations the closing list names.
+**Ready to Merge**: A Delegation whose CI is green, whose review is settled, whose QA requirement is met on its current head, whose Rulings are upheld, and whose branch merges cleanly into the default branch as it now is, and is not behind it where the repository requires branches to be up to date, unless the human chose to merge it as it is; the only Delegations the closing list names.
 
 ## A core plus a config
 
@@ -64,6 +74,14 @@ An Executor knows only its brief. Each of the eight items closes a gap a Delegat
 
 The human answering a question is often away from the Delegation that asked it, and may answer from a phone. A question that says "see above" makes them open the session, read its context and reconstruct the choice. So a Decision Request carries its own context, options, evidence and a recommendation: the human can answer from it alone, and the recommendation means the answer can be one word. The answer is recorded where a reviewer of the pull request will see it, because a reviewer who cannot see why the work went one way will ask the same question again.
 
+## Rulings, under review
+
+A long run with the human away stalls on every question, and most of the questions are ones the evidence already answers: how to build within a settled issue, which branch merges first, whether a QA FAIL is the change or the stack. So in a run the human starts with `go autonomous`, the Chief of Staff answers those itself, as Rulings, and the human reviews each one before anything merges.
+
+The line between what it may rule on and what stays the human's is reversibility. A Ruling's result is a commit on an unmerged branch, which an overturn undoes with another commit. A wider scope fence, an accepted FAIL, a write in the human's name, or a choice among an analysis Delegation's options cannot be taken back by the review, or changes what the human approved at "go". So those still wait for the human, and only their own Delegation waits with them.
+
+A Ruling needs evidence that picks one option, cited so that it can still be checked after the branch has moved, because the review happens after the run and "it seemed reasonable" cannot be reviewed. The Ruling Review comes before Ready to Merge, because an overturn before the merge costs a commit, and after it a new issue. A Ruling that cited an overturned one is reviewed again, not overturned with it, because it may stand on other evidence. Authority is not ticked per kind, as routine writes are: one fixed split keeps the plan to one checklist until a run shows it needs more.
+
 ## Verify every report
 
 A Delegation's report says what it believes it did. A branch that was never pushed, a check that is still running, a review comment marked handled that was not: each reads as done in a report and is not. So the Chief of Staff checks every claim against git, the tracker and CI before it tells the human anything, and re-gates in its own worktree, so a dirty working copy in the Delegation's cannot make a command pass.
@@ -84,7 +102,9 @@ It comes last, after review is settled, CI is green and the branch merges cleanl
 
 QA is a Delegation of its own, not the building Delegation's last phase. A session that built a change has a reason to believe it works, as the Chief of Staff would about work it built itself. A separate Executor, in a working copy detached at the verified head, tests what the pull request holds, not what the builder's worktree holds. The QA skills (`qa-plan` and `manual-qa`) are named by the core, not the config, because the core reads what they produce: the plan's Head and the report's rows. A different skill would produce something the core cannot check.
 
-Those skills are invoked only by a person, and stay so: their rules ("the person has seen the draft", "post only on a yes") assume one, and making them model-invocable would undo that for every user, not only in a run. So a QA Delegation's session is sent each skill as a message where the harness runs that as the user's own invocation, and otherwise the human types it there, as the Dispatch Plan says up front. The QA Plan's delivery is always a Decision Request carrying the draft, because the plan is a judgement about what CI does not prove, and the human is the one to agree with it before anyone runs it. Posting the report can be approved once for the run, because by then the judgement has been made and the report only records it.
+Outside an autonomous run, those skills are invoked only by a person, and stay so: their rules ("the person has seen the draft", "post only on a yes") assume one, and making them model-invocable would undo that for every user, not only in a run. So a QA Delegation's session is sent each skill as a message where the harness runs that as the user's own invocation, and otherwise the human types it there, as the Dispatch Plan says up front, with the exact command. In an autonomous run the human has already handed the Chief of Staff the questions those rules wait on, so typing each command would keep a person at every QA step of a run meant to go on without them. There the QA brief carries each skill's `SKILL.md`, as the CI reviewer's brief carries `code-review`, and each skill's own "Run from an autonomous brief" section says what replaces each wait, since only the skill knows where it waits. A hosted (`url`) target stays on the typed route: its host and role test values must come from a person, and a brief cannot carry either.
+
+The readiness question is asked once, in the Dispatch Plan, because otherwise each QA session asks it: in one run, the human answered it six times. Its answers are facts about the repository, which only the human knows, so they are never a Ruling. They hold for the base branch they were given for, since an answer can name the base the plan is composed against. The QA Plan's delivery is always a Decision Request carrying the draft, because the plan is a judgement about what CI does not prove, and the human is the one to agree with it before anyone runs it. Posting the report can be approved once for the run, because by then the judgement has been made and the report only records it.
 
 A FAIL goes to the human, never straight back to the builder: a FAIL can be the QA Stack, not the change, which is why QA Plans list red herrings. A scenario left for a person stays the human's to pass, because only a person can pass one. The QA Stack is one per machine, with fixed names and ports, so it has one holder at a time whether or not the config names it.
 
@@ -94,7 +114,15 @@ In the first run, a fix for a review finding, relayed by an automated fixer, was
 
 ## Ready to Merge, and no further
 
-The closing list means something only if every item on it can be merged now: green CI, a settled review, the QA the repository requires, and a clean merge. The skill stops there and prints the merge order and, when the config names one, the merge command, because merging is the human's act: it is the point where the work becomes theirs, and a merge train that merges on their behalf takes that from them.
+The closing list means something only if every item on it can be merged now: green CI, a settled review, the QA the repository requires, and a clean merge into the default branch as it now is. The skill stops there and prints the merge order and, when the config names one, the merge command, because merging is the human's act: it is the point where the work becomes theirs, and a merge train that merges on their behalf takes that from them.
+
+## The default branch, checked on the human's return
+
+A row verified against the default branch can stop being Ready to Merge without anything in the run changing: a merge from outside the run, or the human's own merge of the row before it, moves the tip. Under a rule that requires branches to be up to date, the row is then behind, and GitHub will not merge it; without that rule, it may still merge into code it was never tested with. In the first run that met this, the default branch moved three times while rows waited, and the Chief of Staff caught each case by hand. So a row is checked against the tip as it is now, and the merge result is re-gated whenever the tip has moved, strict rule or not, because two changes that each pass can fail together.
+
+The check runs when someone is about to act on the list: at close-out, on `--status`, on `--resume`, and when the human says they merged a pull request. It is not kept on a heartbeat. While only the human's merges are left, the tip moves when the human, or someone outside the run, merges, and a heartbeat would spend a turn every few minutes, for hours, finding nothing the human is not about to look at. Checking on the human's return catches every move that matters, since a stale row matters only when someone reads the list. For the same reason, when more than one row is listed, the merge order asks the human to merge one at a time and say so, so the next row is checked against the tip their merge made: waiting to see a row `BEHIND` first would mean the first merge is already done.
+
+Whether the repository requires branches to be up to date is read from the pull request's `mergeStateStatus`, not from its rulesets or branch protection: GitHub has already applied whichever of them holds, and reading them would mean knowing every way a rule can be set. A behind row gets two options, and the cheaper one, merging as it is with the admin bypass, stays the human's even in an autonomous run, because it sets a repository rule aside.
 
 ## The run folder
 
@@ -102,7 +130,7 @@ A run outlives a session: usage limits end it, laptops close, and a run with blo
 
 ## Four verbs, three tiers
 
-Harnesses differ in how one agent starts another: some start sessions the human can open, some start background runs to poll, some cannot start one at all. The skill body speaks only of `spawn`, `message`, `await` and `report`, and HARNESSES.md says how each works on each harness, so the body does not change when a harness does. Reports travel as files on every harness, so the verbs only carry signals. Facts about a harness are dated and marked when unconfirmed, because a harness changes faster than the skill, and a guessed flag fails at the worst moment of a run.
+Harnesses differ in how one agent starts another: some start sessions the human can open, some start background runs to poll, some cannot start one at all. The skill body speaks only of `spawn`, `message`, `await` and `report`, and HARNESSES.md says how each works on each harness, so the body does not change when a harness does. Reports travel as files on every harness, so the verbs only carry signals. And no signal is trusted alone. A harness's wake-up is a turn-end, not a finished report: it comes at most once per turn, which can be before the report is final. It does not come for a Delegation stuck on a prompt, or for a wait on CI that ends with nothing found. In one run, the Chief of Staff sat idle in each of those ways while the human was away. So `await` pairs the harness's event with a heartbeat that re-arms itself, every wake-up is read as "something may have changed", and a report says whether it is final. The cost is a short turn every few minutes; the alternative is a run that stops without anyone knowing. Facts about a harness are dated and marked when unconfirmed, because a harness changes faster than the skill, and a guessed flag fails at the worst moment of a run.
 
 Each harness has a file of its own, and a run loads only the one it is on, so a run on one harness carries none of the others' facts. The run finds its harness, from the environment and its own tools, rather than trusting the config alone: the same repository is opened in one harness one day and another the next, so a config value goes stale, while a guess sends every Delegation down the wrong route. So the config may pin the harness, and a disagreement is a question, never a choice the run makes. Each harness carries a **Support Level** because "documented" and "proven" fail differently: the first Cursor run followed a harness description no run had tried, and invented what it lacked. Below `verified`, the human sees the level and the harness's limits before the "go", and a level rises only on a run's evidence. Executors may run on another harness because one harness's headless run can carry a run whose own harness cannot yet; it is not the default, because it needs a second CLI signed in and a second set of model names.
 

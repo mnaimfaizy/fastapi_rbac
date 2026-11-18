@@ -81,3 +81,9 @@ A plan is copied into trackers, chats and other teams' tools, so its text is eff
 ## The config reader
 
 Both skills import only Node built-ins, and Node ships no YAML parser, so `adapter.mjs` reads JSON whole and YAML in a small documented subset. Anything outside the subset, any unknown key and any wrong shape is a **problem**, named with its line, never a silent default: a misread config composes against the wrong base or delivers to the wrong place, and nothing would say so. Missing values a step needs are asked for, not assumed, and written to the config only with consent, because the config is the repository's file, not the skill's.
+
+## Answers given up front, and a run from a brief
+
+An orchestrate run can have several QA sessions, and before this skill took answers up front, each one asked the same readiness question: one run answered it six times. So `--answers` takes them in at the start, by the same rules as `two-point.mjs`, and the draft carries the `Readiness answers reused from …` line, so the person who approves the plan still sees what it was composed on. The save offer is left out because whoever gave the file was offered it when they answered.
+
+The skill stays invoked by a person: making it model-invocable would drop the person-gates for every user, not only in a run. In a `go autonomous` orchestrate run the human has handed some decisions to the Chief of Staff, so a brief may stand in for the invocation there, and the section "Run from an autonomous brief" says what replaces each wait. The skill owns that mapping, not orchestrate, because only the skill knows where it waits; a contract test fails when a step that waits on the person is not in it. Readiness answers are never a Ruling: they are facts about the repository, and only the human knows them. A test the composer suggests is never written here: it goes back to the building Delegation, so a composer still never edits the change it plans QA for.
