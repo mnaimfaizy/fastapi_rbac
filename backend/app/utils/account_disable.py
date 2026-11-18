@@ -55,10 +55,12 @@ async def disable_user(
     actor.
 
     Sessions end before the commit. If the commit fails the user is logged
-    out and still active, which is the safe way to fail. An account that is
-    already inactive still loses any session or link a direct database edit
-    left behind, and does not gain a second ``user_disabled`` row. Running
-    the demo-account retirement again depends on that.
+    out and still active, which is the safe way to fail. They end again after
+    the commit, so a login or an emailed link that got in between the first
+    ending and the flag becoming visible does not survive the return. An
+    account that is already inactive still loses any session or link a direct
+    database edit left behind, and does not gain a second ``user_disabled``
+    row. Running the demo-account retirement again depends on that.
     """
     user_id = user.id
     was_active = bool(user.is_active)
@@ -88,6 +90,8 @@ async def disable_user(
             details=details,
             db_session=db_session,
         )
+    # After every commit this function made, including the audit write.
+    await end_sessions_and_emailed_links(user_id, redis_client=redis_client)
     return user
 
 

@@ -19,7 +19,9 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.core.config import settings
 from app.models.audit_log_model import AuditLog
 from app.models.user_model import User
+from app.schemas.common_schema import TokenType
 from app.utils import emailed_links, sessions
+from app.utils.allowlist import get_valid_tokens
 from app.utils.emailed_links import LinkKind
 from app.utils.sessions import RejectReason, SessionRejected
 
@@ -215,6 +217,48 @@ async def test_disable_refuses_the_old_refresh_token_by_the_allowlist(
 
     assert await _refused(redis_mock, db, issued.refresh_token) is RejectReason.NOT_ACCEPTED
     assert "refresh_token_user_not_found_or_inactive" not in await _event_names(db)
+
+
+@pytest.mark.asyncio
+async def test_open_refuses_an_inactive_user_without_a_session(
+    db: AsyncSession, user_factory: Any, redis_mock: MockRedisClient
+) -> None:
+    """A disable that has committed is visible to the next open."""
+    user = await _user(user_factory)
+    user.is_active = False
+    db.add(user)
+    await db.commit()
+
+    with pytest.raises(SessionRejected) as raised:
+        await sessions.open(user, HOME, redis_client=redis_mock)  # type: ignore[arg-type]
+
+    assert raised.value.reason is RejectReason.USER_UNAVAILABLE
+    for token_type in (TokenType.ACCESS, TokenType.REFRESH):
+        assert await get_valid_tokens(redis_mock, user.id, token_type) == set()
+
+
+@pytest.mark.asyncio
+async def test_a_session_opened_during_disable_commit_does_not_survive(
+    db: AsyncSession, user_factory: Any, redis_mock: MockRedisClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The second ending runs after the commit, so an open in that window dies."""
+    from app.utils.account_disable import disable_user
+
+    user = await _user(user_factory)
+    real_commit = db.commit
+
+    async def commit_and_open() -> None:
+        await real_commit()
+        # Detached, and still marked active: the in-flight login's object.
+        stale = User(id=user.id, email=user.email, is_active=True)
+        await sessions.open(stale, HOME, redis_client=redis_mock)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(db, "commit", commit_and_open)
+    await disable_user(user, actor=None, db_session=db, redis_client=redis_mock)  # type: ignore[arg-type]
+
+    assert user.is_active is False
+    for token_type in (TokenType.ACCESS, TokenType.REFRESH):
+        assert await get_valid_tokens(redis_mock, user.id, token_type) == set()
 
 
 @pytest.mark.asyncio

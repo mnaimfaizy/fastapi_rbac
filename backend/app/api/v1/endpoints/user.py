@@ -282,6 +282,8 @@ async def bulk_update_users(
     field_updates = update_obj.model_dump(exclude_unset=True)
     if disabling:
         field_updates.pop("is_active", None)
+    if disabling and any(user.id == current_user.id for user in targets):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Users cannot disable themselves.")
     updated_users = []
     for user in targets:
         current = user
@@ -319,8 +321,9 @@ async def update_user(
     change it.
 
     ``is_active=false`` goes through the disable operation, which ends every
-    session and every emailed link before the flag changes (#281). The acting
-    administrator's session is not one of those sessions.
+    session and every emailed link before the flag changes (#281). Callers
+    cannot disable themselves, so the acting administrator's session is not
+    one of those sessions.
 
     A caller who isn't a superuser cannot change a user above them: see the
     user-target ceiling in ``role_grants``.
@@ -347,6 +350,10 @@ async def update_user(
     disabling = update_data.get("is_active") is False
     if disabling:
         update_data.pop("is_active", None)
+    # Before any write. ensure_can_manage_user allows the caller to edit
+    # themselves; disable must not, or the caller ends their own sessions.
+    if disabling and user.id == current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Users cannot disable themselves.")
     if new_password:
         await password_policy.change_password(
             user,

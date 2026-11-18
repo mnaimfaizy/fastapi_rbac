@@ -238,6 +238,49 @@ async def test_delete_leaves_no_allowlist_entries_or_emailed_links(
     assert deleted[0].details["subject_user_id"] == str(user_id)
 
 
+async def test_a_caller_cannot_disable_themselves(
+    client: AsyncClient, db: AsyncSession, user_factory: Any, redis_mock: Any
+) -> None:
+    admin = await user_factory.create(
+        email="self-disable@example.com", password=PASSWORD, verified=True, is_superuser=True
+    )
+    access, headers = await login(client, admin.email)
+
+    response = await put_active(client, headers, admin.id, False)
+
+    assert response.status_code == 403, response.text
+    assert response.json()["detail"] == "Users cannot disable themselves."
+    await db.refresh(admin)
+    assert admin.is_active is True
+    assert await accepted(redis_mock, access) is True
+    me = await client.get(users_url("/me"), headers=headers)
+    assert me.status_code == 200, me.text
+
+
+async def test_bulk_disable_refuses_when_the_caller_is_included(
+    client: AsyncClient, db: AsyncSession, user_factory: Any, redis_mock: Any
+) -> None:
+    admin = await user_factory.create(
+        email="bulk-self@example.com", password=PASSWORD, verified=True, is_superuser=True
+    )
+    other = await user_factory.create(email="bulk-other@example.com", password=PASSWORD, verified=True)
+    other_session = await sessions.open(other, "198.51.100.22", redis_client=redis_mock)
+    _, headers = await login(client, admin.email)
+
+    response = await client.put(
+        users_url("/bulk-update"),
+        json={"user_ids": [str(admin.id), str(other.id)], "updates": {"is_active": False}},
+        headers=headers,
+    )
+
+    assert response.status_code == 403, response.text
+    await db.refresh(admin)
+    await db.refresh(other)
+    assert admin.is_active is True
+    assert other.is_active is True
+    assert await accepted(redis_mock, other_session.access_token) is True
+
+
 async def test_disable_records_one_audit_row_by_the_administrator(
     client: AsyncClient, db: AsyncSession, user_factory: Any
 ) -> None:
