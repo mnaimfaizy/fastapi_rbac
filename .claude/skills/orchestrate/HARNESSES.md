@@ -6,12 +6,25 @@ The skill body speaks of four verbs only. This file says what they mean, how a r
 | --------- | --------------------------------------------------------------------------------------------------------------------- |
 | `spawn`   | Start an Executor on one brief, with the Dispatch Plan's model, in its own branch and working copy. Returns a handle. |
 | `message` | Send text to a running or finished Executor by its handle: an answer, a nudge, a report sent back.                    |
-| `await`   | Wait for the next event from any running Executor: a report, a Decision Request, an end, or no sign of life.          |
+| `await`   | Wait for the next event from any running Executor, on a primary event and a heartbeat, never on one signal alone.     |
 | `report`  | How a Delegation's report reaches the Chief of Staff.                                                                 |
 
 **`report` is a file on every harness.** A Delegation writes its report to `delegations/<id>/report.md` in the run folder ([RUN.md](RUN.md)), by the absolute path its brief gives (the run folder is gitignored, so it exists only in the Chief of Staff's checkout), and appends each Decision Request to `delegations/<id>/decisions.md`, then stops. The verbs only carry the signal that something was written. An Executor that cannot reach the run folder (one working from a clone somewhere else, or one whose harness refuses the write) ends its turn with the report or the Decision Request as its last message instead, and the Chief of Staff writes that into `report.md` or `decisions.md` before reading it.
 
 **Every Executor works in its own branch and working copy**, never in the Chief of Staff's checkout: a separate worktree on the same machine, or a clone. Two Executors in one working copy overwrite each other.
+
+## Waiting: an event and a heartbeat
+
+The events `await` waits for are a report, a Decision Request, an end, or no sign of life. A harness's own signal for them is not enough on its own. It comes when a Delegation ends a turn, and a Delegation can end a turn before its report is final. It does not come at all for a Delegation stopped on a prompt, or for a wait on CI or a review that ends with nothing found. So every harness's `await` has two parts:
+
+- **A primary event:** the harness's own signal, as its file names it: a session ending a turn, a process ending, a sub-agent's end announced.
+- **A heartbeat:** a check that re-arms itself, every 10 minutes by default, whatever the turns between did. It catches what the event misses. SKILL.md step 6 says when it is armed and removed, and what each firing does.
+
+A wake-up, from either part, means "something may have changed", never "a report is final". On each wake-up the Chief of Staff checks every Delegation the run waits on, not only `running` ones: any that is `running`, `waiting`, `reported` or `sent back`, and a QA Delegation still in progress, since a `reported` row can still be waiting on CI or a review run. For each it checks its `report.md` and `decisions.md`, its session or process, its pull request's checks and the review run. It does not stop at the one the wake-up named. A report is final only when its **Final:** line says `yes` ([BRIEF.md](BRIEF.md#report)).
+
+Each harness file's `await` names its primary event and its heartbeat. On Claude Code (desktop and CLI) the heartbeat is a recurring scheduled task in the Chief of Staff's own session. On a harness whose file names no scheduler, the heartbeat is the **foreground watch**: the Chief of Staff does not end its turn while the run waits on a Delegation. Instead it runs a shell loop in the foreground that checks every 60 seconds. The loop returns as soon as any Delegation's `report.md` or `decisions.md` changes, or a pull request the run waits on changes state, or else at a cap of 10 to 15 minutes. The Chief of Staff acts on what changed, or on nothing, writes the board, and runs the watch again. The harness's own event, where it has one, is one more change the watch sees. How long a shell command or a turn may run on that harness is a **check before use** item until a run records it.
+
+While the watch runs, the turn stays open, so the human has no prompt to answer at. A question for the human (every Decision Request in a relay run, or one queued in an autonomous run on a harness whose **Notify** is `none known`) is written whole in the Chief of Staff's session between two watches, and on the board. Then the watch runs again, and the other Delegations go on. To answer, the human stops its turn and answers there; the Chief of Staff acts on the answer and runs the watch again. The Dispatch Plan says so under **Harness limits**.
 
 ## The harnesses
 
@@ -40,6 +53,7 @@ The id is the value `harness:` and `executors.*` take in the config ([CONFIG.md]
 - `- **Headless QA:**` `yes` when that headless run can carry a QA Delegation, or `none: …`.
 - `- **Facts from:**` where and when each fact was read.
 - `- **Executors:**` building, analysis and QA.
+- `- **Notify:**` how the Chief of Staff can tell the human a question is queued, or `none known`, with a **check before use** item ([below](#notifying-the-human)).
 
 Then the sections `## Verbs`, `## Limits` and `## Check before use`. A draft for an unlisted harness follows the same form.
 
@@ -80,7 +94,7 @@ Each fact in a harness file is dated, with the version it was read at and where 
 
 - `spawn`: the Chief of Staff writes the brief to the run folder and asks the human to start a new session on it, in a new worktree, with the plan's model. The handle is the human's name for that session. One building Delegation runs at a time, whatever `limits.building` says.
 - `message`: the Chief of Staff writes the text for the human to paste into that session.
-- `await`: the human says when the session has written its report.
+- `await`: the human says when the session has written its report. There is no heartbeat: the human is the event.
 - `report`: the report file.
 
 The Chief of Staff still never does a Delegation's work itself, here least of all: running a Delegation in its own session would mix the work it must verify with the session that verifies it.
@@ -119,7 +133,16 @@ Codex Cloud, the Copilot cloud agent, Devin Cloud, Cursor Cloud Agents and Antig
 
 A harness file's **Executors** line wins over this table where they differ. The Dispatch Plan names the Executor for every Delegation, and the human's "go" approves it.
 
-A QA Delegation is never a sub-agent, on any harness: a sub-agent cannot take a user-invoked skill, and QA needs a working copy and a browser of its own. On every harness, the QA Delegation's session starts on its brief, never on a skill command, so the head is pinned before `qa-plan` runs. Where the way a QA skill starts is still **check before use**, the Dispatch Plan says the human may be asked to type `/qa-plan <n>`, and later `/manual-qa <plan file>`, in that session.
+A QA Delegation is never a sub-agent, on any harness: QA needs a working copy and a browser of its own, and outside an autonomous run, a sub-agent cannot take a user-invoked skill either. On every harness, the QA Delegation's session starts on its brief, never on a skill command, so the head is pinned before `qa-plan` runs. Then its QA skills start by one of two routes ([SKILL.md](SKILL.md) step 4):
+
+- **With `go`, and for a `url` target in any run:** typed. Each command is sent to the session as a message where the harness runs that as the user's invocation, or typed there by the human. Where that is still **check before use**, the Dispatch Plan says the human may be asked to type `/qa-plan <n> [--answers <working_dir>/qa-readiness.json]` (the `--answers` part only with an answers file for its base, [SKILL.md](SKILL.md) step 4), and later `/manual-qa <plan file>`, in that session.
+- **With `go autonomous`, for a `stack` target:** from the brief. The session reads each skill's `SKILL.md` from the paths its brief gives and follows it, so how this harness runs a slash command does not matter, and nobody types one.
+
+## Notifying the human
+
+In an autonomous run, a question the Chief of Staff may not rule on is queued, and the run goes on ([SKILL.md](SKILL.md#autonomous-runs)). The human may be away, so the Chief of Staff tells them a question is waiting where the harness can, by the way its file's **Notify** line names. The notification says only that a question is queued, for which Delegation, and in which session: the question itself stays whole on the board and in the Chief of Staff's session, because a notification may be shown where others can read it.
+
+Where the line is `none known`, the queued question waits in the Chief of Staff's session and on the board, and `--status` prints it. The Dispatch Plan for an autonomous run says so under **Harness limits**, so the human knows to look. A way to notify that a run finds is recorded in its Activity Log, and the close-out lists it with the other **check before use** items the run settled.
 
 ## The Harness limits section
 

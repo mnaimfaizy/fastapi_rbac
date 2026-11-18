@@ -52,12 +52,13 @@ jobs:
         github.event.label.name == 'agent:address-review' &&
         github.event.pull_request.head.repo.full_name == github.repository) ||
       github.event_name == 'workflow_dispatch'
-    uses: mnaimfaizy/agent-kit/.github/workflows/agent-review-response-reusable.yml@v1.0.0-beta.7
+    uses: mnaimfaizy/agent-kit/.github/workflows/agent-review-response-reusable.yml@v1.0.0-beta.8
     with:
       kill_switch: ${{ vars.CLAUDE_REVIEW_RESPONSE_ENABLED != 'true' }}
       # Exactly `auto` accepts the review handoff's dispatch; unset is manual.
       response_mode: ${{ vars.CLAUDE_REVIEW_RESPONSE_MODE || 'manual' }}
-      model: ${{ vars.CLAUDE_MODEL_REVIEW_RESPONSE || vars.CLAUDE_MODEL || 'claude-opus-5' }}
+      model: ${{ vars.CLAUDE_REVIEW_RESPONSE_MODEL || vars.CLAUDE_MODEL || 'claude-opus-5-5' }}
+      effort: ${{ vars.CLAUDE_REVIEW_RESPONSE_EFFORT || vars.CLAUDE_EFFORT || '' }}
       # Keep equal to the review job's response_allowlist_actors.
       allowlist_actors: '["mnaimfaizy"]'
       trigger_label: "agent:address-review"
@@ -94,6 +95,10 @@ jobs:
         docker run -d --name agent-kit-redis -p 127.0.0.1:6379:6379 redis:7.2-alpine >/dev/null
       # The checks the agent runs before each fix commit: the same fast checks
       # as the implement job. API, integration and e2e suites are left to PR CI.
+      # They run in the agent's sandbox (no network) and call the tools setup
+      # installed directly, not through `uv run`. The kit writes
+      # /review-response-brief.md and /review-response.json in the workspace
+      # root; prettier here checks react-frontend/ only, so they need no ignore.
       verify_commands: |
         set -euo pipefail
         # Non-secret settings only. Signing-key and superuser settings keep
@@ -118,9 +123,9 @@ jobs:
         npm run build
       # A push made with the job token does not start CI: GitHub holds the
       # pull_request runs for approval. ci_workflow names the one workflow
-      # whose held run the round may start. This repository has two (backend
-      # and frontend CI), so it is left unset: approve held runs from the pull
-      # request's checks ("Approve workflows to run").
-      # ci_workflow: .github/workflows/backend-ci.yml
+      # whose held run the round may start. ci.yml is this repository's only
+      # pull request CI workflow (it calls the backend, frontend and docs
+      # checks), so the round starts it for the commit it pushed.
+      ci_workflow: .github/workflows/ci.yml
     secrets:
       claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

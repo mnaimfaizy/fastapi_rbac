@@ -33,6 +33,9 @@
 //
 // CLI (run from the repository root; `--repo <dir>` points elsewhere)
 //   node adapter.mjs check --for plan      config, problems, effective values, readiness
+//   node adapter.mjs check --for plan --answers <file.json>
+//                                          the same, with answers given up front
+//                                          merged over the config (none written)
 //   node adapter.mjs check --for run [--plan <file>]
 //                                          the same for `run:`, against a plan's Run brief
 //   node adapter.mjs plan [<file>]         a QA Plan (the file, or stdin) against ANATOMY.md
@@ -2379,6 +2382,9 @@ export function renderConfigYaml(config, check = configProblems) {
   return `${emitBlock(ordered, 0).join("\n")}\n`;
 }
 
+/** The config sections whose answers merge key by key, one level down. */
+const MERGED_ONE_LEVEL_DOWN = ["plan", "run"];
+
 /**
  * The repository's config with the person's answers laid over it: a top-level
  * answer replaces that key, except `plan` and `run`, whose keys are merged one
@@ -2391,10 +2397,89 @@ export function mergeAnswers(existing, answers) {
   const merged = { ...existing };
   for (const [key, value] of Object.entries(answers))
     merged[key] =
-      (key === "plan" || key === "run") && isMapping(existing[key]) && isMapping(value)
+      MERGED_ONE_LEVEL_DOWN.includes(key) && isMapping(existing[key]) && isMapping(value)
         ? { ...existing[key], ...value }
         : value;
   return merged;
+}
+
+/** An answers file that cannot be read: a one-line message, exit 2. */
+export class AnswersError extends Error {}
+
+/** Whether `path` is `dir` or inside it, compared as real paths (Windows ignores case). */
+export function isInside(path, dir) {
+  const key = (p) => {
+    let full = resolve(p);
+    try {
+      full = realpathSync.native(full);
+    } catch {
+      // not there: compare as given
+    }
+    return process.platform === "win32" ? full.toLowerCase() : full;
+  };
+  const rel = relative(key(dir), key(path));
+  return rel === "" || (!isAbsolute(rel) && rel.split(/[\\/]/)[0] !== "..");
+}
+
+/**
+ * The answers given in chat, or up front by an orchestrate run, read from
+ * `file` (relative to `repo`): the JSON object `render` takes. Throws an
+ * `AnswersError` when the file is missing, is not JSON, or holds no object.
+ *
+ * @returns {{path: string, answers: Record<string, unknown>}}
+ */
+export function readAnswersFile(repo, file) {
+  const path = resolve(repo, file);
+  if (!existsSync(path) || !statSync(path).isFile())
+    throw new AnswersError(`no answers file at \`${file}\``);
+  let answers;
+  try {
+    answers = JSON.parse(readFileSync(path, "utf8"));
+  } catch (error) {
+    throw new AnswersError(`the answers file \`${file}\` is not valid JSON (${error.message})`);
+  }
+  if (!isMapping(answers))
+    throw new AnswersError(
+      `the answers file \`${file}\` must hold a JSON object, the one \`adapter.mjs render\` takes`,
+    );
+  return { path, answers };
+}
+
+/**
+ * Why an effective `working_dir`, or an answers file inside it, cannot be
+ * used, or null when both can: `working_dir` must be relative and stay inside
+ * the repository, and the answers file (when there is one) must be inside it.
+ * Checked after the merge, since an answer may set `working_dir` itself.
+ *
+ * @param {string} repo
+ * @param {string} workingDir the effective `working_dir`
+ * @param {string | null} answersPath the answers file's resolved path, or null
+ * @returns {string | null}
+ */
+export function answersPlaceProblem(repo, workingDir, answersPath) {
+  if (isAbsolute(workingDir) || workingDir.split(/[\\/]/).includes(".."))
+    return "`working_dir` must be a relative path inside the repository";
+  if (answersPath !== null && !isInside(answersPath, resolve(repo, workingDir)))
+    return `the answers file must be inside \`working_dir\` (\`${workingDir}\`)`;
+  return null;
+}
+
+/**
+ * The one line a draft QA Plan is shown with when its readiness answers came
+ * from a file: each answer as `key=value`, one level down for `plan` and `run`,
+ * as `mergeAnswers` lays them over the config.
+ *
+ * @param {string} file the answers file, as given
+ * @param {Record<string, any>} answers
+ */
+export function reusedAnswersLine(file, answers) {
+  const values = [];
+  for (const [key, value] of Object.entries(answers))
+    if (MERGED_ONE_LEVEL_DOWN.includes(key) && isMapping(value))
+      for (const [sub, inner] of Object.entries(value))
+        values.push(`${key}.${sub}=${JSON.stringify(inner)}`);
+    else values.push(`${key}=${JSON.stringify(value)}`);
+  return `Readiness answers reused from ${file}: ${values.join("; ") || "none"}`;
 }
 
 /**
@@ -2576,6 +2661,61 @@ const readStdin = () => {
 };
 
 /**
+ * `check --for plan --answers <file>`: the plan readiness with the answers
+ * given up front merged over the config, as `render` merges them. Nothing is
+ * written. The file must be inside the merged `working_dir`.
+ *
+ * @returns {{code: number, out: string} | null} null on bad usage
+ */
+function checkPlanAnswers(argv, repo, loaded) {
+  const file = option(argv, "--answers")[0];
+  if (file === undefined || file.startsWith("--")) return null;
+  const json = (value) => `${JSON.stringify(value, null, 2)}\n`;
+  if (loaded.problems.length)
+    return {
+      code: 1,
+      out: json({
+        path: loaded.path,
+        problems: loaded.problems,
+        effective: null,
+        readiness: planReadiness(loaded),
+      }),
+    };
+  let read;
+  try {
+    read = readAnswersFile(repo, file);
+  } catch (error) {
+    if (error instanceof AnswersError) return { code: 2, out: `check: ${error.message}\n` };
+    throw error;
+  }
+  const merged = mergeAnswers(loaded.config, read.answers);
+  const problems = configProblems(merged).map((p) => `the answers: ${p}`);
+  if (problems.length)
+    return {
+      code: 1,
+      out: json({
+        path: loaded.path,
+        problems,
+        effective: null,
+        readiness: planReadiness({ ...loaded, problems }),
+      }),
+    };
+  const effective = effectiveConfig(merged);
+  const misplaced = answersPlaceProblem(repo, effective.working_dir, read.path);
+  if (misplaced) return { code: 2, out: `check: ${misplaced}\n` };
+  return {
+    code: 0,
+    out: json({
+      path: loaded.path,
+      problems: [],
+      effective,
+      readiness: planReadiness({ path: loaded.path, config: merged, problems: [] }),
+      answers: { file, reused: reusedAnswersLine(file, read.answers) },
+    }),
+  };
+}
+
+/**
  * @param {string[]} argv the arguments after the script
  * @param {{read?: (path: string) => string | null, stdin?: () => string,
  *   tools?: () => {chromium: boolean, ffmpeg: boolean}}} [io]
@@ -2591,7 +2731,7 @@ export function main(argv, io = {}) {
   const usage = {
     code: 2,
     out:
-      "usage: node adapter.mjs check --for plan | check --for run [--plan <file>] | " +
+      "usage: node adapter.mjs check --for plan [--answers <file.json>] | check --for run [--plan <file>] | " +
       "plan [<file>] < plan.md | host <url> [--target stack|url] [--confirmed <host>] | " +
       "hazards < changed-paths | " +
       "delivery [--label <name>]… | render [--write [--drop-comments]] < answers.json | " +
@@ -2685,6 +2825,7 @@ export function main(argv, io = {}) {
       };
     }
     if (section !== "plan") return usage;
+    if (argv.includes("--answers")) return checkPlanAnswers(argv, repo, loaded) ?? usage;
     const readiness = planReadiness(loaded);
     return {
       code: loaded.problems.length ? 1 : 0,

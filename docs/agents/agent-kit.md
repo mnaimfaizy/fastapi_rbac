@@ -20,7 +20,7 @@ Agent-kit calls the list of GitHub logins allowed to trigger a run its "Allowlis
 
 ## Pinned tag
 
-Current pin: **`v1.0.0-beta.7`** (commit `51f4023cff65d7e6861ac32d2cdcaa8a5585aaf8`).
+Current pin: **`v1.0.0-beta.8`** (commit `cedae691e97128f091cfa2584fd131988533cac3`).
 
 Agent-kit uses a split contract: the reusable workflows are referenced remotely (`uses: …@<tag>`), and the files below are copied in **from the same tag**. Never mix tags.
 
@@ -41,7 +41,7 @@ These files are copied from the pinned tag and committed. They are an explicit e
 | `.claude/skills/plain-prose/` | optional: `/plain-prose` on a file or pasted text rewrites prose a person reads (PR bodies, READMEs, ADRs) into plain sentences; no flow uses it |
 | `.claude/skills/address-pr-review/` | review response flow; also by hand (`/address-pr-review <n>` on an open pull request): answers its unresolved review threads, shows every reply first and posts only after you confirm. Optional config `address-pr-review.config.yml` (not added here; defaults apply) |
 | `.claude/skills/orchestrate/` | optional: `/orchestrate #12 #34` runs a set of issues through other agent sessions; reads `orchestrate.config.yml` (not yet added here, so it asks in chat, QA stage included: `qa.config.yml` exists, so it asks whether each finished head gets a QA Delegation); no flow uses it |
-| `.github/agent-runtime/` | every flow: hooks that confine agent reads to the workspace and, for implement, writes to the working tree; implement's git-config and push guards |
+| `.github/agent-runtime/` | every flow: hooks that confine agent reads to the workspace and, for implement, writes to the working tree; implement's git-config and push guards; review's `review-threads.mjs`, which posts each finding as an inline thread |
 | `.github/agent-pipeline/` | plan and implement (prompts, draft-PR fallback) |
 | `.github/security-audit/` | audit (prompt, advisory publisher, email notifier) |
 | `.github/agent-review-response/` | review response (trusted script `review-response.mjs`: gate, Work list, publish) |
@@ -67,10 +67,12 @@ The reusable workflows (`*-reusable.yml`) are **not** copied.
 | Secret | `AGENT_KIT_ADVISORIES_TOKEN` | Fine-grained PAT, this repository only, **Repository security advisories: Read and write**. Track its expiry |
 | Secret | `RELEASE_TAG_DEPLOY_KEY` | Private half of the write deploy key `release-tag-on-merge.yml` pushes `v*` tags with (see the tag ruleset step). Not an Agent-kit secret, but the tag ruleset depends on it |
 | Variable | `CLAUDE_SECURITY_AUDIT_ENABLED` | Audit Kill switch. The audit runs only when this is exactly `true` |
-| Variable | `CLAUDE_PIPELINE_ENABLED` | Pipeline Kill switch. The pipeline runs only when this is exactly `true` |
+| Variable | `CLAUDE_AGENT_FLOW_ENABLED` | Agent flow Kill switch (plan, implement, review). The flow runs only when this is exactly `true`. Renamed from `CLAUDE_PIPELINE_ENABLED` in v1.0.0-beta.8, with no fallback |
+| Variable | `CLAUDE_PLAN_ENABLED`, `CLAUDE_IMPLEMENT_ENABLED`, `CLAUDE_REVIEW_ENABLED` | Optional. Exactly `false` turns off that one Stage while the flow is on. Left unset |
 | Variable | `CLAUDE_REVIEW_RESPONSE_ENABLED` | Review response Kill switch. A round runs only when this is exactly `true` |
 | Variable | `CLAUDE_REVIEW_RESPONSE_MODE` | Optional. Exactly `auto` turns on the review handoff; unset is manual (label only) |
-| Variable | `CLAUDE_MODEL` | `claude-opus-5-5`. Per-flow overrides (`CLAUDE_MODEL_AUDIT`, `CLAUDE_MODEL_REVIEW_RESPONSE`, …) are left unset |
+| Variable | `CLAUDE_MODEL` | The model for every Stage; the Callers fall back to `claude-opus-5-5` when it is unset. Per-Stage overrides `CLAUDE_<STAGE>_MODEL` (`CLAUDE_PLAN_MODEL`, `CLAUDE_IMPLEMENT_MODEL`, `CLAUDE_REVIEW_MODEL`, `CLAUDE_REVIEW_RESPONSE_MODEL`, `CLAUDE_SECURITY_AUDIT_MODEL`) are left unset |
+| Variable | `CLAUDE_EFFORT` | Optional reasoning effort for every Stage, with per-Stage overrides `CLAUDE_<STAGE>_EFFORT`. Unset leaves the model's default |
 
 The optional extras are not used: the Dependabot alerts token (Dependabot alerts are off on this repository) and the SMTP email notice.
 
@@ -103,6 +105,7 @@ Caller choices:
   - API, integration and e2e suites are left to PR CI.
 - **`extra_allowed_tools`** is left empty. The implementer cannot run the test suite itself; the verify job does. Widening it would let agent-written code run with the Claude App token.
 - Each job asks for only the permissions its reusable workflow needs. Runs are serialised per issue or PR. The review job grants `actions: write` (required from v1.0.0-beta.7, even in manual mode) for the review response handoff.
+- The review job posts every finding as an inline review thread (from v1.0.0-beta.8, through the Kit-owned `.github/agent-runtime/review-threads.mjs`), and its tracking comment is a Review report with `### Checked` and `### Fixed` sections. Those threads are what Review response answers.
 - The review job passes the `response_*` handoff inputs. They hand nothing off unless `CLAUDE_REVIEW_RESPONSE_MODE` is exactly `auto`.
 
 ## Turning the pipeline on
@@ -177,14 +180,14 @@ Do all of these first. The Caller is safe to have on `main` before then, because
    gh label create agent:review --color 5319E7 --description "Agent-kit: review this pull request"
    ```
 
-6. `gh variable set CLAUDE_PIPELINE_ENABLED --body true`
+6. `gh variable set CLAUDE_AGENT_FLOW_ENABLED --body true`
 7. Try it on a small `ready-for-agent` issue: add `agent:plan`, read the plan, then add `agent:implement`, then add `agent:review` to the draft PR.
 
-To stop the pipeline, set the variable to anything else or delete it.
+To stop the pipeline, set the variable to anything else or delete it. To stop one Stage only, set `CLAUDE_PLAN_ENABLED`, `CLAUDE_IMPLEMENT_ENABLED` or `CLAUDE_REVIEW_ENABLED` to `false`.
 
 ## Review response
 
-The Review response Caller is `.github/workflows/agent-kit-review-response.yml`. It answers the code review on a pull request: each unresolved review thread started by `github-actions` (the kit reviewer) is a Finding, and gets the Verdict `fixed` (one commit), `addressed` or `declined`. Agent-kit's guide: [docs/review-response.md](https://github.com/mnaimfaizy/agent-kit/blob/v1.0.0-beta.7/docs/review-response.md).
+The Review response Caller is `.github/workflows/agent-kit-review-response.yml`. It answers the code review on a pull request: each unresolved review thread started by `github-actions` (the kit reviewer) is a Finding, and gets the Verdict `fixed` (one commit), `addressed` or `declined`. Agent-kit's guide: [docs/review-response.md](https://github.com/mnaimfaizy/agent-kit/blob/v1.0.0-beta.8/docs/review-response.md).
 
 | Trigger | On | What runs |
 | --- | --- | --- |
@@ -196,7 +199,7 @@ Caller choices:
 - **`allowlist_actors`** is `["mnaimfaizy"]`, the same as the pipeline. Only those logins can start a round, and only their thread replies count as Maintainer guidance.
 - **`reviewer_logins`** is empty, so Findings are only the kit reviewer's threads.
 - **`setup_commands`** and **`verify_commands`** are the implement job's, except that Redis binds to `127.0.0.1`. npm install scripts are always off in this job. The agent runs `verify_commands` before each fix commit.
-- **`ci_workflow`** is unset. A push made with the job token holds the PR's CI runs for approval, and the input names only one workflow, but this repository has two (backend and frontend CI). Approve held runs from the PR's checks.
+- **`ci_workflow`** is `.github/workflows/ci.yml`. A push made with the job token holds the PR's CI runs for approval; the round starts the held `ci.yml` run for the commit it pushed. `ci.yml` is the only pull request CI workflow and calls the backend, frontend and docs checks.
 - A round refuses fork PRs, PRs into any branch but `main`, Dependabot PRs and PRs that change a protected path. Review those by hand.
 - The round reads its trusted script, hooks and skill from `main`'s tip, so the Kit-owned paths must be merged before the first round.
 
@@ -226,11 +229,11 @@ Use the `@mnaimfaizy/agent-kit` CLI, at the same version as the new tag. It need
 2. From a clean branch, run `upgrade`. It replaces every Kit-owned path (delete, then copy), rewrites all four `uses:` pins, prints the `examples/` diff, and runs the `doctor --ci` checks. It commits nothing:
 
    ```bash
-   TAG=v1.0.0-beta.7   # the new tag; the CLI version is the tag without the leading v
+   TAG=v1.0.0-beta.8   # the new tag; the CLI version is the tag without the leading v
    npx "@mnaimfaizy/agent-kit@${TAG#v}" upgrade --tag "$TAG"
    ```
 
-   The v1.0.0-beta.7 CLI refuses its own tag's manifest (`".github/agent-review-response/" is not a permitted Kit-owned path`) and changes nothing. If `upgrade` refuses a manifest line, copy each path in the tag's `kit-owned-paths.txt` by hand instead (delete, then `git archive <tag> <path>`), and rewrite the `uses:` pins.
+   The v1.0.0-beta.7 and v1.0.0-beta.8 CLIs refuse their own tag's manifest (`".github/agent-review-response/" is not a permitted Kit-owned path`) and change nothing. If `upgrade` refuses a manifest line, copy each path in the tag's `kit-owned-paths.txt` by hand instead (delete, then `git archive <tag> <path>`), and rewrite the `uses:` pins.
 3. Apply anything relevant from the printed `examples/` diff to the Callers by hand (new or renamed inputs), and update the pin above.
 4. Run the full check, then commit the pins and the Kit-owned paths **in the same commit**:
 

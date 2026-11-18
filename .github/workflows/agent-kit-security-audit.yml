@@ -30,11 +30,12 @@ concurrency:
 
 jobs:
   audit:
-    uses: mnaimfaizy/agent-kit/.github/workflows/security-audit-reusable.yml@v1.0.0-beta.7
+    uses: mnaimfaizy/agent-kit/.github/workflows/security-audit-reusable.yml@v1.0.0-beta.8
     with:
       mode: full
       kill_switch: ${{ vars.CLAUDE_SECURITY_AUDIT_ENABLED != 'true' }}
-      model: ${{ vars.CLAUDE_MODEL_AUDIT || vars.CLAUDE_MODEL || 'claude-opus-5' }}
+      model: ${{ vars.CLAUDE_SECURITY_AUDIT_MODEL || vars.CLAUDE_MODEL || 'claude-opus-5-5' }}
+      effort: ${{ vars.CLAUDE_SECURITY_AUDIT_EFFORT || vars.CLAUDE_EFFORT || '' }}
       # Actor allowlist (Agent-kit's "Allowlist"; not the Redis token Allowlist).
       # Scheduled runs act as the last login to edit the schedule.
       allowlist_actors: '["mnaimfaizy"]'
