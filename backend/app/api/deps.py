@@ -100,11 +100,9 @@ def get_current_user(
         if not user_from_db:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
 
-        # Temporary: disabling a user does not end their sessions yet, so this
-        # is a second revocation mechanism beside the allowlist (ADR 0011
-        # decision 1) until #281 makes disable and delete call end_all.
-        if not user_from_db.is_active:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user.")
+        # Inactive users are refused by the allowlist: disable and delete end
+        # their sessions before the response (#281, ADR 0011 decision 1).
+        # Login still refuses an inactive account on its own.
 
         remember_authenticated_identity(request, user_from_db.id)
 

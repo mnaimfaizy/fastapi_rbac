@@ -183,18 +183,38 @@ async def test_a_refresh_token_no_session_holds_is_refused_and_recorded(
 
 
 @pytest.mark.asyncio
-async def test_a_disabled_users_session_is_refused_at_refresh(
+async def test_setting_is_active_false_directly_does_not_refuse_refresh(
     db: AsyncSession, user_factory: Any, redis_mock: MockRedisClient
 ) -> None:
-    """The temporary ``is_active`` check, until #281 ends sessions on disable."""
+    """The temporary ``is_active`` check is gone (#281, ADR 0011).
+
+    A direct edit of the flag does not end the session. Refusal is the
+    allowlist, which only the disable operation updates.
+    """
     user = await _user(user_factory)
     issued = await sessions.open(user, HOME, redis_client=redis_mock)  # type: ignore[arg-type]
     user.is_active = False
     db.add(user)
     await db.commit()
 
-    assert await _refused(redis_mock, db, issued.refresh_token) is RejectReason.USER_UNAVAILABLE
-    assert "refresh_token_user_not_found_or_inactive" in await _event_names(db)
+    refreshed = await _refresh(redis_mock, db, issued.refresh_token)
+    assert refreshed.access_token
+    assert "refresh_token_user_not_found_or_inactive" not in await _event_names(db)
+
+
+@pytest.mark.asyncio
+async def test_disable_refuses_the_old_refresh_token_by_the_allowlist(
+    db: AsyncSession, user_factory: Any, redis_mock: MockRedisClient
+) -> None:
+    """Disable ends the session, so refresh is the ordinary allowlist refusal."""
+    from app.utils.account_disable import disable_user
+
+    user = await _user(user_factory)
+    issued = await sessions.open(user, HOME, redis_client=redis_mock)  # type: ignore[arg-type]
+    await disable_user(user, actor=None, db_session=db, redis_client=redis_mock)  # type: ignore[arg-type]
+
+    assert await _refused(redis_mock, db, issued.refresh_token) is RejectReason.NOT_ACCEPTED
+    assert "refresh_token_user_not_found_or_inactive" not in await _event_names(db)
 
 
 @pytest.mark.asyncio

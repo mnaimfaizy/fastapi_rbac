@@ -266,6 +266,11 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
             # rules, the reuse policy and session revocation in order (#271).
             # Taking one here would let a caller skip all three.
             raise ValueError("crud.user.update does not set passwords; use password_policy.change_password")
+        if update_data.get("is_active") is False:
+            # Becoming inactive ends every session and emailed link first
+            # (#281). Setting the flag here would leave the allowlist holding
+            # those sessions, and a later re-enable would resurrect them.
+            raise ValueError("crud.user.update does not deactivate users; use account_disable.disable_user")
         if "role_id" in update_data:
             role_ids = update_data.pop("role_id", [])
             if role_ids:
@@ -315,23 +320,6 @@ class CRUDUser(CRUDBase[User, IUserCreate, IUserUpdate]):
 
     def has_verified(self, user: User) -> bool:
         return bool(user.verified)
-
-    async def update_is_active(
-        self, *, db_obj: list[User], obj_in: IUserUpdate, db_session: AsyncSession | None = None
-    ) -> list[User] | None:
-        """
-        Update is_active for a list of users. Requires db_session to be provided explicitly.
-        """
-        if db_session is None:
-            raise ValueError("db_session must be provided")
-        for x in db_obj:
-            if hasattr(obj_in, "is_active") and obj_in.is_active is not None:
-                x.is_active = obj_in.is_active
-            db_session.add(x)
-        await db_session.commit()
-        for x in db_obj:
-            await db_session.refresh(x)
-        return db_obj
 
     async def authenticate(
         self, *, email: EmailStr, password: str, db_session: AsyncSession | None = None

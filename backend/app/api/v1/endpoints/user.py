@@ -23,6 +23,7 @@ from app.schemas.response_schema import (
 )
 from app.schemas.user_schema import IUserCreate, IUserRead, IUserRoleAssign, IUserUpdate
 from app.utils import password_policy, role_grants
+from app.utils.account_disable import disable_user, end_sessions_and_emailed_links, record_user_deleted
 from app.utils.account_email_dispatch import issue_verification
 from app.utils.exceptions.user_exceptions import UserSelfDeleteException
 from app.utils.password_policy import InitialPasswordReason, PasswordChangeReason
@@ -228,6 +229,7 @@ async def update_my_profile(
 async def bulk_update_users(
     bulk_update: dict = Body(...),
     db_session: AsyncSession = Depends(deps.get_db),
+    redis_client: AsyncRedis = Depends(get_redis_client),
     current_user: User = Depends(deps.get_current_user(required_permissions=["user.update"])),
 ) -> JSONResponse:
     """
@@ -274,10 +276,24 @@ async def bulk_update_users(
             role_grants.ensure_can_set_roles(
                 actor=current_user, target_id=user.id, current=list(user.roles), new=new_roles
             )
+    # False is the only value that ends sessions. Re-enabling (true) restores
+    # nothing and stays an ordinary field update (#281).
+    disabling = "is_active" in update_obj.model_fields_set and update_obj.is_active is False
+    field_updates = update_obj.model_dump(exclude_unset=True)
+    if disabling:
+        field_updates.pop("is_active", None)
     updated_users = []
     for user in targets:
-        updated_user = await crud.user.update(obj_current=user, obj_new=update_obj, db_session=db_session)
-        updated_users.append(serialize_user(updated_user))
+        current = user
+        if disabling:
+            current = await disable_user(
+                user, actor=current_user, db_session=db_session, redis_client=redis_client
+            )
+        if field_updates:
+            current = await crud.user.update(
+                obj_current=current, obj_new=field_updates, db_session=db_session
+            )
+        updated_users.append(serialize_user(current))
     return create_response(data=updated_users, message="Bulk update successful")
 
 
@@ -302,6 +318,10 @@ async def update_user(
     not touched. The password is a temporary one, so the user is flagged to
     change it.
 
+    ``is_active=false`` goes through the disable operation, which ends every
+    session and every emailed link before the flag changes (#281). The acting
+    administrator's session is not one of those sessions.
+
     A caller who isn't a superuser cannot change a user above them: see the
     user-target ceiling in ``role_grants``.
     """
@@ -321,6 +341,12 @@ async def update_user(
     # Popped whether or not it is blank: crud.user.update refuses a password
     # key outright, and blank / omitted means leave the password as-is.
     new_password = update_data.pop("password", None)
+    # Popped for the same reason when it is false: crud.user.update refuses
+    # to deactivate, and the disable operation ends sessions and emailed
+    # links before the flag changes (#281). True stays in update_data.
+    disabling = update_data.get("is_active") is False
+    if disabling:
+        update_data.pop("is_active", None)
     if new_password:
         await password_policy.change_password(
             user,
@@ -331,19 +357,23 @@ async def update_user(
             db_session=db_session,
             redis_client=redis_client,
         )
+    if disabling:
+        user = await disable_user(user, actor=current_user, db_session=db_session, redis_client=redis_client)
 
     # Update other fields if any
     if any(value is not None for value in update_data.values()):
         updated_user = await crud.user.update(obj_current=user, obj_new=update_data, db_session=db_session)
         return create_response(data=serialize_user(updated_user), message="User updated successfully")
 
-    return create_response(data=serialize_user(user), message="No changes to update")
+    message = "User updated successfully" if disabling else "No changes to update"
+    return create_response(data=serialize_user(user), message=message)
 
 
 @router.delete("/{user_id}")
 async def remove_user(
     user_id: UUID = Depends(user_deps.is_valid_user_id),
     db_session: AsyncSession = Depends(deps.get_db),
+    redis_client: AsyncRedis = Depends(get_redis_client),
     current_user: User = Depends(deps.get_current_user(required_permissions=["user.delete"])),
 ) -> IDeleteResponseBase[IUserRead]:
     """
@@ -359,8 +389,21 @@ async def remove_user(
         raise UserSelfDeleteException()
     target = await role_grants.load_user(user_id, db_session=db_session)
     role_grants.ensure_can_manage_user(actor=current_user, target=target)
+    # The same refusal crud.user.remove raises, checked first so a delete that
+    # will not happen does not end the user's sessions.
+    if target.roles:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"User has {len(list(target.roles))} role(s) assigned and cannot be deleted. "
+                "Please remove all roles first."
+            ),
+        )
 
+    email = target.email
+    await end_sessions_and_emailed_links(user_id, redis_client=redis_client)
     deleted_user = await crud.user.remove(id=user_id, db_session=db_session)
+    await record_user_deleted(actor=current_user, user_id=user_id, email=email, db_session=db_session)
     return create_response(data=serialize_user(deleted_user), message="User removed")
 
 

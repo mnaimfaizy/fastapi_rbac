@@ -7,6 +7,7 @@ CRUD operations with proper mocking and isolation.
 
 from test.factories.async_factories import AsyncUserFactory
 from test.utils import STRONG_TEST_PASSWORD, accepted_password
+from typing import Any
 from uuid import UUID
 
 import pytest
@@ -16,6 +17,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app import crud
 from app.models.user_model import User
 from app.schemas.user_schema import IUserCreate
+from app.utils.account_disable import disable_user
 
 
 class TestUserCRUD:
@@ -242,15 +244,15 @@ class TestUserCRUD:
         self,
         db: AsyncSession,
         user_factory: AsyncUserFactory,
+        redis_mock: Any,
     ) -> None:
-        """Test user activation and deactivation."""
+        """Deactivation goes through the disable operation, not ``crud.user.update``."""
         # Arrange
         user = await user_factory.create()
         assert user.is_active is True
 
         # Act - Deactivate
-        update_data = {"is_active": False}
-        deactivated_user = await crud.user.update(db_session=db, obj_current=user, obj_new=update_data)
+        deactivated_user = await disable_user(user, actor=None, db_session=db, redis_client=redis_mock)
 
         # Assert - Deactivated
         assert deactivated_user.is_active is False

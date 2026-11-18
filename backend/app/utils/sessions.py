@@ -52,7 +52,8 @@ class RejectReason(str, Enum):
     NOT_ACCEPTED = "not_accepted"
     MISSING_SUBJECT = "missing_subject"
     INVALID_SUBJECT = "invalid_subject"
-    # At refresh: the token's user no longer exists or is disabled.
+    # At refresh: the token's user row is gone. An inactive user is refused
+    # by the allowlist, because disable ends their sessions (#281).
     USER_UNAVAILABLE = "user_unavailable"
     # At end: nothing presented identifies which session the caller holds.
     UNIDENTIFIED = "unidentified"
@@ -178,8 +179,11 @@ async def refresh(
     """Derive a new access token for the session of ``refresh_token``.
 
     In order: the allowlist; the origin network, where a mismatch ends this
-    session only (ADR 0011 decision 5); then the user. A JWT decode failure is
-    recorded and its ``HTTPException`` from ``decode_token`` propagates.
+    session only (ADR 0011 decision 5); then the user row must still exist.
+    An inactive user is not a second check: disable ends their sessions, and
+    the allowlist is the only revocation mechanism (ADR 0011 decision 1,
+    #281). A JWT decode failure is recorded and its ``HTTPException`` from
+    ``decode_token`` propagates.
     """
     ip_address = client_address or "Unknown"
     try:
@@ -221,15 +225,13 @@ async def refresh(
                 db_session, "refresh_token_invalid_uuid", {"user_id": subject, "ip_address": ip_address}
             )
             raise SessionRejected(RejectReason.INVALID_SUBJECT)
-        # Temporary: disabling a user does not end their sessions yet, so this
-        # is a second revocation mechanism beside the allowlist (ADR 0011
-        # decision 1) until #281 makes disable and delete call end_all.
-        if not user or not user.is_active:
+        if user is None:
+            assert subject is not None
             await _record(
                 db_session,
                 "refresh_token_user_not_found_or_inactive",
-                {"email": user.email if user else "N/A", "token_subject": subject, "ip_address": ip_address},
-                user_id=user.id if user else subject,
+                {"email": "N/A", "token_subject": subject, "ip_address": ip_address},
+                user_id=UUID(subject),
             )
             raise SessionRejected(RejectReason.USER_UNAVAILABLE)
         access_token = _mint_access_token(user)
