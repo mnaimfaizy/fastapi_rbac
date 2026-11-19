@@ -1,0 +1,608 @@
+{
+ "v": 3,
+ "attachments": {},
+ "noteOrder": [
+  "row01",
+  "open-questions",
+  "how-to",
+  "revision-1",
+  "row02",
+  "row03",
+  "row04",
+  "row05",
+  "row06",
+  "row07",
+  "row08",
+  "row09",
+  "row10"
+ ],
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-11-19T05:34:37Z"
+ },
+ "title": "FastAPI RBAC — UI redesign",
+ "launch": {
+  "view": "canvas"
+ },
+ "pages": [],
+ "boards": {
+  "Main.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 5400,
+   "title": "01 · Foundations · Foundations · Desktop 1440 · Light"
+  },
+  "auth-login.dc.html": {
+   "x": 0,
+   "y": 5780,
+   "w": 1440,
+   "h": 900,
+   "title": "02 · Auth · Login · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "auth-login-error.dc.html": {
+   "x": 1520,
+   "y": 5780,
+   "w": 1440,
+   "h": 900,
+   "title": "02 · Auth · Login – error · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "auth-login-locked.dc.html": {
+   "x": 3040,
+   "y": 5780,
+   "w": 1440,
+   "h": 900,
+   "title": "02 · Auth · Login – locked · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "auth-register.dc.html": {
+   "x": 4560,
+   "y": 5780,
+   "w": 1440,
+   "h": 1000,
+   "title": "02 · Auth · Register · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "auth-reset-request.dc.html": {
+   "x": 6080,
+   "y": 5780,
+   "w": 1440,
+   "h": 900,
+   "title": "02 · Auth · Reset request · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "auth-reset-confirm.dc.html": {
+   "x": 7600,
+   "y": 5780,
+   "w": 1440,
+   "h": 900,
+   "title": "02 · Auth · Reset confirm · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "auth-verify-success.dc.html": {
+   "x": 9120,
+   "y": 5780,
+   "w": 1440,
+   "h": 900,
+   "title": "02 · Auth · Verify email – success · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "auth-verify-expired.dc.html": {
+   "x": 10640,
+   "y": 5780,
+   "w": 1440,
+   "h": 900,
+   "title": "02 · Auth · Verify email – expired · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "auth-change-required.dc.html": {
+   "x": 12160,
+   "y": 5780,
+   "w": 1440,
+   "h": 960,
+   "title": "02 · Auth · Change password required · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "auth-login-dark.dc.html": {
+   "x": 13680,
+   "y": 5780,
+   "w": 1440,
+   "h": 900,
+   "title": "02 · Auth · Login · Desktop 1440 · Dark",
+   "expand": "fill"
+  },
+  "auth-login-mobile.dc.html": {
+   "x": 15200,
+   "y": 5780,
+   "w": 390,
+   "h": 844,
+   "title": "02 · Auth · Login · Mobile 390 · Light"
+  },
+  "auth-login-signed-out.dc.html": {
+   "x": 15670,
+   "y": 5780,
+   "w": 1440,
+   "h": 900,
+   "title": "02 · Auth · Login – signed out everywhere · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "shell-sidebar-expanded.dc.html": {
+   "x": 0,
+   "y": 7160,
+   "w": 1440,
+   "h": 900,
+   "title": "03 · Shell · Sidebar expanded · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "shell-sidebar-collapsed.dc.html": {
+   "x": 1520,
+   "y": 7160,
+   "w": 1440,
+   "h": 1200,
+   "title": "03 · Shell · Sidebar collapsed · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "shell-user-menu.dc.html": {
+   "x": 3040,
+   "y": 7160,
+   "w": 1440,
+   "h": 1200,
+   "title": "03 · Shell · User menu open · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "shell-drawer-mobile.dc.html": {
+   "x": 4560,
+   "y": 7160,
+   "w": 390,
+   "h": 1080,
+   "title": "03 · Shell · Mobile drawer · Mobile 390 · Light"
+  },
+  "home-admin.dc.html": {
+   "x": 0,
+   "y": 8740,
+   "w": 1440,
+   "h": 1200,
+   "title": "04 · Home · Admin dashboard · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "home-admin-dark.dc.html": {
+   "x": 1520,
+   "y": 8740,
+   "w": 1440,
+   "h": 1200,
+   "title": "04 · Home · Admin dashboard · Desktop 1440 · Dark",
+   "expand": "fill"
+  },
+  "home-manager.dc.html": {
+   "x": 3040,
+   "y": 8740,
+   "w": 1440,
+   "h": 1060,
+   "title": "04 · Home · Manager dashboard · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "home-user.dc.html": {
+   "x": 4560,
+   "y": 8740,
+   "w": 1440,
+   "h": 820,
+   "title": "04 · Home · User home · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "home-user-mobile.dc.html": {
+   "x": 6080,
+   "y": 8740,
+   "w": 390,
+   "h": 1400,
+   "title": "04 · Home · User home · Mobile 390 · Light"
+  },
+  "users-list.dc.html": {
+   "x": 0,
+   "y": 10520,
+   "w": 1440,
+   "h": 1100,
+   "title": "05 · Users · List · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "users-list-dark.dc.html": {
+   "x": 1520,
+   "y": 10520,
+   "w": 1440,
+   "h": 1100,
+   "title": "05 · Users · List · Desktop 1440 · Dark",
+   "expand": "fill"
+  },
+  "users-list-mobile.dc.html": {
+   "x": 3040,
+   "y": 10520,
+   "w": 390,
+   "h": 1080,
+   "title": "05 · Users · List · Mobile 390 · Light"
+  },
+  "users-detail.dc.html": {
+   "x": 3510,
+   "y": 10520,
+   "w": 1440,
+   "h": 1000,
+   "title": "05 · Users · Detail · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "users-create.dc.html": {
+   "x": 5030,
+   "y": 10520,
+   "w": 1440,
+   "h": 1500,
+   "title": "05 · Users · Create form · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "users-edit.dc.html": {
+   "x": 6550,
+   "y": 10520,
+   "w": 1440,
+   "h": 1180,
+   "title": "05 · Users · Edit form · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "users-delete.dc.html": {
+   "x": 8070,
+   "y": 10520,
+   "w": 1440,
+   "h": 1100,
+   "title": "05 · Users · Delete dialog · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "users-create-manager.dc.html": {
+   "x": 9590,
+   "y": 10520,
+   "w": 1440,
+   "h": 1300,
+   "title": "05 · Users · Create form – manager · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "users-detail-unverified.dc.html": {
+   "x": 11110,
+   "y": 10520,
+   "w": 1440,
+   "h": 1000,
+   "title": "05 · Users · Detail – unverified, email resent · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "roles-list.dc.html": {
+   "x": 0,
+   "y": 12400,
+   "w": 1440,
+   "h": 760,
+   "title": "06 · Roles · List · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "roles-list-manager.dc.html": {
+   "x": 1520,
+   "y": 12400,
+   "w": 1440,
+   "h": 760,
+   "title": "06 · Roles · List – manager, read only · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "roles-detail.dc.html": {
+   "x": 3040,
+   "y": 12400,
+   "w": 1440,
+   "h": 920,
+   "title": "06 · Roles · Detail · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "roles-matrix.dc.html": {
+   "x": 4560,
+   "y": 12400,
+   "w": 1440,
+   "h": 1220,
+   "title": "06 · Roles · Permission matrix editor · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "roles-matrix-dark.dc.html": {
+   "x": 6080,
+   "y": 12400,
+   "w": 1440,
+   "h": 1220,
+   "title": "06 · Roles · Permission matrix editor · Desktop 1440 · Dark",
+   "expand": "fill"
+  },
+  "roles-create.dc.html": {
+   "x": 7600,
+   "y": 12400,
+   "w": 1440,
+   "h": 1220,
+   "title": "06 · Roles · Create role · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "roles-delete.dc.html": {
+   "x": 9120,
+   "y": 12400,
+   "w": 1440,
+   "h": 760,
+   "title": "06 · Roles · Delete – type to confirm · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "groups-role-tree.dc.html": {
+   "x": 0,
+   "y": 14000,
+   "w": 1440,
+   "h": 760,
+   "title": "07 · Groups · Role groups tree · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "groups-permission-tree.dc.html": {
+   "x": 1520,
+   "y": 14000,
+   "w": 1440,
+   "h": 1180,
+   "title": "07 · Groups · Permission groups tree · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "groups-form.dc.html": {
+   "x": 3040,
+   "y": 14000,
+   "w": 1440,
+   "h": 900,
+   "title": "07 · Groups · Group create / edit form · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "permissions-list.dc.html": {
+   "x": 0,
+   "y": 15560,
+   "w": 1440,
+   "h": 1000,
+   "title": "08 · Permissions · List · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "permissions-detail.dc.html": {
+   "x": 1520,
+   "y": 15560,
+   "w": 1440,
+   "h": 760,
+   "title": "08 · Permissions · Detail · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "account-profile.dc.html": {
+   "x": 0,
+   "y": 16940,
+   "w": 1440,
+   "h": 860,
+   "title": "09 · Account settings · Profile · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "account-security.dc.html": {
+   "x": 1520,
+   "y": 16940,
+   "w": 1440,
+   "h": 960,
+   "title": "09 · Account settings · Security · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "account-appearance.dc.html": {
+   "x": 3040,
+   "y": 16940,
+   "w": 1440,
+   "h": 760,
+   "title": "09 · Account settings · Appearance · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "account-security-signout.dc.html": {
+   "x": 4560,
+   "y": 16940,
+   "w": 1440,
+   "h": 960,
+   "title": "09 · Account settings · Security – sign out everywhere dialog · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "sys-404.dc.html": {
+   "x": 0,
+   "y": 18280,
+   "w": 1440,
+   "h": 760,
+   "title": "10 · System · In-app 404 · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "sys-unauthorized.dc.html": {
+   "x": 1520,
+   "y": 18280,
+   "w": 1440,
+   "h": 760,
+   "title": "10 · System · In-app Unauthorized · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "sys-404-signed-out.dc.html": {
+   "x": 3040,
+   "y": 18280,
+   "w": 1440,
+   "h": 860,
+   "title": "10 · System · 404 – signed out · Desktop 1440 · Light",
+   "expand": "fill"
+  },
+  "sys-empty-states.dc.html": {
+   "x": 4560,
+   "y": 18280,
+   "w": 1440,
+   "h": 1000,
+   "title": "10 · System · Empty-state sheet · Desktop 1440 · Light"
+  },
+  "sys-skeletons.dc.html": {
+   "x": 6080,
+   "y": 18280,
+   "w": 1440,
+   "h": 1300,
+   "title": "10 · System · Skeleton sheet · Desktop 1440 · Light"
+  },
+  "sys-toasts.dc.html": {
+   "x": 7600,
+   "y": 18280,
+   "w": 1440,
+   "h": 1100,
+   "title": "10 · System · Toasts · Desktop 1440 · Light",
+   "expand": "fill"
+  }
+ },
+ "order": [
+  "Main.dc.html",
+  "auth-login.dc.html",
+  "auth-login-error.dc.html",
+  "auth-login-locked.dc.html",
+  "auth-register.dc.html",
+  "auth-reset-request.dc.html",
+  "auth-reset-confirm.dc.html",
+  "auth-verify-success.dc.html",
+  "auth-verify-expired.dc.html",
+  "auth-change-required.dc.html",
+  "auth-login-dark.dc.html",
+  "auth-login-mobile.dc.html",
+  "auth-login-signed-out.dc.html",
+  "shell-sidebar-expanded.dc.html",
+  "shell-sidebar-collapsed.dc.html",
+  "shell-user-menu.dc.html",
+  "shell-drawer-mobile.dc.html",
+  "home-admin.dc.html",
+  "home-admin-dark.dc.html",
+  "home-manager.dc.html",
+  "home-user.dc.html",
+  "home-user-mobile.dc.html",
+  "users-list.dc.html",
+  "users-list-dark.dc.html",
+  "users-list-mobile.dc.html",
+  "users-detail.dc.html",
+  "users-create.dc.html",
+  "users-edit.dc.html",
+  "users-delete.dc.html",
+  "users-create-manager.dc.html",
+  "users-detail-unverified.dc.html",
+  "roles-list.dc.html",
+  "roles-list-manager.dc.html",
+  "roles-detail.dc.html",
+  "roles-matrix.dc.html",
+  "roles-matrix-dark.dc.html",
+  "roles-create.dc.html",
+  "roles-delete.dc.html",
+  "groups-role-tree.dc.html",
+  "groups-permission-tree.dc.html",
+  "groups-form.dc.html",
+  "permissions-list.dc.html",
+  "permissions-detail.dc.html",
+  "account-profile.dc.html",
+  "account-security.dc.html",
+  "account-appearance.dc.html",
+  "account-security-signout.dc.html",
+  "sys-404.dc.html",
+  "sys-unauthorized.dc.html",
+  "sys-404-signed-out.dc.html",
+  "sys-empty-states.dc.html",
+  "sys-skeletons.dc.html",
+  "sys-toasts.dc.html"
+ ],
+ "notes": {
+  "row01": {
+   "x": 0,
+   "y": -260,
+   "text": "01 · Foundations",
+   "kind": "title1",
+   "maxW": 1440,
+   "w": 240
+  },
+  "open-questions": {
+   "x": 1520,
+   "y": 0,
+   "text": "Open questions for the product owner\n\nNone. Every question was answered in Revision 1.",
+   "w": 560,
+   "fill": "teal",
+   "size": 24
+  },
+  "revision-1": {
+   "x": 1520,
+   "y": 1400,
+   "w": 560,
+   "fill": "blue",
+   "text": "Revision 1 · 19 Nov 2026\n\n1. Manager shows its seeded 15 permissions everywhere. The matrix editor (light and dark) has 3 pending changes: user.delete and role.update added, content.delete_article removed.\n2. Password expiry stays at 90 days. “needs API” tags on the expiring card and on the users list Status column. Security adds “Passwords expire every 90 days.”\n3. Account expiry: no screen showed it, so nothing was removed. Only password expiry appears.\n4. User forms list only roles the viewer can grant, with a helper line. The superuser switch is tagged “visible to superusers only”. New: create form as a manager.\n5. New: Sign out everywhere confirmation (“You’ll be signed out on this device too.”) and Sign in with “You’ve been signed out everywhere.”\n6. Role distribution footnote added.\n7. Recent sign-ins shows the last 10, newest first, with relative times and the full date on hover.\n8. Trees show a child group: Support under Operational, Articles under Content.\n9. New: unverified user detail with “Resend verification email” and its toast.\n10. Removed “Unauthorized – signed out”.\n11. Avatars stay initials only. There were no upload controls to remove."
+  },
+  "how-to": {
+   "x": 1520,
+   "y": 900,
+   "text": "Engineer tags\n\nDashed amber tags are notes for engineers, not UI. “needs API” marks data that needs a backend endpoint that doesn’t exist yet. “visible to superusers only” marks a control only superusers see.\n\nArtboards are named NN · Group · Screen · Size · Theme.",
+   "w": 560,
+   "fill": "gray",
+   "size": "s"
+  },
+  "row02": {
+   "x": 0,
+   "y": 5520,
+   "text": "02 · Auth",
+   "kind": "title1",
+   "maxW": 17110,
+   "w": 240
+  },
+  "row03": {
+   "x": 0,
+   "y": 6900,
+   "text": "03 · Shell",
+   "kind": "title1",
+   "maxW": 4950,
+   "w": 240
+  },
+  "row04": {
+   "x": 0,
+   "y": 8480,
+   "text": "04 · Home pages",
+   "kind": "title1",
+   "maxW": 6470,
+   "w": 240
+  },
+  "row05": {
+   "x": 0,
+   "y": 10260,
+   "text": "05 · Users",
+   "kind": "title1",
+   "maxW": 12550,
+   "w": 240
+  },
+  "row06": {
+   "x": 0,
+   "y": 12140,
+   "text": "06 · Roles",
+   "kind": "title1",
+   "maxW": 10560,
+   "w": 240
+  },
+  "row07": {
+   "x": 0,
+   "y": 13740,
+   "text": "07 · Groups",
+   "kind": "title1",
+   "maxW": 4480,
+   "w": 240
+  },
+  "row08": {
+   "x": 0,
+   "y": 15300,
+   "text": "08 · Permissions",
+   "kind": "title1",
+   "maxW": 2960,
+   "w": 240
+  },
+  "row09": {
+   "x": 0,
+   "y": 16680,
+   "text": "09 · Account settings",
+   "kind": "title1",
+   "maxW": 6000,
+   "w": 240
+  },
+  "row10": {
+   "x": 0,
+   "y": 18020,
+   "text": "10 · System",
+   "kind": "title1",
+   "maxW": 9040,
+   "w": 240
+  }
+ },
+ "designSystems": []
+}
