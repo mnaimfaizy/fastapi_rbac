@@ -9,7 +9,10 @@ interface LoadingRegionProps {
   children: ReactNode;
 }
 
-// Placeholders are decoration: assistive technology hears the label once.
+// The status region is a live region: it announces its text content, not
+// its aria-label. The label is visually hidden text inside the region so
+// screen readers announce "Loading users"; the placeholders are hidden from
+// assistive technology because they are only decoration.
 function LoadingRegion({ label, className, children }: LoadingRegionProps) {
   return (
     <div
@@ -18,6 +21,7 @@ function LoadingRegion({ label, className, children }: LoadingRegionProps) {
       aria-busy="true"
       className={className}
     >
+      <span className="sr-only">{label}</span>
       <div aria-hidden="true" className="contents">
         {children}
       </div>

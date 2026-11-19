@@ -7,13 +7,15 @@ import {
 } from '@/components/common/Skeletons';
 
 describe('Skeletons', () => {
-  it('announces a loading table by name without visible loading text', () => {
+  it('announces a loading table and shows only placeholders', () => {
     render(<TableSkeleton label="Loading users" rows={4} columns={3} />);
 
     const status = screen.getByRole('status', { name: 'Loading users' });
     expect(status).toHaveAttribute('aria-busy', 'true');
-    expect(status).toHaveTextContent('');
-    expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
+    // The label is the region's only text, so a screen reader announces
+    // it. It is visually hidden: the placeholders carry no other text.
+    expect(status).toHaveTextContent(/^Loading users$/);
+    expect(screen.getAllByText('Loading users')).toHaveLength(1);
   });
 
   it('announces loading stat cards', () => {
@@ -21,7 +23,7 @@ describe('Skeletons', () => {
 
     expect(
       screen.getByRole('status', { name: 'Loading dashboard' })
-    ).toBeInTheDocument();
+    ).toHaveTextContent(/^Loading dashboard$/);
   });
 
   it('announces a loading detail page', () => {
@@ -29,6 +31,6 @@ describe('Skeletons', () => {
 
     expect(
       screen.getByRole('status', { name: 'Loading user' })
-    ).toBeInTheDocument();
+    ).toHaveTextContent(/^Loading user$/);
   });
 });
