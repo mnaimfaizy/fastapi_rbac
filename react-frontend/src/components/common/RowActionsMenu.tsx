@@ -24,10 +24,19 @@ export interface RowActionsMenuProps {
   actions: RowAction[];
 }
 
-// A row click opens the detail page, so clicks on the menu stay here.
+// A row opens its detail page on click (and may on Enter or a press), and
+// React bubbles events from the portalled menu up to the row. Keep every
+// click, key and press on the trigger and the menu inside the menu.
 function stop(event: SyntheticEvent) {
   event.stopPropagation();
 }
+
+const stopPropagation = {
+  onClick: stop,
+  onKeyDown: stop,
+  onPointerDown: stop,
+  onMouseDown: stop,
+};
 
 /**
  * The "…" menu at the end of a list row. Destructive items go last, after
@@ -43,12 +52,12 @@ export function RowActionsMenu({ label, actions }: RowActionsMenuProps) {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild onClick={stop} onKeyDown={stop}>
+      <DropdownMenuTrigger asChild {...stopPropagation}>
         <Button variant="ghost" size="icon" aria-label={label}>
           <MoreHorizontal aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" onClick={stop}>
+      <DropdownMenuContent align="end" {...stopPropagation}>
         {regular.map((action) => (
           <DropdownMenuItem key={action.label} onSelect={action.onSelect}>
             {action.icon}
