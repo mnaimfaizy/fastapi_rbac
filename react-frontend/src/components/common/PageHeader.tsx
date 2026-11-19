@@ -32,7 +32,7 @@ export function PageHeader({
           {title}
         </h1>
         {description ? (
-          <p className="text-foreground-secondary text-sm">{description}</p>
+          <div className="text-foreground-secondary text-sm">{description}</div>
         ) : null}
       </div>
       {action ? (
