@@ -1,9 +1,15 @@
 import { screen } from '@testing-library/react';
-import { Route, Routes } from 'react-router-dom';
-import { mockUser, renderWithProviders } from './test-utils';
-import MainLayout from '../components/layout/MainLayout';
-import ProtectedRoute from '../components/layout/ProtectedRoute';
-import LoginPage from '../features/auth/LoginPage';
+import { Routes } from 'react-router-dom';
+import { configureStore } from '@reduxjs/toolkit';
+import { mockUser, renderWithProviders, type AppStore } from './test-utils';
+import { appRoutes } from '../App';
+import authReducer from '../store/slices/authSlice';
+import userReducer from '../store/slices/userSlice';
+import permissionReducer from '../store/slices/permissionSlice';
+import permissionGroupReducer from '../store/slices/permissionGroupSlice';
+import roleReducer from '../store/slices/roleSlice';
+import roleGroupReducer from '../store/slices/roleGroupSlice';
+import dashboardReducer from '../store/slices/dashboardSlice';
 
 /** The read permissions behind the Access group, as the QA Admin holds them. */
 const ACCESS_READ = [
@@ -91,26 +97,33 @@ export function signedInAs(role: ShellRole) {
   };
 }
 
+/** A store with every reducer the app mounts, signed in as `role`. */
+function appStore(role: ShellRole) {
+  return configureStore({
+    reducer: {
+      auth: authReducer,
+      user: userReducer,
+      permission: permissionReducer,
+      permissionGroup: permissionGroupReducer,
+      role: roleReducer,
+      roleGroup: roleGroupReducer,
+      dashboard: dashboardReducer,
+    },
+    preloadedState: signedInAs(role),
+  });
+}
+
 /**
- * The signed-in shell at /dashboard behind the same guard `App.tsx` uses,
- * with the real Sign in page at /login.
+ * The app's own route tree (`appRoutes` from `App.tsx`) at /dashboard,
+ * signed in as `role`: the production guards (`ProtectedRoute`,
+ * `PublicOnlyRoute`), the shell and the real Sign in page. Test files that
+ * use it mock `auth.service` and `dashboard.service`.
  */
 export function renderApp(role: ShellRole = 'admin') {
   window.history.pushState({}, '', '/dashboard');
-  return renderWithProviders(
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route
-        path="/*"
-        element={
-          <ProtectedRoute>
-            <MainLayout />
-          </ProtectedRoute>
-        }
-      />
-    </Routes>,
-    { preloadedState: signedInAs(role) }
-  );
+  return renderWithProviders(<Routes>{appRoutes}</Routes>, {
+    testStore: appStore(role) as unknown as AppStore,
+  });
 }
 
 /** The header user menu's trigger for the named viewer. */

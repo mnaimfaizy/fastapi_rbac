@@ -6,6 +6,7 @@ import authService from '../services/auth.service';
 import { setAuthSessionHint, setStoredAccessToken } from '../lib/tokenStorage';
 
 vi.mock('../services/auth.service');
+vi.mock('../services/dashboard.service');
 const mockAuthService = vi.mocked(authService);
 
 describe('Header user menu', () => {

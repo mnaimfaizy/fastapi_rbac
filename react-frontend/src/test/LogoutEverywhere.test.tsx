@@ -15,6 +15,7 @@ import {
 } from '../lib/tokenStorage';
 
 vi.mock('../services/auth.service');
+vi.mock('../services/dashboard.service');
 const mockAuthService = vi.mocked(authService);
 
 describe('Sign out everywhere', () => {
