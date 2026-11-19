@@ -8,7 +8,7 @@ Related: [System Architecture](../../reference/architecture.md), [Setup](./setup
 
 1. **Token security** — access token in memory (Redux); refresh token in HttpOnly cookie; Axios interceptors refresh on 401 with credentials + CSRF.
 2. **State** — Redux Toolkit with feature slices and async thunks for API calls.
-3. **Components** — feature modules under `src/features/`; shared ShadCN UI under `src/components/ui/`; layouts under `src/components/layout/`.
+3. **Components** — feature modules under `src/features/`; shared ShadCN UI under `src/components/ui/`; shared building blocks under `src/components/common/`; layouts under `src/components/layout/`.
 4. **Type safety** — TypeScript models in `src/models/`; typed Redux hooks.
 
 ## Project structure
@@ -18,7 +18,7 @@ react-frontend/
 ├── public/
 ├── src/
 │   ├── assets/
-│   ├── components/          # auth, layout, ui (ShadCN)
+│   ├── components/          # auth, common (shared blocks, ThemeProvider), layout, ui (ShadCN)
 │   ├── features/            # domain feature modules
 │   │   ├── auth/
 │   │   ├── users/
@@ -28,7 +28,7 @@ react-frontend/
 │   │   ├── permission-groups/
 │   │   └── dashboard/
 │   ├── hooks/               # useAuth, usePermissions, …
-│   ├── lib/                 # utils, token helpers
+│   ├── lib/                 # utils, token helpers, theme.ts (useThemePreference)
 │   ├── models/              # TypeScript interfaces
 │   ├── pages/               # top-level pages (404, unauthorized)
 │   ├── services/            # Axios API clients
