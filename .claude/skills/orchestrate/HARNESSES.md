@@ -70,15 +70,15 @@ State the harness, its Support Level and its tier in the Activity Log and the Di
 
 ### Support Level
 
-How far `orchestrate` has been proven on a harness. Each harness file gives its level, and what it rests on.
+How far `orchestrate` has been proven on a harness or a tracker. Each harness file, and each tracker file under [trackers/](trackers/), gives its level, and what it rests on.
 
-| Level        | Means                                                                |
-| ------------ | -------------------------------------------------------------------- |
-| `verified`   | A full run, from Dispatch Plan to close-out, passed on it.           |
-| `tried`      | A run happened on it, and found gaps, named in the file.             |
-| `documented` | Written from the harness's documentation alone; no run has tried it. |
+| Level        | Means                                                                             |
+| ------------ | --------------------------------------------------------------------------------- |
+| `verified`   | A full run, from Dispatch Plan to close-out, passed on it.                        |
+| `tried`      | A run happened on it, and found gaps, named in the file.                          |
+| `documented` | Written from the harness's or tracker's documentation alone; no run has tried it. |
 
-Below `verified`, the Dispatch Plan opens with the level and what it means for this run, and waits for the human's "go" even when the invocation carried `go`. A level moves up only when a run's Activity Log records the evidence, and the change to the harness file cites that run.
+Below `verified`, the Dispatch Plan opens with the level and what it means for this run, and waits for the human's "go" even when the invocation carried `go`. A level moves up only when a run's Activity Log records the evidence, and the change to the harness or tracker file cites that run.
 
 ### Facts and check before use
 

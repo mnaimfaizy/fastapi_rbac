@@ -1,6 +1,6 @@
 # Orchestrate design
 
-Why the skill is shaped the way it is. The skill carries this file so its rules keep their reasons in any repository it is copied into. Load it when changing the skill, or when a rule in [SKILL.md](SKILL.md), [SPEC.md](SPEC.md), [BRIEF.md](BRIEF.md), [RUN.md](RUN.md), [HARNESSES.md](HARNESSES.md) or [CONFIG.md](CONFIG.md) needs its reason.
+Why the skill is shaped the way it is. The skill carries this file so its rules keep their reasons in any repository it is copied into. Load it when changing the skill, or when a rule in [SKILL.md](SKILL.md), [SPEC.md](SPEC.md), [TEAM.md](TEAM.md), [BRIEF.md](BRIEF.md), [RUN.md](RUN.md), [HARNESSES.md](HARNESSES.md) or [CONFIG.md](CONFIG.md) needs its reason.
 
 ## Glossary
 
@@ -14,7 +14,7 @@ These are word for word the definitions in Agent-kit's root glossary, where a co
 
 **Harness**: The agent product a session runs in (Claude Code desktop, Claude Code CLI, Cursor, Codex CLI and the like), which decides how one session can start, message and wait for another; two versions of one product that behave differently are two harnesses.
 
-**Support Level**: How far `orchestrate` has been proven on a harness: verified (a full run passed), tried (a run happened, with known gaps) or documented (built from the harness's documentation alone).
+**Support Level**: How far `orchestrate` has been proven on a harness or a tracker: verified (a full run passed), tried (a run happened, with known gaps) or documented (built from its documentation alone).
 
 **Live Session**: A separate agent session the human can open, read and talk to while it works; always written in full, because a Session is a signed-in identity in a QA scenario.
 
@@ -39,6 +39,10 @@ These are word for word the definitions in Agent-kit's root glossary, where a co
 **Run Summary**: The account of a finished run, offered after the human merges, for the issue that groups the run's work.
 
 **Ready to Merge**: A Delegation whose CI is green, whose review is settled, whose QA requirement is met on its current head, whose Rulings are upheld, and whose branch merges cleanly into the default branch as it now is, and is not behind it where the repository requires branches to be up to date, unless the human chose to merge it as it is; the only Delegations the closing list names.
+
+**Team Run**: A spec run started with `--team`, in which each teammate runs their own Chief of Staff over the spec's tickets assigned to them alone, beside the others, and every one of them reads one Shared Board.
+
+**Shared Board**: The board of a Team Run on the issue tracker: one row comment on each spec ticket, written only by its current assignee's Chief of Staff, and one state label mirroring its state; a published projection of each teammate's own run folder, never a store.
 
 ## A core plus a config
 
@@ -155,6 +159,22 @@ A spec's tickets can land two ways, and neither is right for every repository, s
 ## The integration branch stays local
 
 An integration branch holds unreviewed work from several Delegations. Pushed, it is public to everyone who can read the repository until someone deletes it, and a deleted branch can still have been fetched. Executors in worktrees of the same repository share its branches without a push, so most runs never need one. An Executor that works from a clone does, and that is the human's choice to make, knowing what becomes public, not the Chief of Staff's: so it is a Decision Request that says so, and the yes covers that branch only. Opening the final pull request pushes the branch too, so it is asked for in the same way.
+
+## Team Run
+
+A team that splits a spec's tickets wants each person to run their own, side by side, and to see where everyone's tickets stand. A single-person run cannot give that: its board lives in a gitignored folder on one machine. So a Team Run is federated. Each teammate runs their own Chief of Staff, on their own machine and harness, over the tickets assigned to them alone, and no session drives another person's machine. There is nothing to join, and the tracker's assignee is the only sign of whose ticket it is, because it is already where the team decides that. A Chief of Staff never sets it.
+
+The Shared Board is one row comment per ticket, written only by the Chief of Staff of that ticket's current assignee, with a state label mirroring the row. Neither GitHub nor GitLab locks a comment, an issue body or a label against a second writer: the last write wins, with no error to the loser. A board in one place would lose rows silently whenever two teammates wrote within one read and write, so the board is cut so that no two teammates ever write the same value ([ADR 0014](https://github.com/mnaimfaizy/agent-kit/blob/main/docs/adr/0014-a-team-runs-shared-board-is-one-single-writer-row-per-ticket.md)).
+
+The board is a projection of each teammate's run folder, not a store that replaces it. The run folder is gitignored because briefs and logs quote issue text and command output nobody chose to publish, and on a public repository the Shared Board is the open web. So a row carries only fields and text written for publication, and the run's state stays where `--resume` and verification already read it ([ADR 0015](https://github.com/mnaimfaizy/agent-kit/blob/main/docs/adr/0015-the-shared-board-is-a-published-projection-of-each-local-run-folder.md)). Writing it is one routine write, approved at "go" for the teammate's own tickets, and the plan says when the repository is public, so nobody publishes to the open web without seeing that first.
+
+A Team Run lands one pull request per ticket. An integration branch would have to be pushed and shared between teammates to hold their work together, and a ticket that blocks a teammate's would have nowhere to land for them. A pull request per ticket gives each teammate's ticket its own merge, which is the one event every other teammate can read: a ticket blocked by a teammate's waits for that merge, as a blocked issue waits in any run.
+
+A ticket with no assignee, or with two, is run by nobody. Guessing an owner would put two Chief of Staff sessions on one branch, or none on a ticket somebody thought was theirs, and the fix is one click on the tracker by the people who know.
+
+The tracker is reached through a short list of operations, named in TRACKERS.md and each mapped in its own file under `trackers/`, as HARNESSES.md names the verbs and each harness has its file under `harnesses/`. Only the Team Run's parts speak of them; the rest of the skill stays bound to `gh`, since a tracker-neutral core is more than a Team Run needs. Detection reads the git remote's host because that is where the tickets live, and a pin that disagrees is a question: either could be the mistake, and a run on the wrong tracker reads the wrong tickets.
+
+Like spec mode, the Team Run is a file of its own, TEAM.md, loaded only for a Team Run (`--team`, and `--status` or `--resume` of one) and for `--status --spec <n>`, so a single-person run reads none of it.
 
 ## Seams
 
