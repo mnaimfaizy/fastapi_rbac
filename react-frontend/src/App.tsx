@@ -80,6 +80,263 @@ const InitAuth = () => {
   return null;
 };
 
+/**
+ * Every route in the app. Exported so a test can check that each sidebar
+ * and menu link targets one of them.
+ */
+export const appRoutes = (
+  <>
+    {/* Authentication Routes */}
+    <Route element={<AuthLayout />}>
+      <Route
+        path="/login"
+        element={
+          <PublicOnlyRoute>
+            <LoginPage />
+          </PublicOnlyRoute>
+        }
+      />
+      <Route
+        path="/register"
+        element={
+          <PublicOnlyRoute>
+            <SignupPage />
+          </PublicOnlyRoute>
+        }
+      />
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
+      {/* Temporary password: the only page the user can reach (ADR 0014) */}
+      <Route
+        path="/change-password-required"
+        element={<ChangePasswordRequiredPage />}
+      />
+      <Route
+        path="/resend-verification-email"
+        element={
+          <PublicOnlyRoute>
+            <ResendVerificationEmailForm />
+          </PublicOnlyRoute>
+        }
+      />
+      <Route
+        path="/registration-success"
+        element={<RegistrationSuccessPage />}
+      />
+      {/* Add routes for password reset if needed */}
+      <Route
+        path="/request-password-reset"
+        element={
+          <PublicOnlyRoute>
+            <PasswordResetRequestPage />
+          </PublicOnlyRoute>
+        }
+      />
+      <Route
+        path="/reset-password"
+        element={
+          <PublicOnlyRoute>
+            <PasswordResetPage />
+          </PublicOnlyRoute>
+        }
+      />
+      <Route
+        path="/reset-password-confirm"
+        element={
+          <PublicOnlyRoute>
+            <PasswordResetConfirmPage />
+          </PublicOnlyRoute>
+        }
+      />
+    </Route>
+
+    {/* Protected Application Routes */}
+    <Route
+      path="/" // Parent route for protected area
+      element={
+        <ProtectedRoute>
+          <MainLayout /> {/* MainLayout now renders Outlet */}
+        </ProtectedRoute>
+      }
+    >
+      {/* Child routes rendered inside MainLayout's Outlet */}
+      <Route index element={<Navigate to="/dashboard" replace />} />
+      {/* Redirect / to /dashboard */}
+      <Route path="dashboard" element={<DashboardPage />}>
+        {/* Nested Dashboard Routes - Rendered inside Dashboard's Outlet */}
+        <Route index element={<DashboardOverview />} />
+        <Route path="/dashboard/profile" element={<ProfileContent />} />
+        <Route
+          path="/dashboard/change-password"
+          element={<ChangePasswordContent />}
+        />
+        {/* User management routes - updated with new components */}
+        <Route
+          path="/dashboard/users"
+          element={
+            <ProtectedRoute requiredPermissions={['user.read']}>
+              <UsersList />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/users/new"
+          element={
+            <ProtectedRoute requiredPermissions={['user.create']}>
+              <UserEditPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/users/:userId"
+          element={
+            <ProtectedRoute requiredPermissions={['user.read']}>
+              <UserDetailContent />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/users/:userId/edit" // Corrected path
+          element={
+            <ProtectedRoute requiredPermissions={['user.update']}>
+              <UserEditPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* Permission management routes */}
+        <Route
+          path="/dashboard/permissions"
+          element={
+            <ProtectedRoute requiredPermissions={['permission.read']}>
+              <PermissionsContent />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/permissions/new"
+          element={
+            <ProtectedRoute requiredPermissions={['permission.create']}>
+              <PermissionFormContent />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/permissions/:id"
+          element={
+            <ProtectedRoute requiredPermissions={['permission.read']}>
+              <PermissionDetail />
+            </ProtectedRoute>
+          }
+        />
+        {/* Permission Group routes */}
+        <Route
+          path="/dashboard/permission-groups"
+          element={
+            <ProtectedRoute requiredPermissions={['permission_group.read']}>
+              <PermissionGroupsContent />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/permission-groups/new"
+          element={
+            <ProtectedRoute requiredPermissions={['permission_group.create']}>
+              <PermissionGroupFormContent />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/permission-groups/edit/:groupId"
+          element={
+            <ProtectedRoute requiredPermissions={['permission_group.update']}>
+              <PermissionGroupFormContent />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/permission-groups/:groupId"
+          element={
+            <ProtectedRoute requiredPermissions={['permission_group.read']}>
+              <PermissionGroupDetail />
+            </ProtectedRoute>
+          }
+        />
+        {/* Role management routes */}
+        <Route
+          path="/dashboard/roles"
+          element={
+            <ProtectedRoute requiredPermissions={['role.read']}>
+              <RolesContent />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/roles/new"
+          element={
+            <ProtectedRoute requiredPermissions={['role.create']}>
+              <RoleFormContent />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/roles/:roleId"
+          element={
+            <ProtectedRoute requiredPermissions={['role.read']}>
+              <RoleDetail />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/roles/edit/:roleId"
+          element={
+            <ProtectedRoute requiredPermissions={['role.update']}>
+              <RoleFormContent />
+            </ProtectedRoute>
+          }
+        />
+        {/* Role Groups routes */}
+        <Route
+          path="/dashboard/role-groups"
+          element={
+            <ProtectedRoute requiredPermissions={['role_group.read']}>
+              <RoleGroupContent />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/role-groups/new"
+          element={
+            <ProtectedRoute requiredPermissions={['role_group.create']}>
+              <RoleGroupFormContent />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/role-groups/:groupId"
+          element={
+            <ProtectedRoute requiredPermissions={['role_group.read']}>
+              <RoleGroupDetail />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/role-groups/edit/:groupId"
+          element={
+            <ProtectedRoute requiredPermissions={['role_group.update']}>
+              <RoleGroupFormContent />
+            </ProtectedRoute>
+          }
+        />
+      </Route>
+    </Route>
+
+    {/* Unauthorized Page Route */}
+    <Route path="/unauthorized" element={<UnauthorizedPage />} />
+
+    {/* Not Found Route */}
+    <Route path="*" element={<NotFoundPage />} />
+  </>
+);
+
 function App() {
   const [isLoading, setIsLoading] = useState(true);
 
@@ -100,273 +357,7 @@ function App() {
         <Router>
           <AppWrapper>
             <InitAuth />
-            <Routes>
-              {/* Authentication Routes */}
-              <Route element={<AuthLayout />}>
-                <Route
-                  path="/login"
-                  element={
-                    <PublicOnlyRoute>
-                      <LoginPage />
-                    </PublicOnlyRoute>
-                  }
-                />
-                <Route
-                  path="/register"
-                  element={
-                    <PublicOnlyRoute>
-                      <SignupPage />
-                    </PublicOnlyRoute>
-                  }
-                />
-                <Route path="/verify-email" element={<VerifyEmailPage />} />
-                {/* Temporary password: the only page the user can reach (ADR 0014) */}
-                <Route
-                  path="/change-password-required"
-                  element={<ChangePasswordRequiredPage />}
-                />
-                <Route
-                  path="/resend-verification-email"
-                  element={
-                    <PublicOnlyRoute>
-                      <ResendVerificationEmailForm />
-                    </PublicOnlyRoute>
-                  }
-                />
-                <Route
-                  path="/registration-success"
-                  element={<RegistrationSuccessPage />}
-                />
-                {/* Add routes for password reset if needed */}
-                <Route
-                  path="/request-password-reset"
-                  element={
-                    <PublicOnlyRoute>
-                      <PasswordResetRequestPage />
-                    </PublicOnlyRoute>
-                  }
-                />
-                <Route
-                  path="/reset-password"
-                  element={
-                    <PublicOnlyRoute>
-                      <PasswordResetPage />
-                    </PublicOnlyRoute>
-                  }
-                />
-                <Route
-                  path="/reset-password-confirm"
-                  element={
-                    <PublicOnlyRoute>
-                      <PasswordResetConfirmPage />
-                    </PublicOnlyRoute>
-                  }
-                />
-              </Route>
-
-              {/* Protected Application Routes */}
-              <Route
-                path="/" // Parent route for protected area
-                element={
-                  <ProtectedRoute>
-                    <MainLayout /> {/* MainLayout now renders Outlet */}
-                  </ProtectedRoute>
-                }
-              >
-                {/* Child routes rendered inside MainLayout's Outlet */}
-                <Route index element={<Navigate to="/dashboard" replace />} />
-                {/* Redirect / to /dashboard */}
-                <Route path="dashboard" element={<DashboardPage />}>
-                  {/* Nested Dashboard Routes - Rendered inside Dashboard's Outlet */}
-                  <Route index element={<DashboardOverview />} />
-                  <Route
-                    path="/dashboard/profile"
-                    element={<ProfileContent />}
-                  />
-                  <Route
-                    path="/dashboard/change-password"
-                    element={<ChangePasswordContent />}
-                  />
-                  {/* User management routes - updated with new components */}
-                  <Route
-                    path="/dashboard/users"
-                    element={
-                      <ProtectedRoute requiredPermissions={['user.read']}>
-                        <UsersList />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/users/new"
-                    element={
-                      <ProtectedRoute requiredPermissions={['user.create']}>
-                        <UserEditPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/users/:userId"
-                    element={
-                      <ProtectedRoute requiredPermissions={['user.read']}>
-                        <UserDetailContent />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/users/:userId/edit" // Corrected path
-                    element={
-                      <ProtectedRoute requiredPermissions={['user.update']}>
-                        <UserEditPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  {/* Permission management routes */}
-                  <Route
-                    path="/dashboard/permissions"
-                    element={
-                      <ProtectedRoute requiredPermissions={['permission.read']}>
-                        <PermissionsContent />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/permissions/new"
-                    element={
-                      <ProtectedRoute
-                        requiredPermissions={['permission.create']}
-                      >
-                        <PermissionFormContent />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/permissions/:id"
-                    element={
-                      <ProtectedRoute requiredPermissions={['permission.read']}>
-                        <PermissionDetail />
-                      </ProtectedRoute>
-                    }
-                  />
-                  {/* Permission Group routes */}
-                  <Route
-                    path="/dashboard/permission-groups"
-                    element={
-                      <ProtectedRoute
-                        requiredPermissions={['permission_group.read']}
-                      >
-                        <PermissionGroupsContent />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/permission-groups/new"
-                    element={
-                      <ProtectedRoute
-                        requiredPermissions={['permission_group.create']}
-                      >
-                        <PermissionGroupFormContent />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/permission-groups/edit/:groupId"
-                    element={
-                      <ProtectedRoute
-                        requiredPermissions={['permission_group.update']}
-                      >
-                        <PermissionGroupFormContent />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/permission-groups/:groupId"
-                    element={
-                      <ProtectedRoute
-                        requiredPermissions={['permission_group.read']}
-                      >
-                        <PermissionGroupDetail />
-                      </ProtectedRoute>
-                    }
-                  />
-                  {/* Role management routes */}
-                  <Route
-                    path="/dashboard/roles"
-                    element={
-                      <ProtectedRoute requiredPermissions={['role.read']}>
-                        <RolesContent />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/roles/new"
-                    element={
-                      <ProtectedRoute requiredPermissions={['role.create']}>
-                        <RoleFormContent />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/roles/:roleId"
-                    element={
-                      <ProtectedRoute requiredPermissions={['role.read']}>
-                        <RoleDetail />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/roles/edit/:roleId"
-                    element={
-                      <ProtectedRoute requiredPermissions={['role.update']}>
-                        <RoleFormContent />
-                      </ProtectedRoute>
-                    }
-                  />
-                  {/* Role Groups routes */}
-                  <Route
-                    path="/dashboard/role-groups"
-                    element={
-                      <ProtectedRoute requiredPermissions={['role_group.read']}>
-                        <RoleGroupContent />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/role-groups/new"
-                    element={
-                      <ProtectedRoute
-                        requiredPermissions={['role_group.create']}
-                      >
-                        <RoleGroupFormContent />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/role-groups/:groupId"
-                    element={
-                      <ProtectedRoute requiredPermissions={['role_group.read']}>
-                        <RoleGroupDetail />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/role-groups/edit/:groupId"
-                    element={
-                      <ProtectedRoute
-                        requiredPermissions={['role_group.update']}
-                      >
-                        <RoleGroupFormContent />
-                      </ProtectedRoute>
-                    }
-                  />
-                </Route>
-              </Route>
-
-              {/* Unauthorized Page Route */}
-              <Route path="/unauthorized" element={<UnauthorizedPage />} />
-
-              {/* Not Found Route */}
-              <Route path="*" element={<NotFoundPage />} />
-            </Routes>
+            <Routes>{appRoutes}</Routes>
           </AppWrapper>
         </Router>
       )}
