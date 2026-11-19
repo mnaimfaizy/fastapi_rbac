@@ -9,6 +9,7 @@ import roleSlice from '../store/slices/roleSlice';
 import roleGroupSlice from '../store/slices/roleGroupSlice';
 import permissionSlice from '../store/slices/permissionSlice';
 import permissionGroupSlice from '../store/slices/permissionGroupSlice';
+import { ThemeProvider } from '../components/common/ThemeProvider';
 
 // Mock data for testing
 export const mockPermissions = [
@@ -305,9 +306,11 @@ export function renderWithProviders(
 
   function Wrapper({ children }: { children: React.ReactNode }) {
     return (
-      <Provider store={testStore}>
-        <BrowserRouter>{children}</BrowserRouter>
-      </Provider>
+      <ThemeProvider>
+        <Provider store={testStore}>
+          <BrowserRouter>{children}</BrowserRouter>
+        </Provider>
+      </ThemeProvider>
     );
   }
 
