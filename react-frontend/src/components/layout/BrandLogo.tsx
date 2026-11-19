@@ -38,7 +38,11 @@ export function BrandMark({
   );
 }
 
-/** Logo and product name, as the sidebar and the mobile header show them. */
+/**
+ * Logo and product name, as the sidebar and the mobile header show them.
+ * The visible name labels the lockup, so the mark is hidden from assistive
+ * tech to avoid announcing the name twice.
+ */
 export function BrandLockup({
   className,
   size = 'md',
@@ -48,7 +52,7 @@ export function BrandLockup({
 }) {
   return (
     <div className={cn('flex items-center gap-2.5', className)}>
-      <BrandMark className="text-primary" />
+      <BrandMark decorative className="text-primary" />
       <span
         className={cn(
           'font-semibold tracking-tight text-foreground',

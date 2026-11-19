@@ -51,8 +51,20 @@ describe('App shell sidebar', () => {
 
     const nav = mainNav();
     expect(within(nav).getByText('FastAPI RBAC')).toBeInTheDocument();
+    // The visible name labels the logo; the mark is not announced again.
     expect(
-      within(nav).getByRole('img', { name: 'FastAPI RBAC' })
+      within(nav).queryByRole('img', { name: 'FastAPI RBAC' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('names the logo when the collapsed sidebar shows it alone', async () => {
+    const user = userEvent.setup();
+    renderShell('admin');
+
+    await user.click(screen.getByRole('button', { name: 'Collapse sidebar' }));
+
+    expect(
+      within(mainNav()).getByRole('img', { name: 'FastAPI RBAC' })
     ).toBeInTheDocument();
   });
 
