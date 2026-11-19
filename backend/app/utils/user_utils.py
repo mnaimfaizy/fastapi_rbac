@@ -27,7 +27,6 @@ def serialize_user(user: User) -> dict[str, Any]:
         "is_active": user.is_active,
         "is_superuser": user.is_superuser,
         "needs_to_change_password": user.needs_to_change_password,
-        "expiry_date": user.expiry_date,
         "contact_phone": user.contact_phone,
         "last_changed_password_date": user.last_changed_password_date,
         "number_of_failed_attempts": user.number_of_failed_attempts,

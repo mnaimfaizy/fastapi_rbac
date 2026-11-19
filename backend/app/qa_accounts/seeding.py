@@ -62,7 +62,6 @@ async def _create(account: QAAccount, role: Role, db_session: AsyncSession) -> N
         verified=True,
         needs_to_change_password=False,
         last_changed_password_date=now,
-        expiry_date=now,
         role_id=[role.id],
         roles=[],
     )
