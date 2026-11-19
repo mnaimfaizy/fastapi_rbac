@@ -18,6 +18,7 @@ Related: [Architecture](./architecture.md), [Setup](./setup.md).
 | Path | Role |
 | --- | --- |
 | `src/components/ui/` | Generated / shared ShadCN primitives (button, dialog, table, …) |
+| `src/components/common/` | Shared building blocks composed from `ui/`: status badge, page header, row "…" menu, confirm dialog, empty state, skeletons, and the theme provider |
 | `src/components/layout/` | Shell layouts (`MainLayout`, `AuthLayout`, route protection) |
 | `src/components/auth/` | Shared auth UI pieces |
 | `src/features/*/…` | Feature-specific screens and forms |
@@ -43,6 +44,12 @@ Align client validation with backend Pydantic rules where practical; backend rem
 - Utility classes via Tailwind
 - Shared helpers such as `cn()` in `src/lib/utils.ts`
 - Prefer existing design tokens / CSS variables over one-off colors
+
+## Design tokens and theme
+
+- **Tokens.** `src/index.css` maps the Web v1 palette onto the shadcn CSS variables, with one block for light (`:root`) and one for dark (`.dark`). It also adds a few tokens beside the stock set: status pairs for badges, danger text, the dialog overlay, the auth panel and secondary text. The values come from the "01 · Foundations" artboard in `react-frontend/design/web-v1/`. Components use these tokens through Tailwind classes such as `bg-primary` or `text-status-danger-foreground`, never literal colors. To rebrand a fork, change the token values.
+- **Theme.** `ThemeProvider` (`src/components/common/ThemeProvider.tsx`, built on `next-themes`) is mounted in `src/main.tsx`. It toggles the `.dark` class, follows the system setting by default and remembers the choice per browser. To read or change the theme, use `useThemePreference()` from `src/lib/theme.ts`.
+- **Fonts.** Inter (interface) and JetBrains Mono (codes and IDs, via `font-mono`) come from packaged `@fontsource-variable` fonts imported once in `src/main.tsx`. The nginx CSP allows only self-hosted fonts.
 
 ## Accessibility
 
