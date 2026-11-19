@@ -30,6 +30,35 @@
 # Writes. gh pr edit fails on this repository's classic Projects field. Add a
 # label and edit a pull-request body with gh api. routes.merge is unset: the
 # close-out prints no merge command, and the skill never merges.
+#
+# Team Run (`/orchestrate --spec <n> --team`). Setup and how-to:
+# docs/agents/agent-kit.md#orchestrate-team-run.
+#
+# Teammates. The skill has no member list: a ticket belongs to the one
+# person assigned to it on GitHub, and each teammate runs their own Chief of
+# Staff, as the gh login it reads with `gh api user`. Today that is
+# mnaimfaizy (owner) and naimfaizy-bot (the bot PC's login; write access,
+# assignable). TODO(Naim): any other teammate needs write access to be
+# assigned, and their own clone and gh login; nothing in this file changes.
+#
+# Spec shape. A Team Run plans only a spec whose tickets are GitHub
+# sub-issues of the spec issue, each with exactly one assignee. Blocking
+# edges are GitHub's issue dependencies ("blocked by").
+#
+# State labels. The six `team.labels` must exist before the first Team Run;
+# the run otherwise asks to create them as the human (a Decision Request).
+# The gh label create commands are in docs/agents/agent-kit.md.
+#
+# set-state. trackers/github.md writes the state label with gh issue edit,
+# which reads the same classic Projects field: on 2026-11-19, gh 2.104.0,
+# `gh issue view --json projectCards` failed here with "Projects (classic)
+# is being deprecated". If gh issue edit fails the same way, write the label
+# with gh api instead (POST repos/mnaimfaizy/fastapi_rbac/issues/<n>/labels
+# -f "labels[]=<new>", then DELETE .../issues/<n>/labels/<old>, URL-encoded),
+# and read the labels back as set-state says.
+#
+# This repository is public: Shared Board rows and state labels are
+# readable by anyone. Briefs, reports and the Ruling Ledger stay in run_dir.
 
 run_dir: tmp/orchestrate
 
@@ -51,3 +80,18 @@ regate:
 
 ready_to_merge:
   qa: report
+
+# Read only by a Team Run. Pinned rather than detected, so a fork or a second
+# remote never changes where the board is written. A disagreement with
+# origin's host is asked about, never chosen silently.
+tracker: github
+
+team:
+  labels: # the agent-kit defaults, written out so the label commands match
+    planned: "team: planned" # in the plan, not started
+    parked: "team: parked" # waiting for a blocker's pull request to merge
+    running: "team: running" # its Delegation is working
+    waiting: "team: waiting" # waiting on a decision
+    ready_to_merge: "team: ready to merge" # Ready to Merge
+    merged: "team: merged" # its pull request is merged
+  recent_activity: 5 # milestones a Shared Board row keeps in its Recent activity list

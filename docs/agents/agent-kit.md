@@ -40,7 +40,7 @@ These files are copied from the pinned tag and committed. They are an explicit e
 | `.claude/skills/manual-qa/` | by hand (`/manual-qa` on a QA Plan): runs it against a QA Stack or a hosted test environment, and saves a local screenshot at each scenario's result. Reads `qa.config.yml` and the QA Accounts seeder |
 | `.claude/skills/plain-prose/` | optional: `/plain-prose` on a file or pasted text rewrites prose a person reads (PR bodies, READMEs, ADRs) into plain sentences; no flow uses it |
 | `.claude/skills/address-pr-review/` | review response flow; also by hand (`/address-pr-review <n>` on an open pull request): answers its unresolved review threads, shows every reply first and posts only after you confirm. Optional config `address-pr-review.config.yml` (not added here; defaults apply) |
-| `.claude/skills/orchestrate/` | optional: `/orchestrate #12 #34` runs a set of issues through other agent sessions; reads `orchestrate.config.yml` (not yet added here, so it asks in chat, QA stage included: `qa.config.yml` exists, so it asks whether each finished head gets a QA Delegation). From v1.0.0-beta.9, `/orchestrate --spec <n> --team` is a Team Run: each teammate builds only their assigned tickets, with a Shared Board of row comments and `team: …` state labels on the tracker; no flow uses it |
+| `.claude/skills/orchestrate/` | optional: `/orchestrate #12 #34` runs a set of issues through other agent sessions; reads `orchestrate.config.yml`. `/orchestrate --spec <n> --team` is a Team Run ([below](#orchestrate-team-run)); no flow uses it |
 | `.github/agent-runtime/` | every flow: hooks that confine agent reads to the workspace and, for implement, writes to the working tree; implement's git-config and push guards; review's `review-threads.mjs`, which posts each finding as an inline thread |
 | `.github/agent-pipeline/` | plan and implement (prompts, draft-PR fallback) |
 | `.github/security-audit/` | audit (prompt, advisory publisher, email notifier) |
@@ -57,6 +57,7 @@ The reusable workflows (`*-reusable.yml`) are **not** copied.
 | `.github/workflows/agent-kit-review-response.yml` | Review response Caller: one Response round on the `agent:address-review` PR label, or on the review handoff's dispatch in auto mode |
 | `.security/threat-model.md` | Threat pack: assets, trust boundaries, attack paths. Public |
 | `.security/findings-ledger.md` | Threat pack: concept-id fingerprints of known findings only. Public; never holds details |
+| `orchestrate.config.yml` | Settings for the `orchestrate` skill: what to read first, the commit and pull request routes, the re-gate commands, QA for Ready to Merge, and the Team Run's `tracker` and `team` labels |
 | `qa.config.yml` | Settings for `qa-plan` and `manual-qa`: the base ref and test suites, PR-comment delivery, the QA Stack commands and the QA Accounts roles. See [QA Accounts](../reference/qa-accounts.md) |
 
 ## Settings
@@ -220,6 +221,43 @@ No new secret is needed: the flow uses `CLAUDE_CODE_OAUTH_TOKEN` and the job tok
 ## Labels: triage state versus trigger
 
 `ready-for-agent` is a triage **state**: the issue is fully specified. `agent:plan` is a **Trigger label**: it starts a run, and the run removes it. A maintainer adds `agent:plan` by hand to an issue that is `ready-for-agent`. Nothing links the two automatically.
+
+## Orchestrate Team Run
+
+A Team Run (`/orchestrate --spec <n> --team`, from v1.0.0-beta.9) splits one spec's tickets between teammates. Each teammate runs their own Chief of Staff, on their own machine, over the tickets assigned to them alone. Everyone reads one **Shared Board** on GitHub: one row comment and one `team: …` state label per ticket. The skill's own guide is `.claude/skills/orchestrate/TEAM.md`.
+
+Set up in `orchestrate.config.yml`: `tracker: github` (pinned) and the six `team.labels`, the agent-kit defaults. There is no member list. Whose ticket it is comes only from its GitHub assignee, and who is running comes from the `gh` login. Today the teammates are `mnaimfaizy` and `naimfaizy-bot` (the bot PC). Any other teammate needs write access, so they can be assigned, plus their own clone and `gh` login.
+
+**Once, before the first Team Run,** create the state labels. A run that finds them missing asks to create them as you, in its Dispatch Plan.
+
+```bash
+gh label create "team: planned" --color C5DEF5 --description "orchestrate Team Run state: in the plan, not started"
+gh label create "team: parked" --color FBCA04 --description "orchestrate Team Run state: waiting for a blocker's pull request to merge"
+gh label create "team: running" --color 1D76DB --description "orchestrate Team Run state: its Delegation is working"
+gh label create "team: waiting" --color D93F0B --description "orchestrate Team Run state: waiting on a decision"
+gh label create "team: ready to merge" --color 0E8A16 --description "orchestrate Team Run state: Ready to Merge"
+gh label create "team: merged" --color 6F42C1 --description "orchestrate Team Run state: its pull request is merged"
+```
+
+**Prepare the spec.** The spec is one issue. Its tickets are its GitHub **sub-issues**, and "blocked by" issue dependencies give the order. Assign each open ticket to exactly one person. A ticket with no assignee is listed but run by nobody, and so is one with two or more.
+
+**Start.** Each teammate, in their own clone, runs:
+
+```text
+/orchestrate --spec <n> --team
+```
+
+The Dispatch Plan lists only your tickets, under "Teammates' tickets (not run here)", `unassigned` and "Needs one assignee". The GitHub tracker file is at Support Level `documented`, so the plan waits for your "go" even if you typed `go`. At "go" you approve the Shared Board writes on your own tickets. `go autonomous` lets your Chief of Staff rule only on your own Delegations. A Team Run always lands one pull request per ticket. A ticket blocked by a teammate's waits, `parked`, until that pull request is merged.
+
+**Check status.** `/orchestrate --status` prints your latest run's board and the whole spec as a blocking tree in merge order. `/orchestrate --status --spec <n>` reads the Shared Board from GitHub alone, with no run of your own: use it as a reviewer, as the spec's owner, or as a teammate with no tickets. Neither writes anything.
+
+**Resume.** `/orchestrate --resume <run>` continues from your run folder (`tmp/orchestrate/<run>`). It re-reads every ticket's assignee and brings the run in line with the Shared Board. A ticket newly assigned to you comes as an amended plan. A ticket reassigned away from you mid-run is asked about: hand it off, which pushes its branch, or ask for it back. After a lost machine, start a new Team Run: it offers to take your old rows over, and restarts each unfinished ticket from its branch.
+
+Things to know here:
+
+- This repository is public, so rows and state labels are readable by anyone. Briefs, reports, Decision Requests and the Ruling Ledger stay in your run folder.
+- A Chief of Staff never assigns or reassigns a ticket, and never merges. The assignee and the merge are yours.
+- The tracker file writes state labels with `gh issue edit`. This repository's classic Projects field makes `gh pr edit` fail, and `gh issue view --json projectCards` fails the same way, so `gh issue edit` may too. If it does, the run writes the label with `gh api`, as the comment in `orchestrate.config.yml` says.
 
 ## Upgrading
 
