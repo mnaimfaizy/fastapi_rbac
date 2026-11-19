@@ -13,7 +13,6 @@ export interface User {
   verified: boolean;
   created_at: string;
   updated_at: string;
-  expiry_date: string | null;
   last_changed_password_date: string | null;
   contact_phone: string | null;
   number_of_failed_attempts: number | null;

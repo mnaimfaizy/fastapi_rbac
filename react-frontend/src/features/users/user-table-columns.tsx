@@ -193,26 +193,6 @@ export const columns: ColumnDef<User>[] = [
       return (
         <div className="space-y-1 text-sm">
           <div>Created: {formatDate(user.created_at)}</div>
-          {user.expiry_date && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger className="flex items-center">
-                  <span className="text-muted-foreground">Expires:</span>
-                  <Badge
-                    variant={
-                      new Date(user.expiry_date) < new Date()
-                        ? 'destructive'
-                        : 'secondary'
-                    }
-                    className="ml-1"
-                  >
-                    {formatDate(user.expiry_date)}
-                  </Badge>
-                </TooltipTrigger>
-                <TooltipContent>Account expiration date</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
         </div>
       );
     },

@@ -260,14 +260,6 @@ const UserDetailContent = () => {
                   : 'Never'}
               </span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="font-medium">Account Expiry</span>
-              <span>
-                {selectedUser.expiry_date
-                  ? format(new Date(selectedUser.expiry_date), 'PPpp')
-                  : 'No expiry'}
-              </span>
-            </div>
           </CardContent>
         </Card>
 
