@@ -1,14 +1,25 @@
 import {
   CircleUser,
+  createLucideIcon,
   FolderTree,
   House,
-  KeyRound,
   Layers,
   LayoutGrid,
   ShieldCheck,
   Users,
   type LucideIcon,
 } from 'lucide-react';
+
+/**
+ * The key the Web v1 artboards draw for Permissions: ring at the bottom
+ * left, shaft and teeth to the top right. It is Lucide's earlier `key`;
+ * the `Key` in the installed lucide-react draws it mirrored.
+ */
+const PermissionKey = createLucideIcon('permission-key', [
+  ['circle', { cx: '7.5', cy: '15.5', r: '5.5', key: 'ring' }],
+  ['path', { d: 'm21 2-9.6 9.6', key: 'shaft' }],
+  ['path', { d: 'm15.5 7.5 3 3L22 7l-3-3', key: 'teeth' }],
+]);
 
 /** One link in the app shell's sidebar. */
 export interface NavItem {
@@ -62,7 +73,7 @@ const ACCESS_ITEMS: NavItem[] = [
   {
     label: 'Permissions',
     to: '/dashboard/permissions',
-    icon: KeyRound,
+    icon: PermissionKey,
     permission: 'permission.read',
   },
   {
