@@ -35,7 +35,6 @@ describe('UserService', () => {
           locked_until: null,
           needs_to_change_password: false,
           verified: false,
-          expiry_date: null,
           last_changed_password_date: null,
           contact_phone: null,
           number_of_failed_attempts: null,

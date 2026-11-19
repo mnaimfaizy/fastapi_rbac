@@ -18,7 +18,6 @@ from app.utils.partial import optional
 class IUserCreateFields(UserBase):
     role_id: list[UUID] | None = None
     last_changed_password_date: datetime | None = None
-    expiry_date: datetime | None = None
     number_of_failed_attempts: int | None = 0  # Adding the missing field with default value
     verified: bool = False  # Add verified field, default to False
     roles: list[dict[str, Any]] | None = None  # Adding roles field
@@ -60,7 +59,6 @@ class IUserUpdate(UserBase):
     is_superuser: bool
     role_id: list[UUID] | None = None
     contact_phone: str | None = None
-    expiry_date: datetime | None = None
     # Optional: a supplied password goes through password_policy.change_password
     # in the admin update endpoint (#198, #271). Blank / omitted means leave as-is.
     password: str
@@ -131,7 +129,6 @@ class IUserLoginSchema(BaseModel):
     verified: bool = False
     is_superuser: bool = False
     needs_to_change_password: bool = False
-    expiry_date: datetime | None = None
     contact_phone: str | None = None
     number_of_failed_attempts: int | None = None
     role: list[str] | None = None

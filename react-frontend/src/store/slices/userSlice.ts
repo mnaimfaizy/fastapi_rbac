@@ -158,7 +158,6 @@ const userSlice = createSlice({
             ...user,
             created_at: user.created_at ? String(user.created_at) : null,
             updated_at: user.updated_at ? String(user.updated_at) : null,
-            expiry_date: user.expiry_date ? String(user.expiry_date) : null,
             last_changed_password_date: user.last_changed_password_date
               ? String(user.last_changed_password_date)
               : null,

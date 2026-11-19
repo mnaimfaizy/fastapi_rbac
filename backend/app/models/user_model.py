@@ -22,7 +22,6 @@ class UserBase(SQLModel):
     last_updated_by: int | None = None  # Assuming str or UUID, keeping as int for now.
     # Only admin create and admin set turn this on (#273, ADR 0014).
     needs_to_change_password: bool = False
-    expiry_date: datetime | None = None
     contact_phone: str | None = None
     last_changed_password_date: datetime | None = None
     number_of_failed_attempts: int | None = None
@@ -32,7 +31,7 @@ class UserBase(SQLModel):
     verified: bool = False
     verification_code: str | None = None
 
-    @field_validator("expiry_date", "last_changed_password_date", "locked_until", mode="before")
+    @field_validator("last_changed_password_date", "locked_until", mode="before")
     @classmethod
     def convert_null_string_to_none(cls, v: Any) -> Any:
         if isinstance(v, str) and v.upper() == "(NULL)":
@@ -49,9 +48,6 @@ class User(BaseUUIDModel, UserBase, table=True):
     last_name: str | None = Field(default=None, index=True)
     password: str | None = Field(default=None)  # Store the hashed password
     # Naive UTC storage; see BaseUUIDModel.updated_at.
-    expiry_date: datetime | None = Field(
-        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None), sa_type=DateTime
-    )
     last_changed_password_date: datetime | None = Field(
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None), sa_type=DateTime
     )
