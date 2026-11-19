@@ -63,6 +63,13 @@ describe('Sign out everywhere', () => {
     expect(store.getState().auth.isAuthenticated).toBe(true);
     expect(getStoredAccessToken()).toBe('mock-access-token');
     expect(hasAuthSessionHint()).toBe(true);
+    // The page is usable again: the menu and dialog left no pointer block.
+    await waitFor(() => {
+      expect(document.body.style.pointerEvents).not.toBe('none');
+    });
+    expect(
+      screen.getByRole('button', { name: 'Account menu for QA Admin' })
+    ).toBeInTheDocument();
   });
 
   it.each([

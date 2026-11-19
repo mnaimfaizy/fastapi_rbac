@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { ChevronRight, Menu, PanelLeft } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -48,9 +48,7 @@ const MainLayout = () => {
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  // Rebuild when the viewer changes; `hasPermission` reads the same user.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const groups = useMemo(() => buildNavGroups(hasPermission), [user]);
+  const groups = buildNavGroups(hasPermission);
   const active = findActiveNavItem(groups, pathname);
 
   function toggleCollapsed() {
