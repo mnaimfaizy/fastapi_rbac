@@ -116,4 +116,57 @@ describe('ConfirmDialog', () => {
     );
     expect(screen.getByText('Dialog open')).toBeInTheDocument();
   });
+
+  it('ignores Escape while an async action is running', async () => {
+    let finish: () => void = () => {};
+    const onConfirm = vi.fn(
+      () => new Promise<void>((resolve) => (finish = resolve))
+    );
+    const user = userEvent.setup();
+    render(<Harness onConfirm={onConfirm} />);
+
+    await user.click(screen.getByRole('button', { name: 'Delete role' }));
+    await user.keyboard('{Escape}');
+
+    expect(screen.getByText('Dialog open')).toBeInTheDocument();
+    expect(
+      screen.getByRole('alertdialog', { name: 'Delete role ‘Manager’?' })
+    ).toBeInTheDocument();
+
+    finish();
+    await waitFor(() =>
+      expect(screen.getByText('Dialog closed')).toBeInTheDocument()
+    );
+  });
+
+  it('closes on Escape when nothing is running', async () => {
+    const onConfirm = vi.fn();
+    const user = userEvent.setup();
+    render(<Harness onConfirm={onConfirm} />);
+
+    await user.keyboard('{Escape}');
+
+    expect(screen.getByText('Dialog closed')).toBeInTheDocument();
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it('confirms with Enter in the field only once the text matches', async () => {
+    const onConfirm = vi.fn();
+    const user = userEvent.setup();
+    render(<Harness onConfirm={onConfirm} confirmText="Manager" />);
+
+    const field = screen.getByRole('textbox', {
+      name: 'Type Manager to confirm',
+    });
+
+    await user.type(field, 'Manag{Enter}');
+    expect(onConfirm).not.toHaveBeenCalled();
+    expect(screen.getByText('Dialog open')).toBeInTheDocument();
+
+    await user.type(field, 'er{Enter}');
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(screen.getByText('Dialog closed')).toBeInTheDocument()
+    );
+  });
 });
