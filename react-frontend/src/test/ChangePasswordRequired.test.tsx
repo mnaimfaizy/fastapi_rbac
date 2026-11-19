@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
 import { renderWithProviders, mockUser, mockToken } from './test-utils';
@@ -156,6 +156,138 @@ describe('Temporary password', () => {
     const signedOut = renderAt('/login', null).store;
     signedOut.dispatch(markPasswordChangeRequired());
     expect(signedOut.getState().auth.user).toBeNull();
+  });
+
+  it('does not send a second change while the first is in flight', async () => {
+    let resolveChange: (value: unknown) => void = () => {};
+    mockAuthService.changePassword.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveChange = resolve;
+        })
+    );
+    const user = userEvent.setup();
+    renderAt('/change-password-required', flaggedUser);
+
+    await user.type(
+      screen.getByLabelText('Temporary password'),
+      'TemporaryPass!47'
+    );
+    await user.type(
+      screen.getByLabelText('New password'),
+      'ReplacementPassword!42'
+    );
+    await user.type(
+      screen.getByLabelText('Confirm new password'),
+      'ReplacementPassword!42'
+    );
+    await user.click(screen.getByRole('button', { name: 'Save and continue' }));
+
+    const button = await screen.findByRole('button', {
+      name: 'Save and continue',
+    });
+    await waitFor(() => expect(button).toBeDisabled());
+    fireEvent.submit(button.closest('form')!);
+
+    expect(mockAuthService.changePassword).toHaveBeenCalledTimes(1);
+    resolveChange({
+      ...mockToken,
+      user: { ...flaggedUser, needs_to_change_password: false },
+    });
+  });
+
+  it('shows each failed policy rule, and a fallback when the refusal has no message', async () => {
+    mockAuthService.changePassword.mockRejectedValueOnce({
+      response: {
+        data: {
+          message: 'Password does not meet complexity requirements',
+          errors: [
+            'Password must contain at least one digit',
+            'Password must contain at least one special character from: !@#$%^&*()_+-=[]{}|;:,.<>?',
+          ],
+        },
+      },
+    });
+    const user = userEvent.setup();
+    renderAt('/change-password-required', flaggedUser);
+
+    await user.type(
+      screen.getByLabelText('Temporary password'),
+      'TemporaryPass!47'
+    );
+    await user.type(
+      screen.getByLabelText('New password'),
+      'ReplacementPassword!42'
+    );
+    await user.type(
+      screen.getByLabelText('Confirm new password'),
+      'ReplacementPassword!42'
+    );
+    await user.click(screen.getByRole('button', { name: 'Save and continue' }));
+
+    expect(
+      await screen.findByText('Password does not meet complexity requirements')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Password must contain at least one digit')
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Dashboard page')).not.toBeInTheDocument();
+
+    mockAuthService.changePassword.mockRejectedValueOnce({});
+    await user.click(screen.getByRole('button', { name: 'Save and continue' }));
+    expect(
+      await screen.findByText('Failed to change password')
+    ).toBeInTheDocument();
+  });
+
+  it('keeps a mismatched confirmation on the page', async () => {
+    const user = userEvent.setup();
+    renderAt('/change-password-required', flaggedUser);
+
+    await user.type(
+      screen.getByLabelText('Temporary password'),
+      'TemporaryPass!47'
+    );
+    await user.type(
+      screen.getByLabelText('New password'),
+      'ReplacementPassword!42'
+    );
+    await user.type(
+      screen.getByLabelText('Confirm new password'),
+      'ReplacementPassword!43'
+    );
+    await user.click(screen.getByRole('button', { name: 'Save and continue' }));
+
+    expect(
+      await screen.findByText("Passwords don't match")
+    ).toBeInTheDocument();
+    expect(mockAuthService.changePassword).not.toHaveBeenCalled();
+  });
+
+  it('renders nothing while the session is still loading', () => {
+    window.history.pushState({}, '', '/change-password-required');
+    renderWithProviders(
+      <Routes>
+        <Route path="/login" element={<div>Login page</div>} />
+        <Route
+          path="/change-password-required"
+          element={<ChangePasswordRequiredPage />}
+        />
+      </Routes>,
+      {
+        preloadedState: {
+          auth: {
+            ...authState(null).auth,
+            isLoading: true,
+          },
+        },
+      }
+    );
+
+    expect(screen.queryByText('Login page')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'Set a new password' })
+    ).not.toBeInTheDocument();
   });
 
   it('offers a logout', async () => {

@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
-import { createMemoryRouter, RouterProvider } from 'react-router-dom';
+import userEvent from '@testing-library/user-event';
+import {
+  createMemoryRouter,
+  Route,
+  RouterProvider,
+  Routes,
+} from 'react-router-dom';
 import { VerifyEmailPage } from '../features/auth/components/VerifyEmailPage';
 import { renderWithProviders } from './test-utils';
 import authService from '../services/auth.service';
@@ -20,6 +26,14 @@ function deferred<T>() {
 
 function verificationError(message: string) {
   return { response: { data: { message } } };
+}
+
+function tokenFor(email: string) {
+  const payload = btoa(JSON.stringify({ sub: email }))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+  return `e30.${payload}.sig`;
 }
 
 describe('VerifyEmailPage', () => {
@@ -65,19 +79,141 @@ describe('VerifyEmailPage', () => {
     expect(screen.queryByText('Email verified')).not.toBeInTheDocument();
   });
 
-  it('shows the missing-token failure without a success banner', async () => {
+  it('shows a missing token without calling it expired', async () => {
     window.history.pushState({}, '', '/verify-email');
 
-    renderWithProviders(<VerifyEmailPage />);
+    renderWithProviders(
+      <Routes>
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
+        <Route path="/login" element={<div>Sign in page</div>} />
+      </Routes>
+    );
 
+    expect(await screen.findByText('This link is missing')).toBeInTheDocument();
+    expect(screen.queryByText('This link has expired')).not.toBeInTheDocument();
     expect(
-      await screen.findByText('This link has expired')
+      screen.getByText(
+        'Open the verification link from your email, or request a new one.'
+      )
     ).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: /resend email/i })
     ).toBeInTheDocument();
     expect(screen.queryByText('Email verified')).not.toBeInTheDocument();
     expect(mockAuthService.verifyEmail).not.toHaveBeenCalled();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('link', { name: 'Back to sign in' }));
+    expect(await screen.findByText('Sign in page')).toBeInTheDocument();
+  });
+
+  it('shows a network error and a generic error without the expired title', async () => {
+    mockAuthService.verifyEmail.mockRejectedValueOnce({
+      isAxiosError: true,
+      code: 'ERR_NETWORK',
+      message: 'Network Error',
+    });
+    const { unmount } = renderWithProviders(<VerifyEmailPage />);
+
+    expect(
+      await screen.findByText('Could not reach the server')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Check your connection and try again.')
+    ).toBeInTheDocument();
+    expect(screen.queryByText('This link has expired')).not.toBeInTheDocument();
+    unmount();
+
+    mockAuthService.verifyEmail.mockRejectedValueOnce(new Error('boom'));
+    renderWithProviders(<VerifyEmailPage />);
+
+    expect(
+      await screen.findByText('Could not verify this link')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Something went wrong. Try again.')
+    ).toBeInTheDocument();
+    expect(screen.queryByText('This link has expired')).not.toBeInTheDocument();
+  });
+
+  it('names the address on success and continues to sign in', async () => {
+    const email = 'ada@example.com';
+    window.history.pushState({}, '', `/verify-email?token=${tokenFor(email)}`);
+    mockAuthService.verifyEmail.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    renderWithProviders(
+      <Routes>
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
+        <Route path="/login" element={<div>Sign in page</div>} />
+      </Routes>
+    );
+
+    expect(
+      await screen.findByText(`${email} is confirmed. You can sign in now.`)
+    ).toBeInTheDocument();
+    await user.click(
+      screen.getByRole('button', { name: 'Continue to sign in' })
+    );
+    expect(await screen.findByText('Sign in page')).toBeInTheDocument();
+  });
+
+  it('resends from an expired link that carries an email, and shows a resend failure', async () => {
+    const email = 'ada@example.com';
+    window.history.pushState({}, '', `/verify-email?token=${tokenFor(email)}`);
+    mockAuthService.verifyEmail.mockRejectedValue(
+      verificationError('This verification link is invalid or has expired.')
+    );
+    mockAuthService.resendVerificationEmail.mockResolvedValueOnce(undefined);
+    const user = userEvent.setup();
+    const { unmount } = renderWithProviders(<VerifyEmailPage />);
+
+    expect(
+      await screen.findByText('This link has expired')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        `Verification links work for 24 hours. We’ll send a fresh one to ${email}.`
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Resend email' })
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Resend email' }));
+    expect(
+      await screen.findByText(
+        'If this address can receive mail, a fresh link is on its way.'
+      )
+    ).toBeInTheDocument();
+    expect(mockAuthService.resendVerificationEmail).toHaveBeenCalledWith(email);
+    unmount();
+
+    window.history.pushState({}, '', `/verify-email?token=${tokenFor(email)}`);
+    mockAuthService.resendVerificationEmail.mockRejectedValueOnce({
+      response: { data: { message: 'Resend is unavailable' } },
+    });
+    renderWithProviders(<VerifyEmailPage />);
+    await user.click(
+      await screen.findByRole('button', { name: 'Resend email' })
+    );
+    expect(
+      await screen.findByText('Resend is unavailable')
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        'If this address can receive mail, a fresh link is on its way.'
+      )
+    ).not.toBeInTheDocument();
+
+    mockAuthService.resendVerificationEmail.mockRejectedValueOnce(
+      new Error('offline')
+    );
+    await user.click(screen.getByRole('button', { name: 'Resend email' }));
+    expect(
+      await screen.findByText(
+        'Could not resend the verification email. Try again.'
+      )
+    ).toBeInTheDocument();
   });
 
   it('does not show success and failure together when a stale verify settles late', async () => {

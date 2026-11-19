@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { passwordPolicySchema } from '@/lib/passwordPolicySchema';
+import { ErrorDetail } from '@/services/api';
 import AuthService from '@/services/auth.service';
 import { useAppSelector } from '@/store/hooks';
 
@@ -36,6 +37,7 @@ export default function SignupPage() {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const {
     register,
@@ -60,6 +62,7 @@ export default function SignupPage() {
     if (isLoading) return;
     setIsLoading(true);
     setApiError(null);
+    setFieldErrors({});
 
     const nameParts = data.fullName.trim().split(' ');
     const firstName = nameParts[0] || '';
@@ -77,17 +80,33 @@ export default function SignupPage() {
       });
       navigate('/registration-success');
     } catch (err) {
-      const axiosError = err as AxiosError<{ message?: string }>;
-      setApiError(
-        axiosError.response?.data?.message ||
-          'Could not create the account. Try again.'
-      );
+      const axiosError = err as AxiosError<{
+        message?: string;
+        errors?: ErrorDetail[];
+      }>;
+      const backendFieldErrors: Record<string, string> = {};
+      for (const entry of axiosError.response?.data?.errors ?? []) {
+        if (!entry.field) continue;
+        const fieldName =
+          entry.field === 'full_name' ? 'fullName' : entry.field;
+        backendFieldErrors[fieldName] = entry.message;
+      }
+      setFieldErrors(backendFieldErrors);
+      // The general notice is only for a rejection that names no field.
+      if (Object.keys(backendFieldErrors).length === 0) {
+        setApiError(
+          axiosError.response?.data?.message ||
+            'Could not create the account. Try again.'
+        );
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   const passwordError = errors.password?.message;
+  const passwordFieldError =
+    typeof passwordError === 'string' ? passwordError : fieldErrors.password;
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
@@ -105,11 +124,16 @@ export default function SignupPage() {
           type="text"
           autoComplete="name"
           className="h-10"
-          aria-invalid={errors.fullName ? true : undefined}
+          aria-invalid={
+            errors.fullName || fieldErrors.fullName ? true : undefined
+          }
           {...register('fullName')}
         />
         {errors.fullName ? (
           <p className="text-danger-text text-sm">{errors.fullName.message}</p>
+        ) : null}
+        {fieldErrors.fullName ? (
+          <p className="text-danger-text text-sm">{fieldErrors.fullName}</p>
         ) : null}
       </div>
 
@@ -120,11 +144,14 @@ export default function SignupPage() {
           type="email"
           autoComplete="email"
           className="h-10"
-          aria-invalid={errors.email ? true : undefined}
+          aria-invalid={errors.email || fieldErrors.email ? true : undefined}
           {...register('email')}
         />
         {errors.email ? (
           <p className="text-danger-text text-sm">{errors.email.message}</p>
+        ) : null}
+        {fieldErrors.email ? (
+          <p className="text-danger-text text-sm">{fieldErrors.email}</p>
         ) : null}
       </div>
 
@@ -132,7 +159,7 @@ export default function SignupPage() {
         id="password"
         label="Password"
         autoComplete="new-password"
-        error={typeof passwordError === 'string' ? passwordError : undefined}
+        error={passwordFieldError}
         {...register('password')}
       />
       <PasswordChecklist value={watch('password') ?? ''} />
@@ -141,7 +168,7 @@ export default function SignupPage() {
         id="confirm-password"
         label="Confirm password"
         autoComplete="new-password"
-        error={errors.confirmPassword?.message}
+        error={errors.confirmPassword?.message ?? fieldErrors.confirmPassword}
         {...register('confirmPassword')}
       />
 

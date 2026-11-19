@@ -1,22 +1,30 @@
 import { Check } from 'lucide-react';
 
-import { PASSWORD_RULES } from '@/lib/passwordPolicy';
+import {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MAX_REPEATS,
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_RULES,
+  PASSWORD_SPECIAL_CHARS,
+} from '@/lib/passwordPolicy';
 import { cn } from '@/lib/utils';
 
 /**
- * Artboard wording for each policy rule. The pass/fail test stays
- * `PASSWORD_RULES`, so the list cannot enforce something the API does not.
+ * Artboard wording for each policy rule. Length, the repeat count, and the
+ * accepted special characters come from the shared policy constants. The
+ * pass/fail test stays `PASSWORD_RULES`, so the list cannot enforce something
+ * the API does not. An id the artboard does not name falls back to `rule.label`.
  */
 const CHECKLIST_LABELS: Record<string, string> = {
-  length: 'At least 12 characters',
-  maxLength: 'At most 128 characters',
+  length: `At least ${PASSWORD_MIN_LENGTH} characters`,
+  maxLength: `At most ${PASSWORD_MAX_LENGTH} characters`,
   uppercase: 'An uppercase letter',
   lowercase: 'A lowercase letter',
   digit: 'A number',
-  special: 'A special character',
+  special: `A special character (${PASSWORD_SPECIAL_CHARS})`,
   notCommon: 'Not a common password',
   noSequential: 'No runs like abc or 123',
-  noRepeats: 'No character repeated 4 or more times in a row',
+  noRepeats: `No character repeated ${PASSWORD_MAX_REPEATS + 1} or more times in a row`,
 };
 
 export function PasswordChecklist({ value }: { value: string }) {
