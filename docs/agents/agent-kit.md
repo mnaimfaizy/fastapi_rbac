@@ -20,7 +20,7 @@ Agent-kit calls the list of GitHub logins allowed to trigger a run its "Allowlis
 
 ## Pinned tag
 
-Current pin: **`v1.0.0-beta.8`** (commit `cedae691e97128f091cfa2584fd131988533cac3`).
+Current pin: **`v1.0.0-beta.9`** (commit `fb9321333cb20caa5a6e1aeb564c9d72a3e151c5`).
 
 Agent-kit uses a split contract: the reusable workflows are referenced remotely (`uses: …@<tag>`), and the files below are copied in **from the same tag**. Never mix tags.
 
@@ -40,7 +40,7 @@ These files are copied from the pinned tag and committed. They are an explicit e
 | `.claude/skills/manual-qa/` | by hand (`/manual-qa` on a QA Plan): runs it against a QA Stack or a hosted test environment, and saves a local screenshot at each scenario's result. Reads `qa.config.yml` and the QA Accounts seeder |
 | `.claude/skills/plain-prose/` | optional: `/plain-prose` on a file or pasted text rewrites prose a person reads (PR bodies, READMEs, ADRs) into plain sentences; no flow uses it |
 | `.claude/skills/address-pr-review/` | review response flow; also by hand (`/address-pr-review <n>` on an open pull request): answers its unresolved review threads, shows every reply first and posts only after you confirm. Optional config `address-pr-review.config.yml` (not added here; defaults apply) |
-| `.claude/skills/orchestrate/` | optional: `/orchestrate #12 #34` runs a set of issues through other agent sessions; reads `orchestrate.config.yml` (not yet added here, so it asks in chat, QA stage included: `qa.config.yml` exists, so it asks whether each finished head gets a QA Delegation); no flow uses it |
+| `.claude/skills/orchestrate/` | optional: `/orchestrate #12 #34` runs a set of issues through other agent sessions; reads `orchestrate.config.yml` (not yet added here, so it asks in chat, QA stage included: `qa.config.yml` exists, so it asks whether each finished head gets a QA Delegation). From v1.0.0-beta.9, `/orchestrate --spec <n> --team` is a Team Run: each teammate builds only their assigned tickets, with a Shared Board of row comments and `team: …` state labels on the tracker; no flow uses it |
 | `.github/agent-runtime/` | every flow: hooks that confine agent reads to the workspace and, for implement, writes to the working tree; implement's git-config and push guards; review's `review-threads.mjs`, which posts each finding as an inline thread |
 | `.github/agent-pipeline/` | plan and implement (prompts, draft-PR fallback) |
 | `.github/security-audit/` | audit (prompt, advisory publisher, email notifier) |
@@ -187,7 +187,7 @@ To stop the pipeline, set the variable to anything else or delete it. To stop on
 
 ## Review response
 
-The Review response Caller is `.github/workflows/agent-kit-review-response.yml`. It answers the code review on a pull request: each unresolved review thread started by `github-actions` (the kit reviewer) is a Finding, and gets the Verdict `fixed` (one commit), `addressed` or `declined`. Agent-kit's guide: [docs/review-response.md](https://github.com/mnaimfaizy/agent-kit/blob/v1.0.0-beta.8/docs/review-response.md).
+The Review response Caller is `.github/workflows/agent-kit-review-response.yml`. It answers the code review on a pull request: each unresolved review thread started by `github-actions` (the kit reviewer) is a Finding, and gets the Verdict `fixed` (one commit), `addressed` or `declined`. Agent-kit's guide: [docs/review-response.md](https://github.com/mnaimfaizy/agent-kit/blob/v1.0.0-beta.9/docs/review-response.md).
 
 | Trigger | On | What runs |
 | --- | --- | --- |
@@ -229,11 +229,11 @@ Use the `@mnaimfaizy/agent-kit` CLI, at the same version as the new tag. It need
 2. From a clean branch, run `upgrade`. It replaces every Kit-owned path (delete, then copy), rewrites all four `uses:` pins, prints the `examples/` diff, and runs the `doctor --ci` checks. It commits nothing:
 
    ```bash
-   TAG=v1.0.0-beta.8   # the new tag; the CLI version is the tag without the leading v
-   npx "@mnaimfaizy/agent-kit@${TAG#v}" upgrade --tag "$TAG"
+   TAG=v1.0.0-beta.9   # the new tag; the CLI version is the tag without the leading v
+   npx "@mnaimfaizy/agent-kit@${TAG#v}" upgrade --tag "$TAG"   # add --yes when there is no terminal
    ```
 
-   The v1.0.0-beta.7 and v1.0.0-beta.8 CLIs refuse their own tag's manifest (`".github/agent-review-response/" is not a permitted Kit-owned path`) and change nothing. If `upgrade` refuses a manifest line, copy each path in the tag's `kit-owned-paths.txt` by hand instead (delete, then `git archive <tag> <path>`), and rewrite the `uses:` pins.
+   The v1.0.0-beta.7 and v1.0.0-beta.8 CLIs refused their own tag's manifest (`".github/agent-review-response/" is not a permitted Kit-owned path`); v1.0.0-beta.9 fixed it ([agent-kit#301](https://github.com/mnaimfaizy/agent-kit/issues/301)). If `upgrade` ever refuses a manifest line, copy each path in the tag's `kit-owned-paths.txt` by hand instead (delete, then `git archive <tag> <path>`), and rewrite the `uses:` pins.
 3. Apply anything relevant from the printed `examples/` diff to the Callers by hand (new or renamed inputs), and update the pin above.
 4. Run the full check, then commit the pins and the Kit-owned paths **in the same commit**:
 

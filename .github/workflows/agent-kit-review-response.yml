@@ -52,7 +52,7 @@ jobs:
         github.event.label.name == 'agent:address-review' &&
         github.event.pull_request.head.repo.full_name == github.repository) ||
       github.event_name == 'workflow_dispatch'
-    uses: mnaimfaizy/agent-kit/.github/workflows/agent-review-response-reusable.yml@v1.0.0-beta.8
+    uses: mnaimfaizy/agent-kit/.github/workflows/agent-review-response-reusable.yml@v1.0.0-beta.9
     with:
       kill_switch: ${{ vars.CLAUDE_REVIEW_RESPONSE_ENABLED != 'true' }}
       # Exactly `auto` accepts the review handoff's dispatch; unset is manual.

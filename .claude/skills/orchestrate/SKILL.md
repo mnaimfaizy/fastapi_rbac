@@ -2,7 +2,7 @@
 name: orchestrate
 description: Run a set of issues, or a whole spec, through other sessions as their Chief of Staff — analyse them, propose one Dispatch Plan, hand each Delegation to an Executor, relay every Decision Request, verify each report, QA each finished head where the repository requires it, and close out with the Ready to Merge list and a merge order. Invoked by the user.
 disable-model-invocation: true
-argument-hint: "#<n> [#<n>…] [go] [autonomous] | --spec <n> [go] [autonomous] | --status [<run>] | --resume <run>"
+argument-hint: "#<n> [#<n>…] [go] [autonomous] | --spec <n> [go] [autonomous] | --spec <n> --team [go] [autonomous] | --status [<run>] | --status --spec <n> | --resume <run>"
 metadata:
   agent-kit-scope: user
 ---
@@ -13,7 +13,7 @@ A user-invoked skill. Running it makes this session the **Chief of Staff** for a
 
 The Chief of Staff plans, delegates, relays and verifies. It never builds a Delegation's work itself, and it never merges.
 
-Load [CONFIG.md](CONFIG.md) when reading or asking for the config. Load [BRIEF.md](BRIEF.md) before writing a brief or reading a report. Load [RUN.md](RUN.md) before opening, updating or resuming a run folder. Load [HARNESSES.md](HARNESSES.md) at step 1, to find this run's **Harness**; then load that harness's own file under [harnesses/](harnesses/), and only that one, before the first `spawn`, `message`, `await` or `report`. Load [SPEC.md](SPEC.md) for `--spec`, or on `--resume` of a spec run ([RUN.md](RUN.md#resume)), and only then. Load [DESIGN.md](DESIGN.md) when a rule needs its reason, or before changing this skill.
+Load [CONFIG.md](CONFIG.md) when reading or asking for the config. Load [BRIEF.md](BRIEF.md) before writing a brief or reading a report. Load [RUN.md](RUN.md) before opening, updating or resuming a run folder. Load [HARNESSES.md](HARNESSES.md) at step 1, to find this run's **Harness**; then load that harness's own file under [harnesses/](harnesses/), and only that one, before the first `spawn`, `message`, `await` or `report`. Load [SPEC.md](SPEC.md) for `--spec` (not for `--status --spec <n>`, which reads the tracker alone), or on `--resume` of a spec run ([RUN.md](RUN.md#resume)), and only then. Load [TEAM.md](TEAM.md) for `--spec <n> --team`, after SPEC.md, on `--resume` or `--status` of a run whose board says it is a Team Run, or for `--status --spec <n>`, and only then: it says how a Team Run's plan changes, adds the Shared Board's writes after "go", and says how the Shared Board is read. Load [DESIGN.md](DESIGN.md) when a rule needs its reason, or before changing this skill.
 
 `<skill>` in a command below is the absolute path of the folder this file is in, written with forward slashes (`C:/Users/me/...` on Windows), inside double quotes because it may contain spaces. Every command runs from the root of the repository the issues belong to.
 
@@ -37,10 +37,12 @@ It finds the repository from the folder it runs in, and lists the copies of `orc
 - `/orchestrate #12 #34 go`: the same, and the run starts straight after the Dispatch Plan is shown, unless analysis raised a Decision Request.
 - `/orchestrate #12 #34 go autonomous`, or `/orchestrate #12 #34 autonomous`: the same, with the Dispatch Plan's **Decision authority** line filled in as `autonomous` ([Autonomous runs](#autonomous-runs)). The word only fills the line in: the run is autonomous only once the plan is approved with that line, as step 4 says.
 - `/orchestrate --spec 50 [go] [autonomous]`: a run for the spec `#50` and the work it holds, in dependency order. Load [SPEC.md](SPEC.md) before step 3: it says how the spec becomes Delegations and how the work lands. `autonomous` fills in the Decision authority line, as for issues.
-- `/orchestrate --status [<run>]`: print the board of the run named, or of the latest run, with the [default-branch check](#the-default-branch-check)'s result, and act on and write nothing ([RUN.md](RUN.md#status)).
+- `/orchestrate --spec 50 --team [go] [autonomous]`: a **Team Run** of the spec `#50`. Each teammate runs their own Chief of Staff, and this one builds only the spec's tickets assigned to this teammate alone, listing the rest. Load [TEAM.md](TEAM.md) with SPEC.md before step 3 for `--team`: it says how the plan changes, and adds the Shared Board's writes after "go". `go` and `autonomous` are this teammate's own.
+- `/orchestrate --status [<run>]`: print the board of the run named, or of the latest run, with the [default-branch check](#the-default-branch-check)'s result, and act on and write nothing ([RUN.md](RUN.md#status)). In a Team Run, it also prints the whole spec from the tracker ([RUN.md](RUN.md#in-a-team-run)).
+- `/orchestrate --status --spec 50`: print the Shared Board of the Team Run on the spec `#50` from the tracker alone, with no run of your own, and write nothing ([RUN.md](RUN.md#--status---spec-n)). For a reviewer, the spec's owner, or a teammate with no tickets.
 - `/orchestrate --resume <run>`: continue a run from its board ([RUN.md](RUN.md#resume)).
 
-`--spec` takes exactly one issue number and nothing else but `go` and `autonomous`. `autonomous` is taken once, last, and only in a run for issues or a spec, after `go` when both are given. With `--status` or `--resume`, on its own, before `go`, or twice, it is a mix this version does not take. Any other argument this version does not know, or a mix of the forms above, `autonomous` included, stops the run before anything is read: say which invocations this version knows.
+`--spec` takes exactly one issue number and nothing else but `--team`, `go` and `autonomous`, except in `--status --spec <n>`. `--team` is taken only with `--spec <n>`, once, straight after its number: anywhere else, or twice, it is a mix this version does not take. `--status --spec <n>` takes exactly one issue number and nothing else: no run name, `--team`, `go` or `autonomous`, and `--status` comes first. `autonomous` is taken once, last, and only in a run for issues or a spec, after `go` when both are given. With `--status` or `--resume`, on its own, before `go`, or twice, it is a mix this version does not take. Any other argument this version does not know, or a mix of the forms above, `autonomous` included, stops the run before anything is read: say which invocations this version knows.
 
 ## Rules
 
@@ -70,7 +72,7 @@ A run whose Dispatch Plan was approved with **Decision authority: autonomous** (
 
 **Making a Ruling:**
 
-1. Give it the next run-wide id, `R<n>`: `R1`, `R2`, and so on, never reused.
+1. Give it the next run-wide id, `R<n>`: `R1`, `R2`, and so on, never reused. A new Team Run after a lost machine starts one past the highest `R<n>` on the old run's pull requests instead ([RUN.md](RUN.md#after-a-lost-machine)).
 2. Append it to the Ruling Ledger, `unreviewed`, with its question, options, choice and reason, evidence, and the earlier Rulings it cites. Mark the Decision Request in the Delegation's `decisions.md` as answered by the Chief of Staff, as `R<n>`.
 3. `message` it to the Delegation that asked, in the Ruling form ([BRIEF.md](BRIEF.md#ruling)), or for a stall, a crash or a merge order, to the Delegation it acts on. Record it where `decisions.to` says, labelled "Chief of Staff ruling, not yet reviewed". With `pull-request`, the line goes in the building Delegation's own pull request body: for a building Delegation's Ruling, its Ruling form tells it to add the line; for a QA Delegation's, whose brief allows no such write, the QA Delegation's form says `Record: none`, and the Chief of Staff sends the line to the building Delegation whose pull request it tests. With `issue-comment`, the Chief of Staff drafts the comment, a write as the human handled as step 6 says. The Delegation goes on with the Ruling while that write waits.
 4. Log it in the Activity Log, then act on it as on the human's answer: the nudge or restart, the merge order, the send back, the new QA run, or the delivery.
@@ -174,7 +176,9 @@ The human's "go" approves the whole plan: every row, the routine writes they tic
 
 For each Delegation in the wave, write its brief to its folder in the run, carrying every item of the Brief Contract ([BRIEF.md](BRIEF.md)), and `spawn` its Executor with that brief. Record the Executor's handle, its branch and its start time on the board.
 
-**Done when:** every Delegation in the wave is running, with its handle on the board.
+Where the harness file says its `spawn` can only propose a session for the human to start (on Claude Code desktop, a turn the app started), the Delegation is `waiting` on the human to start it, with what the human must do queued as a Decision Request. Step 6 checks `waiting` rows on every wake-up, so the turn that finds the session records its handle and start time, sets the row to `running`, and arms its waits, as the harness file says.
+
+**Done when:** every Delegation in the wave is running, with its handle on the board, or is `waiting` on the human to start it, as above.
 
 ### 6. Run the loop
 

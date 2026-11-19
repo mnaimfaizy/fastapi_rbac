@@ -67,6 +67,8 @@ Tabs, anchors, aliases, multi-line scalars, flow collections that span lines, a 
 | `decisions`      | see below           | Where a human decision is recorded, so a reviewer of the pull request can see it.                                                                                                                                         |
 | `ready_to_merge` | see below           | What Ready to Merge requires beyond green CI and a clean merge into the default branch as it now is.                                                                                                                      |
 | `spec`           | see below           | How a spec run (`--spec <n>`) lands its work. A run on a set of issues reads none of it.                                                                                                                                  |
+| `tracker`        | `detect`            | The issue tracker a Team Run (`--spec <n> --team`) reads its tickets from. See below.                                                                                                                                     |
+| `team`           | see below           | A Team Run's state labels, and how much a Shared Board row keeps. Only a Team Run reads it.                                                                                                                               |
 
 A value in any route, command or skill name is free text: the brief carries it as written, so a route can be a command, a skill to use, or a sentence of convention.
 
@@ -161,9 +163,46 @@ Read only by a spec run ([SPEC.md](SPEC.md#the-landing)).
 | `landing`            | `ask`                  | `integration-branch`: each ticket lands on one local branch, which ends in one pull request. `per-ticket`: each ticket opens its own pull request, and a later wave waits for its blockers to be merged. `ask`: the Dispatch Plan asks, with what each costs. Either way, the plan says which it is. |
 | `integration_branch` | `orchestrate/spec-<n>` | The integration branch's name, with `<n>` replaced by the spec's number. `<n>` must be in it, and is its only placeholder; with it filled in, the name must be a valid git branch name. The branch is local: it is pushed only on a yes.                                                             |
 
+### `tracker`
+
+Read only by a Team Run ([TEAM.md](TEAM.md#find-the-tracker)).
+
+| Value    | Meaning                                                                                                                                                                                                                                                    |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `detect` | The default. The tracker is read from the host of the repository's git remote (`origin`, or its only remote; with several and none named `origin`, the run asks which): `github.com` is `github`, `gitlab.com` is `gitlab`. Any other host is asked about. |
+| `github` | GitHub, pinned. Needed for GitHub on any host but `github.com`.                                                                                                                                                                                            |
+| `gitlab` | GitLab, pinned. Needed for a self-hosted GitLab on its own domain.                                                                                                                                                                                         |
+
+A pinned value that disagrees with what the remote's host points to is a question to the human, never a silent choice. `check` prints a `tracker` report: `pinned` (null for `detect`), `remote`, `remote_host` and `detected`. A null `remote` is asked about too, whatever the pin, since a Team Run fetches and pushes on that remote ([TEAM.md](TEAM.md#find-the-tracker)). Any other value is a problem. A run without `--team` reads neither.
+
+### `team`
+
+Read only by a Team Run ([TEAM.md](TEAM.md)).
+
+| Key               | Default         | Meaning                                                                                                                                                                                         |
+| ----------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `labels`          | `team: <state>` | The label for each of the six coarse states a ticket can be in: `planned`, `parked`, `running`, `waiting`, `ready_to_merge` and `merged`. Give all six, or leave `labels` out for the defaults. |
+| `recent_activity` | `5`             | How many milestones a Shared Board row keeps in its Recent activity list. A whole number of 1 or more.                                                                                          |
+
+The default labels are `team: planned`, `team: parked`, `team: running`, `team: waiting`, `team: ready to merge` and `team: merged`. In YAML, quote a label that holds `: `:
+
+```yaml
+team:
+  labels:
+    planned: "team: planned"
+    parked: "team: parked"
+    running: "team: running"
+    waiting: "team: waiting"
+    ready_to_merge: "team: ready to merge"
+    merged: "team: merged"
+  recent_activity: 5
+```
+
+A `labels` mapping that leaves a state out, names a key that is not one of the six, or gives one label to two states (compared without case, as the tracker compares them) is a problem.
+
 ## Readiness check
 
-`node "<skill>/config.mjs" check` prints JSON: the config's `path` (null when there is none), its `problems`, the `effective` values with every default applied, and `readiness`: what the run still **needs** (asked for, in one message) and **notes** (said, and the run goes on). It needs `read_first`, `routes.commit`, `routes.pull_request` and `regate`, and `ready_to_merge.qa` when a QA config (`qa.config.yml`, `qa.config.yaml` or `qa.config.json`) is at the repository root and the config does not set it. With a QA config and `qa: none` set, it notes that the run plans no QA. `qa_config` in the output is that file's name, or null. It exits 1 on any problem and 2 on bad usage; `--repo <dir>` reads another repository.
+`node "<skill>/config.mjs" check` prints JSON: the config's `path` (null when there is none), its `problems`, the `effective` values with every default applied, the `harness` report ([HARNESSES.md](HARNESSES.md#finding-the-harness)), the `tracker` report ([above](#tracker)), and `readiness`: what the run still **needs** (asked for, in one message) and **notes** (said, and the run goes on). It needs `read_first`, `routes.commit`, `routes.pull_request` and `regate`, and `ready_to_merge.qa` when a QA config (`qa.config.yml`, `qa.config.yaml` or `qa.config.json`) is at the repository root and the config does not set it. With a QA config and `qa: none` set, it notes that the run plans no QA. `qa_config` in the output is that file's name, or null. It exits 1 on any problem and 2 on bad usage; `--repo <dir>` reads another repository.
 
 ### Answers given in chat
 
