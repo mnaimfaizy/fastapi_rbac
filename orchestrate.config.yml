@@ -1,0 +1,53 @@
+# orchestrate.config.yml: settings for Agent-kit's orchestrate skill.
+#
+# The keys below are the answers confirmed on 2026-11-19 for the run on
+# #280 and #281. Comments are context for the next run. The checker refuses
+# an unknown key, so a fact that is not a key stays a comment.
+#
+# Harness. This repository is developed in Cursor. Support Level is tried
+# (.claude/skills/orchestrate/harnesses/cursor.md). harness is left unset so
+# the run still detects it. Pin it only after a run is recorded as verified.
+#
+# Which copy. Cursor can load ~/.claude/skills/orchestrate and this
+# repository's .claude/skills/orchestrate. The first command of a run is
+# `node .claude/skills/orchestrate/config.mjs where orchestrate`. use: repository
+# means stop and follow the SKILL.md that load names.
+#
+# message reaches a building sub-agent only after it has ended:
+# "Resume agent <id>". A Ruling made while it is running stays in the
+# Decision Requests cell until that message is sent. An in-progress diff is
+# not delivery.
+#
+# The heartbeat on Cursor is a foreground watch. A turn cut by a human
+# message or by compaction still lets an in-flight watch append the activity
+# log, including a line whose time is earlier than the line above it. A late
+# line is not a new event.
+#
+# Scenarios a QA Delegation leaves for a person are run by the human, or by
+# resuming that QA Delegation. The Chief of Staff does not start the QA Stack
+# to drive them. Driver facts for this API and this web app are in qa.config.yml.
+#
+# Writes. gh pr edit fails on this repository's classic Projects field. Add a
+# label and edit a pull-request body with gh api. routes.merge is unset: the
+# close-out prints no merge command, and the skill never merges.
+
+run_dir: tmp/orchestrate
+
+read_first:
+  - AGENTS.md
+  - docs/agents/domain.md
+  - docs/agents/commit-messages.md
+  - docs/agents/branch-names.md
+  - docs/reference/architecture.md
+  - docs/contributing.md
+
+routes:
+  commit: "Conventional Commits per docs/agents/commit-messages.md (type(scope): subject, no emoji, one logical change): git commit. Branch names per docs/agents/branch-names.md."
+  pull_request: "gh pr create --draft. The body describes the change and ends with Fixes and the issue number, as .github/instructions/resolve-issue.instructions.md requires."
+
+regate:
+  - 'cd backend && uv run --no-project --python 3.10 --with-requirements requirements.txt --with "python-dotenv[cli]" dotenv -f .env.test.example run -- pytest test/unit/ test/api/ -q -p no:cacheprovider'
+  - "cd react-frontend && npm ci --no-audit --no-fund && npx vitest run"
+
+ready_to_merge:
+  qa: report
