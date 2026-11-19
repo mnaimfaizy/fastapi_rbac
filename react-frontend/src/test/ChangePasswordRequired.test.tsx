@@ -63,7 +63,7 @@ describe('Temporary password', () => {
 
     expect(
       await screen.findByText(
-        'An administrator set a temporary password for your account. Choose a new password to continue.'
+        'You signed in with a temporary password. Choose your own before you continue.'
       )
     ).toBeInTheDocument();
     expect(screen.queryByText('Dashboard page')).not.toBeInTheDocument();
@@ -93,18 +93,18 @@ describe('Temporary password', () => {
     const { store } = renderAt('/change-password-required', flaggedUser);
 
     await user.type(
-      screen.getByLabelText('Current Password'),
+      screen.getByLabelText('Temporary password'),
       'TemporaryPass!47'
     );
     await user.type(
-      screen.getByLabelText('New Password'),
+      screen.getByLabelText('New password'),
       'ReplacementPassword!42'
     );
     await user.type(
-      screen.getByLabelText('Confirm New Password'),
+      screen.getByLabelText('Confirm new password'),
       'ReplacementPassword!42'
     );
-    await user.click(screen.getByRole('button', { name: 'Change Password' }));
+    await user.click(screen.getByRole('button', { name: 'Save and continue' }));
 
     expect(await screen.findByText('Dashboard page')).toBeInTheDocument();
     expect(mockAuthService.changePassword).toHaveBeenCalledWith(
@@ -126,16 +126,19 @@ describe('Temporary password', () => {
     const user = userEvent.setup();
     const { store } = renderAt('/change-password-required', flaggedUser);
 
-    await user.type(screen.getByLabelText('Current Password'), 'WrongPass!47');
     await user.type(
-      screen.getByLabelText('New Password'),
+      screen.getByLabelText('Temporary password'),
+      'WrongPass!47'
+    );
+    await user.type(
+      screen.getByLabelText('New password'),
       'ReplacementPassword!42'
     );
     await user.type(
-      screen.getByLabelText('Confirm New Password'),
+      screen.getByLabelText('Confirm new password'),
       'ReplacementPassword!42'
     );
-    await user.click(screen.getByRole('button', { name: 'Change Password' }));
+    await user.click(screen.getByRole('button', { name: 'Save and continue' }));
 
     expect(
       await screen.findByText('Invalid Current Password')
@@ -160,7 +163,7 @@ describe('Temporary password', () => {
     const user = userEvent.setup();
     renderAt('/change-password-required', flaggedUser);
 
-    await user.click(screen.getByRole('button', { name: 'Logout' }));
+    await user.click(screen.getByRole('button', { name: 'Sign out' }));
 
     await waitFor(() => {
       expect(mockAuthService.logout).toHaveBeenCalledTimes(1);

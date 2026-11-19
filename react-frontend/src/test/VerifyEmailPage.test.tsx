@@ -34,12 +34,13 @@ describe('VerifyEmailPage', () => {
 
     renderWithProviders(<VerifyEmailPage />);
 
-    expect(
-      await screen.findByText('Verification Successful')
-    ).toBeInTheDocument();
-    expect(screen.queryByText('Verification Failed')).not.toBeInTheDocument();
+    expect(await screen.findByText('Email verified')).toBeInTheDocument();
+    expect(screen.queryByText('This link has expired')).not.toBeInTheDocument();
     expect(
       screen.queryByRole('link', { name: /resend email/i })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /resend email/i })
     ).not.toBeInTheDocument();
   });
 
@@ -52,18 +53,16 @@ describe('VerifyEmailPage', () => {
 
     renderWithProviders(<VerifyEmailPage />);
 
-    expect(await screen.findByText('Verification Failed')).toBeInTheDocument();
     expect(
-      screen.getByText(
-        'This verification link is invalid or has expired. Please request a new verification email and try again.'
-      )
+      await screen.findByText('This link has expired')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Verification links work for 24 hours/i)
     ).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: /resend email/i })
     ).toBeInTheDocument();
-    expect(
-      screen.queryByText('Verification Successful')
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Email verified')).not.toBeInTheDocument();
   });
 
   it('shows the missing-token failure without a success banner', async () => {
@@ -71,16 +70,13 @@ describe('VerifyEmailPage', () => {
 
     renderWithProviders(<VerifyEmailPage />);
 
-    expect(await screen.findByText('Verification Failed')).toBeInTheDocument();
     expect(
-      screen.getByText('Verification token is missing.')
+      await screen.findByText('This link has expired')
     ).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: /resend email/i })
     ).toBeInTheDocument();
-    expect(
-      screen.queryByText('Verification Successful')
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Email verified')).not.toBeInTheDocument();
     expect(mockAuthService.verifyEmail).not.toHaveBeenCalled();
   });
 
@@ -110,18 +106,16 @@ describe('VerifyEmailPage', () => {
       first.resolve();
       await Promise.resolve();
     });
-    expect(
-      screen.queryByText('Verification Successful')
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Email verified')).not.toBeInTheDocument();
 
     second.reject(
       verificationError('This verification link is invalid or has expired.')
     );
 
-    expect(await screen.findByText('Verification Failed')).toBeInTheDocument();
     expect(
-      screen.queryByText('Verification Successful')
-    ).not.toBeInTheDocument();
+      await screen.findByText('This link has expired')
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Email verified')).not.toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: /resend email/i })
     ).toBeInTheDocument();
