@@ -4,7 +4,8 @@ Releases up to v0.4.0-beta seeded the Manager and User demo accounts
 (``init_db.DEMO_ACCOUNT_EMAILS``) in every mode. Production no longer seeds
 them, but start-up never changes existing users, so a database created by an
 earlier release may still hold them. This one-off, opt-in command deactivates
-each one that exists, ends its sessions and revokes its pending emailed links.
+each one that exists through the disable operation, which ends its sessions
+and revokes its pending emailed links.
 It deletes nothing, so an account's history and audit rows stay. Running it
 again changes nothing. It runs only when MODE is production, because
 development and tests sign in as these accounts.
@@ -23,8 +24,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app import crud
 from app.core.config import ModeEnum, settings
 from app.db.init_db import DEMO_ACCOUNT_EMAILS
-from app.utils import emailed_links, sessions
-from app.utils.emailed_links import LinkKind
+from app.utils.account_disable import disable_user
 
 
 async def retire_demo_accounts(
@@ -44,17 +44,11 @@ async def retire_demo_accounts(
             # FIRST_SUPERUSER_EMAIL may have been set to a demo address.
             report.append(f"{email}: skipped, it is a superuser")
             continue
-        if user.is_active:
-            user.is_active = False
-            db_session.add(user)
-            outcome = "deactivated"
-        else:
-            outcome = "already inactive"
-        # Every run, so a session or link left by an earlier partial run ends too.
-        await sessions.end_all(user.id, redis_client=redis_client)
-        for kind in LinkKind:
-            await emailed_links.revoke(kind, user.id, redis=redis_client)
-        await db_session.commit()
+        outcome = "deactivated" if user.is_active else "already inactive"
+        # Deactivation goes through disable_user. An account that is already
+        # inactive still loses a session or link a direct edit left behind,
+        # and does not gain a second audit row.
+        await disable_user(user, actor=None, db_session=db_session, redis_client=redis_client)
         report.append(f"{email}: {outcome}")
     return report
 

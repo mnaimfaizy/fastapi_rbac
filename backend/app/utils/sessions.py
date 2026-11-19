@@ -33,6 +33,7 @@ from uuid import UUID
 
 from fastapi import BackgroundTasks, HTTPException
 from redis.asyncio import Redis
+from sqlalchemy.ext.asyncio import async_object_session
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app import crud
@@ -52,7 +53,9 @@ class RejectReason(str, Enum):
     NOT_ACCEPTED = "not_accepted"
     MISSING_SUBJECT = "missing_subject"
     INVALID_SUBJECT = "invalid_subject"
-    # At refresh: the token's user no longer exists or is disabled.
+    # At refresh: the token's user row is gone. Opening a session also uses
+    # this when the user is inactive (#281). An inactive user's existing
+    # sessions are refused by the allowlist, because disable ends them.
     USER_UNAVAILABLE = "user_unavailable"
     # At end: nothing presented identifies which session the caller holds.
     UNIDENTIFIED = "unidentified"
@@ -113,11 +116,41 @@ def _mint_access_token(user: User) -> str:
     )
 
 
+async def is_active_now(user: User) -> bool:
+    """Whether ``user`` is active, re-read from the database when the row is loaded.
+
+    Login holds the user object it read before ``disable_user`` commits. A
+    check of that object would still see the old flag. Reloading sees the
+    commit. A user that is not attached (a test double, or a row already
+    detached) keeps the flag it was given.
+    """
+    try:
+        bind = async_object_session(user)
+    except Exception:
+        bind = None
+    if bind is not None:
+        try:
+            await bind.refresh(user)
+        except Exception:
+            logger.exception("Could not reload user %s before opening a session", getattr(user, "id", None))
+    return bool(user.is_active)
+
+
+async def _open_inactive(user: User, redis_client: Redis) -> None:
+    """Drop anything just written for an inactive user, then refuse the open."""
+    await end_all(user.id, redis_client=redis_client)
+    raise SessionRejected(RejectReason.USER_UNAVAILABLE)
+
+
 async def open(user: User, client_address: Optional[str], *, redis_client: Redis) -> IssuedSession:
     """Open a session with a refresh token, recording ``client_address`` as its origin.
 
     At ``CONCURRENT_SESSION_LIMIT`` the oldest other session is evicted.
+    An inactive user gets no session: the flag is read again around the
+    allowlist write, so a disable that commits in between does not leave one.
     """
+    if not await is_active_now(user):
+        raise SessionRejected(RejectReason.USER_UNAVAILABLE)
     refresh_minutes = _refresh_minutes()
     access_token = _mint_access_token(user)
     refresh_token = security.create_refresh_token(user.id, expires_delta=timedelta(minutes=refresh_minutes))
@@ -130,6 +163,8 @@ async def open(user: User, client_address: Optional[str], *, redis_client: Redis
         refresh_expire_minutes=refresh_minutes,
         origin_ip=client_address,
     )
+    if not await is_active_now(user):
+        await _open_inactive(user, redis_client)
     return IssuedSession(access_token, refresh_token, refresh_max_age=refresh_minutes * 60)
 
 
@@ -144,7 +179,10 @@ async def open_access_only(user: User, client_address: Optional[str], *, redis_c
 
     Its route has no CSRF dependency: Swagger's Authorize form cannot send the
     header. That is deliberate until the owner decides otherwise (#279).
+    An inactive user gets no session, same as :func:`open`.
     """
+    if not await is_active_now(user):
+        raise SessionRejected(RejectReason.USER_UNAVAILABLE)
     access_token = _mint_access_token(user)
     await allowlist.record_session(
         redis_client,
@@ -153,6 +191,8 @@ async def open_access_only(user: User, client_address: Optional[str], *, redis_c
         access_expire_minutes=_access_minutes(),
         origin_ip=client_address,
     )
+    if not await is_active_now(user):
+        await _open_inactive(user, redis_client)
     return access_token
 
 
@@ -178,8 +218,14 @@ async def refresh(
     """Derive a new access token for the session of ``refresh_token``.
 
     In order: the allowlist; the origin network, where a mismatch ends this
-    session only (ADR 0011 decision 5); then the user. A JWT decode failure is
-    recorded and its ``HTTPException`` from ``decode_token`` propagates.
+    session only (ADR 0011 decision 5); then the user row must still exist.
+    An inactive user is not a second check: disable ends their sessions, and
+    the allowlist is the only revocation mechanism (ADR 0011 decision 1,
+    #281). After the derived access token is written, the refresh token is
+    checked again. A disable that finished in between leaves that token
+    dead, so the derived access token is revoked and the refresh is refused.
+    A JWT decode failure is recorded and its ``HTTPException`` from
+    ``decode_token`` propagates.
     """
     ip_address = client_address or "Unknown"
     try:
@@ -221,21 +267,25 @@ async def refresh(
                 db_session, "refresh_token_invalid_uuid", {"user_id": subject, "ip_address": ip_address}
             )
             raise SessionRejected(RejectReason.INVALID_SUBJECT)
-        # Temporary: disabling a user does not end their sessions yet, so this
-        # is a second revocation mechanism beside the allowlist (ADR 0011
-        # decision 1) until #281 makes disable and delete call end_all.
-        if not user or not user.is_active:
+        if user is None:
+            assert subject is not None
             await _record(
                 db_session,
                 "refresh_token_user_not_found_or_inactive",
-                {"email": user.email if user else "N/A", "token_subject": subject, "ip_address": ip_address},
-                user_id=user.id if user else subject,
+                {"email": "N/A", "token_subject": subject, "ip_address": ip_address},
+                user_id=UUID(subject),
             )
             raise SessionRejected(RejectReason.USER_UNAVAILABLE)
         access_token = _mint_access_token(user)
         await allowlist.add_derived_access_token(
             redis_client, user.id, access_token, refresh_token, _access_minutes()
         )
+        # Disable can finish both endings after the first is_live check and
+        # before this write. The new access token would otherwise stay usable.
+        if not await allowlist.is_live(redis_client, user.id, TokenType.REFRESH, refresh_token):
+            await allowlist.revoke_session(redis_client, user.id, refresh_token)
+            await _record(db_session, "refresh_token_invalid", {"user_id": subject, "ip_address": ip_address})
+            raise SessionRejected(RejectReason.NOT_ACCEPTED)
         return RefreshedSession(access_token=access_token, user=user)
     except SessionRejected:
         raise
