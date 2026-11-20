@@ -7,7 +7,7 @@ mode: agent
 When the `/commit` command is invoked in chat, the agent must:
 
 1. Assume there are staged or unstaged changes to commit.
-2. Immediately begin the commit workflow:
+2. Immediately begin the commit workflow (agents: load `.claude/skills/commit-change` and commit only through `scripts/development/commit-runner.sh`; see `docs/agents/commit-pipeline.md`):
    - Check git status.
    - Stage all relevant changes.
    - Prompt for or generate a commit message following **`docs/agents/commit-messages.md`** (mandatory SSOT).
