@@ -6,6 +6,7 @@ Project-owned agent assets that do live here:
 
 - `.claude/skills/release`: Release PR workflow (see Release below)
 - `.claude/agents/release-notes.md`: release-notes sub-agent
+- `.claude/skills/commit-change`, `.claude/agents/commit-drafter.md` and `.cursor/agents/commit-drafter.md`: the commit pipeline (see Commit pipeline below)
 - `docs/agents/`: repo-side configuration the installed skills read
 
 Kit-owned files are copied from one pinned [Agent-kit](docs/agents/agent-kit.md) tag. They are an exception to "no vendoring". Never edit them by hand; re-copy them from a new tag instead:
@@ -34,6 +35,10 @@ Optional and per-developer. When the `graphify` MCP server is connected, use `ge
 ### Commit messages (mandatory)
 
 Commit messages must follow [`docs/agents/commit-messages.md`](docs/agents/commit-messages.md). This is not optional: plain conventional commits, no emoji, component/domain scopes. Release-note generation depends on consistent history.
+
+### Commit pipeline (mandatory)
+
+Agents commit only through the `commit-change` skill (`.claude/skills/commit-change`), which drafts the message from the staged diff with the read-only `commit-drafter` sub-agent and runs `bash scripts/development/commit-runner.sh --message-file <path>`. Never `git commit` directly, never `--no-verify`, never `git add .`. A hook failure ends with a trailer naming the reason; the skill says what to do for each, including `explainer-drift`. Details: [`docs/agents/commit-pipeline.md`](docs/agents/commit-pipeline.md).
 
 ### Branch names (mandatory)
 

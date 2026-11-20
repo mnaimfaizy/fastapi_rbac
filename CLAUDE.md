@@ -39,6 +39,10 @@ Optional and per-developer. When the `graphify` MCP server is connected, use `ge
 
 Commit messages must follow [`docs/agents/commit-messages.md`](docs/agents/commit-messages.md). This is not optional: plain conventional commits, no emoji, component/domain scopes.
 
+### Commit pipeline (mandatory)
+
+Agents commit only through the `commit-change` skill (`.claude/skills/commit-change`), which drafts the message from the staged diff with the read-only `commit-drafter` sub-agent and runs `bash scripts/development/commit-runner.sh --message-file <path>`. Never `git commit` directly, never `--no-verify`, never `git add .`. A hook failure ends with a trailer naming the reason; the skill says what to do for each, including `explainer-drift`. Details: [`docs/agents/commit-pipeline.md`](docs/agents/commit-pipeline.md).
+
 ### Branch names (mandatory)
 
 Branch names must follow [`docs/agents/branch-names.md`](docs/agents/branch-names.md). This is not optional: allowed prefixes only; include the issue number and a short slug when the work is for a numbered issue; no harness or vendor prefixes.
@@ -57,6 +61,7 @@ When working in this repository, follow conventions in:
 
 - `.github/copilot-instructions.md`
 - `docs/agents/commit-messages.md` (commit message SSOT)
+- `docs/agents/commit-pipeline.md` (how agents commit)
 - `docs/agents/branch-names.md` (branch name SSOT)
 - `.github/instructions/pre-commit.instructions.md`
 - `.github/instructions/resolve-issue.instructions.md`
