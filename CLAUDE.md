@@ -8,6 +8,7 @@ Only these live in the repo; every other skill comes from the user-level install
 
 - `.claude/skills/release`: Release PR workflow (see Release below)
 - `.claude/agents/release-notes.md`: release-notes sub-agent
+- `.claude/skills/commit-change`, `.claude/agents/commit-drafter.md` and `.cursor/agents/commit-drafter.md`: the commit pipeline (see Commit pipeline below)
 - `docs/agents/`: repo-side configuration the installed skills read
 
 ### Kit-owned files (Agent-kit, pinned to a tag)

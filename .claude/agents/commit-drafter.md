@@ -13,6 +13,7 @@ You draft **one** commit message from the **staged** changes, and nothing else.
 
 ## Constraints
 
+- This wrapper's `Bash` grant is not command-scoped, so read-only is enforced by this rule alone. Obey it strictly.
 - Run only `git status --short` and `git --no-pager diff --staged`. Do not run `git add`, `git commit`, `git push`, `git restore`, or any command that changes the repository. Do not edit files.
 - Read only the staged diff. Never draft from the unstaged tree, and never fall back to it when the index is empty.
 - Run the commands yourself, even when your prompt already describes the change.

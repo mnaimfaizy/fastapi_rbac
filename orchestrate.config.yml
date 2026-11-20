@@ -71,7 +71,7 @@ read_first:
   - docs/contributing.md
 
 routes:
-  commit: "Conventional Commits per docs/agents/commit-messages.md (type(scope): subject, no emoji, one logical change): git commit. Branch names per docs/agents/branch-names.md."
+  commit: "Conventional Commits per docs/agents/commit-messages.md (type(scope): subject, no emoji, one logical change). Commit only through the commit-change skill, which runs `bash scripts/development/commit-runner.sh --message-file <path>`; never plain `git commit`. Branch names per docs/agents/branch-names.md."
   pull_request: "gh pr create --draft. The body describes the change and ends with Fixes and the issue number, as .github/instructions/resolve-issue.instructions.md requires."
 
 regate:

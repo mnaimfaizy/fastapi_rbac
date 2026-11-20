@@ -16,7 +16,7 @@ Adapted from the Agent-kit [commit-pipeline Pattern guide](https://github.com/mn
 
 - Agents commit only through the runner: `bash scripts/development/commit-runner.sh --message-file <path>`. Never `git commit`, and never `--no-verify`.
 - Stage named paths only. Never `git add .` or `git add -A`. Ask the user when nothing is staged, or when staged and unstaged changes are mixed.
-- The drafter reads only `git diff --staged`, cannot edit or run anything that changes the repository, and follows [`commit-messages.md`](commit-messages.md) (types, component/domain scopes, no emoji, `Closes #n` footers).
+- The drafter reads only `git diff --staged`, is read-only (the Cursor wrapper enforces it with `readonly: true`; the Claude wrapper grants `Bash` and relies on its prompt alone), and follows [`commit-messages.md`](commit-messages.md) (types, component/domain scopes, no emoji, `Closes #n` footers).
 - The message goes to the runner as a file, not on stdin or in a quoted argument.
 - Wait for the runner to finish. Do not cancel or background it.
 - If the drafter proposes a split, ask which group goes first; do not commit every proposed message.
@@ -66,6 +66,10 @@ Field names and the reason set are an interface that agents parse: add reasons, 
 | Citation with no anchor, Anchor with no citation | `--stamp` | After every new citation is checked against the code. |
 | Manifest value no longer matches the code | Correct the value on the page | Re-run the checker. |
 | Data block and beat log disagree | Make the static beat log say what the data block says | |
+| Citation that names no single file | Name one file in the citation, or reword it so it is not a citation | The checker's `fix:` line names the page and context. |
+| Checker configuration | Restore the manifest or data block, or add or remove the matching source rule | The checker's `fix:` line says which. |
+
+Any heading not in this table is handled by the `fix:` line in the `python scripts/docs/check_explainers.py` output; the checker's `TITLES` map is the source of the headings.
 
 Every page the command changes is staged by name, then the runner runs again. A pure `--fix` or `--stamp` does not need a prose change; say in the commit body that line ranges were updated.
 

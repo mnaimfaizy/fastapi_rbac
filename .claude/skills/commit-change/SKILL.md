@@ -64,6 +64,10 @@ The runner ends every failure with a trailer: `commit-runner: failed`, `reason`,
 | `Citation with no anchor` or `Anchor with no citation` | `python scripts/docs/check_explainers.py --stamp`, after checking each new citation against the code. |
 | `Manifest value no longer matches the code` | Correct the value on the page. |
 | `Data block and beat log disagree` | Make the beat log say what the data block says. |
+| `Citation that names no single file` | Name one file in the citation, or reword it so it is not a citation. |
+| `Checker configuration` | Restore the manifest or data block, or add or remove the matching source rule. |
+
+For any other heading, follow the `fix:` line in the checker output.
 
 Stage every page the command changed by name (it is under `docs/explainers/`), re-run `python scripts/docs/check_explainers.py` until it prints that every page matches, then run the runner again. If the change is only a line-range update, say so in the commit body. Workflow reference: [`docs/development/explainer-pages.md`](../../../docs/development/explainer-pages.md).
 

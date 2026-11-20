@@ -93,12 +93,13 @@ if git diff --cached --quiet; then
 fi
 
 blocked=""
-while IFS= read -r path; do
+# NUL-separated so git does not quote non-ASCII or special names.
+while IFS= read -r -d '' path; do
   [ -n "$path" ] || continue
   if is_secret_path "$path"; then
     blocked="${blocked:+$blocked, }$path"
   fi
-done < <(git diff --cached --name-only --diff-filter=ACMR)
+done < <(git diff --cached --name-only -z --diff-filter=ACMR)
 
 if [ -n "$blocked" ]; then
   fail "Refusing to commit secret-looking paths: $blocked" secret \
