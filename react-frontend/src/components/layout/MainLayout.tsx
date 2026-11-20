@@ -170,7 +170,9 @@ function DrawerAccount({ user }: { user: User }) {
         <div className="truncate text-sm font-semibold">
           {displayName(user)}
         </div>
-        <div className="truncate text-xs text-muted-foreground">
+        {/* Wraps like the drawer artboard ("admin@fastapi-" / "rbac.example"):
+            at the hyphen first, mid-word only for an address without one. */}
+        <div className="text-xs break-words text-muted-foreground">
           {user.email}
         </div>
       </div>
