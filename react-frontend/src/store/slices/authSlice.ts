@@ -200,13 +200,16 @@ export const logoutUser = createAsyncThunk(
 export const logoutAllUser = createAsyncThunk(
   'auth/logoutAll',
   async (_, { dispatch }) => {
+    let revoked = false;
     try {
       await authService.logoutAll();
+      revoked = true;
     } catch (error) {
       console.error('Error during logout everywhere:', error);
     } finally {
       dispatch(logout());
     }
+    return revoked;
   }
 );
 

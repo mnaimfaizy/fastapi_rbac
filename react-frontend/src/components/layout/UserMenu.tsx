@@ -102,12 +102,13 @@ export function UserMenu({ user }: { user: User }) {
   }
 
   async function signOutEverywhere() {
-    await dispatch(logoutAllUser());
-    // Sign in shows "You’ve been signed out everywhere." for this notice.
-    navigate('/login', {
-      replace: true,
-      state: { notice: SIGNED_OUT_EVERYWHERE_NOTICE },
-    });
+    const revoked = await dispatch(logoutAllUser()).unwrap();
+    // Sign in shows "You’ve been signed out everywhere." only when the server
+    // revoked every session; a failed call still signs this device out.
+    navigate(
+      revoked ? `/login?notice=${SIGNED_OUT_EVERYWHERE_NOTICE}` : '/login',
+      { replace: true }
+    );
   }
 
   return (

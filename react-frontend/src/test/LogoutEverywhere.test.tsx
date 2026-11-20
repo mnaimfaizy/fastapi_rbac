@@ -6,6 +6,7 @@ import {
   userMenuTrigger as trigger,
   type ShellRole,
 } from './shell-test-utils';
+import { SIGNED_OUT_EVERYWHERE_NOTICE } from '../features/auth/notices';
 import authService from '../services/auth.service';
 import {
   getStoredAccessToken,
@@ -95,8 +96,14 @@ describe('Sign out everywhere', () => {
       expect(getStoredAccessToken()).toBeNull();
       expect(hasAuthSessionHint()).toBe(false);
       expect(window.location.pathname).toBe('/login');
+      expect(window.location.search).toBe(
+        `?notice=${SIGNED_OUT_EVERYWHERE_NOTICE}`
+      );
       expect(
         await screen.findByText('You’ve been signed out everywhere.')
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText('Sign in again on any device you still use.')
       ).toBeInTheDocument();
     }
   );
@@ -113,6 +120,13 @@ describe('Sign out everywhere', () => {
     await waitFor(() => {
       expect(window.location.pathname).toBe('/login');
     });
+    expect(window.location.search).toBe('');
+    expect(
+      await screen.findByRole('heading', { name: 'Sign in' })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('You’ve been signed out everywhere.')
+    ).not.toBeInTheDocument();
     expect(store.getState().auth.isAuthenticated).toBe(false);
     expect(getStoredAccessToken()).toBeNull();
     errorSpy.mockRestore();
