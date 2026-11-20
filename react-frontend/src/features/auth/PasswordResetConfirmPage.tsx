@@ -1,33 +1,24 @@
-import { useState, useEffect } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { useAppDispatch, useAppSelector } from '../../store/hooks';
-import {
-  confirmPasswordReset,
-  clearError,
-  resetPasswordResetSuccess,
-} from '../../store/slices/authSlice';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { z } from 'zod';
 
-// shadcn UI components
-import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
-import { Label } from '../../components/ui/label';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '../../components/ui/card';
-import { Alert, AlertDescription } from '../../components/ui/alert';
-import { CheckCircle } from 'lucide-react';
 import { ApiErrorAlert } from '@/components/auth/ApiErrorAlert';
-import { PasswordRequirements } from '@/components/auth/PasswordRequirements';
+import { Button } from '@/components/ui/button';
 import { passwordPolicySchema } from '@/lib/passwordPolicySchema';
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import {
+  clearError,
+  confirmPasswordReset,
+  resetPasswordResetSuccess,
+} from '@/store/slices/authSlice';
 
-// Define validation schema with Zod
+import { AuthHeading } from './components/AuthHeading';
+import { PasswordChecklist } from './components/PasswordChecklist';
+import { PasswordField } from './components/PasswordField';
+import { emailFromLinkToken } from './emailFromLinkToken';
+
 const resetPasswordSchema = z
   .object({
     password: passwordPolicySchema,
@@ -42,28 +33,15 @@ type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>;
 
 const PasswordResetConfirmPage = () => {
   const navigate = useNavigate();
-  const location = useLocation();
-  const [token, setToken] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get('token');
+  const email = emailFromLinkToken(token);
 
   const { isLoading, error, passwordResetSuccess } = useAppSelector(
     (state) => state.auth
   );
   const dispatch = useAppDispatch();
 
-  // Extract token from URL query parameters
-  useEffect(() => {
-    const queryParams = new URLSearchParams(location.search);
-    const tokenFromQuery = queryParams.get('token');
-
-    if (tokenFromQuery) {
-      setToken(tokenFromQuery);
-    } else {
-      // Redirect if no token is provided
-      navigate('/password-reset', { replace: true });
-    }
-  }, [location.search, navigate]);
-
-  // Initialize React Hook Form with Zod validation
   const {
     register,
     handleSubmit,
@@ -71,13 +49,15 @@ const PasswordResetConfirmPage = () => {
     formState: { errors },
   } = useForm<ResetPasswordFormData>({
     resolver: zodResolver(resetPasswordSchema),
-    defaultValues: {
-      password: '',
-      confirmPassword: '',
-    },
+    defaultValues: { password: '', confirmPassword: '' },
   });
 
-  // Reset the passwordResetSuccess state when component unmounts
+  useEffect(() => {
+    if (!token) {
+      navigate('/request-password-reset', { replace: true });
+    }
+  }, [token, navigate]);
+
   useEffect(() => {
     return () => {
       dispatch(resetPasswordResetSuccess());
@@ -86,114 +66,71 @@ const PasswordResetConfirmPage = () => {
 
   const onSubmit = async (data: ResetPasswordFormData) => {
     if (isLoading || !token) return;
-
-    // Clear any previous errors
     dispatch(clearError());
-
     try {
-      // Dispatch password reset action with token and new password
       await dispatch(
-        confirmPasswordReset({
-          token,
-          newPassword: data.password,
-        })
+        confirmPasswordReset({ token, newPassword: data.password })
       ).unwrap();
-    } catch (error) {
-      // Error is handled by the auth slice
-      console.log('Error during password reset:', error);
+    } catch {
+      // The slice stores the complexity errors.
     }
   };
 
+  if (passwordResetSuccess) {
+    return (
+      <div className="flex flex-col gap-5">
+        <AuthHeading
+          title="Password saved"
+          description="You can sign in with your new password."
+        />
+        <Button asChild className="h-10 w-full">
+          <Link to="/login">Continue to sign in</Link>
+        </Button>
+      </div>
+    );
+  }
+
+  const passwordError = errors.password?.message;
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-3xl font-extrabold">
-            Reset Your Password
-          </CardTitle>
-          <CardDescription>
-            {passwordResetSuccess
-              ? 'Your password has been reset successfully'
-              : 'Enter your new password below'}
-          </CardDescription>
-        </CardHeader>
+    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
+      <AuthHeading
+        title="Choose a new password"
+        description={email ? `For ${email}` : undefined}
+      />
 
-        <CardContent>
-          {passwordResetSuccess ? (
-            <div className="space-y-6">
-              <Alert className="border-green-500 bg-green-50 text-green-700">
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <AlertDescription>
-                  Your password has been reset successfully. You can now log in
-                  with your new password.
-                </AlertDescription>
-              </Alert>
+      {error ? (
+        <ApiErrorAlert
+          error={error}
+          fallbackMessage="Password reset failed. Please try again."
+        />
+      ) : null}
 
-              <Button asChild className="w-full">
-                <Link to="/login">Go to Login</Link>
-              </Button>
-            </div>
-          ) : (
-            <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
-              {error && (
-                <ApiErrorAlert
-                  error={error}
-                  fallbackMessage="Password reset failed. Please try again."
-                />
-              )}
+      <PasswordField
+        id="password"
+        label="New password"
+        autoComplete="new-password"
+        error={typeof passwordError === 'string' ? passwordError : undefined}
+        {...register('password')}
+      />
+      <PasswordChecklist value={watch('password') ?? ''} />
 
-              <div className="space-y-2">
-                <Label htmlFor="password">New Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Enter new password"
-                  {...register('password')}
-                />
-                <PasswordRequirements value={watch('password') ?? ''} />
-                {errors.password && (
-                  <p className="text-sm text-red-600">
-                    {errors.password.message}
-                  </p>
-                )}
-              </div>
+      <PasswordField
+        id="confirm-password"
+        label="Confirm new password"
+        autoComplete="new-password"
+        error={errors.confirmPassword?.message}
+        {...register('confirmPassword')}
+      />
 
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirm Password</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  placeholder="Confirm new password"
-                  {...register('confirmPassword')}
-                />
-                {errors.confirmPassword && (
-                  <p className="text-sm text-red-600">
-                    {errors.confirmPassword.message}
-                  </p>
-                )}
-              </div>
-
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={isLoading || !token}
-              >
-                {isLoading ? 'Resetting...' : 'Reset Password'}
-              </Button>
-
-              <div className="text-center">
-                <Link
-                  to="/login"
-                  className="text-sm font-medium text-primary hover:underline"
-                >
-                  Back to login
-                </Link>
-              </div>
-            </form>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+      <Button
+        type="submit"
+        className="h-10 w-full"
+        disabled={isLoading || !token}
+      >
+        Save new password
+      </Button>
+    </form>
   );
 };
 

@@ -59,7 +59,12 @@ const SEQUENCES = [
 ];
 
 const SEQUENCE_LENGTH = 3;
-const MAX_REPEATS = 3;
+
+/**
+ * Consecutive repeats that are still allowed. One more in a row fails
+ * (`count > PASSWORD_MAX_REPEATS`), so the checklist's "4" is this plus one.
+ */
+export const PASSWORD_MAX_REPEATS = 3;
 
 /** True when the password contains a run like `abc`, `XYZ`, `123` — or its reverse. */
 export const hasSequentialChars = (password: string): boolean =>
@@ -80,7 +85,7 @@ export const hasRepeatedChars = (password: string): boolean => {
   for (const char of password) {
     if (char === previous) {
       count += 1;
-      if (count > MAX_REPEATS) return true;
+      if (count > PASSWORD_MAX_REPEATS) return true;
     } else {
       count = 1;
     }
@@ -150,7 +155,7 @@ export const PASSWORD_RULES: readonly PasswordRule[] = [
   },
   {
     id: 'noRepeats',
-    label: 'No character repeated 4+ times in a row',
+    label: `No character repeated ${PASSWORD_MAX_REPEATS + 1}+ times in a row`,
     message: 'Password contains too many repeated characters',
     test: (p) => !hasRepeatedChars(p),
   },

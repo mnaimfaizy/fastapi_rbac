@@ -1,56 +1,48 @@
 import { useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { useAppDispatch, useAppSelector } from '../../store/hooks';
-import {
-  requestPasswordReset,
-  clearError,
-  resetPasswordResetRequested,
-} from '../../store/slices/authSlice';
 import { useForm } from 'react-hook-form';
-import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Link } from 'react-router-dom';
+import { z } from 'zod';
 
-// shadcn UI components
-import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
-import { Label } from '../../components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '../../components/ui/card';
-import { Alert, AlertDescription } from '../../components/ui/alert';
-import { AlertTriangle, CheckCircle } from 'lucide-react';
-import { ErrorResponse } from '@/models/auth';
+  clearError,
+  requestPasswordReset,
+  resetPasswordResetRequested,
+} from '@/store/slices/authSlice';
 
-// Define validation schema with Zod
+import { AuthHeading } from './components/AuthHeading';
+import { AuthNotice } from './components/AuthNotice';
+
 const resetRequestSchema = z.object({
-  email: z.string().email('Please enter a valid email address'),
+  email: z.string().email('Enter a valid email address'),
 });
 
 type ResetRequestFormData = z.infer<typeof resetRequestSchema>;
 
+/**
+ * The artboard says the link works for 1 hour. The shipped lifetime is 30
+ * minutes (`PASSWORD_RESET_TOKEN_EXPIRE_MINUTES`), which is what the reset
+ * email tells the reader.
+ */
 const PasswordResetRequestPage = () => {
   const { isLoading, error, passwordResetRequested } = useAppSelector(
     (state) => state.auth
   );
   const dispatch = useAppDispatch();
 
-  // Initialize React Hook Form with Zod validation
   const {
     register,
     handleSubmit,
     formState: { errors },
   } = useForm<ResetRequestFormData>({
     resolver: zodResolver(resetRequestSchema),
-    defaultValues: {
-      email: '',
-    },
+    defaultValues: { email: '' },
   });
 
-  // Reset the passwordResetRequested state when component unmounts
   useEffect(() => {
     return () => {
       dispatch(resetPasswordResetRequested());
@@ -59,95 +51,63 @@ const PasswordResetRequestPage = () => {
 
   const onSubmit = async (data: ResetRequestFormData) => {
     if (isLoading) return;
-
-    // Clear any previous errors
     dispatch(clearError());
-
     try {
-      // Dispatch password reset request action
       await dispatch(requestPasswordReset(data.email)).unwrap();
     } catch {
-      // Error is handled by the auth slice
+      // The slice stores the error.
     }
   };
 
-  return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-4">
-      <div className="w-full max-w-s flex items-center justify-center ">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle className="text-3xl font-extrabold">
-              Reset Your Password
-            </CardTitle>
-            <CardDescription>
-              {passwordResetRequested
-                ? 'Check your email for password reset instructions'
-                : 'Enter your email to receive password reset instructions'}
-            </CardDescription>
-          </CardHeader>
+  const message = typeof error === 'string' ? error : error?.message;
 
-          <CardContent>
-            {passwordResetRequested ? (
-              <div className="space-y-6">
-                <Alert className="border-green-500 bg-green-50 text-green-700">
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                  <AlertDescription>
-                    If the email exists in our system, we have sent a password
-                    reset link to that address. Please check your inbox.
-                  </AlertDescription>
-                </Alert>
-
-                <Button asChild className="w-full">
-                  <Link to="/login">Back to Login</Link>
-                </Button>
-              </div>
-            ) : (
-              <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
-                {error && (
-                  <Alert variant="destructive">
-                    <AlertTriangle className="h-4 w-4" />
-                    <AlertDescription>
-                      {typeof error === 'object'
-                        ? (error as ErrorResponse)?.message
-                        : error}
-                    </AlertDescription>
-                  </Alert>
-                )}
-
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email Address</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="Email address"
-                    autoComplete="email"
-                    {...register('email')}
-                  />
-                  {errors.email && (
-                    <p className="text-sm text-red-600">
-                      {errors.email.message}
-                    </p>
-                  )}
-                </div>
-
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? 'Sending...' : 'Send Reset Link'}
-                </Button>
-
-                <div className="text-center">
-                  <Link
-                    to="/login"
-                    className="text-sm font-medium text-primary hover:underline"
-                  >
-                    Back to login
-                  </Link>
-                </div>
-              </form>
-            )}
-          </CardContent>
-        </Card>
+  if (passwordResetRequested) {
+    return (
+      <div className="flex flex-col gap-5">
+        <AuthHeading
+          title="Check your email"
+          description="If an account can be reset for that address, we have sent a link. It works for 30 minutes."
+        />
+        <Button asChild className="h-10 w-full">
+          <Link to="/login">Back to sign in</Link>
+        </Button>
       </div>
-    </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
+      <AuthHeading
+        title="Reset your password"
+        description="Enter your email and we’ll send a link to choose a new password. The link works for 30 minutes."
+      />
+
+      {message ? <AuthNotice tone="danger" title={message} /> : null}
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="email">Email</Label>
+        <Input
+          id="email"
+          type="email"
+          placeholder="name@company.com"
+          autoComplete="email"
+          className="h-10"
+          aria-invalid={errors.email ? true : undefined}
+          {...register('email')}
+        />
+        {errors.email ? (
+          <p className="text-danger-text text-sm">{errors.email.message}</p>
+        ) : null}
+      </div>
+
+      <Button type="submit" className="h-10 w-full" disabled={isLoading}>
+        Send reset link
+      </Button>
+
+      <Link to="/login" className="text-primary text-sm hover:underline">
+        Back to sign in
+      </Link>
+    </form>
   );
 };
 
