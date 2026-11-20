@@ -57,3 +57,14 @@ The CI security audit, the plan → implement → review pipeline and the review
 - Engineering skills come from the user-level install; do not re-vendor them into this repository. The only exception is the Agent-kit kit-owned files listed above.
 - `.claude/skills/release` is project-owned and is maintained here.
 - Prefer project conventions from `.github/copilot-instructions.md` when there is a conflict.
+
+## Project conventions
+
+When working in this repository, follow conventions in:
+
+- `.github/copilot-instructions.md`
+- `docs/agents/commit-messages.md` (commit message SSOT)
+- `docs/agents/commit-pipeline.md` (how agents commit)
+- `docs/agents/branch-names.md` (branch name SSOT)
+- `.github/instructions/pre-commit.instructions.md`
+- `.github/instructions/resolve-issue.instructions.md`

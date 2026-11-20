@@ -16,7 +16,7 @@ Adapted from the Agent-kit [commit-pipeline Pattern guide](https://github.com/mn
 
 - Agents commit only through the runner: `bash scripts/development/commit-runner.sh --message-file <path>`. Never `git commit`, and never `--no-verify`.
 - Stage named paths only. Never `git add .` or `git add -A`. Ask the user when nothing is staged, or when staged and unstaged changes are mixed.
-- The drafter reads only `git diff --staged`, is read-only (the Cursor wrapper enforces it with `readonly: true`; the Claude wrapper grants `Bash` and relies on its prompt alone), and follows [`commit-messages.md`](commit-messages.md) (types, component/domain scopes, no emoji, `Closes #n` footers).
+- The drafter reads only `git diff --staged`, is read-only (the Cursor wrapper enforces it with `readonly: true`; the Claude wrapper grants `Bash` and narrows it with a `PreToolUse` hook, `scripts/development/commit-drafter-guard.sh`, that allows only `git status`, `diff`, `log` and `show`. Claude Code's subagent `tools` field cannot scope Bash to commands, so the hook is the documented way), and follows [`commit-messages.md`](commit-messages.md) (types, component/domain scopes, no emoji, `Closes #n` footers).
 - The message goes to the runner as a file, not on stdin or in a quoted argument.
 - Wait for the runner to finish. Do not cancel or background it.
 - If the drafter proposes a split, ask which group goes first; do not commit every proposed message.

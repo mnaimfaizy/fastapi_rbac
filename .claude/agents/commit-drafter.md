@@ -3,6 +3,12 @@ name: commit-drafter
 description: Drafts a commit message from the staged diff. Read-only; it never stages, commits or edits. Used by the commit-change skill.
 tools: Read, Grep, Glob, Bash
 model: haiku
+hooks:
+  PreToolUse:
+    - matcher: "Bash"
+      hooks:
+        - type: command
+          command: "bash \"$CLAUDE_PROJECT_DIR/scripts/development/commit-drafter-guard.sh\""
 ---
 
 # Commit Drafter (Claude)
@@ -13,7 +19,7 @@ You draft **one** commit message from the **staged** changes, and nothing else.
 
 ## Constraints
 
-- This wrapper's `Bash` grant is not command-scoped, so read-only is enforced by this rule alone. Obey it strictly.
+- Read-only is enforced by the `PreToolUse` hook `scripts/development/commit-drafter-guard.sh`, which blocks any Bash command that is not `git status`, `diff`, `log` or `show`. A blocked command is a mistake in your plan, not something to work around.
 - Run only `git status --short` and `git --no-pager diff --staged`. Do not run `git add`, `git commit`, `git push`, `git restore`, or any command that changes the repository. Do not edit files.
 - Read only the staged diff. Never draft from the unstaged tree, and never fall back to it when the index is empty.
 - Run the commands yourself, even when your prompt already describes the change.
