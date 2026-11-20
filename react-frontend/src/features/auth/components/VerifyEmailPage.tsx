@@ -15,19 +15,22 @@ type VerificationStatus =
   'loading' | 'success' | 'expired' | 'missing' | 'network' | 'error';
 
 /**
- * "This link has expired" is only an error that carries a response. A network
- * failure is an axios-shaped error with no response. Anything else is generic.
- * A missing token is handled before this runs.
+ * "This link has expired" is only the 400 `emailed_links.verify_email` raises
+ * when it rejects the link. A response with any other status, including a
+ * 5xx, is a generic error. A network failure is an axios-shaped error with
+ * no response. A missing token is handled before this runs.
  */
 function classifyVerifyError(err: unknown): 'expired' | 'network' | 'error' {
   if (typeof err !== 'object' || err === null) return 'error';
   const record = err as {
-    response?: unknown;
+    response?: { status?: unknown };
     request?: unknown;
     code?: unknown;
     isAxiosError?: unknown;
   };
-  if (record.response) return 'expired';
+  if (record.response) {
+    return record.response.status === 400 ? 'expired' : 'error';
+  }
   if (
     record.isAxiosError === true ||
     record.request != null ||

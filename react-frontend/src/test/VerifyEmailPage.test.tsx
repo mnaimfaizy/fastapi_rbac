@@ -24,8 +24,8 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-function verificationError(message: string) {
-  return { response: { data: { message } } };
+function verificationError(message: string, status = 400) {
+  return { response: { status, data: { message } } };
 }
 
 function tokenFor(email: string) {
@@ -105,6 +105,49 @@ describe('VerifyEmailPage', () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole('link', { name: 'Back to sign in' }));
     expect(await screen.findByText('Sign in page')).toBeInTheDocument();
+  });
+
+  it('shows an expired link for the rejection status', async () => {
+    mockAuthService.verifyEmail.mockRejectedValue(
+      verificationError(
+        'This verification link is invalid or has expired. Please request a new verification email and try again.',
+        400
+      )
+    );
+
+    renderWithProviders(<VerifyEmailPage />);
+
+    expect(
+      await screen.findByText('This link has expired')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Verification links work for 24 hours/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('Could not verify this link')
+    ).not.toBeInTheDocument();
+  });
+
+  it('treats a 5xx response as a generic error, not an expired link', async () => {
+    mockAuthService.verifyEmail.mockRejectedValue(
+      verificationError(
+        'An unexpected error occurred during email verification.',
+        500
+      )
+    );
+
+    renderWithProviders(<VerifyEmailPage />);
+
+    expect(
+      await screen.findByText('Could not verify this link')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Something went wrong. Try again.')
+    ).toBeInTheDocument();
+    expect(screen.queryByText('This link has expired')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Verification links work for 24 hours/i)
+    ).not.toBeInTheDocument();
   });
 
   it('shows a network error and a generic error without the expired title', async () => {

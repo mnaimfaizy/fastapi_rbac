@@ -1051,7 +1051,7 @@ Support WebAuthn, Magic Links, or Passkeys.
 
 **Components:**
 - `src/components/auth/ProtectedRoute.tsx` - Route protection
-- `src/components/auth/LoginForm.tsx` - Login form
+- `src/features/auth/LoginPage.tsx` - Login form
 
 ---
 
