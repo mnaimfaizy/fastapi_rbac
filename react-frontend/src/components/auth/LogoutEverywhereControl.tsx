@@ -1,5 +1,6 @@
 import { type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { SIGNED_OUT_EVERYWHERE_NOTICE } from '../../features/auth/notices';
 import { useAppDispatch } from '../../store/hooks';
 import { logoutAllUser } from '../../store/slices/authSlice';
 import {
@@ -25,8 +26,10 @@ export function LogoutEverywhereControl({
   const navigate = useNavigate();
 
   const handleConfirm = async () => {
-    await dispatch(logoutAllUser());
-    navigate('/login');
+    const revoked = await dispatch(logoutAllUser()).unwrap();
+    navigate(
+      revoked ? `/login?notice=${SIGNED_OUT_EVERYWHERE_NOTICE}` : '/login'
+    );
   };
 
   return (
