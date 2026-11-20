@@ -53,8 +53,11 @@ export class AuthHelper {
    * Logout the current user
    */
   async logout() {
-    // Look for logout button (might be in a dropdown or menu)
-    await this.page.click('button:has-text("Logout"), a:has-text("Logout")');
+    // Sign out lives in the header user menu
+    await this.page.locator('button[aria-label^="Account menu for"]').click();
+    await this.page
+      .getByRole('menuitem', { name: 'Sign out', exact: true })
+      .click();
 
     // Wait for redirect to login page
     await this.page.waitForURL('**/login**', {

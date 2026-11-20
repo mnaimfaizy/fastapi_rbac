@@ -121,30 +121,15 @@ test.describe('Dashboard Flow', () => {
     await navHelper.gotoDashboard();
     await waitHelper.waitForLoadingComplete();
 
-    // Find user menu (might be an avatar or username button)
-    const userMenuButton = page
-      .locator(
-        '[data-testid="user-menu"], [aria-label*="user" i], button:has-text("admin"), button:has-text("profile")'
-      )
-      .first();
+    // Open the header user menu and check its account actions
+    await page.locator('button[aria-label^="Account menu for"]').click();
 
-    if (await userMenuButton.isVisible()) {
-      await userMenuButton.click();
-
-      // Verify menu options are visible
-      const profileLink = page
-        .locator('a:has-text("Profile"), button:has-text("Profile")')
-        .first();
-      const logoutButton = page
-        .locator('button:has-text("Logout"), a:has-text("Logout")')
-        .first();
-
-      // At least one of these should be visible
-      const menuVisible =
-        (await profileLink.isVisible()) || (await logoutButton.isVisible());
-
-      expect(menuVisible).toBeTruthy();
-    }
+    await expect(
+      page.getByRole('menuitem', { name: 'Account settings' })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('menuitem', { name: 'Sign out', exact: true })
+    ).toBeVisible();
   });
 
   test('should handle network errors gracefully', async ({ page }) => {

@@ -6,6 +6,8 @@ applyTo: "**"
 
 When performing a commit in this project, always follow this workflow:
 
+> Agents commit through the `commit-change` skill and `scripts/development/commit-runner.sh`, never `git commit` directly. See [`docs/agents/commit-pipeline.md`](../../docs/agents/commit-pipeline.md). The steps below are the manual equivalent.
+
 1. **Check Git Status and Stage Changes**
 
    - Run `git status` to see changed files.
