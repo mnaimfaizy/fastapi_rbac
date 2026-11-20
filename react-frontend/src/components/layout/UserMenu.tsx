@@ -24,14 +24,10 @@ import { useThemePreference, type ThemePreference } from '@/lib/theme';
 import { ACCOUNT_SETTINGS_PATH } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
 import type { User } from '@/models/user';
+import { SIGNED_OUT_EVERYWHERE_NOTICE } from '@/features/auth/notices';
 import { useAppDispatch } from '../../store/hooks';
 import { logoutAllUser, logoutUser } from '../../store/slices/authSlice';
 import { displayName, initials, roleLabel } from './viewer';
-
-/** Location state that tells Sign in to show the signed-out-everywhere notice. */
-export interface SignedOutEverywhereState {
-  signedOutEverywhere: true;
-}
 
 const THEME_OPTIONS: {
   value: ThemePreference;
@@ -107,8 +103,11 @@ export function UserMenu({ user }: { user: User }) {
 
   async function signOutEverywhere() {
     await dispatch(logoutAllUser());
-    const state: SignedOutEverywhereState = { signedOutEverywhere: true };
-    navigate('/login', { replace: true, state });
+    // Sign in shows "You’ve been signed out everywhere." for this notice.
+    navigate('/login', {
+      replace: true,
+      state: { notice: SIGNED_OUT_EVERYWHERE_NOTICE },
+    });
   }
 
   return (
