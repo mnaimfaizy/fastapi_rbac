@@ -214,7 +214,7 @@ X-CSRF-Token: <csrf_token>
 
 ### POST /api/v1/auth/logout/all
 
-Revoke every session for the authenticated user (every allowlist token, of any type) and delete the HttpOnly `refresh_token` cookie. Same CSRF and authentication rules as logout. Change-password still calls the revocation primitive directly rather than this route. The first-party SPA posts this from **Log out everywhere** after confirmation.
+Revoke every session for the authenticated user (every allowlist token, of any type) and delete the HttpOnly `refresh_token` cookie. Same CSRF and authentication rules as logout. Change-password still calls the revocation primitive directly rather than this route. The first-party SPA posts this from **Sign out everywhere** in the header user menu, after confirmation.
 
 **Request Headers:**
 

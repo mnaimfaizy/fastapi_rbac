@@ -1,34 +1,62 @@
 import { useState } from 'react';
-import { Link, useNavigate, Outlet } from 'react-router-dom';
-import { useAppDispatch, useAppSelector } from '../../store/hooks';
-import { logoutUser } from '../../store/slices/authSlice';
-import { Sidebar } from '../dashboard/sidebar';
-import { LogoutEverywhereControl } from '../auth/LogoutEverywhereControl';
-import { Button } from '@/components/ui/button';
-import { Menu, User } from 'lucide-react';
+import { Outlet, useLocation } from 'react-router-dom';
+import { ChevronRight, Menu, PanelLeft } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { useMediaQuery } from '@/hooks/use-media-query';
-import { cn } from '@/lib/utils';
-import { Meta } from '../common/Meta';
+import { Meta } from '@/components/common/Meta';
 import { usePageMeta } from '@/hooks/usePageMeta';
+import { usePermissions } from '@/hooks/usePermissions';
+import { buildNavGroups, findActiveNavItem } from '@/lib/navigation';
+import { cn } from '@/lib/utils';
+import type { User } from '@/models/user';
+import { useAppSelector } from '../../store/hooks';
+import { AppSidebar } from './AppSidebar';
+import { BrandLockup } from './BrandLogo';
+import { RoleChip, UserAvatar, UserMenu } from './UserMenu';
+import { displayName } from './viewer';
 
+/** localStorage key that remembers a collapsed sidebar in this browser. */
+export const SIDEBAR_COLLAPSED_KEY = 'fastapi-rbac-sidebar-collapsed';
+
+function readCollapsed() {
+  try {
+    return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function writeCollapsed(collapsed: boolean) {
+  try {
+    window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed));
+  } catch {
+    // Storage can be blocked; the sidebar still works, it just forgets.
+  }
+}
+
+const DRAWER_TITLE_ID = 'app-shell-drawer-title';
+
+/**
+ * The Web v1 app shell around every signed-in page: the grouped sidebar
+ * (collapsible on desktop, a drawer on mobile), the header with its
+ * breadcrumb and user menu, and the page in `<main>`.
+ */
 const MainLayout = () => {
   const { user } = useAppSelector((state) => state.auth);
-  const dispatch = useAppDispatch();
-  const navigate = useNavigate();
-  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const isDesktop = useMediaQuery('(min-width: 1024px)');
+  const { hasPermission } = usePermissions();
+  const { pathname } = useLocation();
   const metaInfo = usePageMeta();
+  const [collapsed, setCollapsed] = useState(readCollapsed);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const handleLogout = async () => {
-    await dispatch(logoutUser());
-    navigate('/login');
-  };
+  const groups = buildNavGroups(hasPermission);
+  const active = findActiveNavItem(groups, pathname);
 
-  const toggleUserMenu = () => {
-    setIsUserMenuOpen(!isUserMenuOpen);
-  };
+  function toggleCollapsed() {
+    setCollapsed((current) => {
+      writeCollapsed(!current);
+      return !current;
+    });
+  }
 
   return (
     <>
@@ -37,120 +65,65 @@ const MainLayout = () => {
         description={metaInfo.description}
         keywords={metaInfo.keywords}
       />
-      <div className="flex min-h-screen">
-        {/* Sidebar for desktop */}
-        {isDesktop ? (
-          <div
-            className={cn(
-              'border-r bg-background',
-              isCollapsed ? 'w-[80px]' : 'w-[250px]'
-            )}
-          >
-            <div className="flex h-16 items-center justify-between border-b px-4">
-              {!isCollapsed && (
-                <h2 className="text-lg font-semibold">RBAC Admin</h2>
-              )}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsCollapsed(!isCollapsed)}
-                className={cn('ml-auto', !isCollapsed && 'rotate-180')}
-                aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              >
-                <Menu className="h-4 w-4" />
-              </Button>
-            </div>
-            <Sidebar isCollapsed={isCollapsed} />
-          </div>
-        ) : (
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button
-                variant="outline"
-                size="icon"
-                className="absolute left-4 top-4 lg:hidden"
-              >
-                <Menu className="h-4 w-4" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-[250px] p-0">
-              <div className="flex h-16 items-center border-b px-4">
-                <h2 className="text-lg font-semibold">RBAC Admin</h2>
-              </div>
-              <Sidebar />
-            </SheetContent>
-          </Sheet>
-        )}
+      <div className="flex min-h-screen bg-background text-foreground">
+        <AppSidebar
+          groups={groups}
+          collapsed={collapsed}
+          className={cn(
+            'sticky top-0 hidden h-screen shrink-0 overflow-y-auto border-r border-sidebar-border lg:flex',
+            collapsed ? 'w-[68px]' : 'w-64'
+          )}
+        />
 
-        {/* Main content area */}
-        <div className="flex-1 flex flex-col">
-          <header className="bg-background border-b px-4 h-16 flex items-center justify-end">
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <Button
-                  variant="ghost"
-                  onClick={toggleUserMenu}
-                  className="flex items-center gap-2"
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b bg-background pr-2 pl-1 lg:h-16 lg:pr-6 lg:pl-4">
+            <div className="flex min-w-0 items-center gap-1 lg:gap-3">
+              <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+                <SheetTrigger
+                  aria-label="Open menu"
+                  className="inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
                 >
-                  <User className="h-4 w-4" />
-                  {user?.first_name} {user?.last_name}
-                  <svg
-                    className={`w-4 h-4 transition-transform ${
-                      isUserMenuOpen ? 'rotate-180' : ''
-                    }`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M19 9l-7 7-7-7"
-                    />
-                  </svg>
-                </Button>
+                  <Menu aria-hidden="true" className="size-5" />
+                </SheetTrigger>
+                <SheetContent
+                  side="left"
+                  aria-labelledby={DRAWER_TITLE_ID}
+                  aria-describedby={undefined}
+                  className="w-[300px] max-w-[85vw] gap-0 border-r-0 p-0 sm:max-w-[300px]"
+                >
+                  <h2 id={DRAWER_TITLE_ID} className="sr-only">
+                    Main menu
+                  </h2>
+                  <AppSidebar
+                    groups={groups}
+                    onNavigate={() => setDrawerOpen(false)}
+                    className="flex-1 overflow-y-auto"
+                  />
+                  {user && <DrawerAccount user={user} />}
+                </SheetContent>
+              </Sheet>
 
-                {isUserMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-56 py-1 bg-white rounded-md shadow-lg z-10">
-                    <Link
-                      to="/dashboard/profile"
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                      onClick={() => setIsUserMenuOpen(false)}
-                    >
-                      Your Profile
-                    </Link>
-                    <Link
-                      to="/dashboard/change-password"
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                      onClick={() => setIsUserMenuOpen(false)}
-                    >
-                      Change Password
-                    </Link>
-                    <button
-                      onClick={() => {
-                        handleLogout();
-                        setIsUserMenuOpen(false);
-                      }}
-                      className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
-                    >
-                      Logout
-                    </button>
-                    <LogoutEverywhereControl>
-                      <button
-                        type="button"
-                        className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
-                      >
-                        Log out everywhere
-                      </button>
-                    </LogoutEverywhereControl>
-                  </div>
-                )}
-              </div>
+              <BrandLockup size="sm" className="lg:hidden" />
+
+              <button
+                type="button"
+                onClick={toggleCollapsed}
+                aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                className="hidden size-9 shrink-0 items-center justify-center rounded-lg text-foreground-secondary outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring lg:inline-flex"
+              >
+                <PanelLeft aria-hidden="true" className="size-4" />
+              </button>
+              <span
+                aria-hidden="true"
+                className="hidden h-5 w-px bg-border lg:block"
+              />
+              <Breadcrumb active={active} />
             </div>
+
+            {user && <UserMenu user={user} />}
           </header>
 
-          <main className="flex-1 p-8 pt-6 space-y-6">
+          <main className="flex-1 space-y-6 p-4 sm:p-6 lg:p-8">
             <Outlet />
           </main>
         </div>
@@ -158,5 +131,54 @@ const MainLayout = () => {
     </>
   );
 };
+
+function Breadcrumb({
+  active,
+}: {
+  active: ReturnType<typeof findActiveNavItem>;
+}) {
+  if (!active) {
+    return null;
+  }
+  return (
+    <nav
+      aria-label="Breadcrumb"
+      className="hidden items-center gap-1.5 text-sm whitespace-nowrap lg:flex"
+    >
+      {!active.item.standalone && (
+        <>
+          <span className="text-muted-foreground">{active.group.label}</span>
+          <ChevronRight
+            aria-hidden="true"
+            className="size-3.5 text-muted-foreground"
+          />
+        </>
+      )}
+      <span aria-current="page" className="font-medium text-foreground">
+        {active.item.label}
+      </span>
+    </nav>
+  );
+}
+
+/** Who is signed in, at the foot of the mobile drawer. */
+function DrawerAccount({ user }: { user: User }) {
+  return (
+    <div className="flex items-center gap-2.5 border-t border-sidebar-border p-3">
+      <UserAvatar user={user} size="lg" />
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-semibold">
+          {displayName(user)}
+        </div>
+        {/* Wraps like the drawer artboard ("admin@fastapi-" / "rbac.example"):
+            at the hyphen first, mid-word only for an address without one. */}
+        <div className="text-xs break-words text-muted-foreground">
+          {user.email}
+        </div>
+      </div>
+      <RoleChip user={user} />
+    </div>
+  );
+}
 
 export default MainLayout;

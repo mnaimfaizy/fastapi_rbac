@@ -112,24 +112,9 @@ test.describe('Authentication Flow', () => {
     // Wait for dashboard to load
     await page.waitForURL('**/dashboard**', { timeout: 30000 });
 
-    // Find and click logout button (might be in dropdown)
-    // First, try to click user menu if it exists
-    const userMenu = page
-      .locator(
-        '[data-testid="user-menu"], [aria-label*="user" i], button:has-text("admin")'
-      )
-      .first();
-    if (await userMenu.isVisible()) {
-      await userMenu.click();
-    }
-
-    // Click logout button
-    const logoutButton = page
-      .locator(
-        'button:has-text("Logout"), a:has-text("Logout"), [data-testid="logout"]'
-      )
-      .first();
-    await logoutButton.click();
+    // Sign out lives in the header user menu
+    await page.locator('button[aria-label^="Account menu for"]').click();
+    await page.getByRole('menuitem', { name: 'Sign out', exact: true }).click();
 
     // Should redirect to login page
     await page.waitForURL('**/login**', { timeout: 30000 });

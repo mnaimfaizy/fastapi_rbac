@@ -95,7 +95,7 @@ export const fetchUsers = createAsyncThunk(
 ## Naming
 
 - Pages / feature screens: `LoginPage.tsx`, `UsersList.tsx`
-- Layout: `MainLayout.tsx`, `AuthLayout.tsx`
+- Layout: `MainLayout.tsx` (the app shell, see [UI components](./ui.md#app-shell)), `AuthLayout.tsx`
 - UI primitives: ShadCN-style lowercase hyphen files under `components/ui/`
 
 ## Conventions
