@@ -37,12 +37,26 @@ class RoleOutput(BaseModel):
     pass
 
 
+class IRoleUser(IBaseSchema):
+    """A user who holds a role, as shown on role detail. Not the users relationship."""
+
+    id: UUID
+    email: str
+    first_name: str | None = None
+    last_name: str | None = None
+
+
 class IRoleRead(RoleSchemaBase):
     id: UUID
     created_at: datetime
     updated_at: datetime | None = None
     created_by_id: UUID | None = None
     permissions: List[IPermissionRead] = []
+    user_count: int = 0
+
+
+class IRoleDetailRead(IRoleRead):
+    users: List[IRoleUser] = []
 
 
 class IRoleOutput(RoleSchemaBase):

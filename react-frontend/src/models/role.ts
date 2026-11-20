@@ -1,6 +1,13 @@
 import { Permission } from './permission';
 import { User } from './user'; // Assuming User model exists
 
+export interface RoleHolder {
+  id: string;
+  email: string;
+  first_name?: string | null;
+  last_name?: string | null;
+}
+
 export interface Role {
   id: string;
   name: string;
@@ -11,6 +18,8 @@ export interface Role {
   created_by?: User; // Optional: if backend populates this
   role_group_id?: string;
   permissions?: Permission[]; // Optional: if backend populates this
+  user_count?: number;
+  users?: RoleHolder[];
 }
 
 export interface RoleCreate {
