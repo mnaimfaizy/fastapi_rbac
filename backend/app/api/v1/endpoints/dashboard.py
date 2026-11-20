@@ -1,110 +1,100 @@
-from typing import List
+from fastapi import APIRouter, Depends
+from sqlmodel.ext.asyncio.session import AsyncSession
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-
+from app import dashboard_metrics
 from app.api import deps
-from app.crud import crud_dashboard
 from app.models.user_model import User
 from app.schemas.dashboard_schema import (
     DashboardStats,
     IDashboardResponse,
     IDashboardResponseData,
-    RecentLoginUser,
-    UserSummaryForTable,
+    RecentSignIn,
+    RoleCount,
 )
-from app.schemas.role_schema import IRoleEnum  # For role checking
 
 router = APIRouter()
+
+_USER_METRICS = "user.read"
+_ROLE_METRICS = "role.read"
+_ROLE_GROUP_METRICS = "role_group.read"
+_PERMISSION_METRICS = "permission.read"
+_PERMISSION_GROUP_METRICS = "permission_group.read"
+
+# A superuser skips route permission checks. Treat them as holding every metric.
+_ALL_METRICS = {
+    _USER_METRICS,
+    _ROLE_METRICS,
+    _ROLE_GROUP_METRICS,
+    _PERMISSION_METRICS,
+    _PERMISSION_GROUP_METRICS,
+}
+
+
+def _permission_names(user: User) -> set[str]:
+    if user.is_superuser:
+        return set(_ALL_METRICS)
+    names: set[str] = set()
+    for role in user.roles or []:
+        for permission in role.permissions or []:
+            if permission.name:
+                names.add(permission.name)
+    return names
 
 
 @router.get("", response_model=IDashboardResponse)
 async def get_dashboard_data(
-    db: Session = Depends(deps.get_db),
+    db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user()),
 ) -> IDashboardResponse:
-    """
-    Retrieve dashboard data.
-    Data returned will vary based on the user's role.
-    """
+    """Dashboard metrics the caller is allowed to see. Missing permission is null, not zero."""
+    granted = _permission_names(current_user)
     stats = DashboardStats()
-    recent_logins_data: List[RecentLoginUser] = []
-    system_users_summary_data: List[UserSummaryForTable] = []
+    distribution: list[RoleCount] | None = None
+    sign_ins: list[RecentSignIn] | None = None
 
-    # Admin users get all stats
-    # Non-admin users might get a subset or different stats
-    # This logic can be expanded significantly based on requirements
-
-    is_admin = any(role.name.lower() == IRoleEnum.admin.lower() for role in current_user.roles)
-
-    if is_admin:
-        stats.total_users = await crud_dashboard.get_total_users_count(db)
-        stats.active_users = await crud_dashboard.get_active_users_count(db)
-        stats.total_roles = await crud_dashboard.get_total_roles_count(db)
-        stats.total_permissions = await crud_dashboard.get_total_permissions_count(
-            db
-        )  # Ensure this crud exists
-        stats.active_sessions = await crud_dashboard.get_active_sessions_count(db)  # Placeholder
-
-        db_recent_logins = await crud_dashboard.get_recent_logins(db, limit=5)
-        for user_login in db_recent_logins:
-            recent_logins_data.append(
-                RecentLoginUser(
-                    id=user_login.id,
-                    name=f"{user_login.first_name} {user_login.last_name}".strip(),
-                    email=user_login.email,
-                    last_active=(
-                        user_login.updated_at.strftime("%Y-%m-%d %H:%M:%S")
-                        if user_login.updated_at
-                        else "N/A"
-                    ),  # Or last_login_at
-                )
+    if _USER_METRICS in granted:
+        stats.total_users = await dashboard_metrics.count_users(db)
+        stats.active_users = await dashboard_metrics.count_active_users(db)
+        stats.locked_users = await dashboard_metrics.count_locked_users(db)
+        sign_ins = [
+            RecentSignIn(
+                id=row.id,
+                name=row.name,
+                email=row.email,
+                signed_in_at=row.signed_in_at,
             )
+            for row in await dashboard_metrics.recent_sign_ins(db)
+        ]
 
-        db_system_users = await crud_dashboard.get_system_users_summary(db, limit=10)
-        for user_obj in db_system_users:
-            # Determine a simplified role string, e.g., the first role name or 'Multiple'
-            role_name = user_obj.roles[0].name if user_obj.roles else "N/A"
-            system_users_summary_data.append(
-                UserSummaryForTable(
-                    id=user_obj.id,
-                    name=f"{user_obj.first_name} {user_obj.last_name}".strip(),
-                    email=user_obj.email,
-                    role=role_name,
-                    status=("active" if user_obj.is_active else "inactive"),  # Assuming is_active field
-                    last_active=(
-                        user_login.updated_at.strftime("%Y-%m-%d %H:%M:%S")
-                        if user_login.updated_at
-                        else "N/A"
-                    ),
-                )
-            )
-    else:
-        # For non-admin users, provide limited or specific stats
-        # Example: Only their own activity or team-specific data (if applicable)
-        stats.total_users = await crud_dashboard.get_total_users_count(db)  # Or a more restricted count
-        # Potentially hide other stats or show user-specific ones
-        # stats.active_sessions = await crud_dashboard.get_active_sessions_count_for_user(db, current_user.id)
+    if _ROLE_METRICS in granted:
+        stats.total_roles = await dashboard_metrics.count_roles(db)
+        distribution = [
+            RoleCount(name=share.name, count=share.count)
+            for share in await dashboard_metrics.role_distribution(db)
+        ]
 
-        # Non-admins might not see recent logins of others or system user summary
+    if _ROLE_GROUP_METRICS in granted:
+        stats.total_role_groups = await dashboard_metrics.count_role_groups(db)
 
-    dashboard_response_data = IDashboardResponseData(
-        stats=stats,
-        recent_logins=recent_logins_data if is_admin else None,  # Only for admin
-        system_users_summary=(system_users_summary_data if is_admin else None),  # Only for admin
+    if _PERMISSION_METRICS in granted:
+        stats.total_permissions = await dashboard_metrics.count_permissions(db)
+
+    if _PERMISSION_GROUP_METRICS in granted:
+        stats.total_permission_groups = await dashboard_metrics.count_permission_groups(db)
+
+    return IDashboardResponse(
+        data=IDashboardResponseData(
+            stats=stats,
+            role_distribution=distribution,
+            recent_sign_ins=sign_ins,
+        )
     )
-    return IDashboardResponse(data=dashboard_response_data)
 
 
 @router.get("/stats", response_model=IDashboardResponse)
 async def get_dashboard_stats(
-    db: Session = Depends(deps.get_db),
+    db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user()),
 ) -> IDashboardResponse:
-    """
-    Retrieve dashboard stats (alias for /dashboard or /dashboard/stats).
-    """
-    is_admin = any(role.name.lower() == IRoleEnum.admin.lower() for role in current_user.roles)
-    if not is_admin:
-        raise HTTPException(status_code=403, detail="Admins only")
+    """Same payload as ``GET /dashboard``. Permissions decide the fields, not the role name."""
     return await get_dashboard_data(db=db, current_user=current_user)
