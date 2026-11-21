@@ -5,9 +5,12 @@ The endpoint decides which of these a caller may see. This module only queries.
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import Boolean, cast, func, select
+from sqlalchemy.sql.selectable import Select
+from sqlmodel import col
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models.audit_log_model import AuditLog
@@ -51,11 +54,11 @@ def _display_name(first_name: str | None, last_name: str | None, email: str) -> 
     return name or email
 
 
-async def _count(db: AsyncSession, statement: object) -> int:
+async def _count(db: AsyncSession, statement: Select[Any]) -> int:
     # ``exec`` yields a Row for ``func.count()``, not a bare int.
-    value = (await db.exec(statement)).one()  # type: ignore[arg-type]
+    value = (await db.exec(statement)).one()  # type: ignore[call-overload]
     if not isinstance(value, int):
-        value = value[0]  # type: ignore[index]
+        value = value[0]
     return int(value or 0)
 
 
@@ -79,8 +82,8 @@ async def count_locked_users(db: AsyncSession) -> int:
         .select_from(User)
         .where(
             cast(User.is_locked, Boolean).is_(True),
-            User.locked_until.is_not(None),
-            User.locked_until > now,
+            col(User.locked_until).is_not(None),
+            col(User.locked_until) > now,
         ),
     )
 
@@ -104,12 +107,12 @@ async def count_permission_groups(db: AsyncSession) -> int:
 async def role_distribution(db: AsyncSession) -> list[RoleShare]:
     """One count per role a user holds. A user in two roles is counted in each, once."""
     statement = (
-        select(Role.name, func.count(UserRole.user_id))
-        .join(UserRole, UserRole.role_id == Role.id)
-        .group_by(Role.id, Role.name)
-        .order_by(Role.name)
+        select(col(Role.name), func.count(col(UserRole.user_id)))
+        .join(UserRole, col(UserRole.role_id) == col(Role.id))
+        .group_by(col(Role.id), col(Role.name))
+        .order_by(col(Role.name))
     )
-    rows = (await db.exec(statement)).all()
+    rows = (await db.exec(statement)).all()  # type: ignore[call-overload]
     shares: list[RoleShare] = []
     for name, count in rows:
         if not name:
@@ -121,13 +124,19 @@ async def role_distribution(db: AsyncSession) -> list[RoleShare]:
 async def recent_sign_ins(db: AsyncSession, limit: int = SIGN_IN_LIMIT) -> list[SignInRow]:
     """The newest ``successful_login`` events joined to the user who signed in."""
     statement = (
-        select(AuditLog.timestamp, User.id, User.first_name, User.last_name, User.email)
-        .join(User, User.id == AuditLog.actor_id)
-        .where(AuditLog.action == SIGN_IN_ACTION)
-        .order_by(AuditLog.timestamp.desc(), AuditLog.id.desc())
+        select(
+            col(AuditLog.timestamp),
+            col(User.id),
+            col(User.first_name),
+            col(User.last_name),
+            col(User.email),
+        )
+        .join(User, col(User.id) == col(AuditLog.actor_id))
+        .where(col(AuditLog.action) == SIGN_IN_ACTION)
+        .order_by(col(AuditLog.timestamp).desc(), col(AuditLog.id).desc())
         .limit(limit)
     )
-    rows = (await db.exec(statement)).all()
+    rows = (await db.exec(statement)).all()  # type: ignore[call-overload]
     sign_ins: list[SignInRow] = []
     for timestamp, user_id, first_name, last_name, email in rows:
         sign_ins.append(
