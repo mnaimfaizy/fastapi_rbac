@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
 import { renderWithProviders, mockUser } from './test-utils';
 import RoleDetail from '../features/roles/RoleDetail';
@@ -332,9 +333,105 @@ describe('Role detail', () => {
     expect(
       await screen.findByRole('link', { name: 'Edit role' })
     ).toHaveAttribute('href', '/dashboard/roles/edit/role-manager');
+    const deleteButton = screen.getByRole('button', { name: /Delete role/i });
+    expect(deleteButton).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'More actions for Manager' })
+      screen.queryByRole('button', { name: /More actions/i })
+    ).not.toBeInTheDocument();
+
+    await userEvent.click(deleteButton);
+    const confirm = await within(
+      await screen.findByRole('alertdialog')
+    ).findByRole('button', { name: 'Delete role' });
+    expect(confirm).toHaveClass('bg-destructive');
+  });
+
+  it('does not fetch the permission catalog without permission.read and labels the list as partial', async () => {
+    const granted = [...MANAGER_GRANTED].filter((n) => n !== 'permission.read');
+    renderWithProviders(
+      <Routes>
+        <Route path="/dashboard/roles/:roleId" element={<RoleDetail />} />
+      </Routes>,
+      { preloadedState: viewer(granted) }
+    );
+
+    expect(
+      await screen.findByText(/permissions granted \(partial list/)
     ).toBeInTheDocument();
+    expect(screen.queryByText(/of 29 granted/)).not.toBeInTheDocument();
+    expect(mockPermissionService.getPermissions).not.toHaveBeenCalled();
+  });
+
+  it('labels the matrix as partial when the catalog is bigger than one page', async () => {
+    const items = catalogPermissions();
+    mockPermissionService.getPermissions.mockResolvedValue({
+      data: {
+        items,
+        total: 250,
+        page: 1,
+        size: 100,
+        pages: 3,
+        next_page: 2,
+        previous_page: null,
+      },
+      message: 'ok',
+      meta: {},
+    });
+    renderWithProviders(
+      <Routes>
+        <Route path="/dashboard/roles/:roleId" element={<RoleDetail />} />
+      </Routes>,
+      { preloadedState: viewer([...MANAGER_GRANTED]) }
+    );
+
+    expect(
+      await screen.findByText(/permissions granted \(partial list/)
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/of 29 granted/)).not.toBeInTheDocument();
+  });
+
+  it('shows only the count when the API sends no holders (no user.read)', async () => {
+    mockRoleService.getRoleById.mockResolvedValue({
+      data: { ...managerRole, users: undefined },
+      message: 'ok',
+      meta: {},
+    });
+    renderWithProviders(
+      <Routes>
+        <Route path="/dashboard/roles/:roleId" element={<RoleDetail />} />
+      </Routes>,
+      { preloadedState: viewer([...MANAGER_GRANTED]) }
+    );
+
+    expect(await screen.findByText('2 users')).toBeInTheDocument();
+    expect(
+      screen.getByText(/needs the user.read permission/)
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: /View all/ })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/No users hold this role/)
+    ).not.toBeInTheDocument();
+  });
+
+  it('links to all holders when the capped list is shorter than the count', async () => {
+    mockRoleService.getRoleById.mockResolvedValue({
+      data: { ...managerRole, user_count: 90 },
+      message: 'ok',
+      meta: {},
+    });
+    renderWithProviders(
+      <Routes>
+        <Route path="/dashboard/roles/:roleId" element={<RoleDetail />} />
+      </Routes>,
+      { preloadedState: viewer([...MANAGER_GRANTED]) }
+    );
+
+    expect(
+      await screen.findByRole('link', { name: 'View all 90' })
+    ).toHaveAttribute('href', '/dashboard/users');
+    expect(screen.getByText('90 users')).toBeInTheDocument();
   });
 
   it('refuses the detail page to a user who cannot read roles', async () => {

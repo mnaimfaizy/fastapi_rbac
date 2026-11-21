@@ -70,6 +70,17 @@ def role_read(role: Role, *, user_count: int, users: list[dict[str, Any]] | None
     return payload
 
 
+def _holds_permission(user: User, permission_name: str) -> bool:
+    """Whether the caller is a superuser or holds the permission through a role."""
+    if getattr(user, "is_superuser", False):
+        return True
+    return any(
+        permission.name == permission_name
+        for role in (user.roles or [])
+        for permission in (role.permissions or [])
+    )
+
+
 async def _counts_for(roles: list[Role], db_session: AsyncSession) -> dict[Any, int]:
     return await crud.role.count_users_by_role(role_ids=[role.id for role in roles], db_session=db_session)
 
@@ -127,10 +138,17 @@ async def get_role_by_id(
     current_user: User = Depends(deps.get_current_user(required_permissions=["role.read"])),
 ) -> IGetResponseBase[IRoleDetailRead]:
     """
-    Gets a role by its id
+    Gets a role by its id.
+
+    ``users`` lists the first holders by email (capped) and is present only when
+    the caller also holds ``user.read``; ``user_count`` is always the full count.
     """
     counts = await _counts_for([role], db_session)
-    holders = await crud.role.list_holders(role_id=role.id, db_session=db_session)
+    # Holder identities need user.read, as they do on the user endpoints. A
+    # caller with role.read alone still gets the count.
+    holders = None
+    if _holds_permission(current_user, "user.read"):
+        holders = await crud.role.list_holders(role_id=role.id, db_session=db_session)
     return create_response(data=role_read(role, user_count=counts.get(role.id, 0), users=holders))
 
 

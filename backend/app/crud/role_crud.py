@@ -21,6 +21,9 @@ from app.utils.exceptions.common_exception import ResourceNotFoundException
 from app.utils.security_audit import create_audit_log
 
 # Permissions and their groups in two SELECTs, however many roles are on the page.
+# Role detail lists this many holders; the full count comes from user_count.
+HOLDERS_LIMIT = 25
+
 _ROLE_READ_OPTIONS = (selectinload(Role.permissions).selectinload(Permission.group),)
 
 
@@ -118,13 +121,16 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
         found = {role_id: count for role_id, count in result.all()}
         return {role_id: int(found.get(role_id, 0)) for role_id in role_ids}
 
-    async def list_holders(self, *, role_id: UUID, db_session: AsyncSession) -> list[dict[str, Any]]:
-        """Users who hold the role: identity columns only, one query."""
+    async def list_holders(
+        self, *, role_id: UUID, db_session: AsyncSession, limit: int = HOLDERS_LIMIT
+    ) -> list[dict[str, Any]]:
+        """The first ``limit`` users who hold the role by email: identity columns only, one query."""
         result = await db_session.exec(
             select(User.id, User.email, User.first_name, User.last_name)
             .join(UserRole, UserRole.user_id == User.id)  # type: ignore[arg-type]
             .where(UserRole.role_id == role_id)
             .order_by(User.email)
+            .limit(limit)
         )
         return [
             {"id": user_id, "email": email, "first_name": first_name, "last_name": last_name}

@@ -17,6 +17,7 @@ from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.core.config import settings
+from app.crud.role_crud import HOLDERS_LIMIT
 
 SEEDED_MANAGER_GROUPS = {
     "user.create": "User",
@@ -72,7 +73,9 @@ def _permission_group_selects(statements: List[str]) -> List[str]:
 async def test_seeded_manager_role_returns_groups_and_a_user_count(
     client: AsyncClient, user_factory: Any, role_factory: Any, permission_factory: Any
 ) -> None:
-    headers = await sign_in(client, user_factory, role_factory, permission_factory, ("role.read",))
+    headers = await sign_in(
+        client, user_factory, role_factory, permission_factory, ("role.read", "user.read")
+    )
 
     listing = await client.get(url("/roles"), headers=headers)
     assert listing.status_code == 200, listing.text
@@ -94,7 +97,9 @@ async def test_seeded_manager_role_returns_groups_and_a_user_count(
 async def test_role_list_user_count_matches_holders(
     client: AsyncClient, user_factory: Any, role_factory: Any, permission_factory: Any
 ) -> None:
-    headers = await sign_in(client, user_factory, role_factory, permission_factory, ("role.read",))
+    headers = await sign_in(
+        client, user_factory, role_factory, permission_factory, ("role.read", "user.read")
+    )
     role = await role_factory.create(name=f"counted-{uuid4().hex[:8]}")
     first = await user_factory.create(email=f"held-a-{uuid4().hex[:8]}@example.com", roles=[role])
     second = await user_factory.create(email=f"held-b-{uuid4().hex[:8]}@example.com", roles=[role])
@@ -168,3 +173,56 @@ async def test_unpaginated_role_list_includes_group_and_user_count(
     assert {permission["name"]: permission["group"]["name"] for permission in manager["permissions"]} == (
         SEEDED_MANAGER_GROUPS
     )
+
+
+async def test_role_detail_hides_holders_without_user_read(
+    client: AsyncClient, user_factory: Any, role_factory: Any, permission_factory: Any
+) -> None:
+    headers = await sign_in(client, user_factory, role_factory, permission_factory, ("role.read",))
+    role = await role_factory.create(name=f"held-{uuid4().hex[:8]}")
+    await user_factory.create(email=f"hidden-{uuid4().hex[:8]}@example.com", roles=[role])
+
+    detail = await client.get(url(f"/roles/{role.id}"), headers=headers)
+
+    assert detail.status_code == 200, detail.text
+    body = detail.json()["data"]
+    assert body["user_count"] == 1
+    assert body.get("users") is None
+    assert "hidden-" not in detail.text
+
+
+async def test_role_detail_lists_holders_with_user_read(
+    client: AsyncClient, user_factory: Any, role_factory: Any, permission_factory: Any
+) -> None:
+    headers = await sign_in(
+        client, user_factory, role_factory, permission_factory, ("role.read", "user.read")
+    )
+    role = await role_factory.create(name=f"held-{uuid4().hex[:8]}")
+    holder = await user_factory.create(email=f"shown-{uuid4().hex[:8]}@example.com", roles=[role])
+
+    detail = await client.get(url(f"/roles/{role.id}"), headers=headers)
+
+    assert detail.status_code == 200, detail.text
+    body = detail.json()["data"]
+    assert body["user_count"] == 1
+    assert [user["email"] for user in body["users"]] == [holder.email]
+
+
+async def test_role_detail_caps_holders_and_keeps_the_full_count(
+    client: AsyncClient, user_factory: Any, role_factory: Any, permission_factory: Any
+) -> None:
+    headers = await sign_in(
+        client, user_factory, role_factory, permission_factory, ("role.read", "user.read")
+    )
+    role = await role_factory.create(name=f"crowded-{uuid4().hex[:8]}")
+    total = HOLDERS_LIMIT + 3
+    emails = [f"crowd-{index:03d}-{uuid4().hex[:6]}@example.com" for index in range(total)]
+    for email in emails:
+        await user_factory.create(email=email, roles=[role])
+
+    detail = await client.get(url(f"/roles/{role.id}"), headers=headers)
+
+    assert detail.status_code == 200, detail.text
+    body = detail.json()["data"]
+    assert body["user_count"] == total
+    assert [user["email"] for user in body["users"]] == sorted(emails)[:HOLDERS_LIMIT]

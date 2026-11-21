@@ -56,7 +56,7 @@ class IRoleRead(RoleSchemaBase):
 
 
 class IRoleDetailRead(IRoleRead):
-    users: List[IRoleUser] = []
+    users: List[IRoleUser] | None = None
 
 
 class IRoleOutput(RoleSchemaBase):

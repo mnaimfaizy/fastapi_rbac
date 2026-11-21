@@ -5,7 +5,7 @@ import { AppDispatch, RootState } from '../../store';
 import { deleteRole, fetchRoleById } from '../../store/slices/roleSlice';
 import { fetchPermissions } from '../../store/slices/permissionSlice';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Check, MoreHorizontal, Pencil } from 'lucide-react';
+import { ArrowLeft, Check, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Permission } from '@/models/permission';
@@ -136,11 +136,14 @@ const RoleDetail: React.FC = () => {
   const canReadRoles = hasPermission('role.read');
   const canUpdateRoles = hasPermission('role.update');
   const canDeleteRoles = hasPermission('role.delete');
+  const canReadPermissions = hasPermission('permission.read');
 
   const { currentRole, loading, error } = useSelector(
     (state: RootState) => state.role
   );
-  const { permissions } = useSelector((state: RootState) => state.permission);
+  const { permissions, totalItems: permissionTotal } = useSelector(
+    (state: RootState) => state.permission
+  );
 
   useEffect(() => {
     if (!canReadRoles) {
@@ -151,9 +154,12 @@ const RoleDetail: React.FC = () => {
 
     if (roleId) {
       dispatch(fetchRoleById(roleId));
-      dispatch(fetchPermissions({ page: 1, pageSize: 100 }));
+      // The catalog needs permission.read; without it the matrix is partial.
+      if (canReadPermissions) {
+        dispatch(fetchPermissions({ page: 1, pageSize: 100 }));
+      }
     }
-  }, [dispatch, roleId, canReadRoles, navigate]);
+  }, [dispatch, roleId, canReadRoles, canReadPermissions, navigate]);
 
   const handleDelete = async () => {
     if (!canDeleteRoles) {
@@ -203,13 +209,24 @@ const RoleDetail: React.FC = () => {
   const grantedIds = new Set(
     currentRole.permissions?.map((permission) => permission.id)
   );
+  const catalogPermissions = canReadPermissions ? permissions : [];
+  // The "of N" total is only true when every permission was fetched. One page
+  // holds 100, so a bigger catalog is partial too.
+  const catalogComplete =
+    canReadPermissions &&
+    permissionTotal > 0 &&
+    catalogPermissions.length >= permissionTotal;
   const catalog = [
-    ...permissions,
+    ...catalogPermissions,
     ...(currentRole.permissions ?? []).filter(
-      (permission) => !permissions.some((item) => item.id === permission.id)
+      (permission) =>
+        !catalogPermissions.some((item) => item.id === permission.id)
     ),
   ];
   const matrix = buildMatrix(catalog, grantedIds);
+  // users is sent only to callers who also hold user.read.
+  const canSeeHolders =
+    currentRole.users !== undefined && currentRole.users !== null;
   const holders = currentRole.users ?? [];
   const userCount = currentRole.user_count ?? holders.length;
 
@@ -244,12 +261,9 @@ const RoleDetail: React.FC = () => {
             {canDeleteRoles && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    aria-label={`More actions for ${currentRole.name}`}
-                  >
-                    <MoreHorizontal className="h-4 w-4" />
+                  <Button variant="destructive">
+                    <Trash2 className="h-4 w-4" />
+                    Delete role
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
@@ -262,7 +276,10 @@ const RoleDetail: React.FC = () => {
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleDelete}>
+                    <AlertDialogAction
+                      onClick={handleDelete}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
                       Delete role
                     </AlertDialogAction>
                   </AlertDialogFooter>
@@ -278,7 +295,9 @@ const RoleDetail: React.FC = () => {
           <div>
             <h2 className="text-base font-semibold">Permissions</h2>
             <p className="text-sm text-muted-foreground">
-              {matrix.granted} of {matrix.total} granted, by permission group
+              {catalogComplete
+                ? `${matrix.granted} of ${matrix.total} granted, by permission group`
+                : `${matrix.granted} ${matrix.granted === 1 ? 'permission' : 'permissions'} granted (partial list: the full catalog is not available to you)`}
             </p>
           </div>
           <div className="rounded-xl border overflow-x-auto">
@@ -377,7 +396,7 @@ const RoleDetail: React.FC = () => {
                 {userCount} {userCount === 1 ? 'user' : 'users'}
               </p>
             </div>
-            {userCount > 0 && (
+            {canSeeHolders && userCount > 0 && (
               <Link
                 to="/dashboard/users"
                 className="text-sm font-medium text-primary hover:underline"
@@ -386,7 +405,13 @@ const RoleDetail: React.FC = () => {
               </Link>
             )}
           </div>
-          {holders.length === 0 ? (
+          {!canSeeHolders ? (
+            userCount > 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Seeing who holds this role needs the user.read permission.
+              </p>
+            ) : null
+          ) : holders.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No users hold this role
             </p>
