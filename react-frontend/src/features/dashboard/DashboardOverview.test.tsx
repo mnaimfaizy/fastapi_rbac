@@ -156,8 +156,8 @@ describe('DashboardOverview', () => {
     ).toBeInTheDocument();
     expect(card('Locked accounts').getByText('2')).toBeInTheDocument();
     expect(
-      screen.getByRole('link', { name: 'View locked users' })
-    ).toHaveAttribute('href', '/dashboard/users?status=Locked');
+      screen.queryByRole('link', { name: /locked users/i })
+    ).not.toBeInTheDocument();
 
     const distribution = card('Role distribution');
     expect(distribution.getByText('Admin')).toBeInTheDocument();
@@ -192,7 +192,19 @@ describe('DashboardOverview', () => {
   it('drops role and permission stats for a manager and keeps the shared metrics', async () => {
     const twelveAgo = new Date(Date.now() - 12 * 60 * 1000);
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    renderDashboard('Manager', filledDashboard(twelveAgo, yesterday));
+    // The API sends a manager no role-group or permission fields; the page
+    // follows the data, so those cards are not drawn.
+    const filled = filledDashboard(twelveAgo, yesterday);
+    renderDashboard('Manager', {
+      ...filled,
+      stats: {
+        ...filled.stats,
+        total_roles: null,
+        total_role_groups: null,
+        total_permissions: null,
+        total_permission_groups: null,
+      },
+    });
 
     expect(
       await screen.findByText(
@@ -212,8 +224,8 @@ describe('DashboardOverview', () => {
       )
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('link', { name: 'View locked users' })
-    ).toHaveAttribute('href', '/dashboard/users?status=Locked');
+      screen.queryByRole('link', { name: /locked users/i })
+    ).not.toBeInTheDocument();
     expect(screen.queryByText('Illustrative data')).not.toBeInTheDocument();
     expect(screen.queryByText('0')).not.toBeInTheDocument();
   });
@@ -235,7 +247,7 @@ describe('DashboardOverview', () => {
       screen.queryByText('Users with several roles are counted in each.')
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('link', { name: 'View locked users' })
+      screen.queryByRole('link', { name: /locked users/i })
     ).not.toBeInTheDocument();
     expect(
       screen.queryByText('mei.tanaka@example.com')
@@ -251,16 +263,50 @@ describe('DashboardOverview', () => {
 
     await waitFor(() => {
       expect(screen.getAllByText('No data yet').length).toBeGreaterThanOrEqual(
-        5
+        3
       );
     });
-    expect(screen.getByText('Roles')).toBeInTheDocument();
-    expect(screen.getByText('Permissions')).toBeInTheDocument();
+    // The API sent no role or permission fields, so those cards are not shown
+    // even though the viewer is an admin.
+    expect(screen.queryByText('Roles')).not.toBeInTheDocument();
+    expect(screen.queryByText('Permissions')).not.toBeInTheDocument();
     expect(screen.queryByText('0')).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('link', { name: 'View locked users' })
+      screen.queryByRole('link', { name: /locked users/i })
     ).not.toBeInTheDocument();
     expect(screen.getByText('No role distribution')).toBeInTheDocument();
     expect(screen.getByText('No recent sign-ins')).toBeInTheDocument();
+  });
+
+  it('shows the roles and permissions cards by what the API sent, not by role name', async () => {
+    const twelveAgo = new Date(Date.now() - 12 * 60 * 1000);
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const data = filledDashboard(twelveAgo, yesterday);
+    renderDashboard('Auditor', data);
+
+    expect(await screen.findByText('Roles')).toBeInTheDocument();
+    expect(screen.getByText('Permissions')).toBeInTheDocument();
+    expect(card('Roles').getByText('3')).toBeInTheDocument();
+  });
+
+  it('hides the permissions card when only the role fields were sent', async () => {
+    const twelveAgo = new Date(Date.now() - 12 * 60 * 1000);
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const data = filledDashboard(twelveAgo, yesterday);
+    renderDashboard(
+      'Admin',
+      {
+        ...data,
+        stats: {
+          ...data.stats,
+          total_permissions: null,
+          total_permission_groups: null,
+        },
+      },
+      true
+    );
+
+    expect(await screen.findByText('Roles')).toBeInTheDocument();
+    expect(screen.queryByText('Permissions')).not.toBeInTheDocument();
   });
 });

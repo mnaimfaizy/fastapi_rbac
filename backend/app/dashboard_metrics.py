@@ -21,7 +21,8 @@ from app.models.role_model import Role
 from app.models.user_model import User
 from app.models.user_role_model import UserRole
 
-SIGN_IN_ACTION = "successful_login"
+# Password and OAuth2 sign-ins both count as a sign-in.
+SIGN_IN_ACTIONS = ("successful_login", "oauth2_successful_login")
 SIGN_IN_LIMIT = 10
 
 
@@ -122,7 +123,7 @@ async def role_distribution(db: AsyncSession) -> list[RoleShare]:
 
 
 async def recent_sign_ins(db: AsyncSession, limit: int = SIGN_IN_LIMIT) -> list[SignInRow]:
-    """The newest ``successful_login`` events joined to the user who signed in."""
+    """The newest sign-in events (password and OAuth2) joined to the user who signed in."""
     statement = (
         select(
             col(AuditLog.timestamp),
@@ -132,7 +133,7 @@ async def recent_sign_ins(db: AsyncSession, limit: int = SIGN_IN_LIMIT) -> list[
             col(User.email),
         )
         .join(User, col(User.id) == col(AuditLog.actor_id))
-        .where(col(AuditLog.action) == SIGN_IN_ACTION)
+        .where(col(AuditLog.action).in_(SIGN_IN_ACTIONS))
         .order_by(col(AuditLog.timestamp).desc(), col(AuditLog.id).desc())
         .limit(limit)
     )

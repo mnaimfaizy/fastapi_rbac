@@ -1,7 +1,8 @@
 """Dashboard metrics follow the caller's permissions (#421, absorbs #405).
 
-Locked users, role distribution and the last 10 ``successful_login`` audit
-events replace the ``active_sessions`` placeholder. A caller who lacks a
+Locked users, role distribution and the last 10 sign-in audit events
+(``successful_login`` and ``oauth2_successful_login``) replace the
+``active_sessions`` placeholder. A caller who lacks a
 permission gets null for that metric, not a zero and not a 403.
 
 In ``test/api/`` because these boot the app in-process: see
@@ -143,7 +144,7 @@ async def test_role_distribution_counts_a_user_once_per_role(
     assert counts[beta.name] == 1
 
 
-async def test_recent_sign_ins_are_the_last_ten_successful_logins(
+async def test_recent_sign_ins_are_the_last_ten_password_and_oauth2_logins(
     client: AsyncClient,
     db: AsyncSession,
     user_factory: Any,
@@ -174,25 +175,45 @@ async def test_recent_sign_ins_are_the_last_ten_successful_logins(
         )
     noise = await user_factory.create(email=f"noise-{uuid4().hex[:8]}@example.com", password=PASSWORD)
     newest = start + timedelta(days=1)
-    for action in ("oauth2_successful_login", "failed_login"):
-        db.add(
-            AuditLog(
-                actor_id=noise.id,
-                action=action,
-                resource_type="security_event",
-                resource_id=str(noise.id),
-                details={},
-                timestamp=newest,
-            )
+    db.add(
+        AuditLog(
+            actor_id=noise.id,
+            action="failed_login",
+            resource_type="security_event",
+            resource_id=str(noise.id),
+            details={},
+            timestamp=newest,
         )
+    )
+    oauth_person = await user_factory.create(
+        email=f"oauth-{uuid4().hex[:8]}@example.com",
+        password=PASSWORD,
+        first_name="Oauth",
+        last_name="Person",
+    )
+    db.add(
+        AuditLog(
+            actor_id=oauth_person.id,
+            action="oauth2_successful_login",
+            resource_type="security_event",
+            resource_id=str(oauth_person.id),
+            details={},
+            timestamp=newest + timedelta(minutes=1),
+        )
+    )
     await db.commit()
 
     rows = (await dashboard(client, headers))["recent_sign_ins"]
 
-    assert [row["email"] for row in rows] == [email for email, _when in reversed(signed_in[-10:])]
+    # The OAuth2 sign-in is the newest, so it leads; nine password sign-ins follow.
+    assert [row["email"] for row in rows] == [oauth_person.email] + [
+        email for email, _when in reversed(signed_in[-9:])
+    ]
+    assert len(rows) == 10
     assert caller not in [row["email"] for row in rows]
     assert noise.email not in [row["email"] for row in rows]
-    assert rows[0]["name"] == "Sign In12"
+    assert rows[0]["name"] == "Oauth Person"
+    assert rows[1]["name"] == "Sign In12"
     first_at = datetime.fromisoformat(rows[0]["signed_in_at"].replace("Z", "+00:00"))
     second_at = datetime.fromisoformat(rows[1]["signed_in_at"].replace("Z", "+00:00"))
     assert first_at > second_at

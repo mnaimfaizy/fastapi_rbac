@@ -4,7 +4,6 @@ import { differenceInSeconds, format, formatDistance } from 'date-fns';
 import { AlertCircle, Lock, ShieldCheck, UserCheck, Users } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '@/hooks/redux';
-import { usePermissions } from '@/hooks/usePermissions';
 import { fetchDashboardData } from '@/store/slices/dashboardSlice';
 import { StatsCard } from '@/components/dashboard/stats-card';
 import { EmptyState } from '@/components/common/EmptyState';
@@ -18,7 +17,6 @@ import {
 } from '@/components/ui/card';
 import type { RecentSignIn, RoleCount } from '@/models/dashboard';
 
-const LOCKED_USERS_HREF = '/dashboard/users?status=Locked';
 const ALL_USERS_HREF = '/dashboard/users';
 const ROLE_DISTRIBUTION_FOOTNOTE =
   'Users with several roles are counted in each.';
@@ -67,13 +65,11 @@ function MetricCard({
   value,
   description,
   icon: Icon,
-  action,
 }: {
   title: string;
   value: number | null | undefined;
   description?: string;
   icon?: LucideIcon;
-  action?: { href: string; label: string };
 }) {
   if (value == null) {
     return (
@@ -87,26 +83,6 @@ function MetricCard({
             title="No data yet"
             description="This metric isn't available."
           />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (action) {
-    return (
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">{title}</CardTitle>
-          {Icon ? <Icon className="text-muted-foreground h-4 w-4" /> : null}
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{value.toLocaleString()}</div>
-          <Link
-            to={action.href}
-            className="text-primary mt-1 inline-block text-xs underline-offset-4 hover:underline"
-          >
-            {action.label}
-          </Link>
         </CardContent>
       </Card>
     );
@@ -230,8 +206,6 @@ const DashboardOverview = () => {
   const dispatch = useAppDispatch();
   const { data, loading, error } = useAppSelector((state) => state.dashboard);
   const currentUser = useAppSelector((state) => state.auth.user);
-  const { hasRole } = usePermissions();
-  const isAdmin = hasRole('admin') || !!currentUser?.is_superuser;
 
   useEffect(() => {
     dispatch(fetchDashboardData());
@@ -300,7 +274,9 @@ const DashboardOverview = () => {
           }
           icon={UserCheck}
         />
-        {isAdmin ? (
+        {/* The API sends a field only to callers who hold its permission, so a
+            null field means the card is not theirs to see. */}
+        {stats.total_roles != null ? (
           <MetricCard
             title="Roles"
             value={stats.total_roles}
@@ -312,7 +288,7 @@ const DashboardOverview = () => {
             icon={ShieldCheck}
           />
         ) : null}
-        {isAdmin ? (
+        {stats.total_permissions != null ? (
           <MetricCard
             title="Permissions"
             value={stats.total_permissions}
@@ -328,7 +304,6 @@ const DashboardOverview = () => {
           title="Locked accounts"
           value={stats.locked_users}
           icon={Lock}
-          action={{ href: LOCKED_USERS_HREF, label: 'View locked users' }}
         />
       </div>
 
