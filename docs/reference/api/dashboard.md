@@ -59,6 +59,8 @@ Authorization: Bearer <access_token>
 
 A superuser is treated as holding all five.
 
+`backend/test/api/test_dashboard_metrics.py` checks this table, and the sign-in actions listed under the notes below, against the API, so a change to either fails a test until this page is updated.
+
 **Response (caller holds none of them):**
 
 ```json

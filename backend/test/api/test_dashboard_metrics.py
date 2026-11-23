@@ -9,15 +9,20 @@ In ``test/api/`` because these boot the app in-process: see
 `ADR 0012 <../../../docs/adr/0012-test-suites-split-by-environment.md>`_.
 """
 
+import re
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from test.utils import API_TEST_PASSWORD, get_csrf_token, seeded_permission
 from typing import Any
 from uuid import uuid4
 
+import pytest
 from httpx import AsyncClient
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.api.v1.endpoints.dashboard import _ALL_METRICS
 from app.core.config import settings
+from app.dashboard_metrics import SIGN_IN_ACTIONS
 from app.models.audit_log_model import AuditLog
 
 PASSWORD = API_TEST_PASSWORD
@@ -297,3 +302,71 @@ async def test_superuser_receives_every_metric(
     assert isinstance(data["stats"]["total_permissions"], int)
     assert isinstance(data["role_distribution"], list)
     assert email in [row["email"] for row in data["recent_sign_ins"]]
+
+
+# docs/reference/api/dashboard.md is hand-written. These tests hold its
+# permission table and its list of sign-in actions to the code, so a renamed
+# permission, a moved field or a new sign-in action fails here instead of
+# drifting the page. The docs folder is absent when only backend/ is copied
+# (the test image), so they skip there.
+DASHBOARD_DOC = Path(__file__).resolve().parents[3] / "docs" / "reference" / "api" / "dashboard.md"
+needs_doc = pytest.mark.skipif(not DASHBOARD_DOC.is_file(), reason="docs/ is not in this checkout")
+
+
+def documented_permission_fields() -> dict[str, set[str]]:
+    """The 'Which permission fills which field' table: permission -> field paths."""
+    text = DASHBOARD_DOC.read_text(encoding="utf-8")
+    section = text.split("**Which permission fills which field:**", 1)[1]
+    table: dict[str, set[str]] = {}
+    for line in section.splitlines()[1:]:
+        if not line.strip():
+            if table:
+                break
+            continue
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) != 2 or set(cells[0]) <= {"-", " ", ":"}:
+            continue
+        names = re.findall(r"`([^`]+)`", cells[0])
+        if not names:
+            continue
+        table[names[0]] = set(re.findall(r"`([^`]+)`", cells[1]))
+    return table
+
+
+def documented_sign_in_actions() -> set[str]:
+    text = DASHBOARD_DOC.read_text(encoding="utf-8")
+    bullet = next(line for line in text.splitlines() if "A sign-in is" in line)
+    return {name for name in re.findall(r"`([a-z0-9_]+)`", bullet) if name.endswith("_login")}
+
+
+def non_null_fields(data: dict[str, Any]) -> set[str]:
+    fields = {f"stats.{name}" for name, value in data["stats"].items() if value is not None}
+    fields |= {name for name, value in data.items() if name != "stats" and value is not None}
+    return fields
+
+
+@needs_doc
+def test_dashboard_doc_lists_every_metric_permission() -> None:
+    assert set(documented_permission_fields()) == _ALL_METRICS
+
+
+@needs_doc
+def test_dashboard_doc_names_the_sign_in_actions() -> None:
+    assert documented_sign_in_actions() == set(SIGN_IN_ACTIONS)
+
+
+@needs_doc
+async def test_dashboard_doc_table_matches_the_fields_each_permission_fills(
+    client: AsyncClient,
+    user_factory: Any,
+    role_factory: Any,
+    permission_factory: Any,
+) -> None:
+    table = documented_permission_fields()
+    assert table, "the permission table was not found in dashboard.md"
+    for permission, fields in sorted(table.items()):
+        headers, _email = await sign_in_holding(
+            client, user_factory, role_factory, permission_factory, [permission]
+        )
+        data = await dashboard(client, headers)
+        assert non_null_fields(data) == fields, f"{permission}: the doc table and the API disagree"

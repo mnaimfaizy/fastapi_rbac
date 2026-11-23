@@ -20,6 +20,8 @@ import type { RecentSignIn, RoleCount } from '@/models/dashboard';
 const ALL_USERS_HREF = '/dashboard/users';
 const ROLE_DISTRIBUTION_FOOTNOTE =
   'Users with several roles are counted in each.';
+const ROLE_DISTRIBUTION_PERCENT_NOTE =
+  'Percentages are the share of all users who hold the role.';
 
 function greeting(firstName?: string | null, lastName?: string | null): string {
   const name = [firstName, lastName].filter(Boolean).join(' ');
@@ -98,9 +100,22 @@ function MetricCard({
   );
 }
 
-function RoleDistribution({ rows }: { rows: RoleCount[] | null | undefined }) {
+/**
+ * Users per role. `role_distribution` counts a user once per role held, so the
+ * counts can add up to more than the number of users. A percentage is the
+ * share of all users (`stats.total_users`), never of the summed counts, and is
+ * left out when the viewer cannot see the user total.
+ */
+function RoleDistribution({
+  rows,
+  totalUsers,
+}: {
+  rows: RoleCount[] | null | undefined;
+  totalUsers: number | null | undefined;
+}) {
   const shares = rows ?? [];
-  const total = shares.reduce((sum, row) => sum + row.count, 0);
+  const userTotal = totalUsers != null && totalUsers > 0 ? totalUsers : null;
+  const showPercent = userTotal != null;
 
   return (
     <Card className="col-span-full lg:col-span-8">
@@ -118,21 +133,26 @@ function RoleDistribution({ rows }: { rows: RoleCount[] | null | undefined }) {
           <div className="space-y-4">
             <ul className="space-y-3">
               {shares.map((row) => {
-                const percent = percentOf(row.count, total);
+                const percent =
+                  userTotal == null ? null : percentOf(row.count, userTotal);
                 return (
                   <li key={row.name} className="space-y-1">
                     <div className="flex items-baseline justify-between text-sm">
                       <span className="font-medium">{row.name}</span>
                       <span className="text-muted-foreground">
-                        {row.count.toLocaleString()} {percent}%
+                        {percent == null
+                          ? row.count.toLocaleString()
+                          : `${row.count.toLocaleString()} ${percent}%`}
                       </span>
                     </div>
-                    <div className="bg-muted h-2 overflow-hidden rounded-full">
-                      <div
-                        className="bg-primary h-full"
-                        style={{ width: `${percent}%` }}
-                      />
-                    </div>
+                    {percent != null && (
+                      <div className="bg-muted h-2 overflow-hidden rounded-full">
+                        <div
+                          className="bg-primary h-full"
+                          style={{ width: `${Math.min(percent, 100)}%` }}
+                        />
+                      </div>
+                    )}
                   </li>
                 );
               })}
@@ -140,6 +160,11 @@ function RoleDistribution({ rows }: { rows: RoleCount[] | null | undefined }) {
             <p className="text-muted-foreground text-xs">
               {ROLE_DISTRIBUTION_FOOTNOTE}
             </p>
+            {showPercent && (
+              <p className="text-muted-foreground text-xs">
+                {ROLE_DISTRIBUTION_PERCENT_NOTE}
+              </p>
+            )}
           </div>
         )}
       </CardContent>
@@ -308,7 +333,10 @@ const DashboardOverview = () => {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-12">
-        <RoleDistribution rows={role_distribution} />
+        <RoleDistribution
+          rows={role_distribution}
+          totalUsers={stats.total_users}
+        />
         <RecentSignIns rows={recent_sign_ins} />
       </div>
     </div>

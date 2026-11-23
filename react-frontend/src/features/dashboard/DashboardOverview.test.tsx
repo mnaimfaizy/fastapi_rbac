@@ -230,6 +230,64 @@ describe('DashboardOverview', () => {
     expect(screen.queryByText('0')).not.toBeInTheDocument();
   });
 
+  it('shows each role as a share of all users, not of role assignments', async () => {
+    const twelveAgo = new Date(Date.now() - 12 * 60 * 1000);
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const filled = filledDashboard(twelveAgo, yesterday);
+    // 10 users who all hold both roles: the counts sum to 20, but every user
+    // holds each role, so each row is 100%, not 50%.
+    renderDashboard('Admin', {
+      ...filled,
+      stats: { ...filled.stats, total_users: 10, active_users: 10 },
+      role_distribution: [
+        { name: 'Admin', count: 10 },
+        { name: 'Manager', count: 10 },
+      ],
+    });
+
+    const distribution = within(
+      (await screen.findByText('Role distribution')).closest(
+        '[data-slot="card"]'
+      ) as HTMLElement
+    );
+    expect(distribution.getAllByText('10 100%')).toHaveLength(2);
+    expect(distribution.queryByText(/50%/)).not.toBeInTheDocument();
+    expect(
+      distribution.getByText(
+        'Percentages are the share of all users who hold the role.'
+      )
+    ).toBeInTheDocument();
+  });
+
+  it('shows role counts without percentages when the user total is hidden', async () => {
+    const twelveAgo = new Date(Date.now() - 12 * 60 * 1000);
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const filled = filledDashboard(twelveAgo, yesterday);
+    // role.read without user.read: the API sends role_distribution but no
+    // total_users, so there is no honest denominator.
+    renderDashboard('Auditor', {
+      ...filled,
+      stats: {
+        ...filled.stats,
+        total_users: null,
+        active_users: null,
+        locked_users: null,
+      },
+      recent_sign_ins: null,
+    });
+
+    const distribution = within(
+      (await screen.findByText('Role distribution')).closest(
+        '[data-slot="card"]'
+      ) as HTMLElement
+    );
+    expect(distribution.getByText('64')).toBeInTheDocument();
+    expect(distribution.queryByText(/%/)).not.toBeInTheDocument();
+    expect(
+      distribution.getByText('Users with several roles are counted in each.')
+    ).toBeInTheDocument();
+  });
+
   it('shows empty states for a plain user and no admin metrics or fake chart', async () => {
     renderDashboard('User', emptyDashboard);
 
