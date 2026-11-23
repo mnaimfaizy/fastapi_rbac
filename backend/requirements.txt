@@ -31,9 +31,9 @@ cssselect==1.5.0
 cssutils==2.15.0
 distlib==0.4.4
 dnspython==2.8.0
-email_validator==2.3.0
+email_validator==2.4.0
 emails==1.1.3
-exceptiongroup==1.3.1
+exceptiongroup==1.3.2
 factory_boy==3.3.3
 Faker==37.12.0
 fastapi==0.162.5
@@ -62,7 +62,7 @@ itsdangerous==2.2.0
 Jinja2==3.1.6
 kombu==5.7.0
 lxml==5.4.0
-librt==0.16.0
+librt==0.17.0
 Mako==1.4.3
 markdown-it-py==3.0.0
 MarkupSafe==3.0.4
@@ -78,7 +78,7 @@ packaging==26.3
 pandas==2.3.3
 pathspec==1.1.1
 pendulum==3.3.0
-pika==1.4.4
+pika==1.5.0
 platformdirs==4.12.4
 pluggy==1.7.0
 pre-commit==3.8.0
@@ -89,7 +89,7 @@ prompt_toolkit==3.0.53
 pyasn1==0.6.5
 pycodestyle==2.15.0
 pycparser==3.11
-pydantic==2.14.3
+pydantic==2.14.4
 pydantic-extra-types==2.11.1
 pydantic-settings==2.15.0
 pydantic_core==2.50.4
@@ -118,7 +118,7 @@ shellingham==1.5.4
 six==1.17.0
 sniffio==1.3.1
 sqlakeyset==2.0.1787969905
-SQLAlchemy==2.0.57
+SQLAlchemy==2.0.58
 SQLAlchemy-Utils==0.43.0
 sqlmodel==0.0.49
 starlette==1.7.0
