@@ -130,7 +130,7 @@ typing-inspection==0.4.5
 typing_extensions==4.16.0
 tzdata==2026.6
 tzlocal==5.4.5
-ujson==5.13.0
+ujson==6.1.0
 urllib3==2.8.0
 slowapi==0.1.10
 uvicorn==0.54.0
