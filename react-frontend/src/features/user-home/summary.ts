@@ -42,7 +42,11 @@ export function permissionGroupName(code: string): string {
     .slice(0, dot)
     .split('_')
     .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .map((word, index) =>
+      index === 0
+        ? word.charAt(0).toUpperCase() + word.slice(1)
+        : word.toLowerCase()
+    )
     .join(' ');
 }
 

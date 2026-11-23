@@ -76,6 +76,26 @@ function renderHome(overrides: Partial<User> = {}) {
   return renderWithProviders(<UserHome />, { preloadedState: state });
 }
 
+function panelTitles(): (string | null)[] {
+  return screen
+    .getAllByRole('heading', { level: 2 })
+    .map((heading) => heading.textContent);
+}
+
+function focusableLabels(): (string | null)[] {
+  return [
+    screen.getByRole('link', { name: /Edit profile/ }),
+    screen.getByRole('link', { name: /Change password/ }),
+    screen.getByRole('button', { name: /Sign out everywhere/ }),
+  ]
+    .slice()
+    .sort((a, b) => {
+      const following = a.compareDocumentPosition(b);
+      return following & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+    })
+    .map((element) => element.textContent?.replace(/\s+/g, ' ').trim() ?? '');
+}
+
 describe('Signed-in home', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -199,6 +219,71 @@ describe('User home', () => {
       within(content).getByText('content.read_article')
     ).toBeInTheDocument();
     expect(screen.queryByText('user.read')).not.toBeInTheDocument();
+  });
+
+  it('keeps a multi-word permission group in seed order', () => {
+    renderHome({
+      permissions: [
+        'content.read_article',
+        'permission_group.read',
+        'role_group.read',
+        'self.read_profile',
+      ],
+    });
+
+    expect(
+      screen
+        .getAllByRole('group')
+        .map((group) => group.getAttribute('aria-label'))
+    ).toEqual(['Role group', 'Permission group', 'Self', 'Content']);
+  });
+
+  it('puts the mobile panels in tab order', () => {
+    renderHome();
+
+    expect(panelTitles()).toEqual([
+      'Security status',
+      'Quick actions',
+      'Profile',
+      'Your roles and permissions',
+    ]);
+    expect(focusableLabels()).toEqual([
+      'Change password',
+      'Sign out everywhere',
+      'Edit profile',
+    ]);
+  });
+
+  it('puts the desktop panels in tab order', () => {
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: true,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    })) as typeof window.matchMedia;
+
+    try {
+      renderHome();
+
+      expect(panelTitles()).toEqual([
+        'Profile',
+        'Quick actions',
+        'Security status',
+        'Your roles and permissions',
+      ]);
+      expect(focusableLabels()).toEqual([
+        'Edit profile',
+        'Change password',
+        'Sign out everywhere',
+      ]);
+    } finally {
+      window.matchMedia = original;
+    }
   });
 
   it('shows password age, verified status and last password change, and hides expiry until the API sends it', () => {
