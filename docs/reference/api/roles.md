@@ -84,7 +84,7 @@ Get a role by its ID. Needs `role.read`.
 
 The role has the same `permissions[].group` and `user_count` as the list reads. It also carries `users`, the holders of the role (`id`, `email`, `first_name`, `last_name`), under these rules:
 
-- `users` is present only when the caller also holds `user.read` (a superuser always does). A caller with `role.read` alone gets `user_count` and no `users` key, because holder identities need `user.read` everywhere else in the API.
+- `users` is present only when the caller also holds `user.read` (a superuser always does). A caller with `role.read` alone gets `user_count` and `"users": null` (the key is present, its value is `null`), because holder identities need `user.read` everywhere else in the API.
 - `users` lists at most the first 25 holders, ordered by email. `user_count` is always the full count, so `len(users)` can be smaller than `user_count`.
 
 **Request Headers:**

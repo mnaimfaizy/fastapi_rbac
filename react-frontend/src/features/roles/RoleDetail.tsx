@@ -396,13 +396,10 @@ const RoleDetail: React.FC = () => {
                 {userCount} {userCount === 1 ? 'user' : 'users'}
               </p>
             </div>
-            {canSeeHolders && userCount > 0 && (
-              <Link
-                to="/dashboard/users"
-                className="text-sm font-medium text-primary hover:underline"
-              >
-                View all {userCount}
-              </Link>
+            {canSeeHolders && holders.length < userCount && (
+              <p className="text-sm text-muted-foreground">
+                Showing the first {holders.length} of {userCount}
+              </p>
             )}
           </div>
           {!canSeeHolders ? (

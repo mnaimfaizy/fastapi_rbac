@@ -407,15 +407,13 @@ describe('Role detail', () => {
     expect(
       screen.getByText(/needs the user.read permission/)
     ).toBeInTheDocument();
-    expect(
-      screen.queryByRole('link', { name: /View all/ })
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/Showing the first/)).not.toBeInTheDocument();
     expect(
       screen.queryByText(/No users hold this role/)
     ).not.toBeInTheDocument();
   });
 
-  it('links to all holders when the capped list is shorter than the count', async () => {
+  it('says the holders list is capped when it is shorter than the count', async () => {
     mockRoleService.getRoleById.mockResolvedValue({
       data: { ...managerRole, user_count: 90 },
       message: 'ok',
@@ -429,9 +427,13 @@ describe('Role detail', () => {
     );
 
     expect(
-      await screen.findByRole('link', { name: 'View all 90' })
-    ).toHaveAttribute('href', '/dashboard/users');
+      await screen.findByText('Showing the first 2 of 90')
+    ).toBeInTheDocument();
     expect(screen.getByText('90 users')).toBeInTheDocument();
+    // The users list has no role filter, so there is no link to "all" holders.
+    expect(
+      screen.queryByRole('link', { name: /View all/ })
+    ).not.toBeInTheDocument();
   });
 
   it('refuses the detail page to a user who cannot read roles', async () => {

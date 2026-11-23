@@ -187,7 +187,9 @@ async def test_role_detail_hides_holders_without_user_read(
     assert detail.status_code == 200, detail.text
     body = detail.json()["data"]
     assert body["user_count"] == 1
-    assert body.get("users") is None
+    # The key is serialized as null, not omitted (docs/reference/api/roles.md).
+    assert "users" in body
+    assert body["users"] is None
     assert "hidden-" not in detail.text
 
 
