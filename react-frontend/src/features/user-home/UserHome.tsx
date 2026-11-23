@@ -1,16 +1,15 @@
 import { useEffect, useId, useState, type ReactNode } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, Smartphone, createLucideIcon } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ArrowRight, Smartphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { StatusBadge } from '@/components/common/StatusBadge';
-import { SIGNED_OUT_EVERYWHERE_NOTICE } from '@/features/auth/notices';
-import { ACCOUNT_SETTINGS_PATH } from '@/lib/navigation';
+import { useSignOutEverywhere } from '@/features/auth/useSignOutEverywhere';
+import { ACCOUNT_SETTINGS_PATH, PermissionKey } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
 import type { User } from '@/models/user';
 import { displayName, initials } from '@/components/layout/viewer';
-import { useAppDispatch, useAppSelector } from '@/store/hooks';
-import { logoutAllUser } from '@/store/slices/authSlice';
+import { useAppSelector } from '@/store/hooks';
 import {
   accountSummary,
   expiryStatus,
@@ -39,12 +38,6 @@ function useDesktopHome(): boolean {
 
   return desktop;
 }
-
-const PasswordKey = createLucideIcon('password-key', [
-  ['circle', { cx: '7.5', cy: '15.5', r: '5.5', key: 'ring' }],
-  ['path', { d: 'm21 2-9.6 9.6', key: 'shaft' }],
-  ['path', { d: 'm15.5 7.5 3 3L22 7l-3-3', key: 'teeth' }],
-]);
 
 function permissionCodes(user: User): string[] {
   const raw = (user.permissions ?? []) as readonly (
@@ -94,8 +87,7 @@ function Panel({
 /** The plain user's home: their account, not the admin dashboard. */
 export default function UserHome() {
   const user = useAppSelector((state) => state.auth.user);
-  const dispatch = useAppDispatch();
-  const navigate = useNavigate();
+  const signOutEverywhere = useSignOutEverywhere();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const desktop = useDesktopHome();
 
@@ -109,14 +101,6 @@ export default function UserHome() {
   const expiry = expiryStatus(user.password_expires_at, now);
   const age = passwordAge(user.last_changed_password_date, now);
   const groups = groupPermissions(codes);
-
-  async function signOutEverywhere() {
-    const revoked = await dispatch(logoutAllUser()).unwrap();
-    navigate(
-      revoked ? `/login?notice=${SIGNED_OUT_EVERYWHERE_NOTICE}` : '/login',
-      { replace: true }
-    );
-  }
 
   const profile = (
     <Panel title="Profile">
@@ -149,7 +133,7 @@ export default function UserHome() {
       <div className="flex flex-col gap-2.5 lg:flex-row lg:flex-wrap">
         <Button asChild className="h-10 w-full justify-center lg:h-9 lg:w-auto">
           <Link to="/dashboard/change-password">
-            <PasswordKey aria-hidden="true" />
+            <PermissionKey aria-hidden="true" />
             Change password
           </Link>
         </Button>
