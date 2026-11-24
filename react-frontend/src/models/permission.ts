@@ -1,8 +1,18 @@
+/** A role that grants this permission, from the permission detail read. */
+export interface PermissionRoleGrant {
+  id: string;
+  name: string;
+  role_group?: string | null;
+  user_count: number;
+}
+
 export interface Permission {
   id: string;
   name: string;
   description?: string;
   group?: PermissionGroup;
+  /** Present on permission detail. The list leaves it off. */
+  roles?: PermissionRoleGrant[];
   created_at: string;
   updated_at: string;
   created_by_id?: string;
