@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '../../store';
@@ -14,17 +14,8 @@ import { toast } from 'sonner';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Permission } from '@/models/permission';
 import { RoleHolder } from '@/models/role';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+import { normalizeApiError } from '@/lib/apiError';
+import { RoleDeleteDialog } from './RoleDeleteDialog';
 import {
   Table,
   TableBody,
@@ -157,6 +148,7 @@ const RoleDetail: React.FC = () => {
     (state: RootState) => state.permission
   );
   const { roleGroups } = useSelector((state: RootState) => state.roleGroup);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   // The header breadcrumb ends with this role's name (Access › Roles › Name).
   usePageCrumb(currentRole?.id === roleId ? currentRole?.name : null);
 
@@ -199,11 +191,14 @@ const RoleDetail: React.FC = () => {
         toast.success('Role deleted successfully');
         navigate('/dashboard/roles');
       } catch (deleteError: unknown) {
-        const errorMessage =
-          deleteError instanceof Error
-            ? deleteError.message
-            : 'Failed to delete role';
+        const errorMessage = normalizeApiError(
+          deleteError,
+          'Failed to delete role'
+        ).message;
         toast.error(errorMessage, { duration: 5000 });
+        throw deleteError instanceof Error
+          ? deleteError
+          : new Error(errorMessage);
       }
     }
   };
@@ -293,32 +288,10 @@ const RoleDetail: React.FC = () => {
               </Button>
             )}
             {canDeleteRoles && (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive">
-                    <Trash2 className="h-4 w-4" />
-                    Delete role
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete Role</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This action cannot be undone. This will permanently delete
-                      this role from the system.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={handleDelete}
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    >
-                      Delete role
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+              <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
+                <Trash2 className="h-4 w-4" />
+                Delete role
+              </Button>
             )}
           </div>
         </div>
@@ -479,6 +452,12 @@ const RoleDetail: React.FC = () => {
           )}
         </section>
       </div>
+      <RoleDeleteDialog
+        role={currentRole}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 };

@@ -766,14 +766,15 @@ describe('RoleList Component', () => {
       const deleteButton = screen.getByTestId('delete-role-button');
       await user.click(deleteButton);
 
-      // Check if delete dialog is opened
-      expect(screen.getByText('Delete Role')).toBeInTheDocument();
       expect(
-        screen.getByText(/Are you sure you want to delete the role "user"/)
+        screen.getByRole('alertdialog', { name: 'Delete role ‘user’?' })
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText('No users hold this role. This cannot be undone.')
       ).toBeInTheDocument();
     });
 
-    it('shows warning message in delete dialog when role has permissions', async () => {
+    it('uses a plain confirm when the role has no holders', async () => {
       renderRoleList();
 
       await user.click(
@@ -782,10 +783,8 @@ describe('RoleList Component', () => {
       const deleteButton = screen.getByTestId('delete-role-button');
       await user.click(deleteButton);
 
-      // Check if warning message is shown for role with permissions
-      expect(
-        screen.getByText(/Warning: This role has 4 permissions assigned/)
-      ).toBeInTheDocument();
+      expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Delete role' })).toBeEnabled();
     });
 
     it('successfully deletes role when confirmed', async () => {
@@ -814,7 +813,7 @@ describe('RoleList Component', () => {
       const deleteButton = screen.getByTestId('delete-role-button');
       await user.click(deleteButton);
 
-      const confirmButton = screen.getByRole('button', { name: 'Delete' });
+      const confirmButton = screen.getByRole('button', { name: 'Delete role' });
       await user.click(confirmButton);
 
       await waitFor(() => {
@@ -854,7 +853,7 @@ describe('RoleList Component', () => {
       const deleteButton = screen.getByTestId('delete-role-button');
       await user.click(deleteButton);
 
-      const confirmButton = screen.getByRole('button', { name: 'Delete' });
+      const confirmButton = screen.getByRole('button', { name: 'Delete role' });
       await user.click(confirmButton);
 
       await waitFor(() => {
@@ -878,8 +877,9 @@ describe('RoleList Component', () => {
       const cancelButton = screen.getByRole('button', { name: 'Cancel' });
       await user.click(cancelButton);
 
-      // Dialog should be closed
-      expect(screen.queryByText('Delete Role')).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('alertdialog', { name: 'Delete role ‘user’?' })
+      ).not.toBeInTheDocument();
       expect(mockRoleService.deleteRole).not.toHaveBeenCalled();
     });
   });

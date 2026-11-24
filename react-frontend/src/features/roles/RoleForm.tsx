@@ -2,11 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Form,
   FormControl,
@@ -26,8 +24,10 @@ import { Role } from '@/models/role';
 import { RoleGroup } from '@/models/roleGroup';
 import { Permission } from '@/models/permission';
 import permissionService from '@/services/permission.service';
+import { normalizeApiError } from '@/lib/apiError';
+import { PermissionMatrixEditor } from './PermissionMatrixEditor';
+import { permissionDiff } from './permissionMatrix';
 
-// Zod schema for validation
 const roleSchema = z.object({
   name: z
     .string()
@@ -38,205 +38,302 @@ const roleSchema = z.object({
     }),
   description: z.string().optional(),
   role_group_id: z.string().optional(),
-  permission_ids: z.array(z.string()).optional(),
 });
 
-export type RoleFormData = z.infer<typeof roleSchema>;
+type RoleFields = z.infer<typeof roleSchema>;
+
+export interface RoleEditorSubmit {
+  name: string;
+  description?: string;
+  role_group_id?: string;
+  addedPermissionIds: string[];
+  removedPermissionIds: string[];
+  selectedPermissionIds: string[];
+}
 
 interface RoleFormProps {
-  onSubmit: SubmitHandler<RoleFormData>;
+  mode: 'create' | 'edit';
+  onSubmit: (data: RoleEditorSubmit) => Promise<void> | void;
   onCancel?: () => void;
   initialData?: Role | null;
   isLoading?: boolean;
   roleGroups: RoleGroup[];
 }
 
+function permissionIds(role: Role | null | undefined): string[] {
+  return role?.permissions?.map((permission) => permission.id) ?? [];
+}
+
+function mergeCatalog(
+  fetched: Permission[],
+  rolePermissions: Permission[] | undefined
+): Permission[] {
+  const byId = new Map<string, Permission>();
+  for (const permission of fetched) byId.set(permission.id, permission);
+  for (const permission of rolePermissions ?? []) {
+    if (!byId.has(permission.id)) byId.set(permission.id, permission);
+  }
+  return [...byId.values()];
+}
+
+function withIds(
+  current: readonly string[],
+  ids: readonly string[],
+  on: boolean
+) {
+  if (on) {
+    const have = new Set(current);
+    const next = [...current];
+    for (const id of ids) {
+      if (!have.has(id)) next.push(id);
+    }
+    return next;
+  }
+  const drop = new Set(ids);
+  return current.filter((id) => !drop.has(id));
+}
+
 const RoleForm: React.FC<RoleFormProps> = ({
+  mode,
   onSubmit,
   onCancel,
   initialData,
   isLoading,
   roleGroups,
 }) => {
-  const [permissions, setPermissions] = useState<Permission[]>([]);
-  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
+  const [baseline] = useState(() => ({
+    name: initialData?.name || '',
+    description: initialData?.description || '',
+    roleGroupId: initialData?.role_group_id || '',
+    permissionIds: permissionIds(initialData),
+  }));
+  const [selectedIds, setSelectedIds] = useState<string[]>(
+    baseline.permissionIds
+  );
+  const [catalog, setCatalog] = useState<Permission[]>([]);
+  const [permissionsLoading, setPermissionsLoading] = useState(true);
+  const [permissionsError, setPermissionsError] = useState<string | null>(null);
+  const [catalogIncomplete, setCatalogIncomplete] = useState(false);
 
-  const form = useForm<RoleFormData>({
+  const form = useForm<RoleFields>({
     resolver: zodResolver(roleSchema),
     defaultValues: {
-      name: initialData?.name || '',
-      description: initialData?.description || '',
-      role_group_id: initialData?.role_group_id || undefined,
-      permission_ids: initialData?.permissions?.map((p) => p.id) || [],
+      name: baseline.name,
+      description: baseline.description,
+      role_group_id: baseline.roleGroupId || undefined,
     },
   });
 
-  // Load permissions on component mount
   useEffect(() => {
+    let cancelled = false;
     const loadPermissions = async () => {
+      setPermissionsLoading(true);
       try {
         const response = await permissionService.getPermissions(1, 100);
-        setPermissions(response.data.items || []);
-      } catch (error) {
-        console.error('Failed to load permissions:', error);
+        if (cancelled) return;
+        const items = response.data.items || [];
+        const total = response.data.total ?? items.length;
+        setCatalog(mergeCatalog(items, initialData?.permissions));
+        setCatalogIncomplete(total > items.length);
+        setPermissionsError(null);
+      } catch (error: unknown) {
+        if (cancelled) return;
+        setCatalog(mergeCatalog([], initialData?.permissions));
+        setCatalogIncomplete(false);
+        setPermissionsError(
+          normalizeApiError(error, 'Failed to load permissions').message
+        );
+      } finally {
+        if (!cancelled) setPermissionsLoading(false);
       }
     };
-    loadPermissions();
-  }, []);
-
-  // Update selected permissions when initialData changes
-  useEffect(() => {
-    if (initialData?.permissions) {
-      setSelectedPermissions(initialData.permissions.map((p) => p.id));
-    }
+    void loadPermissions();
+    return () => {
+      cancelled = true;
+    };
   }, [initialData]);
 
-  const handlePermissionChange = (permissionId: string, checked: boolean) => {
-    const updatedPermissions = checked
-      ? [...selectedPermissions, permissionId]
-      : selectedPermissions.filter((id) => id !== permissionId);
+  const watchedName = form.watch('name');
+  const watchedDescription = form.watch('description') ?? '';
+  const watchedGroup = form.watch('role_group_id') ?? '';
+  const metadataDirty =
+    watchedName !== baseline.name ||
+    watchedDescription !== baseline.description ||
+    watchedGroup !== baseline.roleGroupId;
+  const { added, removed } = permissionDiff(
+    baseline.permissionIds,
+    selectedIds
+  );
+  const changeCount = added.length + removed.length;
+  const dirty = metadataDirty || changeCount > 0;
+  const selectedCount = selectedIds.length;
 
-    setSelectedPermissions(updatedPermissions);
-    form.setValue('permission_ids', updatedPermissions);
-  };
-
-  const handleFormSubmit = (data: RoleFormData) => {
-    onSubmit({
-      ...data,
-      permission_ids: selectedPermissions,
+  const handleDiscard = () => {
+    setSelectedIds(baseline.permissionIds);
+    form.reset({
+      name: baseline.name,
+      description: baseline.description,
+      role_group_id: baseline.roleGroupId || undefined,
     });
   };
 
-  // Update default values if initialData changes (e.g., after fetch)
-  React.useEffect(() => {
-    if (initialData) {
-      form.reset({
-        name: initialData.name,
-        description: initialData.description || '',
-        role_group_id: initialData.role_group_id,
-      });
-    }
-  }, [initialData, form]);
+  const handleFormSubmit: SubmitHandler<RoleFields> = (data) => {
+    const diff = permissionDiff(baseline.permissionIds, selectedIds);
+    const description = data.description?.trim();
+    return onSubmit({
+      name: data.name,
+      description: description ? description : undefined,
+      role_group_id: data.role_group_id || undefined,
+      addedPermissionIds: diff.added,
+      removedPermissionIds: diff.removed,
+      selectedPermissionIds: selectedIds,
+    });
+  };
+
+  const changeLabel = `${changeCount} ${changeCount === 1 ? 'change' : 'changes'}`;
 
   return (
     <Form {...form}>
       <form
         onSubmit={form.handleSubmit(handleFormSubmit)}
-        className="space-y-4"
+        className="space-y-8"
       >
-        <FormField
-          control={form.control}
-          name="name"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Role Name</FormLabel>
-              <FormControl>
-                <Input placeholder="e.g., Admin, Editor" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="role_group_id"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Role Group</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a role group" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="root">None</SelectItem>
-                  {roleGroups.map((group) => (
-                    <SelectItem key={group.id} value={group.id}>
-                      {group.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="description"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Description (Optional)</FormLabel>
-              <FormControl>
-                <Textarea
-                  placeholder="Describe the role's purpose"
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        {/* Permissions Selection */}
-        <div>
-          <FormLabel className="text-base font-medium">Permissions</FormLabel>
-          <div className="mt-2 space-y-2 max-h-64 overflow-y-auto border rounded-md p-4">
-            {permissions.map((permission) => (
-              <div key={permission.id} className="flex items-center space-x-2">
-                <Checkbox
-                  id={`permission-${permission.id}`}
-                  data-testid={`permission-${permission.name}-checkbox`}
-                  checked={selectedPermissions.includes(permission.id)}
-                  onCheckedChange={(checked) =>
-                    handlePermissionChange(permission.id, checked as boolean)
-                  }
-                  aria-label={permission.name}
-                />
-                <label
-                  htmlFor={`permission-${permission.id}`}
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                >
-                  {permission.name}
-                </label>
-                <span className="text-xs text-muted-foreground">
-                  {permission.description}
-                </span>
-              </div>
-            ))}
-            {permissions.length === 0 && (
-              <p
-                className="text-sm text-muted-foreground"
-                data-testid="loading-permissions"
-              >
-                Loading permissions...
-              </p>
-            )}
+        <section className="space-y-4">
+          <h2 className="text-base font-semibold">Details</h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Name</FormLabel>
+                  <FormControl>
+                    <Input autoComplete="off" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="role_group_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Role group</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value || undefined}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a group" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {field.value &&
+                      !roleGroups.some((group) => group.id === field.value) ? (
+                        <SelectItem value={field.value}>
+                          {field.value}
+                        </SelectItem>
+                      ) : null}
+                      {roleGroups.map((group) => (
+                        <SelectItem key={group.id} value={group.id}>
+                          {group.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem className="sm:col-span-2">
+                  <FormLabel>
+                    Description{' '}
+                    <span className="text-muted-foreground font-normal">
+                      (optional)
+                    </span>
+                  </FormLabel>
+                  <FormControl>
+                    <Textarea {...field} value={field.value ?? ''} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </div>
-        </div>
+        </section>
 
-        <div className="flex justify-end space-x-4">
-          {onCancel && (
+        <PermissionMatrixEditor
+          catalog={catalog}
+          selectedIds={selectedIds}
+          savedIds={baseline.permissionIds}
+          trackChanges={mode === 'edit'}
+          loading={permissionsLoading}
+          loadError={permissionsError}
+          incomplete={catalogIncomplete}
+          onToggle={(id) =>
+            setSelectedIds((current) =>
+              current.includes(id)
+                ? current.filter((entry) => entry !== id)
+                : [...current, id]
+            )
+          }
+          onSetMany={(ids, on) =>
+            setSelectedIds((current) => withIds(current, ids, on))
+          }
+        />
+
+        <div className="bg-card sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-4 border-t py-3">
+          <div className="text-muted-foreground flex flex-wrap items-center gap-3 text-sm">
+            {mode === 'edit' && changeCount > 0 ? (
+              <span className="bg-primary/15 text-primary inline-flex items-center gap-2 rounded-md px-2.5 py-1 font-medium">
+                <span
+                  aria-hidden
+                  className="bg-primary size-1.5 rounded-full"
+                />
+                <span role="status">{changeLabel}</span>
+              </span>
+            ) : null}
+            <span>
+              {selectedCount} of {catalog.length} permissions selected
+            </span>
+          </div>
+          <div className="flex gap-2">
+            {mode === 'edit' ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleDiscard}
+                disabled={!dirty || isLoading}
+              >
+                Discard
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onCancel}
+                disabled={isLoading}
+              >
+                Cancel
+              </Button>
+            )}
             <Button
-              type="button"
-              variant="outline"
-              onClick={onCancel}
-              disabled={isLoading}
+              type="submit"
+              disabled={isLoading || (mode === 'edit' && !dirty)}
             >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Cancel
+              {isLoading
+                ? 'Saving...'
+                : mode === 'edit'
+                  ? 'Save changes'
+                  : 'Create role'}
             </Button>
-          )}
-          <Button type="submit" disabled={isLoading}>
-            {isLoading
-              ? 'Saving...'
-              : initialData
-                ? 'Save Changes'
-                : 'Create Role'}
-          </Button>
+          </div>
         </div>
       </form>
     </Form>
