@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { displayName, initials } from '@/components/layout/viewer';
 import type { User } from '@/models/user';
 import userService from '@/services/user.service';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { getCurrentUser } from '@/store/slices/authSlice';
 import { SettingsSection } from './SettingsSection';
@@ -27,7 +28,9 @@ type ProfileFormData = z.infer<typeof profileSchema>;
  * The Profile tab: first name, last name and phone, with the email shown
  * read-only. Saving goes to `PUT /users/me` (the caller's own record, behind
  * `self.update_profile`), and the response becomes the signed-in user, so
- * the header shows the new name at once.
+ * the header shows the new name at once. A viewer the API would refuse
+ * (no `self.update_profile`, not a superuser) sees the fields read-only and
+ * no Save button.
  */
 export function ProfileTab() {
   const user = useAppSelector((state) => state.auth.user);
@@ -39,6 +42,8 @@ export function ProfileTab() {
 
 function ProfileForm({ user }: { user: User }) {
   const dispatch = useAppDispatch();
+  const { hasPermission } = usePermissions();
+  const canEdit = user.is_superuser || hasPermission('self.update_profile');
   const [saveError, setSaveError] = useState<string | null>(null);
   const {
     register,
@@ -124,6 +129,7 @@ function ProfileForm({ user }: { user: User }) {
             <Input
               id="profile-first-name"
               autoComplete="given-name"
+              readOnly={!canEdit}
               aria-invalid={errors.firstName ? true : undefined}
               className="h-10"
               {...register('firstName')}
@@ -137,6 +143,7 @@ function ProfileForm({ user }: { user: User }) {
             <Input
               id="profile-last-name"
               autoComplete="family-name"
+              readOnly={!canEdit}
               aria-invalid={errors.lastName ? true : undefined}
               className="h-10"
               {...register('lastName')}
@@ -160,6 +167,7 @@ function ProfileForm({ user }: { user: User }) {
               id="profile-phone"
               type="tel"
               autoComplete="tel"
+              readOnly={!canEdit}
               className="h-10"
               {...register('phone')}
             />
@@ -180,11 +188,13 @@ function ProfileForm({ user }: { user: User }) {
           </Field>
         </div>
 
-        <div className="flex justify-end">
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Saving…' : 'Save changes'}
-          </Button>
-        </div>
+        {canEdit ? (
+          <div className="flex justify-end">
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? 'Saving…' : 'Save changes'}
+            </Button>
+          </div>
+        ) : null}
       </form>
     </SettingsSection>
   );

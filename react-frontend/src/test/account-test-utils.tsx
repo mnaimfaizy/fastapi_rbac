@@ -23,7 +23,8 @@ export const ACCOUNT_ROLES: [ShellRole, string][] = [
 ];
 
 /**
- * The app's own route tree at `path`, signed in as `role`, with any fields
+ * The app's own route tree at `path`, signed in as `role` (holding
+ * `self.update_profile`, as every seeded role does), with any fields
  * of the signed-in user replaced by `overrides`. Test files that use it mock
  * `auth.service`, `user.service` and `dashboard.service`.
  */
@@ -34,7 +35,12 @@ export function renderAccountAt(
 ) {
   window.history.pushState({}, '', path);
   const state = signedInAs(role);
-  state.auth.user = { ...state.auth.user, ...overrides };
+  // Every seeded role holds self.update_profile; the shell fixtures leave it out.
+  state.auth.user = {
+    ...state.auth.user,
+    permissions: [...state.auth.user.permissions, 'self.update_profile'],
+    ...overrides,
+  };
   const store = configureStore({
     reducer: {
       auth: authReducer,

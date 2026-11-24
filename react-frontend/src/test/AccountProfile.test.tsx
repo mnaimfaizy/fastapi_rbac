@@ -136,4 +136,37 @@ describe('Profile tab', () => {
     ).toBeInTheDocument();
     expect(userMenuTrigger('QA Admin')).toBeInTheDocument();
   });
+
+  it('shows the profile read-only, without Save, to a viewer the API would refuse', async () => {
+    renderAt('/dashboard/account/profile', 'user', {
+      permissions: ['self.read_profile'],
+    });
+
+    const profile = await screen.findByRole('region', { name: 'Profile' });
+    expect(within(profile).getByLabelText('First name')).toHaveAttribute(
+      'readonly'
+    );
+    expect(within(profile).getByLabelText('Last name')).toHaveAttribute(
+      'readonly'
+    );
+    expect(within(profile).getByLabelText(/Phone/)).toHaveAttribute('readonly');
+    expect(
+      within(profile).queryByRole('button', { name: 'Save changes' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('lets a superuser without the permission edit, as the API does', async () => {
+    renderAt('/dashboard/account/profile', 'admin', {
+      permissions: [],
+      is_superuser: true,
+    });
+
+    const profile = await screen.findByRole('region', { name: 'Profile' });
+    expect(within(profile).getByLabelText('First name')).not.toHaveAttribute(
+      'readonly'
+    );
+    expect(
+      within(profile).getByRole('button', { name: 'Save changes' })
+    ).toBeInTheDocument();
+  });
 });
