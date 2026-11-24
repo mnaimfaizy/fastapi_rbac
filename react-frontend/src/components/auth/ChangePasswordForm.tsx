@@ -95,12 +95,20 @@ export const ChangePasswordForm = ({ onSuccess }: ChangePasswordFormProps) => {
     onSuccess?.();
   };
 
+  // handleSubmit skips onSubmit when the form fails validation, so clear the
+  // last attempt's refusal or "Password updated." here too: otherwise it would
+  // sit beside the new field errors as if it were about this attempt.
+  const onInvalid = () => {
+    dispatch(clearError());
+    dispatch(resetPasswordChangeSuccess());
+  };
+
   const newPasswordError = errors.newPassword?.message;
 
   return (
     <form
       noValidate
-      onSubmit={handleSubmit(onSubmit)}
+      onSubmit={handleSubmit(onSubmit, onInvalid)}
       className="flex flex-col gap-[18px]"
     >
       {passwordChangeSuccess ? (

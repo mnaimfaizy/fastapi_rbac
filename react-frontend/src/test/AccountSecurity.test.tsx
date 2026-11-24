@@ -110,6 +110,60 @@ describe('Security tab: change password', () => {
     expect(mockAuthService.changePassword).not.toHaveBeenCalled();
   });
 
+  it('clears the last refusal when the next attempt fails before it is sent', async () => {
+    mockAuthService.changePassword.mockRejectedValue({
+      response: { data: { message: 'Invalid Current Password' } },
+    });
+    const user = userEvent.setup();
+    renderAccountAt(SECURITY);
+
+    const section = await changePasswordSection();
+    await fillPasswordForm(section, GOOD_PASSWORD);
+    expect(await within(section).findByRole('alert')).toHaveTextContent(
+      'Invalid Current Password'
+    );
+
+    const confirm = within(section).getByLabelText('Confirm new password');
+    await user.clear(confirm);
+    await user.type(confirm, 'Quartz-Meadow-32');
+    await user.click(
+      within(section).getByRole('button', { name: 'Update password' })
+    );
+
+    expect(
+      await within(section).findByText("Passwords don't match")
+    ).toBeInTheDocument();
+    expect(
+      within(section).queryByText('Invalid Current Password')
+    ).not.toBeInTheDocument();
+    expect(mockAuthService.changePassword).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears "Password updated." when the next attempt fails before it is sent', async () => {
+    mockAuthService.changePassword.mockResolvedValue({
+      ...mockToken,
+      access_token: 'rotated-access-token',
+      user: shellViewers.admin,
+    });
+    renderAccountAt(SECURITY);
+
+    const section = await changePasswordSection();
+    await fillPasswordForm(section, GOOD_PASSWORD);
+    expect(
+      await within(section).findByText('Password updated.')
+    ).toBeInTheDocument();
+
+    await fillPasswordForm(section, GOOD_PASSWORD, 'Quartz-Meadow-32');
+
+    expect(
+      await within(section).findByText("Passwords don't match")
+    ).toBeInTheDocument();
+    expect(
+      within(section).queryByText('Password updated.')
+    ).not.toBeInTheDocument();
+    expect(mockAuthService.changePassword).toHaveBeenCalledTimes(1);
+  });
+
   it.each(ROLES)(
     'shows each policy rule the API refuses for %s',
     async (role) => {
