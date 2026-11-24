@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { AlertCircle, Trash2 } from 'lucide-react';
+import { AlertCircle, RotateCw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   Table,
@@ -34,6 +35,27 @@ function formatCreated(value: string | undefined) {
   }).format(date);
 }
 
+function loadStatus(err: unknown): number | undefined {
+  if (typeof err === 'object' && err !== null && 'response' in err) {
+    const response = (err as { response?: { status?: unknown } }).response;
+    return typeof response?.status === 'number' ? response.status : undefined;
+  }
+  return undefined;
+}
+
+function loadErrorMessage(err: unknown): string {
+  if (typeof err === 'object' && err !== null && 'response' in err) {
+    const data = (err as { response?: { data?: { detail?: unknown } } })
+      .response?.data;
+    if (typeof data?.detail === 'string' && data.detail) {
+      return data.detail;
+    }
+  }
+  return err instanceof Error && err.message
+    ? err.message
+    : 'Something went wrong.';
+}
+
 function countLabel(count: number, singular: string, plural: string) {
   return `${count} ${count === 1 ? singular : plural}`;
 }
@@ -46,7 +68,11 @@ export default function PermissionDetail() {
   const canDelete = hasPermission('permission.delete');
   const [permission, setPermission] = useState<Permission | null>(null);
   const [loading, setLoading] = useState(canRead);
+  // Only a 404 means the permission is gone; any other failure (500,
+  // network, 403, expired session) keeps its message and offers a retry.
   const [missing, setMissing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   useEffect(() => {
@@ -56,6 +82,7 @@ export default function PermissionDetail() {
     let active = true;
     setLoading(true);
     setMissing(false);
+    setLoadError(null);
     permissionService
       .getPermissionById(id)
       .then((response) => {
@@ -63,10 +90,14 @@ export default function PermissionDetail() {
           setPermission(response.data);
         }
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (active) {
           setPermission(null);
-          setMissing(true);
+          if (loadStatus(err) === 404) {
+            setMissing(true);
+          } else {
+            setLoadError(loadErrorMessage(err));
+          }
         }
       })
       .finally(() => {
@@ -77,7 +108,7 @@ export default function PermissionDetail() {
     return () => {
       active = false;
     };
-  }, [canRead, id]);
+  }, [canRead, id, attempt]);
 
   if (!canRead) {
     return (
@@ -96,6 +127,26 @@ export default function PermissionDetail() {
       <div role="status" aria-label="Loading permission" aria-busy="true">
         <span className="sr-only">Loading permission</span>
       </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>Couldn’t load this permission</AlertTitle>
+        <AlertDescription className="flex flex-col items-start gap-3">
+          <span>{loadError}</span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setAttempt((n) => n + 1)}
+          >
+            <RotateCw aria-hidden="true" />
+            Try again
+          </Button>
+        </AlertDescription>
+      </Alert>
     );
   }
 

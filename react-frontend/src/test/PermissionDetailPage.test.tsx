@@ -1,12 +1,21 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Route, Routes } from 'react-router-dom';
-import { screen } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { toast } from 'sonner';
 import PermissionDetail from '@/features/permissions/PermissionDetail';
 import permissionService from '@/services/permission.service';
 import { renderWithProviders } from './test-utils';
 import { signedInAs } from './shell-test-utils';
 
 vi.mock('@/services/permission.service');
+vi.mock('sonner', () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+  },
+}));
 
 const mockPermissionService = vi.mocked(permissionService);
 
@@ -58,6 +67,10 @@ function renderDetail(role: 'admin' | 'manager' | 'user') {
   return renderWithProviders(
     <Routes>
       <Route path="/dashboard/permissions/:id" element={<PermissionDetail />} />
+      <Route
+        path="/dashboard/permissions"
+        element={<h1>Permissions list</h1>}
+      />
     </Routes>,
     { preloadedState: viewerState(role) }
   );
@@ -66,6 +79,8 @@ function renderDetail(role: 'admin' | 'manager' | 'user') {
 describe('Permission detail', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Drop any queued once-values so one test's failures cannot leak into the next.
+    mockPermissionService.getPermissionById.mockReset();
     mockPermissionService.getPermissionById.mockResolvedValue({
       data: permission,
       message: '',
@@ -126,5 +141,105 @@ describe('Permission detail', () => {
       await screen.findByText('You do not have permission to view permissions.')
     ).toBeInTheDocument();
     expect(mockPermissionService.getPermissionById).not.toHaveBeenCalled();
+  });
+  it('says the permission is not found only for a 404', async () => {
+    mockPermissionService.getPermissionById.mockRejectedValue({
+      isAxiosError: true,
+      response: { status: 404, data: { detail: 'Permission not found' } },
+    });
+    renderDetail('admin');
+
+    expect(
+      await screen.findByRole('heading', { name: 'Permission not found' })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Try again' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows a load error with a retry for any other failure', async () => {
+    const user = userEvent.setup();
+    mockPermissionService.getPermissionById
+      .mockRejectedValueOnce({
+        isAxiosError: true,
+        response: { status: 500, data: { detail: 'Internal server error' } },
+      })
+      .mockRejectedValueOnce(new Error('Network Error'))
+      .mockResolvedValueOnce({ data: permission, message: '', meta: {} });
+    renderDetail('admin');
+
+    expect(
+      await screen.findByText('Couldn’t load this permission')
+    ).toBeInTheDocument();
+    expect(screen.getByText('Internal server error')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'Permission not found' })
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByText('Network Error')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(
+      await screen.findByRole('heading', { name: 'user.update' })
+    ).toBeInTheDocument();
+    expect(mockPermissionService.getPermissionById).toHaveBeenCalledTimes(3);
+  });
+
+  it('deletes after confirmation and returns to the list', async () => {
+    const user = userEvent.setup();
+    mockPermissionService.deletePermission.mockResolvedValue({
+      success: true,
+    });
+    renderDetail('admin');
+
+    await user.click(
+      await screen.findByRole('button', { name: 'More actions' })
+    );
+    await user.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(
+      within(dialog).getByText('Delete permission ‘user.update’?')
+    ).toBeInTheDocument();
+    expect(mockPermissionService.deletePermission).not.toHaveBeenCalled();
+
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Delete permission' })
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'Permissions list' })
+    ).toBeInTheDocument();
+    expect(mockPermissionService.deletePermission).toHaveBeenCalledWith(
+      'perm-1'
+    );
+    expect(toast.success).toHaveBeenCalledWith('Permission deleted');
+    expect(window.location.pathname).toBe('/dashboard/permissions');
+  });
+
+  it('keeps the dialog open and reports the error when delete fails', async () => {
+    const user = userEvent.setup();
+    mockPermissionService.deletePermission.mockRejectedValue(
+      new Error('Permission is still granted by a role')
+    );
+    renderDetail('admin');
+
+    await user.click(
+      await screen.findByRole('button', { name: 'More actions' })
+    );
+    await user.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+    const dialog = await screen.findByRole('alertdialog');
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Delete permission' })
+    );
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(
+        'Permission is still granted by a role'
+      );
+    });
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/dashboard/permissions/perm-1');
   });
 });
