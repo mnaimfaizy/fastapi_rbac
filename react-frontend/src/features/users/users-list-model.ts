@@ -32,3 +32,63 @@ export function formatDay(value: string | null | undefined): string {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? '—' : dayFormat.format(date);
 }
+
+/** Status filter values, as they appear in the menu and in `?status=`. */
+export const STATUS_FILTERS = ['Locked', 'Pending', 'Disabled'] as const;
+export type StatusFilter = (typeof STATUS_FILTERS)[number];
+
+const EXCEPTION_FOR: Record<StatusFilter, UserException> = {
+  Locked: 'locked',
+  Pending: 'pending',
+  Disabled: 'disabled',
+};
+
+/** `?status=locked` and `?status=Locked` both work; anything else is "All". */
+export function parseStatusFilter(
+  value: string | null | undefined
+): StatusFilter | null {
+  if (!value) return null;
+  const wanted = value.trim().toLowerCase();
+  return (
+    STATUS_FILTERS.find((status) => status.toLowerCase() === wanted) ?? null
+  );
+}
+
+export interface UserListFilters {
+  search: string;
+  role: string | null;
+  status: StatusFilter | null;
+}
+
+/** Search (name or email), role and status narrow the list together. */
+export function filterUsers(users: User[], filters: UserListFilters): User[] {
+  const query = filters.search.trim().toLowerCase();
+  return users.filter((user) => {
+    if (query) {
+      const haystack = `${fullName(user)} ${user.email}`.toLowerCase();
+      if (!haystack.includes(query)) return false;
+    }
+    if (
+      filters.role &&
+      !(user.roles ?? []).some((role) => role.name === filters.role)
+    ) {
+      return false;
+    }
+    if (
+      filters.status &&
+      !userExceptions(user).includes(EXCEPTION_FOR[filters.status])
+    ) {
+      return false;
+    }
+    return true;
+  });
+}
+
+/** Role names held by the loaded users, for the role filter. */
+export function roleNames(users: User[]): string[] {
+  const names = new Set<string>();
+  users.forEach((user) =>
+    (user.roles ?? []).forEach((role) => names.add(role.name))
+  );
+  return [...names].sort((a, b) => a.localeCompare(b));
+}

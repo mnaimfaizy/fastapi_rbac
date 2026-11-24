@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import type { VisibilityState } from '@tanstack/react-table';
-import { Plus, MoreHorizontal } from 'lucide-react';
+import { Plus, MoreHorizontal, SearchX, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { AppDispatch, RootState } from '../../store';
 import { deleteUser, fetchUsers } from '../../store/slices/userSlice';
@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { PageHeader } from '@/components/common/PageHeader';
 import { TableSkeleton } from '@/components/common/Skeletons';
+import { EmptyState } from '@/components/common/EmptyState';
 import { DataTable } from '@/components/dashboard/users/data-table';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
@@ -39,6 +40,13 @@ import {
 } from './user-table-columns';
 import { UsersColumnPicker } from './UsersColumnPicker';
 import { UsersPagination } from './UsersPagination';
+import { UsersToolbar } from './UsersToolbar';
+import {
+  filterUsers,
+  parseStatusFilter,
+  roleNames,
+  type StatusFilter,
+} from './users-list-model';
 
 /**
  * The users API pages with at most 100 rows and has no search or filter
@@ -51,9 +59,13 @@ const UsersList = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
   const { hasPermission } = usePermissions();
-  const { users, loading, error } = useSelector(
+  const { users, loading, error, pagination } = useSelector(
     (state: RootState) => state.user
   );
+  const [searchParams, setSearchParams] = useSearchParams();
+  const status = parseStatusFilter(searchParams.get('status'));
+  const [search, setSearch] = useState('');
+  const [role, setRole] = useState<string | null>(null);
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(10);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
@@ -136,10 +148,15 @@ const UsersList = () => {
     [canRead, canUpdate, canDelete, handleDeleteClick]
   );
 
-  const allUsers = users ?? [];
-  const pageCount = Math.max(1, Math.ceil(allUsers.length / pageSize));
+  const allUsers = useMemo(() => users ?? [], [users]);
+  const roles = useMemo(() => roleNames(allUsers), [allUsers]);
+  const filtered = useMemo(
+    () => filterUsers(allUsers, { search, role, status }),
+    [allUsers, search, role, status]
+  );
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(pageIndex, pageCount - 1);
-  const pageRows = allUsers.slice(
+  const pageRows = filtered.slice(
     currentPage * pageSize,
     (currentPage + 1) * pageSize
   );
@@ -148,6 +165,39 @@ const UsersList = () => {
   ).length;
 
   const openUser = (user: User) => navigate(`/dashboard/users/${user.id}`);
+
+  const changeSearch = (value: string) => {
+    setSearch(value);
+    setPageIndex(0);
+  };
+  const changeRole = (value: string | null) => {
+    setRole(value);
+    setPageIndex(0);
+  };
+  // The status filter lives in the URL, so `/dashboard/users?status=Locked`
+  // opens the list already filtered.
+  const changeStatus = (value: StatusFilter | null) => {
+    setSearchParams(
+      (params) => {
+        const next = new URLSearchParams(params);
+        if (value) next.set('status', value);
+        else next.delete('status');
+        return next;
+      },
+      { replace: true }
+    );
+    setPageIndex(0);
+  };
+  const clearSearch = () => changeSearch('');
+  const clearFilters = () => {
+    changeRole(null);
+    changeStatus(null);
+  };
+
+  const isFirstLoad = loading && allUsers.length === 0;
+  const noUsers = !isFirstLoad && !error && allUsers.length === 0;
+  const noMatch = allUsers.length > 0 && filtered.length === 0;
+  const truncated = pagination.total > allUsers.length;
 
   return (
     <div className="flex flex-col gap-6">
@@ -176,16 +226,70 @@ const UsersList = () => {
       )}
 
       <div className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center gap-2.5">
-          <span className="flex-1" />
-          <UsersColumnPicker
-            visibility={columnVisibility}
-            onChange={setColumnVisibility}
-          />
-        </div>
+        <UsersToolbar
+          search={search}
+          onSearchChange={changeSearch}
+          roles={roles}
+          role={role}
+          onRoleChange={changeRole}
+          status={status}
+          onStatusChange={changeStatus}
+          columnPicker={
+            <UsersColumnPicker
+              visibility={columnVisibility}
+              onChange={setColumnVisibility}
+            />
+          }
+        />
 
-        {loading && allUsers.length === 0 ? (
+        {truncated ? (
+          <p className="text-foreground-secondary text-sm">
+            Showing the first {allUsers.length} of {pagination.total} users.
+            Search and filters cover these only.
+          </p>
+        ) : null}
+
+        {isFirstLoad ? (
           <TableSkeleton label="Loading users" columns={4} />
+        ) : noUsers ? (
+          <div className="rounded-xl border">
+            <EmptyState
+              icon={Users}
+              title="No users yet"
+              description="Users you add can sign in with the roles you give them."
+              action={
+                canCreate
+                  ? { label: 'Add user', href: '/dashboard/users/new' }
+                  : undefined
+              }
+            />
+          </div>
+        ) : noMatch ? (
+          <div className="rounded-xl border">
+            {search.trim() ? (
+              <EmptyState
+                icon={SearchX}
+                title={`No users match ‘${search.trim()}’`}
+                description="Check the spelling, or search by email instead."
+                action={{
+                  label: 'Clear search',
+                  variant: 'secondary',
+                  onClick: clearSearch,
+                }}
+              />
+            ) : (
+              <EmptyState
+                icon={SearchX}
+                title="No users match these filters"
+                description="Try another role or status."
+                action={{
+                  label: 'Clear filters',
+                  variant: 'secondary',
+                  onClick: clearFilters,
+                }}
+              />
+            )}
+          </div>
         ) : (
           <DataTable
             columns={columns}
@@ -198,7 +302,7 @@ const UsersList = () => {
             }
             footer={
               <UsersPagination
-                total={allUsers.length}
+                total={filtered.length}
                 pageIndex={currentPage}
                 pageSize={pageSize}
                 onPageChange={setPageIndex}

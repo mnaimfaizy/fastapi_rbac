@@ -231,4 +231,112 @@ describe('UsersList (Web v1)', () => {
       ]);
     });
   });
+
+  describe('search and filters', () => {
+    const names = () =>
+      within(table())
+        .getAllByRole('link')
+        .map((link) => link.textContent);
+
+    async function pickFilter(label: string, option: string) {
+      await user.click(screen.getByRole('button', { name: label }));
+      await user.click(screen.getByRole('menuitemradio', { name: option }));
+    }
+
+    it('searches by name or email', async () => {
+      await renderList();
+
+      await user.type(
+        screen.getByRole('searchbox', { name: 'Search users' }),
+        'WEBB'
+      );
+      expect(names()).toEqual(['Marcus Webb']);
+
+      await user.clear(screen.getByRole('searchbox', { name: 'Search users' }));
+      await user.type(
+        screen.getByRole('searchbox', { name: 'Search users' }),
+        'hannah@'
+      );
+      expect(names()).toEqual(['Hannah Lindqvist']);
+    });
+
+    it('combines search, the role filter and the status filter', async () => {
+      await renderList();
+
+      await pickFilter('Filter by role', 'user');
+      expect(names()).toEqual(['Hannah Lindqvist', 'Aisha Karim']);
+
+      await pickFilter('Filter by status', 'Disabled');
+      expect(names()).toEqual(['Aisha Karim']);
+      expect(window.location.search).toBe('?status=Disabled');
+
+      await user.type(
+        screen.getByRole('searchbox', { name: 'Search users' }),
+        'hannah'
+      );
+      expect(screen.queryByRole('table')).not.toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { name: 'No users match ‘hannah’' })
+      ).toBeInTheDocument();
+    });
+
+    it('offers Clear search when nothing matches', async () => {
+      await renderList();
+
+      await user.type(
+        screen.getByRole('searchbox', { name: 'Search users' }),
+        'xyz'
+      );
+      expect(
+        screen.getByRole('heading', { name: 'No users match ‘xyz’' })
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText('Check the spelling, or search by email instead.')
+      ).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Clear search' }));
+      expect(
+        screen.getByRole('searchbox', { name: 'Search users' })
+      ).toHaveValue('');
+      expect(names()).toHaveLength(listUsers.length);
+    });
+
+    it('reads the status filter from the URL', async () => {
+      window.history.pushState({}, '', '/dashboard/users?status=locked');
+      mockUserService.getUsers.mockResolvedValue(pageOf(listUsers));
+      renderWithProviders(<UsersList />, { preloadedState: viewer(ADMIN) });
+
+      await screen.findByText('marcus@example.com');
+      expect(names()).toEqual(['Marcus Webb']);
+      expect(
+        screen.getByRole('button', { name: 'Filter by status' })
+      ).toHaveTextContent('Status:Locked');
+
+      await pickFilter('Filter by status', 'All');
+      expect(names()).toHaveLength(listUsers.length);
+      expect(window.location.search).toBe('');
+    });
+
+    it('ignores an unknown status in the URL', async () => {
+      window.history.pushState({}, '', '/dashboard/users?status=Banned');
+      await renderList();
+
+      expect(names()).toHaveLength(listUsers.length);
+    });
+
+    it('shows the shared empty state when there are no users', async () => {
+      await renderList(ADMIN, []);
+
+      expect(
+        await screen.findByRole('heading', { name: 'No users yet' })
+      ).toBeInTheDocument();
+      // The page header and the empty state both offer it.
+      const addLinks = screen.getAllByRole('link', { name: 'Add user' });
+      expect(addLinks).toHaveLength(2);
+      addLinks.forEach((link) =>
+        expect(link).toHaveAttribute('href', '/dashboard/users/new')
+      );
+      expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    });
+  });
 });
