@@ -390,28 +390,34 @@ describe('Role detail', () => {
     expect(screen.queryByText(/of 29 granted/)).not.toBeInTheDocument();
   });
 
-  it('shows only the count when the API sends no holders (no user.read)', async () => {
-    mockRoleService.getRoleById.mockResolvedValue({
-      data: { ...managerRole, users: undefined },
-      message: 'ok',
-      meta: {},
-    });
-    renderWithProviders(
-      <Routes>
-        <Route path="/dashboard/roles/:roleId" element={<RoleDetail />} />
-      </Routes>,
-      { preloadedState: viewer([...MANAGER_GRANTED]) }
-    );
+  it.each([
+    ['null, as the API sends it', null],
+    ['absent', undefined],
+  ])(
+    'shows only the count when users is %s (no user.read)',
+    async (_label, users) => {
+      mockRoleService.getRoleById.mockResolvedValue({
+        data: { ...managerRole, users },
+        message: 'ok',
+        meta: {},
+      });
+      renderWithProviders(
+        <Routes>
+          <Route path="/dashboard/roles/:roleId" element={<RoleDetail />} />
+        </Routes>,
+        { preloadedState: viewer([...MANAGER_GRANTED]) }
+      );
 
-    expect(await screen.findByText('2 users')).toBeInTheDocument();
-    expect(
-      screen.getByText(/needs the user.read permission/)
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/Showing the first/)).not.toBeInTheDocument();
-    expect(
-      screen.queryByText(/No users hold this role/)
-    ).not.toBeInTheDocument();
-  });
+      expect(await screen.findByText('2 users')).toBeInTheDocument();
+      expect(
+        screen.getByText(/needs the user.read permission/)
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/Showing the first/)).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(/No users hold this role/)
+      ).not.toBeInTheDocument();
+    }
+  );
 
   it('says the holders list is capped when it is shorter than the count', async () => {
     mockRoleService.getRoleById.mockResolvedValue({

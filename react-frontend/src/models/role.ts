@@ -19,7 +19,11 @@ export interface Role {
   role_group_id?: string;
   permissions?: Permission[]; // Optional: if backend populates this
   user_count?: number;
-  users?: RoleHolder[];
+  /**
+   * Holders of the role (first 25 by email). `null` when the caller lacks
+   * user.read: the API sends `"users": null`, not a missing key.
+   */
+  users?: RoleHolder[] | null;
 }
 
 export interface RoleCreate {
