@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders, mockUsers, mockRoles } from './test-utils';
@@ -97,6 +97,11 @@ function viewer(permissions: string[], name = 'Viewer') {
     },
   };
 }
+
+const MANAGER = ['user.read', 'user.create', 'user.update', 'role.read'];
+// The seeded User role holds no user.* permission, so the route guard keeps
+// a plain user out of this page; this is the narrowest viewer who gets in.
+const READ_ONLY = ['user.read'];
 
 const ADMIN = [
   'user.read',
@@ -337,6 +342,117 @@ describe('UsersList (Web v1)', () => {
         expect(link).toHaveAttribute('href', '/dashboard/users/new')
       );
       expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('row menu, row click and mobile', () => {
+    async function openMenuFor(name: string) {
+      await user.click(
+        screen.getByRole('button', { name: `Actions for ${name}` })
+      );
+      return screen.getAllByRole('menuitem').map((item) => item.textContent);
+    }
+
+    it('gives an admin view, edit and delete', async () => {
+      await renderList(ADMIN);
+
+      expect(
+        screen.getByRole('link', { name: 'Add user' })
+      ).toBeInTheDocument();
+      expect(await openMenuFor('Ada Lovelace')).toEqual([
+        'View details',
+        'Edit user',
+        'Delete user',
+      ]);
+    });
+
+    it('shows a manager without user.delete the list with no delete', async () => {
+      await renderList(MANAGER);
+
+      expect(within(table()).getAllByRole('row')).toHaveLength(
+        listUsers.length + 1
+      );
+      expect(await openMenuFor('Ada Lovelace')).toEqual([
+        'View details',
+        'Edit user',
+      ]);
+    });
+
+    it('gives a read-only viewer no add, edit or delete', async () => {
+      await renderList(READ_ONLY);
+
+      expect(
+        screen.queryByRole('link', { name: 'Add user' })
+      ).not.toBeInTheDocument();
+      expect(await openMenuFor('Ada Lovelace')).toEqual(['View details']);
+    });
+
+    it('confirms before deleting, naming the user', async () => {
+      mockUserService.deleteUser.mockResolvedValue(undefined);
+      await renderList(ADMIN);
+
+      await openMenuFor('Marcus Webb');
+      await user.click(screen.getByRole('menuitem', { name: 'Delete user' }));
+      const dialog = screen.getByRole('alertdialog', {
+        name: 'Delete user ‘Marcus Webb’?',
+      });
+      await user.click(
+        within(dialog).getByRole('button', { name: 'Delete user' })
+      );
+
+      expect(mockUserService.deleteUser).toHaveBeenCalledWith('u-marcus');
+    });
+
+    it('opens the user when the row is clicked', async () => {
+      await renderList();
+
+      await user.click(
+        within(rowFor('Ada Lovelace')).getByText('ada@example.com')
+      );
+      expect(window.location.pathname).toBe('/dashboard/users/u-ada');
+    });
+
+    it('keeps the row menu from opening the user', async () => {
+      await renderList();
+
+      await openMenuFor('Ada Lovelace');
+      expect(window.location.pathname).toBe('/dashboard/users');
+    });
+
+    describe('on mobile', () => {
+      const original = window.matchMedia;
+      beforeEach(() => {
+        window.matchMedia = ((query: string) => ({
+          matches: query === '(max-width: 767px)',
+          media: query,
+          onchange: null,
+          addListener: () => {},
+          removeListener: () => {},
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          dispatchEvent: () => false,
+        })) as typeof window.matchMedia;
+      });
+      afterEach(() => {
+        window.matchMedia = original;
+      });
+
+      it('shows stacked rows instead of the table', async () => {
+        await renderList();
+
+        expect(screen.queryByRole('table')).not.toBeInTheDocument();
+        expect(
+          screen.queryByRole('button', { name: 'Columns' })
+        ).not.toBeInTheDocument();
+        const rows = within(
+          screen.getByRole('list', { name: 'Users' })
+        ).getAllByRole('listitem');
+        expect(rows).toHaveLength(listUsers.length);
+        expect(within(rows[1]).getByText('Locked')).toBeInTheDocument();
+
+        await user.click(within(rows[0]).getByText('ada@example.com'));
+        expect(window.location.pathname).toBe('/dashboard/users/u-ada');
+      });
     });
   });
 });

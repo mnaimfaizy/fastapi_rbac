@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders, mockUsers, mockRoles } from './test-utils';
 import UsersList from '../features/users/UsersList';
@@ -272,7 +272,7 @@ describe('UsersList Component', () => {
 
       // Click on the first action menu button
       const actionButtons = screen.getAllByRole('button', {
-        name: /open menu/i,
+        name: /^actions for /i,
       });
       await user.click(actionButtons[0]);
 
@@ -318,7 +318,7 @@ describe('UsersList Component', () => {
 
       // Click on the first action menu button
       const actionButtons = screen.getAllByRole('button', {
-        name: /open menu/i,
+        name: /^actions for /i,
       });
       await user.click(actionButtons[0]);
 
@@ -373,24 +373,25 @@ describe('UsersList Component', () => {
 
       // Click on the first action menu button
       const actionButtons = screen.getAllByRole('button', {
-        name: /open menu/i,
+        name: /^actions for /i,
       });
       await user.click(actionButtons[0]);
 
       // Wait for menu to appear and click delete
       await waitFor(() => {
-        expect(screen.getByTestId('delete-user-button')).toBeInTheDocument();
+        expect(
+          screen.getByRole('menuitem', { name: 'Delete user' })
+        ).toBeInTheDocument();
       });
 
-      await user.click(screen.getByTestId('delete-user-button'));
+      await user.click(screen.getByRole('menuitem', { name: 'Delete user' }));
 
       // Check that dialog opened
       await waitFor(() => {
-        expect(screen.getByText('Delete User')).toBeInTheDocument();
         expect(
-          screen.getByText(/are you sure you want to delete this user/i)
+          screen.getByRole('alertdialog', { name: 'Delete user ‘John Doe’?' })
         ).toBeInTheDocument();
-        expect(screen.getByTestId('confirm-delete-user')).toBeInTheDocument();
+        expect(screen.getByText(/can’t be undone/i)).toBeInTheDocument();
       });
     });
 
@@ -401,15 +402,17 @@ describe('UsersList Component', () => {
 
       // Open delete dialog
       const actionButtons = screen.getAllByRole('button', {
-        name: /open menu/i,
+        name: /^actions for /i,
       });
       await user.click(actionButtons[0]);
 
       await waitFor(() => {
-        expect(screen.getByTestId('delete-user-button')).toBeInTheDocument();
+        expect(
+          screen.getByRole('menuitem', { name: 'Delete user' })
+        ).toBeInTheDocument();
       });
 
-      await user.click(screen.getByTestId('delete-user-button'));
+      await user.click(screen.getByRole('menuitem', { name: 'Delete user' }));
 
       // Click cancel
       await waitFor(() => {
@@ -420,7 +423,7 @@ describe('UsersList Component', () => {
 
       // Dialog should close
       await waitFor(() => {
-        expect(screen.queryByText('Delete User')).not.toBeInTheDocument();
+        expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
       });
     });
     it('dispatches delete action when delete is confirmed', async () => {
@@ -434,26 +437,32 @@ describe('UsersList Component', () => {
 
       // Open delete dialog
       const actionButtons = screen.getAllByRole('button', {
-        name: /open menu/i,
+        name: /^actions for /i,
       });
       await user.click(actionButtons[0]);
 
       await waitFor(() => {
-        expect(screen.getByTestId('delete-user-button')).toBeInTheDocument();
+        expect(
+          screen.getByRole('menuitem', { name: 'Delete user' })
+        ).toBeInTheDocument();
       });
 
-      await user.click(screen.getByTestId('delete-user-button'));
+      await user.click(screen.getByRole('menuitem', { name: 'Delete user' }));
 
       // Confirm delete
       await waitFor(() => {
-        expect(screen.getByTestId('confirm-delete-user')).toBeInTheDocument();
+        expect(screen.getByRole('alertdialog')).toBeInTheDocument();
       });
 
-      await user.click(screen.getByTestId('confirm-delete-user'));
+      await user.click(
+        within(screen.getByRole('alertdialog')).getByRole('button', {
+          name: 'Delete user',
+        })
+      );
 
       // Verify the dialog closes after deletion
       await waitFor(() => {
-        expect(screen.queryByText('Delete User')).not.toBeInTheDocument();
+        expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
       });
 
       // Verify the delete action was processed by checking store state
