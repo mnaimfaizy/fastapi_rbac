@@ -4,6 +4,7 @@ import { differenceInSeconds, format, formatDistance } from 'date-fns';
 import { AlertCircle, Lock, ShieldCheck, UserCheck, Users } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '@/hooks/redux';
+import { usePermissions } from '@/hooks/usePermissions';
 import { fetchDashboardData } from '@/store/slices/dashboardSlice';
 import { StatsCard } from '@/components/dashboard/stats-card';
 import { EmptyState } from '@/components/common/EmptyState';
@@ -18,6 +19,17 @@ import {
 import type { RecentSignIn, RoleCount } from '@/models/dashboard';
 
 const ALL_USERS_HREF = '/dashboard/users';
+// The Roles and Permissions cards are for people who manage the access
+// catalogue. Reading roles or permissions is not enough: a manager holds
+// role.read and permission.read but is read-only there, so those cards stay
+// off the manager dashboard (#421, home-manager artboard). This is the same
+// rule that marks the Roles page "Read only".
+const ROLE_MANAGEMENT = ['role.create', 'role.update', 'role.delete'];
+const PERMISSION_MANAGEMENT = [
+  'permission.create',
+  'permission.update',
+  'permission.delete',
+];
 const ROLE_DISTRIBUTION_FOOTNOTE =
   'Users with several roles are counted in each.';
 const ROLE_DISTRIBUTION_PERCENT_NOTE =
@@ -231,6 +243,9 @@ const DashboardOverview = () => {
   const dispatch = useAppDispatch();
   const { data, loading, error } = useAppSelector((state) => state.dashboard);
   const currentUser = useAppSelector((state) => state.auth.user);
+  const { hasAnyPermission } = usePermissions();
+  const managesRoles = hasAnyPermission(ROLE_MANAGEMENT);
+  const managesPermissions = hasAnyPermission(PERMISSION_MANAGEMENT);
 
   useEffect(() => {
     dispatch(fetchDashboardData());
@@ -299,9 +314,9 @@ const DashboardOverview = () => {
           }
           icon={UserCheck}
         />
-        {/* The API sends a field only to callers who hold its permission, so a
-            null field means the card is not theirs to see. */}
-        {stats.total_roles != null ? (
+        {/* A card needs both: the API sent the field (the caller may read it)
+            and the caller manages that catalogue (see ROLE_MANAGEMENT). */}
+        {managesRoles && stats.total_roles != null ? (
           <MetricCard
             title="Roles"
             value={stats.total_roles}
@@ -313,7 +328,7 @@ const DashboardOverview = () => {
             icon={ShieldCheck}
           />
         ) : null}
-        {stats.total_permissions != null ? (
+        {managesPermissions && stats.total_permissions != null ? (
           <MetricCard
             title="Permissions"
             value={stats.total_permissions}

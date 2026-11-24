@@ -17,7 +17,32 @@ vi.mock('../../services/dashboard.service', () => ({
 
 const getDashboardData = vi.mocked(dashboardService.getDashboardData);
 
-function viewer(roleName: string, superuser: boolean) {
+// What the seed gives each role (backend/app/db/init_db.py): an admin manages
+// roles and permissions; a manager can only read them.
+const ADMIN_PERMISSIONS = [
+  'user.read',
+  'role.create',
+  'role.read',
+  'role.update',
+  'role.delete',
+  'role_group.read',
+  'permission.create',
+  'permission.read',
+  'permission.update',
+  'permission.delete',
+  'permission_group.read',
+];
+const MANAGER_PERMISSIONS = [
+  'user.create',
+  'user.read',
+  'user.update',
+  'role.read',
+  'role_group.read',
+  'permission.read',
+  'permission_group.read',
+];
+
+function viewer(roleName: string, superuser: boolean, permissions: string[]) {
   return {
     id: '1',
     email: `${roleName.toLowerCase()}@example.com`,
@@ -37,14 +62,15 @@ function viewer(roleName: string, superuser: boolean) {
     verification_code: null,
     last_updated_by: null,
     roles: [{ id: '1', name: roleName }],
-    permissions: [] as string[],
+    permissions,
   };
 }
 
 function renderDashboard(
   roleName: string,
   data: DashboardData,
-  superuser = false
+  superuser = false,
+  permissions: string[] = []
 ) {
   getDashboardData.mockResolvedValue(data);
   const testStore = configureStore({
@@ -54,7 +80,7 @@ function renderDashboard(
     },
     preloadedState: {
       auth: {
-        user: viewer(roleName, superuser),
+        user: viewer(roleName, superuser, permissions),
         accessToken: 'token',
         refreshToken: null,
         isAuthenticated: true,
@@ -137,7 +163,12 @@ describe('DashboardOverview', () => {
   it('shows the admin metrics, the role chart and real sign-in times', async () => {
     const twelveAgo = new Date(Date.now() - 12 * 60 * 1000);
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    renderDashboard('Admin', filledDashboard(twelveAgo, yesterday), true);
+    renderDashboard(
+      'Admin',
+      filledDashboard(twelveAgo, yesterday),
+      true,
+      ADMIN_PERMISSIONS
+    );
 
     expect(
       await screen.findByText(
@@ -192,19 +223,15 @@ describe('DashboardOverview', () => {
   it('drops role and permission stats for a manager and keeps the shared metrics', async () => {
     const twelveAgo = new Date(Date.now() - 12 * 60 * 1000);
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    // The API sends a manager no role-group or permission fields; the page
-    // follows the data, so those cards are not drawn.
-    const filled = filledDashboard(twelveAgo, yesterday);
-    renderDashboard('Manager', {
-      ...filled,
-      stats: {
-        ...filled.stats,
-        total_roles: null,
-        total_role_groups: null,
-        total_permissions: null,
-        total_permission_groups: null,
-      },
-    });
+    // A seeded manager holds role.read and permission.read, so the API sends
+    // every field. The cards still stay off: a manager does not manage the
+    // roles or permissions catalogue.
+    renderDashboard(
+      'Manager',
+      filledDashboard(twelveAgo, yesterday),
+      false,
+      MANAGER_PERMISSIONS
+    );
 
     expect(
       await screen.findByText(
@@ -336,15 +363,34 @@ describe('DashboardOverview', () => {
     expect(screen.getByText('No recent sign-ins')).toBeInTheDocument();
   });
 
-  it('shows the roles and permissions cards by what the API sent, not by role name', async () => {
+  it('shows the roles and permissions cards by permission, not by role name', async () => {
     const twelveAgo = new Date(Date.now() - 12 * 60 * 1000);
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const data = filledDashboard(twelveAgo, yesterday);
-    renderDashboard('Auditor', data);
+    renderDashboard('Auditor', data, false, [
+      'role.read',
+      'role.update',
+      'permission.read',
+      'permission.delete',
+    ]);
 
     expect(await screen.findByText('Roles')).toBeInTheDocument();
     expect(screen.getByText('Permissions')).toBeInTheDocument();
     expect(card('Roles').getByText('3')).toBeInTheDocument();
+  });
+
+  it('shows only the roles card to someone who manages roles but not permissions', async () => {
+    const twelveAgo = new Date(Date.now() - 12 * 60 * 1000);
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    renderDashboard(
+      'Role editor',
+      filledDashboard(twelveAgo, yesterday),
+      false,
+      [...MANAGER_PERMISSIONS, 'role.update']
+    );
+
+    expect(await screen.findByText('Roles')).toBeInTheDocument();
+    expect(screen.queryByText('Permissions')).not.toBeInTheDocument();
   });
 
   it('hides the permissions card when only the role fields were sent', async () => {
@@ -361,7 +407,8 @@ describe('DashboardOverview', () => {
           total_permission_groups: null,
         },
       },
-      true
+      true,
+      ADMIN_PERMISSIONS
     );
 
     expect(await screen.findByText('Roles')).toBeInTheDocument();

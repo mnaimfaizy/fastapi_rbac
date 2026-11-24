@@ -88,6 +88,7 @@ A superuser is treated as holding all five.
 - `role_distribution` counts a user once for each role they hold, so a user with several roles appears in each.
 - `recent_sign_ins` holds the 10 newest sign-ins, newest first. A sign-in is a successful password login (`successful_login`) or a successful OAuth2 login (`oauth2_successful_login`). `signed_in_at` is a UTC timestamp.
 - The earlier `active_sessions`, `recent_logins` (`last_active`) and `system_users_summary` fields no longer exist.
+- The web dashboard draws the Roles card only for a caller who can also create, update or delete roles, and the Permissions card only for one who can create, update or delete permissions. A manager holds `role.read` and `permission.read`, so the API still sends `total_roles` and `total_permissions`, but the manager dashboard shows neither card.
 
 ### GET /api/v1/dashboard/stats
 
