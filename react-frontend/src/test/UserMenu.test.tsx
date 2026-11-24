@@ -117,7 +117,7 @@ describe('Header user menu', () => {
       await screen.findByRole('menuitem', { name: 'Account settings' })
     );
 
-    expect(window.location.pathname).toBe('/dashboard/profile');
+    expect(window.location.pathname).toBe('/dashboard/account/profile');
     await waitFor(() => {
       expect(screen.queryByRole('menu')).not.toBeInTheDocument();
     });

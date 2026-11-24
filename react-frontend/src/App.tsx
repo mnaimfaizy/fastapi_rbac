@@ -30,8 +30,7 @@ import PasswordResetConfirmPage from './features/auth/PasswordResetConfirmPage';
 import ChangePasswordRequiredPage from './features/auth/ChangePasswordRequiredPage';
 import SignupPage from './features/auth/SignupPage';
 import DashboardOverview from './features/dashboard/DashboardOverview';
-import ProfileContent from './components/dashboard/ProfileContent';
-import ChangePasswordContent from './components/dashboard/ChangePasswordContent';
+import AccountSettingsPage from './features/account/AccountSettingsPage';
 import UsersList from './features/users/UsersList';
 import UserEditPage from './features/users/UserEditPage';
 import UserDetailContent from './features/users/UserDetailContent';
@@ -164,10 +163,18 @@ export const appRoutes = (
       <Route path="dashboard" element={<DashboardPage />}>
         {/* Nested Dashboard Routes - Rendered inside Dashboard's Outlet */}
         <Route index element={<DashboardOverview />} />
-        <Route path="/dashboard/profile" element={<ProfileContent />} />
+        {/* Account settings, one URL per tab; the old pages redirect */}
+        <Route
+          path="/dashboard/account/:tab?"
+          element={<AccountSettingsPage />}
+        />
+        <Route
+          path="/dashboard/profile"
+          element={<Navigate to="/dashboard/account/profile" replace />}
+        />
         <Route
           path="/dashboard/change-password"
-          element={<ChangePasswordContent />}
+          element={<Navigate to="/dashboard/account/security" replace />}
         />
         {/* User management routes - updated with new components */}
         <Route
