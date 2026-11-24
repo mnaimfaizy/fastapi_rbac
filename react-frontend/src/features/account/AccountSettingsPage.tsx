@@ -44,7 +44,7 @@ const AccountSettingsPage = () => {
       />
       <nav
         aria-label="Account settings sections"
-        className="flex gap-1 overflow-x-auto border-b"
+        className="flex gap-1 border-b"
       >
         {TABS.map(({ id, label }) => {
           const selected = id === active.id;
