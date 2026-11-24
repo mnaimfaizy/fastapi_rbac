@@ -60,6 +60,14 @@ Every signed-in page renders inside `MainLayout` (`src/components/layout/`), the
 - **User menu.** `UserMenu` is the header's Radix dropdown: initials avatar, name and role chip on the trigger; name and email, Account settings, a light/dark/system theme switch, Sign out, and Sign out everywhere inside. It closes on Escape or an outside click and returns focus to its trigger. Sign out everywhere asks first with the shared `ConfirmDialog` ("You’ll be signed out on this device too."), then lands on Sign in, which shows "You’ve been signed out everywhere." Sign-out actions live only here, never in the sidebar.
 - **Links.** Every sidebar and menu link must target a route in `App.tsx`. `src/test/AppShell.test.tsx` checks this against the exported `appRoutes`, so add the route before the nav item.
 
+## Group trees
+
+Role groups and permission groups share one module, `src/features/groups/`, built to the "07 · Groups" artboards:
+
+- **Tree.** `GroupTree` renders groups as an expandable table: Name, Parent, Members, Created and the shared "…" `RowActionsMenu`. An open group lists its child groups first, then its members (roles with their user counts, or permission codes with their descriptions). Each group has a count chip such as "1 role · 1 group". Top-level groups start open. The toolbar has search, which keeps the path to each match, and Expand all / Collapse all. An empty tree shows the shared `EmptyState`. Each page passes only the menu actions the viewer holds the permission for.
+- **Data.** Each page maps its service response into flat records joined by parent id (`treeModel.ts`). Role groups come nested from `GET /role-groups`, and their roles come from `GET /roles` by `role_group_id`. Permission groups come flat from `GET /permission-groups`, with their permissions. `buildGroupTree` nests them, sorts siblings by name, and makes a group whose parent is missing or on a cycle a root. Both pages request one page of 100 groups, the API's page maximum.
+- **Form.** `GroupForm` is the create and edit form for both kinds: Name, and `ParentGroupSelect`, a searchable combobox of "No parent" and the other groups. On edit it leaves out the group itself and its descendants. Moving a group to another parent is done here.
+
 ## Accessibility
 
 Use Radix-backed ShadCN controls for focus management and keyboard behavior. Keep labels associated with inputs; do not remove accessible attributes when wrapping primitives.
