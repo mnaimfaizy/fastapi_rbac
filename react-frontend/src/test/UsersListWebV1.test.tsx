@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { toast } from 'sonner';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders, mockUsers, mockRoles } from './test-utils';
 import UsersList from '../features/users/UsersList';
+import { fetchUsers } from '../store/slices/userSlice';
 import userService from '../services/user.service';
 import type { User } from '../models/user';
 
@@ -68,6 +69,16 @@ const listUsers: User[] = [
     is_active: false,
   }),
 ];
+
+// The API deletes only a user who holds no role (backend user.py remove_user).
+const nora = makeUser({
+  id: 'u-nora',
+  first_name: 'Nora',
+  last_name: 'Free',
+  email: 'nora@example.com',
+  roles: [],
+});
+const withNora = [...listUsers, nora];
 
 function pageOf(items: User[]) {
   return {
@@ -180,19 +191,19 @@ describe('UsersList (Web v1)', () => {
         expect(option).toHaveAttribute('aria-checked', 'false')
       );
 
+      // The menu stays open while columns are ticked.
       await user.click(screen.getByRole('menuitemcheckbox', { name: 'Phone' }));
-      await user.click(screen.getByRole('button', { name: 'Columns' }));
       await user.click(
         screen.getByRole('menuitemcheckbox', { name: 'Failed attempts' })
       );
-      await user.click(screen.getByRole('button', { name: 'Columns' }));
       await user.click(
         screen.getByRole('menuitemcheckbox', { name: 'Created' })
       );
-      await user.click(screen.getByRole('button', { name: 'Columns' }));
       await user.click(
         screen.getByRole('menuitemcheckbox', { name: 'Password changed' })
       );
+      expect(screen.getByRole('menu')).toBeInTheDocument();
+      await user.keyboard('{Escape}');
 
       const headers = within(table())
         .getAllByRole('columnheader')
@@ -388,44 +399,84 @@ describe('UsersList (Web v1)', () => {
       expect(await openMenuFor('Ada Lovelace')).toEqual(['View details']);
     });
 
-    it('confirms before deleting, naming the user', async () => {
-      await renderList(ADMIN);
-      // After the delete, the refetch returns the list without Marcus.
+    it('confirms before deleting a user who holds no role, naming the user', async () => {
+      await renderList(ADMIN, withNora);
+      // After the delete, the refetch returns the list without Nora.
       const deleted = new Set<string>();
       mockUserService.deleteUser.mockImplementation(async (id: string) => {
         deleted.add(id);
       });
       mockUserService.getUsers.mockImplementation(async () =>
-        pageOf(listUsers.filter((item) => !deleted.has(item.id)))
+        pageOf(withNora.filter((item) => !deleted.has(item.id)))
       );
 
-      await openMenuFor('Marcus Webb');
+      await openMenuFor('Nora Free');
       await user.click(screen.getByRole('menuitem', { name: 'Delete user' }));
       const dialog = screen.getByRole('alertdialog', {
-        name: 'Delete user ‘Marcus Webb’?',
+        name: 'Delete user ‘Nora Free’?',
       });
+      expect(
+        within(dialog).getByText(
+          'They lose access straight away. This can’t be undone.'
+        )
+      ).toBeInTheDocument();
       await user.click(
         within(dialog).getByRole('button', { name: 'Delete user' })
       );
 
-      expect(mockUserService.deleteUser).toHaveBeenCalledWith('u-marcus');
+      expect(mockUserService.deleteUser).toHaveBeenCalledWith('u-nora');
       await waitFor(() =>
         expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
       );
       expect(toast.success).toHaveBeenCalledWith('User deleted');
       await waitFor(() =>
         expect(
-          within(table()).queryByRole('link', { name: 'Marcus Webb' })
+          within(table()).queryByRole('link', { name: 'Nora Free' })
         ).not.toBeInTheDocument()
       );
       expect(window.location.pathname).toBe('/dashboard/users');
     });
 
-    it('reports a failed delete in a toast, not the page banner', async () => {
-      mockUserService.deleteUser.mockRejectedValue(new Error('Server error'));
-      await renderList(ADMIN);
+    it('tells the truth about a user who holds roles, and offers Edit user', async () => {
+      await renderList(ADMIN, withNora);
 
       await openMenuFor('Marcus Webb');
+      await user.click(screen.getByRole('menuitem', { name: 'Delete user' }));
+      const dialog = screen.getByRole('alertdialog', {
+        name: 'Remove Marcus Webb’s roles first',
+      });
+      expect(
+        within(dialog).getByText(
+          'Marcus Webb holds 1 role. A user who holds a role can’t be deleted, so remove their roles on the edit page first.'
+        )
+      ).toBeInTheDocument();
+      expect(
+        within(dialog).queryByRole('button', { name: 'Delete user' })
+      ).not.toBeInTheDocument();
+
+      await user.click(
+        within(dialog).getByRole('button', { name: 'Edit user' })
+      );
+      expect(mockUserService.deleteUser).not.toHaveBeenCalled();
+      expect(window.location.pathname).toBe('/dashboard/users/u-marcus/edit');
+    });
+
+    it('offers no delete for a role holder to a viewer who cannot edit users', async () => {
+      await renderList(['user.read', 'user.delete'], withNora);
+
+      expect(await openMenuFor('Marcus Webb')).toEqual(['View details']);
+      await user.keyboard('{Escape}');
+      expect(await openMenuFor('Nora Free')).toEqual([
+        'View details',
+        'Delete user',
+      ]);
+    });
+
+    it('reports a failed delete in a toast, not the page banner', async () => {
+      mockUserService.deleteUser.mockRejectedValue(new Error('Server error'));
+      await renderList(ADMIN, withNora);
+
+      await openMenuFor('Nora Free');
       await user.click(screen.getByRole('menuitem', { name: 'Delete user' }));
       const dialog = screen.getByRole('alertdialog');
       await user.click(
@@ -500,6 +551,16 @@ describe('UsersList (Web v1)', () => {
         expect(
           screen.queryByRole('button', { name: 'Columns' })
         ).not.toBeInTheDocument();
+        // The mobile header is "Users" and Add user, with no description.
+        expect(
+          screen.getByRole('heading', { name: 'Users' })
+        ).toBeInTheDocument();
+        expect(
+          screen.getByRole('link', { name: 'Add user' })
+        ).toBeInTheDocument();
+        expect(
+          screen.queryByText('Everyone who can sign in to FastAPI RBAC.')
+        ).not.toBeInTheDocument();
         const rows = within(
           screen.getByRole('list', { name: 'Users' })
         ).getAllByRole('listitem');
@@ -563,13 +624,13 @@ describe('UsersList (Web v1)', () => {
     });
 
     it('does not claim the list is cut short after a delete', async () => {
-      await renderList(ADMIN);
+      await renderList(ADMIN, withNora);
       mockUserService.deleteUser.mockResolvedValue(undefined);
       // The refetch never lands, so only the local removal is on screen.
       mockUserService.getUsers.mockReturnValue(new Promise(() => {}));
 
       await user.click(
-        screen.getByRole('button', { name: 'Actions for Marcus Webb' })
+        screen.getByRole('button', { name: 'Actions for Nora Free' })
       );
       await user.click(screen.getByRole('menuitem', { name: 'Delete user' }));
       await user.click(
@@ -585,26 +646,23 @@ describe('UsersList (Web v1)', () => {
     });
 
     it('drops a role filter once nobody on the list holds that role', async () => {
-      await renderList(ADMIN);
-      const deleted = new Set<string>();
-      mockUserService.deleteUser.mockImplementation(async (id: string) => {
-        deleted.add(id);
-      });
-      mockUserService.getUsers.mockImplementation(async () =>
-        pageOf(listUsers.filter((item) => !deleted.has(item.id)))
-      );
+      const { store } = await renderList(ADMIN);
 
       await user.click(screen.getByRole('button', { name: 'Filter by role' }));
       await user.click(screen.getByRole('menuitemradio', { name: 'manager' }));
-      await user.click(
-        screen.getByRole('button', { name: 'Actions for Marcus Webb' })
+      expect(
+        within(table())
+          .getAllByRole('link')
+          .map((link) => link.textContent)
+      ).toEqual(['Marcus Webb']);
+
+      // The list reloads and the only manager is gone (removed elsewhere).
+      mockUserService.getUsers.mockResolvedValue(
+        pageOf(listUsers.filter((item) => item.id !== 'u-marcus'))
       );
-      await user.click(screen.getByRole('menuitem', { name: 'Delete user' }));
-      await user.click(
-        within(screen.getByRole('alertdialog')).getByRole('button', {
-          name: 'Delete user',
-        })
-      );
+      await act(async () => {
+        await store.dispatch(fetchUsers({ page: 1, limit: 100 }));
+      });
 
       await waitFor(() =>
         expect(

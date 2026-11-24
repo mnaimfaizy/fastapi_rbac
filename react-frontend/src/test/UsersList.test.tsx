@@ -333,6 +333,30 @@ describe('UsersList Component', () => {
   });
 
   describe('User Operations (CRUD)', () => {
+    // The API deletes only a user who holds no role, so these delete flows
+    // use role-less copies of the mock users.
+    const roleLessUsers = mockUsers.map((item) => ({ ...item, roles: [] }));
+    beforeEach(() => {
+      const deletedIds: string[] = [];
+      mockUserService.deleteUser.mockImplementation(async (userId: string) => {
+        deletedIds.push(userId);
+      });
+      mockUserService.getUsers.mockImplementation(async () => {
+        const items = roleLessUsers.filter(
+          (item) => !deletedIds.includes(item.id)
+        );
+        return {
+          items,
+          total: items.length,
+          page: 1,
+          size: 10,
+          pages: 1,
+          previous_page: null,
+          next_page: null,
+        };
+      });
+    });
+
     const fullPermissionsState = {
       auth: {
         user: {
@@ -353,7 +377,7 @@ describe('UsersList Component', () => {
         error: null,
       },
       user: {
-        users: mockUsers,
+        users: roleLessUsers,
         selectedUser: null,
         loading: false,
         error: null,

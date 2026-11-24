@@ -32,6 +32,8 @@ export function UsersColumnPicker({
           <DropdownMenuCheckboxItem
             key={id}
             checked={visibility[id] !== false}
+            // Keep the menu open so several columns can be ticked in a row.
+            onSelect={(event) => event.preventDefault()}
             onCheckedChange={(checked) =>
               onChange({ ...visibility, [id]: checked === true })
             }

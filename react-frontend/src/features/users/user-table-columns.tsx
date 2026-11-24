@@ -84,7 +84,7 @@ export const DEFAULT_USER_COLUMN_VISIBILITY: VisibilityState =
   Object.fromEntries(OPTIONAL_USER_COLUMNS.map(({ id }) => [id, false]));
 
 /** Narrowest width of the default columns; each optional one adds to it. */
-export const USERS_TABLE_MIN_WIDTH = 720;
+export const USERS_TABLE_MIN_WIDTH = 856;
 export const OPTIONAL_COLUMN_WIDTH = 140;
 
 const optionalCell = 'w-[140px] text-foreground-secondary';
@@ -124,19 +124,19 @@ export function buildUserColumns(
     {
       id: 'roles',
       header: 'Roles',
-      meta: { className: 'w-[180px]' },
+      meta: { className: 'w-[200px]' },
       cell: ({ row }) => <RoleChips user={row.original} />,
     },
     {
       id: 'status',
       header: 'Status',
-      meta: { className: 'w-[140px]' },
+      meta: { className: 'w-[230px]' },
       cell: ({ row }) => <UserStatusBadges user={row.original} />,
     },
     {
       id: 'last_sign_in',
       header: 'Last sign-in',
-      meta: { className: 'w-[130px] text-foreground-secondary' },
+      meta: { className: 'w-[150px] text-foreground-secondary' },
       // The users API returns no sign-in time yet, so every row shows a dash.
       cell: () => '—',
     },

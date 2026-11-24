@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import type { VisibilityState } from '@tanstack/react-table';
-import { CircleAlert, Plus, SearchX, Users } from 'lucide-react';
+import { CircleAlert, Plus, Search, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { AppDispatch, RootState } from '../../store';
 import {
@@ -49,6 +49,45 @@ import {
  */
 const USERS_FETCH_LIMIT = 100;
 
+interface DeleteCopy {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  holdsRoles: boolean;
+}
+
+const NO_DELETE_COPY: DeleteCopy = {
+  title: '',
+  description: '',
+  confirmLabel: 'Delete user',
+  holdsRoles: false,
+};
+
+/**
+ * What the delete dialog says. The API deletes only a user who holds no
+ * role (`remove_user` answers 409 otherwise), so for a role holder the
+ * dialog says so and offers the edit page instead of a delete it would
+ * refuse.
+ */
+function deleteCopyFor(user: User): DeleteCopy {
+  const name = fullName(user);
+  const count = (user.roles ?? []).length;
+  if (count > 0) {
+    return {
+      title: `Remove ${name}’s roles first`,
+      description: `${name} holds ${count} ${count === 1 ? 'role' : 'roles'}. A user who holds a role can’t be deleted, so remove their roles on the edit page first.`,
+      confirmLabel: 'Edit user',
+      holdsRoles: true,
+    };
+  }
+  return {
+    title: `Delete user ‘${name}’?`,
+    description: 'They lose access straight away. This can’t be undone.',
+    confirmLabel: 'Delete user',
+    holdsRoles: false,
+  };
+}
+
 const UsersList = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
@@ -66,8 +105,8 @@ const UsersList = () => {
     DEFAULT_USER_COLUMN_VISIBILITY
   );
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
-  // The name stays in the title while the dialog animates closed.
-  const [deleteTitle, setDeleteTitle] = useState('');
+  // The dialog's copy stays while it animates closed.
+  const [deleteCopy, setDeleteCopy] = useState<DeleteCopy>(NO_DELETE_COPY);
   const isMobile = useMediaQuery('(max-width: 767px)');
 
   const loadUsers = useCallback(
@@ -86,6 +125,12 @@ const UsersList = () => {
 
   const confirmDelete = async () => {
     if (!userToDelete) return;
+    if (deleteCopy.holdsRoles) {
+      // The API refuses to delete a user who holds a role; send the viewer
+      // to the edit page, where the roles are removed.
+      navigateRef.current(`/dashboard/users/${userToDelete.id}/edit`);
+      return;
+    }
     try {
       await dispatch(deleteUser(userToDelete.id)).unwrap();
     } catch (error: unknown) {
@@ -125,12 +170,15 @@ const UsersList = () => {
             navigateRef.current(`/dashboard/users/${user.id}/edit`),
         });
       }
-      if (canDelete) {
+      // A user who holds a role can't be deleted until the roles are removed,
+      // which needs user.update; without it the viewer can't act, so no Delete.
+      const holdsRoles = (user.roles ?? []).length > 0;
+      if (canDelete && (!holdsRoles || canUpdate)) {
         actions.push({
           label: 'Delete user',
           destructive: true,
           onSelect: () => {
-            setDeleteTitle(`Delete user ‘${fullName(user)}’?`);
+            setDeleteCopy(deleteCopyFor(user));
             setUserToDelete(user);
           },
         });
@@ -211,7 +259,12 @@ const UsersList = () => {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Users"
-        description="Everyone who can sign in to FastAPI RBAC."
+        // The mobile artboard puts Add user on the title's line with no
+        // description; on desktop it sits centred against the title block.
+        className="flex-row items-center justify-between sm:items-center"
+        description={
+          isMobile ? undefined : 'Everyone who can sign in to FastAPI RBAC.'
+        }
         action={
           canCreate ? (
             <Button asChild>
@@ -292,7 +345,7 @@ const UsersList = () => {
           <div className="rounded-xl border">
             {search.trim() ? (
               <EmptyState
-                icon={SearchX}
+                icon={Search}
                 title={`No users match ‘${search.trim()}’`}
                 description="Check the spelling, or search by email instead."
                 action={{
@@ -303,7 +356,7 @@ const UsersList = () => {
               />
             ) : (
               <EmptyState
-                icon={SearchX}
+                icon={Search}
                 title="No users match these filters"
                 description="Try another role or status."
                 action={{
@@ -360,9 +413,10 @@ const UsersList = () => {
         onOpenChange={(open) => {
           if (!open) setUserToDelete(null);
         }}
-        title={deleteTitle}
-        description="They lose access straight away and their role assignments are removed. This can’t be undone."
-        confirmLabel="Delete user"
+        title={deleteCopy.title}
+        description={deleteCopy.description}
+        confirmLabel={deleteCopy.confirmLabel}
+        destructive={!deleteCopy.holdsRoles}
         onConfirm={confirmDelete}
       />
     </div>

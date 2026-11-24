@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ChevronDown, Search } from 'lucide-react';
+import { ChevronsUpDown, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -50,7 +50,10 @@ function FilterMenu({
             <span className="text-muted-foreground">{prefix}</span>
             <span>{current}</span>
           </span>
-          <ChevronDown aria-hidden="true" className="text-muted-foreground" />
+          <ChevronsUpDown
+            aria-hidden="true"
+            className="text-muted-foreground"
+          />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
