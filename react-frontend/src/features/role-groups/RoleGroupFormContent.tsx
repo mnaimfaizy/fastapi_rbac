@@ -31,6 +31,9 @@ const RoleGroupFormContent = () => {
   const current = useAppSelector((state) => state.roleGroup.currentRoleGroup);
   const [groupsLoaded, setGroupsLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // The id whose fresh copy has arrived. A copy left in the store by the
+  // detail page may be stale, so the form waits for this one.
+  const [fetchedId, setFetchedId] = useState<string | null>(null);
 
   useEffect(() => {
     void dispatch(fetchRoleGroups({ page: 1, size: 100 })).finally(() =>
@@ -39,6 +42,7 @@ const RoleGroupFormContent = () => {
     if (groupId) {
       dispatch(fetchRoleGroupById(groupId))
         .unwrap()
+        .then(() => setFetchedId(groupId))
         .catch((err: unknown) =>
           setLoadError(message(err, 'The role group couldn’t be loaded.'))
         );
@@ -89,7 +93,9 @@ const RoleGroupFormContent = () => {
   }
 
   const editing = Boolean(groupId);
-  const ready = groupsLoaded && (!editing || current?.id === groupId);
+  const ready =
+    groupsLoaded &&
+    (!editing || (fetchedId === groupId && current?.id === groupId));
   if (!ready) {
     return <DetailSkeleton label="Loading role group" sections={1} />;
   }

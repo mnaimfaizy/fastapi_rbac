@@ -35,6 +35,9 @@ export default function PermissionGroupFormContent() {
   );
   const [groupsLoaded, setGroupsLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // The id whose fresh copy has arrived. A copy left in the store by the
+  // detail page may be stale, so the form waits for this one.
+  const [fetchedId, setFetchedId] = useState<string | null>(null);
 
   useEffect(() => {
     void dispatch(fetchPermissionGroups({ page: 1, pageSize: 100 })).finally(
@@ -43,6 +46,7 @@ export default function PermissionGroupFormContent() {
     if (groupId) {
       dispatch(fetchPermissionGroupById(groupId))
         .unwrap()
+        .then(() => setFetchedId(groupId))
         .catch((err: unknown) =>
           setLoadError(message(err, 'The permission group couldn’t be loaded.'))
         );
@@ -91,7 +95,9 @@ export default function PermissionGroupFormContent() {
   }
 
   const editing = Boolean(groupId);
-  const ready = groupsLoaded && (!editing || current?.id === groupId);
+  const ready =
+    groupsLoaded &&
+    (!editing || (fetchedId === groupId && current?.id === groupId));
   if (!ready) {
     return <DetailSkeleton label="Loading permission group" sections={1} />;
   }
