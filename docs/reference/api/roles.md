@@ -8,6 +8,8 @@ This document provides information about the role management endpoints of the Fa
 
 Retrieve a paginated list of roles. Supports optional filtering by name pattern (use \* as wildcard).
 
+Each role carries its `permissions`, and each permission carries its `group` (`{ "id", "name" }`, or `null` when the permission has no group). `user_count` is the number of users who hold the role.
+
 **Query Parameters:**
 
 - `name_pattern` (string, optional): Filter roles by name pattern (e.g., "admin*" or "*manager\*")
@@ -24,7 +26,20 @@ Authorization: Bearer <access_token>
 ```json
 {
   "data": [
-    { "id": "uuid", "name": "admin", "description": "Administrator role", ... }
+    {
+      "id": "uuid",
+      "name": "admin",
+      "description": "Administrator role",
+      "user_count": 2,
+      "permissions": [
+        {
+          "id": "uuid",
+          "name": "user.read",
+          "group": { "id": "uuid", "name": "User" }
+        }
+      ],
+      ...
+    }
   ],
   "pagination": { "page": 1, "limit": 20, "total": 1, "pages": 1 }
 }
@@ -32,7 +47,7 @@ Authorization: Bearer <access_token>
 
 ### GET /api/v1/roles/list
 
-Retrieve a list of all roles (no pagination).
+Retrieve a list of all roles (no pagination). Each role has the same `permissions[].group` and `user_count` fields as the paginated list.
 
 **Request Headers:**
 
@@ -45,14 +60,32 @@ Authorization: Bearer <access_token>
 ```json
 {
   "data": [
-    { "id": "uuid", "name": "admin", "description": "Administrator role", ... }
+    {
+      "id": "uuid",
+      "name": "admin",
+      "description": "Administrator role",
+      "user_count": 2,
+      "permissions": [
+        {
+          "id": "uuid",
+          "name": "user.read",
+          "group": { "id": "uuid", "name": "User" }
+        }
+      ],
+      ...
+    }
   ]
 }
 ```
 
 ### GET /api/v1/roles/{role_id}
 
-Get a role by its ID.
+Get a role by its ID. Needs `role.read`.
+
+The role has the same `permissions[].group` and `user_count` as the list reads. It also carries `users`, the holders of the role (`id`, `email`, `first_name`, `last_name`), under these rules:
+
+- `users` is present only when the caller also holds `user.read` (a superuser always does). A caller with `role.read` alone gets `user_count` and `"users": null` (the key is present, its value is `null`), because holder identities need `user.read` everywhere else in the API.
+- `users` lists at most the first 25 holders, ordered by email. `user_count` is always the full count, so `len(users)` can be smaller than `user_count`.
 
 **Request Headers:**
 
@@ -64,7 +97,28 @@ Authorization: Bearer <access_token>
 
 ```json
 {
-  "data": { "id": "uuid", "name": "admin", "description": "Administrator role", ... }
+  "data": {
+    "id": "uuid",
+    "name": "admin",
+    "description": "Administrator role",
+    "user_count": 2,
+    "permissions": [
+      {
+        "id": "uuid",
+        "name": "user.read",
+        "group": { "id": "uuid", "name": "User" }
+      }
+    ],
+    "users": [
+      {
+        "id": "uuid",
+        "email": "admin@example.com",
+        "first_name": "Ada",
+        "last_name": "Min"
+      }
+    ],
+    ...
+  }
 }
 ```
 

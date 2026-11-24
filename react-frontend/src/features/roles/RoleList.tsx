@@ -17,7 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Role } from '@/models/role';
 import {
   AlertDialog,
@@ -28,11 +28,17 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
-import { Eye, Edit, Trash2, AlertCircle } from 'lucide-react';
+import { AlertCircle, MoreHorizontal } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { RoleGroupChip } from './RoleGroupChip';
 
 const RoleList: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -47,30 +53,21 @@ const RoleList: React.FC = () => {
   const [deleteRoleId, setDeleteRoleId] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
-  // Verify required permissions
   const canReadRoles = hasPermission('role.read');
   const canUpdateRoles = hasPermission('role.update');
   const canDeleteRoles = hasPermission('role.delete');
   const canReadRoleGroups = hasPermission('role_group.read');
+  const showActions = canUpdateRoles || canDeleteRoles;
+  const columnCount = showActions ? 6 : 5;
 
-  // Only load roles if user has permission to read them
   useEffect(() => {
     if (canReadRoles) {
       dispatch(fetchRoles({ page: currentPage, size: pageSize }));
-      // Fetch role groups only if user has permission to read them
       if (canReadRoleGroups) {
-        dispatch(fetchRoleGroups({ page: 1, size: 100 })); // Get all groups for reference
+        dispatch(fetchRoleGroups({ page: 1, size: 100 }));
       }
     }
   }, [dispatch, currentPage, pageSize, canReadRoles, canReadRoleGroups]);
-
-  const handleView = (roleId: string) => {
-    if (!canReadRoles) {
-      toast.error('You do not have permission to view role details');
-      return;
-    }
-    navigate(`/dashboard/roles/${roleId}`);
-  };
 
   const handleEdit = (roleId: string) => {
     if (!canUpdateRoles) {
@@ -88,6 +85,7 @@ const RoleList: React.FC = () => {
     setDeleteRoleId(roleId);
     setIsDeleteDialogOpen(true);
   };
+
   const handleRetry = () => {
     dispatch(clearRoleError());
     dispatch(fetchRoles({ page: currentPage, size: pageSize }));
@@ -104,10 +102,10 @@ const RoleList: React.FC = () => {
       await dispatch(deleteRole(deleteRoleId)).unwrap();
       toast.success('Role deleted successfully');
       dispatch(fetchRoles({ page: currentPage, size: pageSize }));
-    } catch (error: unknown) {
+    } catch (deleteError: unknown) {
       let errorMessage = 'Failed to delete role';
-      if (error instanceof Error) {
-        errorMessage = error.message;
+      if (deleteError instanceof Error) {
+        errorMessage = deleteError.message;
       }
       toast.error(errorMessage, {
         duration: 5000,
@@ -128,25 +126,10 @@ const RoleList: React.FC = () => {
 
   const getRoleGroupName = (groupId: string | undefined) => {
     if (!groupId) return null;
-    const group = roleGroups.find((g) => g.id === groupId);
+    const group = roleGroups.find((entry) => entry.id === groupId);
     return group?.name;
   };
 
-  const formatDate = (dateString: string | undefined) => {
-    if (!dateString) return '-';
-    const date = new Date(dateString);
-    return !isNaN(date.getTime())
-      ? date.toLocaleDateString(undefined, {
-          year: 'numeric',
-          month: 'short',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-        })
-      : '-';
-  };
-
-  // If user doesn't have read permission, show message
   if (!canReadRoles) {
     return (
       <div className="p-4 text-center">
@@ -160,6 +143,9 @@ const RoleList: React.FC = () => {
       </div>
     );
   }
+
+  const rolePendingDelete = roles?.find((role) => role.id === deleteRoleId);
+
   return (
     <div className="space-y-4">
       {error && (
@@ -185,155 +171,164 @@ const RoleList: React.FC = () => {
         </Alert>
       )}
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Description</TableHead>
-            <TableHead>Permissions</TableHead>
-            <TableHead>Role Group</TableHead>
-            <TableHead>Created At</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {loading ? (
-            <TableRow>
-              <TableCell colSpan={6} className="text-center py-8">
-                <div
-                  className="flex items-center justify-center space-x-2"
-                  data-testid="loading-spinner"
-                >
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                  <span>Loading roles...</span>
-                </div>
-              </TableCell>
+      <div className="overflow-hidden rounded-xl border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="h-11 px-4">Name</TableHead>
+              <TableHead className="h-11 px-4">Description</TableHead>
+              <TableHead className="h-11 px-4">Role group</TableHead>
+              <TableHead className="h-11 px-4 text-right">
+                Permissions
+              </TableHead>
+              <TableHead className="h-11 px-4 text-right">Users</TableHead>
+              {showActions && (
+                <TableHead className="h-11 px-4 text-right">
+                  <span className="sr-only">Actions</span>
+                </TableHead>
+              )}
             </TableRow>
-          ) : !roles || roles.length === 0 ? (
-            <TableRow>
-              <TableCell
-                colSpan={6}
-                className="text-center py-8 text-muted-foreground"
-              >
-                No roles found
-              </TableCell>
-            </TableRow>
-          ) : (
-            roles &&
-            roles.map((role: Role) => (
-              <TableRow key={role.id}>
-                <TableCell className="font-medium">{role.name}</TableCell>
-                <TableCell>{role.description || '-'}</TableCell>
-                <TableCell>
-                  <span className="text-sm text-muted-foreground">
-                    {role.permissions?.length || 0} permission
-                    {role.permissions?.length === 1 ? '' : 's'}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  {role.role_group_id && canReadRoleGroups ? (
-                    <button
-                      onClick={() => navigateToRoleGroup(role.role_group_id!)}
-                      className="text-primary hover:underline focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-sm"
-                    >
-                      {getRoleGroupName(role.role_group_id) || 'View Group'}
-                    </button>
-                  ) : (
-                    <span className="text-muted-foreground">
-                      {role.role_group_id
-                        ? getRoleGroupName(role.role_group_id)
-                        : 'No group'}
-                    </span>
-                  )}
-                </TableCell>
-                <TableCell>{formatDate(role.created_at)}</TableCell>
-                <TableCell>
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleView(role.id)}
-                      title="View role details"
-                    >
-                      <Eye className="h-4 w-4" />
-                      <span className="sr-only">View role details</span>
-                    </Button>
-
-                    {canUpdateRoles && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEdit(role.id)}
-                        title="Edit role"
-                      >
-                        <Edit className="h-4 w-4" />
-                        <span className="sr-only">Edit role</span>
-                      </Button>
-                    )}
-
-                    {canDeleteRoles && (
-                      <AlertDialog
-                        open={isDeleteDialogOpen && deleteRoleId === role.id}
-                        onOpenChange={setIsDeleteDialogOpen}
-                      >
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => handleDelete(role.id)}
-                            title="Delete role"
-                            data-testid="delete-role-button"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            <span className="sr-only">Delete role</span>
-                          </Button>
-                        </AlertDialogTrigger>
-                        {/* Delete Dialog Content */}
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete Role</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              <p>
-                                Are you sure you want to delete the role &quot;
-                                {role.name}
-                                &quot;? This action cannot be undone.
-                              </p>
-                              {role.permissions &&
-                                role.permissions.length > 0 && (
-                                  <div className="mt-4 p-4 bg-destructive/10 border border-destructive rounded-md">
-                                    <p className="text-destructive font-medium">
-                                      Warning: This role has{' '}
-                                      {role.permissions.length} permission
-                                      {role.permissions.length === 1
-                                        ? ''
-                                        : 's'}{' '}
-                                      assigned. Deleting this role will remove
-                                      these permissions from all users who have
-                                      this role.
-                                    </p>
-                                  </div>
-                                )}
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={handleDeleteConfirm}
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            >
-                              Delete
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    )}
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={columnCount} className="text-center py-8">
+                  <div
+                    className="flex items-center justify-center space-x-2"
+                    data-testid="loading-spinner"
+                  >
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                    <span>Loading roles...</span>
                   </div>
                 </TableCell>
               </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
+            ) : !roles || roles.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={columnCount}
+                  className="text-center py-8 text-muted-foreground"
+                >
+                  No roles found
+                </TableCell>
+              </TableRow>
+            ) : (
+              roles.map((role: Role) => (
+                <TableRow key={role.id}>
+                  <TableCell className="h-16 px-4 font-medium">
+                    <Link
+                      to={`/dashboard/roles/${role.id}`}
+                      className="font-semibold hover:underline"
+                    >
+                      {role.name}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="h-16 px-4 text-foreground-secondary">
+                    {role.description || '-'}
+                  </TableCell>
+                  <TableCell className="h-16 px-4">
+                    {role.role_group_id && canReadRoleGroups ? (
+                      <RoleGroupChip
+                        name={
+                          getRoleGroupName(role.role_group_id) || 'View group'
+                        }
+                        onOpen={() => navigateToRoleGroup(role.role_group_id!)}
+                      />
+                    ) : role.role_group_id &&
+                      getRoleGroupName(role.role_group_id) ? (
+                      <RoleGroupChip
+                        name={getRoleGroupName(role.role_group_id)!}
+                      />
+                    ) : (
+                      <span className="text-muted-foreground">No group</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="h-16 px-4 text-right">
+                    {role.permissions?.length || 0}
+                  </TableCell>
+                  <TableCell className="h-16 px-4 text-right">
+                    {role.user_count ?? 0}
+                  </TableCell>
+                  {showActions && (
+                    <TableCell className="h-16 px-4 text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            aria-label={`Actions for ${role.name}`}
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {canUpdateRoles && (
+                            <DropdownMenuItem
+                              onClick={() => handleEdit(role.id)}
+                              title="Edit role"
+                            >
+                              Edit role
+                            </DropdownMenuItem>
+                          )}
+                          {canDeleteRoles && (
+                            <DropdownMenuItem
+                              onClick={() => handleDelete(role.id)}
+                              title="Delete role"
+                              data-testid="delete-role-button"
+                            >
+                              Delete role
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      <AlertDialog
+        open={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Role</AlertDialogTitle>
+            <AlertDialogDescription>
+              <p>
+                Are you sure you want to delete the role &quot;
+                {rolePendingDelete?.name}
+                &quot;? This action cannot be undone.
+              </p>
+              {rolePendingDelete?.permissions &&
+                rolePendingDelete.permissions.length > 0 && (
+                  <div className="mt-4 p-4 bg-destructive/10 border border-destructive rounded-md">
+                    <p className="text-destructive font-medium">
+                      Warning: This role has{' '}
+                      {rolePendingDelete.permissions.length} permission
+                      {rolePendingDelete.permissions.length === 1
+                        ? ''
+                        : 's'}{' '}
+                      assigned. Deleting this role will remove these permissions
+                      from all users who have this role.
+                    </p>
+                  </div>
+                )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {pagination && pagination.pages > 1 && (
         <div className="flex items-center justify-between border-t pt-4">

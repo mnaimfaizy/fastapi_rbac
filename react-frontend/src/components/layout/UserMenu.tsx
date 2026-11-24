@@ -24,9 +24,9 @@ import { useThemePreference, type ThemePreference } from '@/lib/theme';
 import { ACCOUNT_SETTINGS_PATH } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
 import type { User } from '@/models/user';
-import { SIGNED_OUT_EVERYWHERE_NOTICE } from '@/features/auth/notices';
+import { useSignOutEverywhere } from '@/features/auth/useSignOutEverywhere';
 import { useAppDispatch } from '../../store/hooks';
-import { logoutAllUser, logoutUser } from '../../store/slices/authSlice';
+import { logoutUser } from '../../store/slices/authSlice';
 import { displayName, initials, roleLabel } from './viewer';
 
 const THEME_OPTIONS: {
@@ -94,18 +94,8 @@ export function SignOutEverywhereDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const dispatch = useAppDispatch();
-  const navigate = useNavigate();
-
-  async function signOutEverywhere() {
-    const revoked = await dispatch(logoutAllUser()).unwrap();
-    // Sign in shows "You’ve been signed out everywhere." only when the server
-    // revoked every session; a failed call still signs this device out.
-    navigate(
-      revoked ? `/login?notice=${SIGNED_OUT_EVERYWHERE_NOTICE}` : '/login',
-      { replace: true }
-    );
-  }
+  // The redirect rule lives in useSignOutEverywhere, shared with User home.
+  const signOutEverywhere = useSignOutEverywhere();
 
   return (
     <ConfirmDialog

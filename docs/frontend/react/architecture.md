@@ -26,7 +26,8 @@ react-frontend/
 │   │   ├── permissions/
 │   │   ├── role-groups/
 │   │   ├── permission-groups/
-│   │   └── dashboard/
+│   │   ├── dashboard/
+│   │   └── user-home/       # landing page for users without access management
 │   ├── hooks/               # useAuth, usePermissions, …
 │   ├── lib/                 # utils, token helpers, theme.ts (useThemePreference)
 │   ├── models/              # TypeScript interfaces
