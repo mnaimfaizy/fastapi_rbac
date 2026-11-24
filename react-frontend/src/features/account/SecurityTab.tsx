@@ -10,10 +10,11 @@ import { useAppSelector } from '@/store/hooks';
 import { SettingsSection } from './SettingsSection';
 
 /**
- * How long a password lasts. It matches the API's default
- * `REQUIRE_PASSWORD_CHANGE_DAYS` and the copy the design fixes ("Passwords
- * expire every 90 days."); the user read model has no expiry date of its
- * own yet.
+ * How long a password lasts, copied from the API's default
+ * `REQUIRE_PASSWORD_CHANGE_DAYS` and the copy #416 fixes ("Passwords expire
+ * every 90 days."). It is wrong for a deployment that changes the setting.
+ * The user read model has no expiry date yet: #425 exposes it and shows it
+ * across Web v1, and should replace this constant and the computed date.
  */
 const PASSWORD_LIFETIME_DAYS = 90;
 const DAY_MS = 24 * 60 * 60 * 1000;
