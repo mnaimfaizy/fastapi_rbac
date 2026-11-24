@@ -311,9 +311,16 @@ class TestDashboardFlow:
         regular_token = login_response["data"]["access_token"]
         regular_headers = {"Authorization": f"Bearer {regular_token}"}
 
-        # Test dashboard endpoints should be forbidden
+        # Signed-in users may call the dashboard. Fields they cannot see are null.
+        stats_response = await client.get(
+            f"{settings.API_V1_STR}/dashboard/stats",
+            headers=regular_headers,
+        )
+        assert stats_response.status_code == 200, stats_response.text
+        assert stats_response.json()["data"]["stats"]["total_users"] is None
+
+        # Endpoints this API does not provide stay absent.
         dashboard_endpoints = [
-            "/dashboard/stats",
             "/dashboard/users/analytics",
             "/dashboard/roles/analytics",
             "/dashboard/activity",

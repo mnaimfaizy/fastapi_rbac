@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import React from 'react';
-import { render, screen, within, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
@@ -23,9 +22,6 @@ vi.mock('react-router-dom', async () => {
   return {
     ...actual,
     useNavigate: vi.fn(),
-    BrowserRouter: ({ children }: { children: React.ReactNode }) => (
-      <div>{children}</div>
-    ),
   };
 });
 
@@ -397,12 +393,15 @@ describe('RoleList Component', () => {
   });
 
   describe('Permission-Based Behavior', () => {
-    it('shows edit button when user has update permission', () => {
+    it('shows edit button when user has update permission', async () => {
       renderRoleList();
 
-      // Should show edit buttons for each role
-      const editButtons = screen.getAllByTitle('Edit role');
-      expect(editButtons).toHaveLength(mockRoles.length);
+      const triggers = screen.getAllByRole('button', { name: /Actions for/ });
+      expect(triggers).toHaveLength(mockRoles.length);
+      await user.click(triggers[0]);
+      expect(
+        screen.getByRole('menuitem', { name: 'Edit role' })
+      ).toBeInTheDocument();
     });
 
     it('hides edit button when user lacks update permission', () => {
@@ -420,12 +419,13 @@ describe('RoleList Component', () => {
       expect(screen.queryByTitle('Edit role')).not.toBeInTheDocument();
     });
 
-    it('shows delete button when user has delete permission', () => {
+    it('shows delete button when user has delete permission', async () => {
       renderRoleList();
 
-      // Should show delete buttons for each role
-      const deleteButtons = screen.getAllByTestId('delete-role-button');
-      expect(deleteButtons).toHaveLength(mockRoles.length);
+      const triggers = screen.getAllByRole('button', { name: /Actions for/ });
+      expect(triggers).toHaveLength(mockRoles.length);
+      await user.click(triggers[0]);
+      expect(screen.getByTestId('delete-role-button')).toBeInTheDocument();
     });
 
     it('hides delete button when user lacks delete permission', () => {
@@ -564,11 +564,12 @@ describe('RoleList Component', () => {
 
       renderRoleList();
 
-      const roleGroupLink = screen.getByRole('button', {
+      // A grey chip, as the artboard draws it, that still opens the group.
+      const roleGroupChip = screen.getByRole('button', {
         name: 'System Administration',
       });
-      expect(roleGroupLink).toBeInTheDocument();
-      expect(roleGroupLink).toHaveClass('text-primary', 'hover:underline');
+      expect(roleGroupChip).toHaveClass('bg-muted', 'rounded-md');
+      expect(roleGroupChip).not.toHaveClass('hover:underline');
     });
   });
 
@@ -577,10 +578,10 @@ describe('RoleList Component', () => {
       renderRoleList();
 
       // Check permission count for user role (4 permissions)
-      expect(screen.getByText('4 permissions')).toBeInTheDocument();
+      expect(screen.getByText('4')).toBeInTheDocument();
 
       // Check permission count for admin role (8 permissions - all mockPermissions)
-      expect(screen.getByText('8 permissions')).toBeInTheDocument();
+      expect(screen.getByText('8')).toBeInTheDocument();
     });
 
     it('displays singular "permission" for role with one permission', () => {
@@ -625,7 +626,7 @@ describe('RoleList Component', () => {
 
       renderRoleList();
 
-      expect(screen.getByText('1 permission')).toBeInTheDocument();
+      expect(screen.getByText('1')).toBeInTheDocument();
     });
 
     it('displays "0 permissions" for role with no permissions', () => {
@@ -670,21 +671,18 @@ describe('RoleList Component', () => {
 
       renderRoleList();
 
-      expect(screen.getByText('0 permissions')).toBeInTheDocument();
+      expect(screen.getAllByText('0').length).toBeGreaterThan(0);
     });
   });
 
-  describe('Date Formatting', () => {
-    it('formats created_at date correctly', () => {
+  describe('User counts', () => {
+    it('shows a user count for each role', () => {
       renderRoleList();
 
-      // The mock date '2024-01-01T00:00:00Z' should be formatted
-      // The exact format depends on locale, but should contain date parts
-      const formattedDates = screen.getAllByText(/Jan|2024/);
-      expect(formattedDates.length).toBeGreaterThan(0);
+      expect(screen.getAllByText('0').length).toBeGreaterThan(0);
     });
 
-    it('displays "-" for missing created_at date', () => {
+    it('still lists a role when created_at is missing', () => {
       const roleWithoutDate = {
         ...mockRoles[0],
         created_at: undefined,
@@ -726,23 +724,16 @@ describe('RoleList Component', () => {
 
       renderRoleList();
 
-      const table = screen.getByRole('table');
-      const dashText = within(table).getByText('-');
-      expect(dashText).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'user' })).toBeInTheDocument();
     });
   });
 
   describe('User Interactions', () => {
-    it('calls handleView when view button is clicked', async () => {
-      const mockNavigateFunction = vi.fn();
-      mockNavigate.mockReturnValue(mockNavigateFunction);
-
+    it('links each role name to its detail page', () => {
       renderRoleList();
 
-      const viewButton = screen.getAllByTitle('View role details')[0];
-      await user.click(viewButton);
-
-      expect(mockNavigateFunction).toHaveBeenCalledWith(
+      expect(screen.getByRole('link', { name: 'user' })).toHaveAttribute(
+        'href',
         `/dashboard/roles/${mockRoles[0].id}`
       );
     });
@@ -753,7 +744,10 @@ describe('RoleList Component', () => {
 
       renderRoleList();
 
-      const editButton = screen.getAllByTitle('Edit role')[0];
+      await user.click(
+        screen.getByRole('button', { name: 'Actions for user' })
+      );
+      const editButton = screen.getByTitle('Edit role');
       await user.click(editButton);
 
       expect(mockNavigateFunction).toHaveBeenCalledWith(
@@ -766,7 +760,10 @@ describe('RoleList Component', () => {
     it('opens delete dialog when delete button is clicked', async () => {
       renderRoleList();
 
-      const deleteButton = screen.getAllByTestId('delete-role-button')[0];
+      await user.click(
+        screen.getByRole('button', { name: 'Actions for user' })
+      );
+      const deleteButton = screen.getByTestId('delete-role-button');
       await user.click(deleteButton);
 
       // Check if delete dialog is opened
@@ -779,7 +776,10 @@ describe('RoleList Component', () => {
     it('shows warning message in delete dialog when role has permissions', async () => {
       renderRoleList();
 
-      const deleteButton = screen.getAllByTestId('delete-role-button')[0];
+      await user.click(
+        screen.getByRole('button', { name: 'Actions for user' })
+      );
+      const deleteButton = screen.getByTestId('delete-role-button');
       await user.click(deleteButton);
 
       // Check if warning message is shown for role with permissions
@@ -808,7 +808,10 @@ describe('RoleList Component', () => {
 
       renderRoleList();
 
-      const deleteButton = screen.getAllByTestId('delete-role-button')[0];
+      await user.click(
+        screen.getByRole('button', { name: 'Actions for user' })
+      );
+      const deleteButton = screen.getByTestId('delete-role-button');
       await user.click(deleteButton);
 
       const confirmButton = screen.getByRole('button', { name: 'Delete' });
@@ -845,7 +848,10 @@ describe('RoleList Component', () => {
 
       renderRoleList();
 
-      const deleteButton = screen.getAllByTestId('delete-role-button')[0];
+      await user.click(
+        screen.getByRole('button', { name: 'Actions for user' })
+      );
+      const deleteButton = screen.getByTestId('delete-role-button');
       await user.click(deleteButton);
 
       const confirmButton = screen.getByRole('button', { name: 'Delete' });
@@ -863,7 +869,10 @@ describe('RoleList Component', () => {
 
       renderRoleList();
 
-      const deleteButton = screen.getAllByTestId('delete-role-button')[0];
+      await user.click(
+        screen.getByRole('button', { name: 'Actions for user' })
+      );
+      const deleteButton = screen.getByTestId('delete-role-button');
       await user.click(deleteButton);
 
       const cancelButton = screen.getByRole('button', { name: 'Cancel' });
@@ -1096,17 +1105,17 @@ describe('RoleList Component', () => {
       expect(screen.getByText('Name')).toBeInTheDocument();
       expect(screen.getByText('Description')).toBeInTheDocument();
       expect(screen.getByText('Permissions')).toBeInTheDocument();
-      expect(screen.getByText('Role Group')).toBeInTheDocument();
-      expect(screen.getByText('Created At')).toBeInTheDocument();
+      expect(screen.getByText('Role group')).toBeInTheDocument();
+      expect(screen.getByText('Users')).toBeInTheDocument();
       expect(screen.getByText('Actions')).toBeInTheDocument();
     });
 
-    it('renders view button for all roles regardless of permissions', () => {
+    it('links every role name to its detail page', () => {
       renderRoleList();
 
-      // Should show view buttons for each role
-      const viewButtons = screen.getAllByTitle('View role details');
-      expect(viewButtons).toHaveLength(mockRoles.length);
+      expect(screen.getAllByRole('link', { name: /user|admin/ })).toHaveLength(
+        mockRoles.length
+      );
     });
   });
 
