@@ -40,9 +40,14 @@ export default function PermissionGroupFormContent() {
   const [fetchedId, setFetchedId] = useState<string | null>(null);
 
   useEffect(() => {
-    void dispatch(fetchPermissionGroups({ page: 1, pageSize: 100 })).finally(
-      () => setGroupsLoaded(true)
-    );
+    // Without the group list the parent select would be wrong, so a
+    // failed load blocks the form.
+    dispatch(fetchPermissionGroups({ page: 1, pageSize: 100 }))
+      .unwrap()
+      .then(() => setGroupsLoaded(true))
+      .catch((err: unknown) =>
+        setLoadError(message(err, 'The permission groups couldn’t be loaded.'))
+      );
     if (groupId) {
       dispatch(fetchPermissionGroupById(groupId))
         .unwrap()

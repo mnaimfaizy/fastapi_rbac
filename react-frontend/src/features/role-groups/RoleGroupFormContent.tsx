@@ -36,9 +36,14 @@ const RoleGroupFormContent = () => {
   const [fetchedId, setFetchedId] = useState<string | null>(null);
 
   useEffect(() => {
-    void dispatch(fetchRoleGroups({ page: 1, size: 100 })).finally(() =>
-      setGroupsLoaded(true)
-    );
+    // Without the group list the parent select would be wrong, so a
+    // failed load blocks the form.
+    dispatch(fetchRoleGroups({ page: 1, size: 100 }))
+      .unwrap()
+      .then(() => setGroupsLoaded(true))
+      .catch((err: unknown) =>
+        setLoadError(message(err, 'The role groups couldn’t be loaded.'))
+      );
     if (groupId) {
       dispatch(fetchRoleGroupById(groupId))
         .unwrap()

@@ -294,4 +294,37 @@ describe('Group form', () => {
       ).not.toBeInTheDocument();
     });
   });
+
+  describe('when the parent is not in the group list', () => {
+    it('says the parent is unknown instead of “No parent”', async () => {
+      const support = roleGroup('support', 'Support', 'elsewhere');
+      mockRoleGroupService.getRoleGroups.mockResolvedValue(
+        page([administrative, support]) as never
+      );
+      mockRoleGroupService.getRoleGroupById.mockResolvedValue({
+        message: 'ok',
+        meta: {},
+        data: { ...support, roles: [], children: [] },
+      } as never);
+      renderGroupsAt('/dashboard/role-groups/edit/support', 'admin');
+
+      expect(
+        await screen.findByRole('combobox', { name: 'Parent group' })
+      ).toHaveTextContent('Unknown group');
+    });
+
+    it('blocks the form when the group list fails to load', async () => {
+      mockRoleGroupService.getRoleGroups.mockRejectedValue(
+        new Error('Network Error')
+      );
+      renderGroupsAt('/dashboard/role-groups/new', 'admin');
+
+      expect(
+        await screen.findByText('Couldn’t load the role group')
+      ).toBeVisible();
+      expect(
+        screen.queryByRole('textbox', { name: 'Name' })
+      ).not.toBeInTheDocument();
+    });
+  });
 });

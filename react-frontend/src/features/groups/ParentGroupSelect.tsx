@@ -31,6 +31,7 @@ export interface ParentGroupSelectProps extends Omit<
 }
 
 const NO_PARENT = 'No parent';
+const UNKNOWN_PARENT = 'Unknown group';
 
 /**
  * A combobox for a group's parent: "No parent" or one of the groups,
@@ -78,7 +79,9 @@ export function ParentGroupSelect({
           className={cn('w-full justify-between font-normal', className)}
           {...triggerProps}
         >
-          <span className="truncate">{selected?.name ?? NO_PARENT}</span>
+          <span className="truncate">
+            {value === null ? NO_PARENT : (selected?.name ?? UNKNOWN_PARENT)}
+          </span>
           <ChevronsUpDown aria-hidden="true" className="opacity-50" />
         </Button>
       </PopoverTrigger>
