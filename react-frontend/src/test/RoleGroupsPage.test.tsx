@@ -240,6 +240,31 @@ describe('Role groups page', () => {
     });
   });
 
+  describe('when only the roles fail to load', () => {
+    it('keeps the tree, says the roles are missing, and retries them', async () => {
+      const user = userEvent.setup();
+      mockRoleService.getRoles.mockRejectedValueOnce(
+        new Error('Network Error')
+      );
+      renderGroupsAt('/dashboard/role-groups', 'admin');
+
+      expect(await screen.findByText('Couldn’t load roles')).toBeVisible();
+      expect(screen.getByRole('link', { name: 'Support' })).toBeVisible();
+      expect(screen.queryByText('8 users')).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('heading', { name: 'Create your first role group' })
+      ).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Try again' }));
+      expect(await screen.findByText('8 users')).toBeVisible();
+      expect(
+        within(rowFor('Operational')).getByText('1 role · 1 group')
+      ).toBeVisible();
+      expect(screen.queryByText('Couldn’t load roles')).not.toBeInTheDocument();
+      expect(mockRoleGroupService.getRoleGroups).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('with more roles than one page holds', () => {
     it('reads every page of roles', async () => {
       const first = page([roles[0]]);

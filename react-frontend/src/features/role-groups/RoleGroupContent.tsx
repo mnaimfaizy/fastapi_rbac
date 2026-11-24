@@ -43,6 +43,9 @@ const RoleGroupContent = () => {
   const [attempt, setAttempt] = useState(0);
   const [toDelete, setToDelete] = useState<GroupNode | null>(null);
 
+  const [rolesFailed, setRolesFailed] = useState(false);
+  const [rolesAttempt, setRolesAttempt] = useState(0);
+
   useEffect(() => {
     let active = true;
     dispatch(fetchRoleGroups(ALL))
@@ -54,21 +57,49 @@ const RoleGroupContent = () => {
           setLoadError(typeof err === 'string' ? err : 'Please try again.')
       )
       .finally(() => active && setLoaded(true));
-    if (canReadRoles) {
-      fetchAllRoles()
-        .then((all) => active && setRoles(all))
-        .catch(() => active && setRoles(null));
-    }
     return () => {
       active = false;
     };
-  }, [dispatch, canReadRoles, attempt]);
+  }, [dispatch, attempt]);
+
+  // Roles load on their own, so a failure there leaves the tree usable and
+  // says what is missing instead of showing every group as empty.
+  useEffect(() => {
+    if (!canReadRoles) {
+      return;
+    }
+    let active = true;
+    fetchAllRoles()
+      .then((all) => {
+        if (active) {
+          setRoles(all);
+          setRolesFailed(false);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setRoles(null);
+          setRolesFailed(true);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [canReadRoles, rolesAttempt]);
 
   const retry = () => {
     setLoaded(false);
     setLoadError(null);
     setAttempt((n) => n + 1);
+    if (rolesFailed) {
+      retryRoles();
+    }
   };
+
+  function retryRoles() {
+    setRolesFailed(false);
+    setRolesAttempt((n) => n + 1);
+  }
 
   const tree = useMemo(
     () => buildGroupTree(roleGroupsToFlat(roleGroups, roles)),
@@ -133,6 +164,14 @@ const RoleGroupContent = () => {
           title="Couldn’t load role groups"
           message={loadError}
           onRetry={retry}
+        />
+      ) : null}
+
+      {rolesFailed && !loadError ? (
+        <LoadError
+          title="Couldn’t load roles"
+          message="The groups are shown without their roles, so their counts leave roles out."
+          onRetry={retryRoles}
         />
       ) : null}
 
