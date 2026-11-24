@@ -24,6 +24,7 @@ export function AppearanceTab() {
     <SettingsSection
       title="Theme"
       description="Applies to this browser. System follows your device setting."
+      className="max-w-[860px]"
     >
       <div
         role="radiogroup"
