@@ -137,7 +137,7 @@ export function buildUserColumns(
       id: 'last_sign_in',
       header: 'Last sign-in',
       meta: { className: 'w-[130px] text-foreground-secondary' },
-      // The users API has no sign-in time yet; see the d417 report.
+      // The users API returns no sign-in time yet, so every row shows a dash.
       cell: () => '—',
     },
     {

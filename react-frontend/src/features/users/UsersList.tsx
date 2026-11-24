@@ -5,7 +5,11 @@ import type { VisibilityState } from '@tanstack/react-table';
 import { Plus, SearchX, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { AppDispatch, RootState } from '../../store';
-import { deleteUser, fetchUsers } from '../../store/slices/userSlice';
+import {
+  clearUserErrors,
+  deleteUser,
+  fetchUsers,
+} from '../../store/slices/userSlice';
 import type { User } from '@/models/user';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
@@ -62,6 +66,8 @@ const UsersList = () => {
     DEFAULT_USER_COLUMN_VISIBILITY
   );
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  // The name stays in the title while the dialog animates closed.
+  const [deleteTitle, setDeleteTitle] = useState('');
   const isMobile = useMediaQuery('(max-width: 767px)');
 
   const loadUsers = useCallback(
@@ -86,6 +92,8 @@ const UsersList = () => {
       const message =
         typeof error === 'string' && error ? error : 'Failed to delete user';
       toast.error(message);
+      // The toast reports it; the page banner is for load failures only.
+      dispatch(clearUserErrors());
       // Keep the dialog open so the person can retry or cancel.
       throw error;
     }
@@ -121,7 +129,10 @@ const UsersList = () => {
         actions.push({
           label: 'Delete user',
           destructive: true,
-          onSelect: () => setUserToDelete(user),
+          onSelect: () => {
+            setDeleteTitle(`Delete user ‘${fullName(user)}’?`);
+            setUserToDelete(user);
+          },
         });
       }
       return (
@@ -328,7 +339,7 @@ const UsersList = () => {
         onOpenChange={(open) => {
           if (!open) setUserToDelete(null);
         }}
-        title={userToDelete ? `Delete user ‘${fullName(userToDelete)}’?` : ''}
+        title={deleteTitle}
         description="They lose access straight away and their role assignments are removed. This can’t be undone."
         confirmLabel="Delete user"
         onConfirm={confirmDelete}

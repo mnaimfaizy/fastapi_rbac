@@ -60,6 +60,19 @@ Every signed-in page renders inside `MainLayout` (`src/components/layout/`), the
 - **User menu.** `UserMenu` is the header's Radix dropdown: initials avatar, name and role chip on the trigger; name and email, Account settings, a light/dark/system theme switch, Sign out, and Sign out everywhere inside. It closes on Escape or an outside click and returns focus to its trigger. Sign out everywhere asks first with the shared `ConfirmDialog` ("You’ll be signed out on this device too."), then lands on Sign in, which shows "You’ve been signed out everywhere." Sign-out actions live only here, never in the sidebar.
 - **Links.** Every sidebar and menu link must target a route in `App.tsx`. `src/test/AppShell.test.tsx` checks this against the exported `appRoutes`, so add the route before the nav item.
 
+## Lists
+
+The users list (`src/features/users/UsersList.tsx`, from the "05 · Users · List" artboards) is the first list on the Web v1 pattern:
+
+- **Table.** `DataTable` (`src/components/dashboard/users/data-table.tsx`) draws the table only: header, rows, an optional row click and a footer slot. The page passes in the rows to show and the column visibility, and owns search, filters, the column picker and pagination. A row click opens the row's detail page; clicks on links, buttons and the row's "…" menu keep their own behavior.
+- **Row menu.** `RowActionsMenu` gets only the actions the viewer can use, and destructive ones are confirmed with `ConfirmDialog`.
+- **Status.** The status column shows `StatusBadge` for exceptions only, so a healthy row has an empty cell.
+- **Empty and no-match states.** Both use `EmptyState`: "No users match ‘xyz’" with Clear search, and a create action on an empty list only for viewers who can create.
+- **Status filter in the URL.** The users list reads and writes `?status=` (Locked, Pending or Disabled, in any case), so other pages can link to a filtered list.
+- **Mobile.** Below the `md` breakpoint the list renders as stacked rows instead of the table.
+
+`GET /users/list` takes only `page` and `size` (at most 100), so the users list loads one page of 100 users and searches, filters and pages it in the browser.
+
 ## Accessibility
 
 Use Radix-backed ShadCN controls for focus management and keyboard behavior. Keep labels associated with inputs; do not remove accessible attributes when wrapping primitives.

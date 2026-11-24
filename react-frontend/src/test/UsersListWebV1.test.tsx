@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
+import { toast } from 'sonner';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders, mockUsers, mockRoles } from './test-utils';
 import UsersList from '../features/users/UsersList';
@@ -388,8 +389,15 @@ describe('UsersList (Web v1)', () => {
     });
 
     it('confirms before deleting, naming the user', async () => {
-      mockUserService.deleteUser.mockResolvedValue(undefined);
       await renderList(ADMIN);
+      // After the delete, the refetch returns the list without Marcus.
+      const deleted = new Set<string>();
+      mockUserService.deleteUser.mockImplementation(async (id: string) => {
+        deleted.add(id);
+      });
+      mockUserService.getUsers.mockImplementation(async () =>
+        pageOf(listUsers.filter((item) => !deleted.has(item.id)))
+      );
 
       await openMenuFor('Marcus Webb');
       await user.click(screen.getByRole('menuitem', { name: 'Delete user' }));
@@ -401,6 +409,34 @@ describe('UsersList (Web v1)', () => {
       );
 
       expect(mockUserService.deleteUser).toHaveBeenCalledWith('u-marcus');
+      await waitFor(() =>
+        expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+      );
+      expect(toast.success).toHaveBeenCalledWith('User deleted');
+      await waitFor(() =>
+        expect(
+          within(table()).queryByRole('link', { name: 'Marcus Webb' })
+        ).not.toBeInTheDocument()
+      );
+      expect(window.location.pathname).toBe('/dashboard/users');
+    });
+
+    it('reports a failed delete in a toast, not the page banner', async () => {
+      mockUserService.deleteUser.mockRejectedValue(new Error('Server error'));
+      await renderList(ADMIN);
+
+      await openMenuFor('Marcus Webb');
+      await user.click(screen.getByRole('menuitem', { name: 'Delete user' }));
+      const dialog = screen.getByRole('alertdialog');
+      await user.click(
+        within(dialog).getByRole('button', { name: 'Delete user' })
+      );
+
+      await waitFor(() =>
+        expect(toast.error).toHaveBeenCalledWith('Server error')
+      );
+      expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
 
     it('opens the user when the row is clicked', async () => {
@@ -412,11 +448,31 @@ describe('UsersList (Web v1)', () => {
       expect(window.location.pathname).toBe('/dashboard/users/u-ada');
     });
 
-    it('keeps the row menu from opening the user', async () => {
+    it('keeps clicks inside the row menu from opening the user', async () => {
       await renderList();
 
       await openMenuFor('Ada Lovelace');
+      // React bubbles events from the portalled menu up to the row; a click
+      // on the menu itself, off any item, must not reach the row.
+      await user.click(screen.getByRole('menu'));
       expect(window.location.pathname).toBe('/dashboard/users');
+    });
+
+    it('gives a plain user no actions at all', async () => {
+      // The seeded User role's permissions: no user.* among them.
+      await renderList([
+        'self.read_profile',
+        'self.update_profile',
+        'self.read_roles',
+        'self.read_permissions',
+      ]);
+
+      expect(
+        screen.queryByRole('link', { name: 'Add user' })
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: /^Actions for / })
+      ).not.toBeInTheDocument();
     });
 
     describe('on mobile', () => {

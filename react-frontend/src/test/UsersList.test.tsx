@@ -139,10 +139,12 @@ describe('UsersList Component', () => {
           error: null,
         },
         user: {
-          users: [mockUsers[0]], // Provide one user to prevent useEffect fetch
+          // The page always fetches on mount; the banner comes from the
+          // rejected fetch above, not from preloaded state.
+          users: [mockUsers[0]],
           selectedUser: null,
           loading: false,
-          error: errorMessage,
+          error: null,
           pagination: {
             total: 1,
             page: 1,
