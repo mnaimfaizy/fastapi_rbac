@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import type { VisibilityState } from '@tanstack/react-table';
-import { Plus, SearchX, Users } from 'lucide-react';
+import { CircleAlert, Plus, SearchX, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { AppDispatch, RootState } from '../../store';
 import {
@@ -152,9 +152,12 @@ const UsersList = () => {
 
   const allUsers = useMemo(() => users ?? [], [users]);
   const roles = useMemo(() => roleNames(allUsers), [allUsers]);
+  // A role nobody on the list holds any more (its last holder was deleted)
+  // stops filtering, so the trigger never says "All" while a role applies.
+  const activeRole = role && roles.includes(role) ? role : null;
   const filtered = useMemo(
-    () => filterUsers(allUsers, { search, role, status }),
-    [allUsers, search, role, status]
+    () => filterUsers(allUsers, { search, role: activeRole, status }),
+    [allUsers, search, activeRole, status]
   );
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(pageIndex, pageCount - 1);
@@ -197,9 +200,12 @@ const UsersList = () => {
   };
 
   const isFirstLoad = loading && allUsers.length === 0;
+  const loadFailed = !loading && !!error && allUsers.length === 0;
   const noUsers = !isFirstLoad && !error && allUsers.length === 0;
   const noMatch = allUsers.length > 0 && filtered.length === 0;
-  const truncated = pagination.total > allUsers.length;
+  // Compare with what the last fetch reported, not the local list, which
+  // shrinks on delete while `pagination.total` stays as fetched.
+  const truncated = pagination.total > USERS_FETCH_LIMIT;
 
   return (
     <div className="flex flex-col gap-6">
@@ -218,7 +224,7 @@ const UsersList = () => {
         }
       />
 
-      {error && (
+      {error && !loadFailed && (
         <div
           role="alert"
           className="border-destructive bg-destructive/10 text-destructive rounded-md border p-3 text-sm"
@@ -232,7 +238,7 @@ const UsersList = () => {
           search={search}
           onSearchChange={changeSearch}
           roles={roles}
-          role={role}
+          role={activeRole}
           onRoleChange={changeRole}
           status={status}
           onStatusChange={changeStatus}
@@ -247,13 +253,28 @@ const UsersList = () => {
 
         {truncated ? (
           <p className="text-foreground-secondary text-sm">
-            Showing the first {allUsers.length} of {pagination.total} users.
+            Showing the first {USERS_FETCH_LIMIT} of {pagination.total} users.
             Search and filters cover these only.
           </p>
         ) : null}
 
         {isFirstLoad ? (
           <TableSkeleton label="Loading users" columns={4} />
+        ) : loadFailed ? (
+          <div className="rounded-xl border">
+            <EmptyState
+              icon={CircleAlert}
+              title="Users didn’t load"
+              description={error ?? undefined}
+              action={{
+                label: 'Try again',
+                variant: 'secondary',
+                onClick: () => {
+                  loadUsers();
+                },
+              }}
+            />
+          </div>
         ) : noUsers ? (
           <div className="rounded-xl border">
             <EmptyState

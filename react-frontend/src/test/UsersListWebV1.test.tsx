@@ -511,4 +511,111 @@ describe('UsersList (Web v1)', () => {
       });
     });
   });
+
+  describe('review fixes', () => {
+    it('offers a retry instead of an empty table when the first load fails', async () => {
+      mockUserService.getUsers.mockRejectedValueOnce(
+        new Error('Network error')
+      );
+      renderWithProviders(<UsersList />, {
+        preloadedState: {
+          ...viewer(ADMIN),
+          user: {
+            users: [],
+            selectedUser: null,
+            loading: false,
+            error: null,
+            pagination: {
+              total: 0,
+              page: 1,
+              size: 10,
+              pages: 0,
+              previousPage: null,
+              nextPage: null,
+            },
+          },
+        },
+      });
+
+      expect(
+        await screen.findByRole('heading', { name: 'Users didn’t load' })
+      ).toBeInTheDocument();
+      expect(screen.getByText('Network error')).toBeInTheDocument();
+      expect(screen.queryByRole('table')).not.toBeInTheDocument();
+      expect(screen.queryByText(/^Showing /)).not.toBeInTheDocument();
+
+      mockUserService.getUsers.mockResolvedValue(pageOf(listUsers));
+      await user.click(screen.getByRole('button', { name: 'Try again' }));
+      expect(await screen.findByText('ada@example.com')).toBeInTheDocument();
+    });
+
+    it('says search covers only the loaded users when the API has more', async () => {
+      mockUserService.getUsers.mockResolvedValue({
+        ...pageOf(listUsers),
+        total: 150,
+        pages: 2,
+      });
+      renderWithProviders(<UsersList />, { preloadedState: viewer(ADMIN) });
+
+      expect(
+        await screen.findByText(/^Showing the first 100 of 150 users\./)
+      ).toBeInTheDocument();
+    });
+
+    it('does not claim the list is cut short after a delete', async () => {
+      await renderList(ADMIN);
+      mockUserService.deleteUser.mockResolvedValue(undefined);
+      // The refetch never lands, so only the local removal is on screen.
+      mockUserService.getUsers.mockReturnValue(new Promise(() => {}));
+
+      await user.click(
+        screen.getByRole('button', { name: 'Actions for Marcus Webb' })
+      );
+      await user.click(screen.getByRole('menuitem', { name: 'Delete user' }));
+      await user.click(
+        within(screen.getByRole('alertdialog')).getByRole('button', {
+          name: 'Delete user',
+        })
+      );
+
+      await waitFor(() =>
+        expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+      );
+      expect(screen.queryByText(/^Showing the first/)).not.toBeInTheDocument();
+    });
+
+    it('drops a role filter once nobody on the list holds that role', async () => {
+      await renderList(ADMIN);
+      const deleted = new Set<string>();
+      mockUserService.deleteUser.mockImplementation(async (id: string) => {
+        deleted.add(id);
+      });
+      mockUserService.getUsers.mockImplementation(async () =>
+        pageOf(listUsers.filter((item) => !deleted.has(item.id)))
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Filter by role' }));
+      await user.click(screen.getByRole('menuitemradio', { name: 'manager' }));
+      await user.click(
+        screen.getByRole('button', { name: 'Actions for Marcus Webb' })
+      );
+      await user.click(screen.getByRole('menuitem', { name: 'Delete user' }));
+      await user.click(
+        within(screen.getByRole('alertdialog')).getByRole('button', {
+          name: 'Delete user',
+        })
+      );
+
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: 'Filter by role' })
+        ).toHaveTextContent('Role:All')
+      );
+      expect(
+        within(table())
+          .getAllByRole('link')
+          .map((link) => link.textContent)
+      ).toEqual(['Ada Lovelace', 'Hannah Lindqvist', 'Aisha Karim']);
+    });
+  });
 });

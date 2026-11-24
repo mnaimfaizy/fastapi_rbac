@@ -68,10 +68,10 @@ The users list (`src/features/users/UsersList.tsx`, from the "05 · Users · Lis
 - **Row menu.** `RowActionsMenu` gets only the actions the viewer can use, and destructive ones are confirmed with `ConfirmDialog`.
 - **Status.** The status column shows `StatusBadge` for exceptions only, so a healthy row has an empty cell.
 - **Empty and no-match states.** Both use `EmptyState`: "No users match ‘xyz’" with Clear search, and a create action on an empty list only for viewers who can create.
-- **Status filter in the URL.** The users list reads and writes `?status=` (Locked, Pending or Disabled, in any case), so other pages can link to a filtered list.
+- **Status filter in the URL.** The users list reads and writes `?status=`, so other pages can link to a filtered list. The accepted values are `STATUS_FILTERS` in `src/features/users/users-list-model.ts`, matched in any case by `parseStatusFilter`; any other value shows everyone.
 - **Mobile.** Below the `md` breakpoint the list renders as stacked rows instead of the table.
 
-`GET /users/list` takes only `page` and `size` (at most 100), so the users list loads one page of 100 users and searches, filters and pages it in the browser.
+`GET /users/list` takes only `page` and `size`, so the users list loads one page of `USERS_FETCH_LIMIT` users (`src/features/users/UsersList.tsx`, the API's largest page size) and searches, filters and pages it in the browser. When the API reports more, the page says search covers the loaded users only. Sorting is not offered: the Web v1 artboards have none, and the list keeps the API's order.
 
 ## Accessibility
 
