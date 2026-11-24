@@ -71,7 +71,7 @@ function ProfileForm({ user }: { user: User }) {
         lastName: saved.last_name ?? '',
         phone: saved.contact_phone ?? '',
       });
-      toast.success('Profile saved.');
+      toast.success('Profile saved');
     } catch (error) {
       setSaveError(
         error instanceof Error && error.message
