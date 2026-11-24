@@ -72,7 +72,7 @@ read_first:
 
 routes:
   commit: "Conventional Commits per docs/agents/commit-messages.md (type(scope): subject, no emoji, one logical change). Commit only through the commit-change skill, which runs `bash scripts/development/commit-runner.sh --message-file <path>`; never plain `git commit`. Branch names per docs/agents/branch-names.md."
-  pull_request: "gh pr create --draft. The body describes the change and ends with Fixes and the issue number, as .github/instructions/resolve-issue.instructions.md requires."
+  pull_request: "Open and update pull requests only through the create-pull-request skill, which runs `bash scripts/development/pr-runner.sh ... --draft`; never plain gh pr create, gh pr edit or git push. The body lists Fixes and the issue number under Issues, as .github/instructions/resolve-issue.instructions.md requires. See docs/agents/pr-pipeline.md."
 
 regate:
   - 'cd backend && uv run --no-project --python 3.10 --with-requirements requirements.txt --with "python-dotenv[cli]" dotenv -f .env.test.example run -- pytest test/unit/ test/api/ -q -p no:cacheprovider'
