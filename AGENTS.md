@@ -7,6 +7,7 @@ Project-owned agent assets that do live here:
 - `.claude/skills/release`: Release PR workflow (see Release below)
 - `.claude/agents/release-notes.md`: release-notes sub-agent
 - `.claude/skills/commit-change`, `.claude/agents/commit-drafter.md` and `.cursor/agents/commit-drafter.md`: the commit pipeline (see Commit pipeline below)
+- `.claude/skills/create-pull-request`, `.claude/agents/pr-drafter.md` and `.cursor/agents/pr-drafter.md`: the pull request pipeline (see Pull request pipeline below)
 - `docs/agents/`: repo-side configuration the installed skills read
 
 Kit-owned files are copied from one pinned [Agent-kit](docs/agents/agent-kit.md) tag. They are an exception to "no vendoring". Never edit them by hand; re-copy them from a new tag instead:
@@ -40,6 +41,10 @@ Commit messages must follow [`docs/agents/commit-messages.md`](docs/agents/commi
 
 Agents commit only through the `commit-change` skill (`.claude/skills/commit-change`), which drafts the message from the staged diff with the read-only `commit-drafter` sub-agent and runs `bash scripts/development/commit-runner.sh --message-file <path>`. Never `git commit` directly, never `--no-verify`, never `git add .`. A hook failure ends with a trailer naming the reason; the skill says what to do for each, including `explainer-drift`. Details: [`docs/agents/commit-pipeline.md`](docs/agents/commit-pipeline.md).
 
+### Pull request pipeline (mandatory)
+
+Agents open and update pull requests only through the `create-pull-request` skill (`.claude/skills/create-pull-request`), which drafts the title and body from the branch with the read-only `pr-drafter` sub-agent and runs `bash scripts/development/pr-runner.sh --title <text> --body-file <path> --merge-base <sha>`. Never `git push`, `gh pr create` or `gh pr edit` directly, and never force-push. The runner refuses a merge base that does not match the branch, a body without a readable Merge risk block, and any label not on `docs/agents/pr-labels.txt`; no reviewer is requested unless the user names one. Details: [`docs/agents/pr-pipeline.md`](docs/agents/pr-pipeline.md).
+
 ### Branch names (mandatory)
 
 Branch names must follow [`docs/agents/branch-names.md`](docs/agents/branch-names.md). This is not optional: allowed prefixes only; include the issue number and a short slug when the work is for a numbered issue; no harness or vendor prefixes.
@@ -65,6 +70,7 @@ When working in this repository, follow conventions in:
 - `.github/copilot-instructions.md`
 - `docs/agents/commit-messages.md` (commit message SSOT)
 - `docs/agents/commit-pipeline.md` (how agents commit)
+- `docs/agents/pr-pipeline.md` (how agents open pull requests)
 - `docs/agents/branch-names.md` (branch name SSOT)
 - `.github/instructions/pre-commit.instructions.md`
 - `.github/instructions/resolve-issue.instructions.md`

@@ -29,7 +29,7 @@ import PasswordResetPage from './features/auth/PasswordResetPage';
 import PasswordResetConfirmPage from './features/auth/PasswordResetConfirmPage';
 import ChangePasswordRequiredPage from './features/auth/ChangePasswordRequiredPage';
 import SignupPage from './features/auth/SignupPage';
-import DashboardOverview from './features/dashboard/DashboardOverview';
+import SignedInHome from './features/user-home/SignedInHome';
 import ProfileContent from './components/dashboard/ProfileContent';
 import ChangePasswordContent from './components/dashboard/ChangePasswordContent';
 import UsersList from './features/users/UsersList';
@@ -163,7 +163,7 @@ export const appRoutes = (
       {/* Redirect / to /dashboard */}
       <Route path="dashboard" element={<DashboardPage />}>
         {/* Nested Dashboard Routes - Rendered inside Dashboard's Outlet */}
-        <Route index element={<DashboardOverview />} />
+        <Route index element={<SignedInHome />} />
         <Route path="/dashboard/profile" element={<ProfileContent />} />
         <Route
           path="/dashboard/change-password"

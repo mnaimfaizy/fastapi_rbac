@@ -26,7 +26,7 @@ Never ask `commit-drafter` to stage, commit or fix anything.
 - Never run `git add .` or `git add -A`. Stage the paths the user means to commit, by name.
 - Do not stage a secret-looking file: `.env` or `.env.*` (except `.env.example`, `.env.sample`, `.env.template`), private keys, certificates, `credentials.json`. Never create or commit `.sandcastle/.env`. If one is already staged, unstage it with `git restore --staged <path>` and tell the user.
 - If `commit-drafter` proposes a split, stop and ask which group to commit first. Do not commit every proposed message.
-- Branch names follow [`docs/agents/branch-names.md`](../../../docs/agents/branch-names.md). Pushing, PRs and merging are not part of this skill.
+- Branch names follow [`docs/agents/branch-names.md`](../../../docs/agents/branch-names.md). Pushing, PRs and merging are not part of this skill; pull requests go through the `create-pull-request` skill ([`docs/agents/pr-pipeline.md`](../../../docs/agents/pr-pipeline.md)).
 
 ## Steps
 

@@ -1,9 +1,10 @@
-from typing import List, Optional
+from typing import Any, List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from fastapi_pagination import Params
 from redis.asyncio import Redis
+from sqlalchemy import inspect as sa_inspect
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -22,6 +23,7 @@ from app.schemas.response_schema import (
 )
 from app.schemas.role_schema import (
     IRoleCreate,
+    IRoleDetailRead,
     IRolePermissionAssign,
     IRolePermissionUnassign,
     IRoleRead,
@@ -39,6 +41,48 @@ router = APIRouter()
 
 SYSTEM_ROLE_PERMISSIONS_DETAIL = "Cannot modify system role permissions"
 SYSTEM_ROLE_RENAME_DETAIL = "Cannot rename a system role"
+
+
+def _permission_group(permission: Any) -> dict[str, Any] | None:
+    """Group id and name when the relationship was loaded with the permission.
+
+    Paginated reads may already be ``IPermissionRead`` instances. Those are not
+    ORM objects, so inspection is only for a still-unloaded relationship.
+    """
+    if getattr(permission, "_sa_instance_state", None) is not None:
+        if "group" in sa_inspect(permission).unloaded:
+            return None
+    group = getattr(permission, "group", None)
+    if group is None or getattr(group, "id", None) is None:
+        return None
+    return {"id": group.id, "name": getattr(group, "name", None)}
+
+
+def role_read(role: Role, *, user_count: int, users: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """Role payload for a read: each permission's group, plus how many users hold it."""
+    payload = serialize_role(role)
+    payload["user_count"] = user_count
+    if users is not None:
+        payload["users"] = users
+    loaded = list(role.permissions or [])
+    for item, permission in zip(payload.get("permissions") or [], loaded):
+        item["group"] = _permission_group(permission)
+    return payload
+
+
+def _holds_permission(user: User, permission_name: str) -> bool:
+    """Whether the caller is a superuser or holds the permission through a role."""
+    if getattr(user, "is_superuser", False):
+        return True
+    return any(
+        permission.name == permission_name
+        for role in (user.roles or [])
+        for permission in (role.permissions or [])
+    )
+
+
+async def _counts_for(roles: list[Role], db_session: AsyncSession) -> dict[Any, int]:
+    return await crud.role.count_users_by_role(role_ids=[role.id for role in roles], db_session=db_session)
 
 
 @router.get("")
@@ -60,8 +104,10 @@ async def get_roles(
     # it returns an IGetResponsePaginated, not a Page: the rows live at
     # .data.items, never .items. The declared Page[ModelType] on
     # get_multi_paginated describes the CRUD layer, not what arrives here.
+    roles = list(response_page.data.items)
+    counts = await _counts_for(roles, db_session)
     response_data = {
-        "items": [serialize_role(role) for role in response_page.data.items],
+        "items": [role_read(role, user_count=counts.get(role.id, 0)) for role in roles],
         "total": response_page.data.total,
         "page": response_page.data.page,
         "size": response_page.data.size,
@@ -81,18 +127,29 @@ async def get_all_roles_list(
     Gets a list of all roles (no pagination).
     """
     roles = await crud.role.get_all(db_session=db_session)
-    return create_response(data=[serialize_role(role) for role in roles])
+    counts = await _counts_for(roles, db_session)
+    return create_response(data=[role_read(role, user_count=counts.get(role.id, 0)) for role in roles])
 
 
 @router.get("/{role_id}")
 async def get_role_by_id(
     role: Role = Depends(role_deps.get_user_role_by_id),
+    db_session: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user(required_permissions=["role.read"])),
-) -> IGetResponseBase[IRoleRead]:
+) -> IGetResponseBase[IRoleDetailRead]:
     """
-    Gets a role by its id
+    Gets a role by its id.
+
+    ``users`` lists the first holders by email (capped) and is present only when
+    the caller also holds ``user.read``; ``user_count`` is always the full count.
     """
-    return create_response(data=serialize_role(role))
+    counts = await _counts_for([role], db_session)
+    # Holder identities need user.read, as they do on the user endpoints. A
+    # caller with role.read alone still gets the count.
+    holders = None
+    if _holds_permission(current_user, "user.read"):
+        holders = await crud.role.list_holders(role_id=role.id, db_session=db_session)
+    return create_response(data=role_read(role, user_count=counts.get(role.id, 0), users=holders))
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)

@@ -6,7 +6,7 @@ This document provides information about the dashboard endpoints of the FastAPI 
 
 ### GET /api/v1/dashboard
 
-Retrieve dashboard data (stats, recent logins, system user summary). Data returned varies by user role.
+Retrieve the dashboard metrics the caller is allowed to see. Any signed-in user can call it. The caller's permissions decide which fields are filled in, not the role name. A field the caller may not see is `null`, not zero and not a 403.
 
 **Request Headers:**
 
@@ -14,57 +14,85 @@ Retrieve dashboard data (stats, recent logins, system user summary). Data return
 Authorization: Bearer <access_token>
 ```
 
-**Response (admin):**
+**Response (caller holds every permission below, for example an admin):**
 
 ```json
 {
+  "success": true,
+  "message": "Dashboard data retrieved successfully",
   "data": {
     "stats": {
       "total_users": 100,
       "active_users": 80,
+      "locked_users": 2,
       "total_roles": 5,
-      "total_permissions": 20,
-      "active_sessions": 10
+      "total_role_groups": 3,
+      "total_permissions": 29,
+      "total_permission_groups": 7
     },
-    "recent_logins": [
+    "role_distribution": [
+      { "name": "Admin", "count": 3 },
+      { "name": "Manager", "count": 8 },
+      { "name": "User", "count": 64 }
+    ],
+    "recent_sign_ins": [
       {
         "id": "uuid",
         "name": "John Doe",
         "email": "john@example.com",
-        "last_active": "2025-07-08 12:00:00"
-      }
-    ],
-    "system_users_summary": [
-      {
-        "id": "uuid",
-        "name": "Jane Smith",
-        "email": "jane@example.com",
-        "role": "admin",
-        "status": "active",
-        "last_active": "2025-07-08 11:00:00"
+        "signed_in_at": "2026-07-08T12:00:00Z"
       }
     ]
   }
 }
 ```
 
-**Response (non-admin):**
+**Which permission fills which field:**
+
+| Permission              | Fields                                                                             |
+| ----------------------- | ---------------------------------------------------------------------------------- |
+| `user.read`             | `stats.total_users`, `stats.active_users`, `stats.locked_users`, `recent_sign_ins` |
+| `role.read`             | `stats.total_roles`, `role_distribution`                                           |
+| `role_group.read`       | `stats.total_role_groups`                                                          |
+| `permission.read`       | `stats.total_permissions`                                                          |
+| `permission_group.read` | `stats.total_permission_groups`                                                    |
+
+A superuser is treated as holding all five.
+
+`backend/test/api/test_dashboard_metrics.py` checks this table, and the sign-in actions listed under the notes below, against the API, so a change to either fails a test until this page is updated.
+
+**Response (caller holds none of them):**
 
 ```json
 {
+  "success": true,
+  "message": "Dashboard data retrieved successfully",
   "data": {
     "stats": {
-      "total_users": 100
+      "total_users": null,
+      "active_users": null,
+      "locked_users": null,
+      "total_roles": null,
+      "total_role_groups": null,
+      "total_permissions": null,
+      "total_permission_groups": null
     },
-    "recent_logins": null,
-    "system_users_summary": null
+    "role_distribution": null,
+    "recent_sign_ins": null
   }
 }
 ```
 
+**Notes on the fields:**
+
+- `role_distribution` counts a user once for each role they hold, so a user with several roles appears in each.
+- `recent_sign_ins` holds the 10 newest sign-ins, newest first. A sign-in is a successful password login (`successful_login`) or a successful OAuth2 login (`oauth2_successful_login`). `signed_in_at` is a UTC timestamp.
+- The earlier `active_sessions`, `recent_logins` (`last_active`) and `system_users_summary` fields no longer exist.
+- The web dashboard draws the Roles card only for a caller who can also create, update or delete roles, and the Permissions card only for one who can create, update or delete permissions. A manager holds `role.read` and `permission.read`, so the API still sends `total_roles` and `total_permissions`, but the manager dashboard shows neither card.
+
 ### GET /api/v1/dashboard/stats
 
-Retrieve dashboard stats (alias for /dashboard). Admins only.
+Retrieve the same payload as `GET /api/v1/dashboard`. It is no longer admin-only: any signed-in user gets 200, and the permissions above decide which fields are `null`.
 
 **Request Headers:**
 
@@ -74,16 +102,14 @@ Authorization: Bearer <access_token>
 
 **Response:**
 
-- Same as above for admin users.
-- 403 Forbidden for non-admin users.
+- Same as `GET /api/v1/dashboard`.
 
 ## Error Responses
 
-- 403 Forbidden: Insufficient permissions (for /dashboard/stats)
-- 500 Internal Server Error: Unexpected error
+- 403 Forbidden: Missing, invalid or rejected access token.
+- 500 Internal Server Error: Unexpected error.
 
 ## Notes
 
-- All endpoints require authentication.
-- Admins see full stats, recent logins, and user summaries. Non-admins see limited stats only.
-- See backend code for detailed permission requirements and error handling.
+- All endpoints require authentication, and no endpoint here requires a specific permission.
+- See `backend/app/api/v1/endpoints/dashboard.py` for the permission-to-field mapping.
