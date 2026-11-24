@@ -1,0 +1,14 @@
+# Labels an agent may put on a pull request, one per line.
+# Read by the pr-drafter (to choose) and scripts/development/pr-runner.sh (to
+# refuse anything else). See docs/agents/pr-pipeline.md.
+#
+# Kind and area labels a person reads only. Workflow labels stay off this list
+# on purpose: agent:* and team:* drive automation (only mnaimfaizy adds
+# agent:review), ready-for-* and needs-* belong to issue triage, and release
+# belongs to the release skill.
+bug
+enhancement
+documentation
+cleanup
+maintenance
+dependencies
