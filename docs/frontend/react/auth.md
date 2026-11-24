@@ -42,9 +42,9 @@ Keep permission **names** aligned with backend permission records.
 | --- | --- |
 | Sign in, register, verify email, resend, and password reset UI | `src/features/auth/` (`LoginPage`, `SignupPage`, `VerifyEmailPage`, `ResendVerificationEmailForm`, `PasswordResetRequestPage`, `PasswordResetConfirmPage`) |
 | Auth Redux slice | `src/store/slices/authSlice.ts` (`logoutUser`, `logoutAllUser`) |
-| Change-password form (dashboard) | `src/components/auth/ChangePasswordForm.tsx` |
+| Change-password form (Security tab of Account settings) | `src/components/auth/ChangePasswordForm.tsx`, shown by `src/features/account/SecurityTab.tsx` |
 | Temporary-password page | `src/features/auth/ChangePasswordRequiredPage.tsx` (own form and **Sign out**) |
-| Header user menu (Sign out, Sign out everywhere) | `src/components/layout/UserMenu.tsx` |
+| Header user menu (Sign out, Sign out everywhere) and the Security tab of Account settings (Sign out everywhere) | `src/components/layout/UserMenu.tsx` (`SignOutEverywhereDialog`, shared with `src/features/account/SecurityTab.tsx`) |
 | Axios + interceptors | `src/services/api.ts`, `authTokenManager.ts` |
 | Hooks | `src/hooks/useAuth.ts`, `usePermissions.ts` |
 | Route guards | `src/components/auth/` / `src/components/layout/` |
