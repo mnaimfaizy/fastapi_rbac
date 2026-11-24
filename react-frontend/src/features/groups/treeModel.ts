@@ -32,6 +32,12 @@ export interface FlatGroup {
 export interface GroupNode extends FlatGroup {
   parentName: string | null;
   children: GroupNode[];
+  /**
+   * The group's own counts, kept when a search trims `members` and
+   * `children`, so the count chip always shows the whole group.
+   */
+  memberCount: number | null;
+  childCount: number;
 }
 
 export interface MemberNoun {
@@ -52,7 +58,13 @@ export function buildGroupTree(flat: FlatGroup[]): GroupNode[] {
   const nodes = new Map<string, GroupNode>();
   for (const group of flat) {
     if (!nodes.has(group.id)) {
-      nodes.set(group.id, { ...group, parentName: null, children: [] });
+      nodes.set(group.id, {
+        ...group,
+        parentName: null,
+        children: [],
+        memberCount: group.members ? group.members.length : null,
+        childCount: 0,
+      });
     }
   }
 
@@ -91,6 +103,7 @@ export function buildGroupTree(flat: FlatGroup[]): GroupNode[] {
   const sortDeep = (list: GroupNode[]) => {
     list.sort(byName);
     for (const node of list) {
+      node.childCount = node.children.length;
       sortDeep(node.children);
     }
     return list;
@@ -155,11 +168,11 @@ function count(n: number, noun: MemberNoun) {
 /** The count chip's text, such as "1 role · 1 group". */
 export function memberSummary(node: GroupNode, noun: MemberNoun): string {
   const parts: string[] = [];
-  if (node.members) {
-    parts.push(count(node.members.length, noun));
+  if (node.memberCount !== null) {
+    parts.push(count(node.memberCount, noun));
   }
-  if (node.children.length > 0 || !node.members) {
-    parts.push(count(node.children.length, { one: 'group', other: 'groups' }));
+  if (node.childCount > 0 || node.memberCount === null) {
+    parts.push(count(node.childCount, { one: 'group', other: 'groups' }));
   }
   return parts.join(' · ');
 }

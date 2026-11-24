@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AlertCircle, KeyRound, Plus } from 'lucide-react';
+import { KeyRound, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import {
@@ -8,7 +8,6 @@ import {
   fetchPermissionGroups,
 } from '@/store/slices/permissionGroupSlice';
 import { usePermissions } from '@/hooks/usePermissions';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/common/PageHeader';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
@@ -16,6 +15,7 @@ import { TableSkeleton } from '@/components/common/Skeletons';
 import type { RowAction } from '@/components/common/RowActionsMenu';
 import { GroupTree } from '../groups/GroupTree';
 import { buildGroupTree, type GroupNode } from '../groups/treeModel';
+import { LoadError } from '../groups/LoadError';
 import { permissionGroupsToFlat } from './permissionGroupTree';
 
 /** Every permission group, up to the API's page limit, in one request. */
@@ -34,17 +34,30 @@ const PermissionGroupsContent = () => {
   );
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [toDelete, setToDelete] = useState<GroupNode | null>(null);
 
   useEffect(() => {
+    let active = true;
     dispatch(fetchPermissionGroups(ALL))
       .unwrap()
-      .then(() => setLoadError(null))
-      .catch((err: unknown) =>
-        setLoadError(typeof err === 'string' ? err : 'Please try again.')
+      .then(() => active && setLoadError(null))
+      .catch(
+        (err: unknown) =>
+          active &&
+          setLoadError(typeof err === 'string' ? err : 'Please try again.')
       )
-      .finally(() => setLoaded(true));
-  }, [dispatch]);
+      .finally(() => active && setLoaded(true));
+    return () => {
+      active = false;
+    };
+  }, [dispatch, attempt]);
+
+  const retry = () => {
+    setLoaded(false);
+    setLoadError(null);
+    setAttempt((n) => n + 1);
+  };
 
   const tree = useMemo(
     () => buildGroupTree(permissionGroupsToFlat(permissionGroups)),
@@ -106,14 +119,15 @@ const PermissionGroupsContent = () => {
       />
 
       {loadError ? (
-        <Alert variant="destructive">
-          <AlertCircle aria-hidden="true" />
-          <AlertTitle>Couldn’t load permission groups</AlertTitle>
-          <AlertDescription>{loadError}</AlertDescription>
-        </Alert>
+        <LoadError
+          title="Couldn’t load permission groups"
+          message={loadError}
+          onRetry={retry}
+        />
       ) : null}
 
-      {!loaded && permissionGroups.length === 0 ? (
+      {loadError && permissionGroups.length === 0 ? null : !loaded &&
+        permissionGroups.length === 0 ? (
         <TableSkeleton label="Loading permission groups" columns={5} />
       ) : (
         <GroupTree

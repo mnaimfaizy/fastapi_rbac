@@ -1,15 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AlertCircle, Plus, Shield } from 'lucide-react';
+import { Plus, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import {
   deleteRoleGroup,
   fetchRoleGroups,
 } from '@/store/slices/roleGroupSlice';
-import { fetchRoles } from '@/store/slices/roleSlice';
 import { usePermissions } from '@/hooks/usePermissions';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/common/PageHeader';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
@@ -17,7 +15,12 @@ import { TableSkeleton } from '@/components/common/Skeletons';
 import type { RowAction } from '@/components/common/RowActionsMenu';
 import { GroupTree } from '../groups/GroupTree';
 import { buildGroupTree, type GroupNode } from '../groups/treeModel';
-import { roleGroupsToFlat } from './roleGroupTree';
+import { LoadError } from '../groups/LoadError';
+import {
+  fetchAllRoles,
+  roleGroupsToFlat,
+  type RoleWithCount,
+} from './roleGroupTree';
 
 /** Every role group, with up to the API's page limit in one request. */
 const ALL = { page: 1, size: 100 };
@@ -32,28 +35,44 @@ const RoleGroupContent = () => {
   const canReadRoles = hasPermission('role.read');
 
   const roleGroups = useAppSelector((state) => state.roleGroup.roleGroups);
-  const roles = useAppSelector((state) => state.role.roles);
+  // Every role, or null while unknown (no role.read, or the load failed),
+  // so the chips leave out a role count rather than show a wrong one.
+  const [roles, setRoles] = useState<RoleWithCount[] | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [toDelete, setToDelete] = useState<GroupNode | null>(null);
 
   useEffect(() => {
+    let active = true;
     dispatch(fetchRoleGroups(ALL))
       .unwrap()
-      .then(() => setLoadError(null))
-      .catch((err: unknown) =>
-        setLoadError(typeof err === 'string' ? err : 'Please try again.')
+      .then(() => active && setLoadError(null))
+      .catch(
+        (err: unknown) =>
+          active &&
+          setLoadError(typeof err === 'string' ? err : 'Please try again.')
       )
-      .finally(() => setLoaded(true));
+      .finally(() => active && setLoaded(true));
     if (canReadRoles) {
-      void dispatch(fetchRoles(ALL));
+      fetchAllRoles()
+        .then((all) => active && setRoles(all))
+        .catch(() => active && setRoles(null));
     }
-  }, [dispatch, canReadRoles]);
+    return () => {
+      active = false;
+    };
+  }, [dispatch, canReadRoles, attempt]);
+
+  const retry = () => {
+    setLoaded(false);
+    setLoadError(null);
+    setAttempt((n) => n + 1);
+  };
 
   const tree = useMemo(
-    () =>
-      buildGroupTree(roleGroupsToFlat(roleGroups, canReadRoles ? roles : null)),
-    [roleGroups, roles, canReadRoles]
+    () => buildGroupTree(roleGroupsToFlat(roleGroups, roles)),
+    [roleGroups, roles]
   );
 
   const actionsFor = (group: GroupNode): RowAction[] => {
@@ -110,14 +129,15 @@ const RoleGroupContent = () => {
       />
 
       {loadError ? (
-        <Alert variant="destructive">
-          <AlertCircle aria-hidden="true" />
-          <AlertTitle>Couldn’t load role groups</AlertTitle>
-          <AlertDescription>{loadError}</AlertDescription>
-        </Alert>
+        <LoadError
+          title="Couldn’t load role groups"
+          message={loadError}
+          onRetry={retry}
+        />
       ) : null}
 
-      {!loaded && roleGroups.length === 0 ? (
+      {loadError && roleGroups.length === 0 ? null : !loaded &&
+        roleGroups.length === 0 ? (
         <TableSkeleton label="Loading role groups" columns={5} />
       ) : (
         <GroupTree

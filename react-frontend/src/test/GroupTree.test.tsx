@@ -192,4 +192,21 @@ describe('GroupTree', () => {
     const parentCell = within(rowFor('Orphan')).getAllByRole('cell')[1];
     expect(parentCell).toHaveTextContent(/^—$/);
   });
+
+  it('keeps each group’s whole counts while a search trims its rows', async () => {
+    const user = userEvent.setup();
+    renderTree();
+
+    await user.type(
+      screen.getByRole('searchbox', { name: 'Search role groups' }),
+      'Manager'
+    );
+    // Only Manager matches, but Operational still has 1 role and 1 group.
+    expect(
+      screen.queryByRole('link', { name: 'Support' })
+    ).not.toBeInTheDocument();
+    expect(
+      within(rowFor('Operational')).getByText('1 role · 1 group')
+    ).toBeVisible();
+  });
 });

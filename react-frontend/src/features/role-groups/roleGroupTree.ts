@@ -1,9 +1,10 @@
 import type { Role } from '@/models/role';
+import { roleService } from '@/services/role.service';
 import type { RoleGroup } from '@/models/roleGroup';
 import type { FlatGroup, GroupMember } from '../groups/treeModel';
 
 /** A role as `GET /roles` returns it once it carries a holder count. */
-type RoleWithCount = Role & { user_count?: number };
+export type RoleWithCount = Role & { user_count?: number };
 
 function userCount(role: RoleWithCount) {
   if (typeof role.user_count !== 'number') {
@@ -46,4 +47,18 @@ export function roleGroupsToFlat(
   };
   groups.forEach(visit);
   return [...seen.values()];
+}
+
+/** The page size `GET /roles` allows at most. */
+const ROLE_PAGE_SIZE = 100;
+
+/** Every role, reading `GET /roles` page by page. */
+export async function fetchAllRoles(): Promise<RoleWithCount[]> {
+  const first = await roleService.getRoles({ page: 1, size: ROLE_PAGE_SIZE });
+  const roles: RoleWithCount[] = [...first.data.items];
+  for (let page = 2; page <= first.data.pages; page += 1) {
+    const next = await roleService.getRoles({ page, size: ROLE_PAGE_SIZE });
+    roles.push(...next.data.items);
+  }
+  return roles;
 }

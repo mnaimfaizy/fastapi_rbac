@@ -214,4 +214,23 @@ describe('Permission groups page', () => {
       expect(mockPermissionService.getPermissionGroups).not.toHaveBeenCalled();
     });
   });
+
+  describe('when loading fails', () => {
+    it('shows the error with a retry, not the first-run empty state', async () => {
+      mockPermissionService.getPermissionGroups.mockRejectedValueOnce(
+        new Error('Network Error')
+      );
+      renderGroupsAt('/dashboard/permission-groups', 'admin');
+
+      expect(
+        await screen.findByText('Couldn’t load permission groups')
+      ).toBeVisible();
+      expect(screen.getByRole('button', { name: 'Try again' })).toBeVisible();
+      expect(
+        screen.queryByRole('heading', {
+          name: 'Create your first permission group',
+        })
+      ).not.toBeInTheDocument();
+    });
+  });
 });

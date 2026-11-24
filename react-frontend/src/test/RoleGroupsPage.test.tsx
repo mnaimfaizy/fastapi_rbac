@@ -214,4 +214,52 @@ describe('Role groups page', () => {
       expect(mockRoleGroupService.getRoleGroups).not.toHaveBeenCalled();
     });
   });
+
+  describe('when loading fails', () => {
+    it('shows the error with a retry, not the first-run empty state', async () => {
+      const user = userEvent.setup();
+      mockRoleGroupService.getRoleGroups.mockRejectedValueOnce(
+        new Error('Network Error')
+      );
+      renderGroupsAt('/dashboard/role-groups', 'admin');
+
+      expect(
+        await screen.findByText('Couldn’t load role groups')
+      ).toBeVisible();
+      expect(
+        screen.queryByRole('heading', { name: 'Create your first role group' })
+      ).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Try again' }));
+      expect(
+        await screen.findByRole('link', { name: 'Support' })
+      ).toBeVisible();
+      expect(
+        screen.queryByText('Couldn’t load role groups')
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  describe('with more roles than one page holds', () => {
+    it('reads every page of roles', async () => {
+      const first = page([roles[0]]);
+      mockRoleService.getRoles.mockImplementation((async (params?: {
+        page?: number;
+      }) =>
+        params?.page === 2
+          ? {
+              ...page([roles[1]]),
+              data: { ...page([roles[1]]).data, page: 2, pages: 2 },
+            }
+          : { ...first, data: { ...first.data, pages: 2 } }) as never);
+      renderGroupsAt('/dashboard/role-groups', 'admin');
+
+      expect(await screen.findByText('8 users')).toBeVisible();
+      expect(screen.getByText('3 users')).toBeVisible();
+      expect(mockRoleService.getRoles).toHaveBeenCalledWith({
+        page: 2,
+        size: 100,
+      });
+    });
+  });
 });
