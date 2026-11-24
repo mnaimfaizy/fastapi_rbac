@@ -57,19 +57,12 @@ Never ask `pr-drafter` to push, create the pull request or edit files.
 
 The runner ends every failure with a trailer: `pr-runner: failed`, `reason`, optional `scope` and `paths`, and `hint`.
 
-| reason | What to do |
-| --- | --- |
-| `usage` | Fix the arguments the message names. |
-| `auth` | `gh auth status`; fix the login before saying a pull request exists. |
-| `on-base` | Create a branch per `docs/agents/branch-names.md`; do not open a pull request from `main`. |
-| `merge-base` | Fetch the base, call `pr-drafter` again (same `--base`), retry with the new draft. |
-| `no-commits` | Commit the work with `commit-change` first. |
-| `body` | Header line left in the body file: rewrite the file. Missing AI notice or a closing keyword in backticks: send the draft back. |
-| `risk` | Send the draft back to `pr-drafter` with the runner's message. |
-| `label` | Drop the label, or send the draft back; never add the label to the allowlist to get past the runner. |
-| `secret` | A branch commit adds a secret-looking path in `paths`. Stop and tell the user; remove it in a new commit only if they agree. |
-| `diverged` | The remote branch has commits this one does not. `git merge origin/<branch>`, then retry. |
-| `push`, `create` | Read the git or gh output above the trailer, fix the cause, retry. |
+The reasons and their meanings are listed once, in the comment above `fail()` in `scripts/development/pr-runner.sh`, and each trailer's `hint` says what to do next. Rules the runner cannot enforce:
+
+- `merge-base`, `body` (AI notice or a closing keyword in backticks) and `risk`: send the draft back to `pr-drafter` with the runner's message; do not fix the body by hand. A header line left in the body file is the one `body` case you fix yourself, by rewriting the file.
+- `label`: drop the label, or send the draft back; never add the label to the allowlist to get past the runner.
+- `secret`: stop and tell the user; remove the path in a new commit only if they agree.
+- `diverged`: `git merge origin/<branch>` through the commit pipeline, then retry. Never rebase or force-push.
 
 ## Checks before you report
 

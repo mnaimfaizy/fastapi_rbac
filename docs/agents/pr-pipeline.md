@@ -45,8 +45,10 @@ MERGE-BASE: <full SHA from git merge-base>
 Still to check:
 ## Merge risk
 **Reversible:** <yes or no> — <for no: the part a revert does not undo>
-**Blast radius:** <none|docs|ci|tooling|backend|frontend|api|auth|stored-data> — <at most two sentences>
+**Blast radius:** <one word from RADIUS_WORDS in pr-runner.sh> — <at most two sentences>
 ```
+
+The blast radius words are listed once, as `RADIUS_WORDS` in [`scripts/development/pr-runner.sh`](../../scripts/development/pr-runner.sh); the runner's `RADIUS_LINE` check and its error message are built from it.
 
 The three header lines sit above the AI notice, so the main agent strips them and they never reach the published body. Empty sections are left out, except `## Merge risk`.
 
@@ -74,20 +76,7 @@ hint: <the command to run next>
 
 Field names and the reason set are an interface that agents parse: add reasons, do not rename them. The shape matches the commit runner's trailer.
 
-| `reason` | Meaning | What to do |
-| --- | --- | --- |
-| `usage` | A missing or unknown argument | Fix the arguments |
-| `auth` | gh is not logged in, or cannot read the repository or user | `gh auth status` |
-| `on-base` | Detached HEAD, or on the base branch | Create a branch per `branch-names.md` |
-| `merge-base` | Missing, abbreviated or different merge base, or the base cannot be resolved | `git fetch origin <base>`, draft again |
-| `no-commits` | Nothing between the base and HEAD | Commit through `commit-change` |
-| `body` | A header line left in the body, no AI notice, or a closing keyword in backticks | Rewrite the body file, or send the draft back |
-| `risk` | Unreadable `**Reversible:**` or `**Blast radius:**` line | Send the draft back; do not fix it by hand |
-| `label` | A label not on the allowlist, or the API refused one (`scope` names it) | Drop the label, or draft again |
-| `secret` | The branch adds a secret-looking path (`paths` lists them) | Stop and tell the user |
-| `diverged` | The remote branch has commits this one lacks, or a force flag was passed | `git merge origin/<branch>`, retry |
-| `push` | `git push` failed | Read the git output |
-| `create` | `gh pr create`, the update or the reviewer request failed | Read the gh output |
+The reasons, with what each means, are listed once, in the comment above `fail()` in [`scripts/development/pr-runner.sh`](../../scripts/development/pr-runner.sh). Each failure's `hint` line says what to do next; the [`create-pull-request`](../../.claude/skills/create-pull-request/SKILL.md) skill adds the agent-side rules (send the draft back, never force-push).
 
 ## What was adapted, and what was left out
 
@@ -102,4 +91,4 @@ Field names and the reason set are an interface that agents parse: add reasons, 
 
 ## Trying a failure on purpose
 
-Run the runner with a made-up merge base, with a body whose `**Reversible:**` line ends in a full stop, and with `--label agent:review`, and check that each ends with the `merge-base`, `risk` and `label` trailers before anything is pushed.
+Run the runner with a made-up merge base, with a body whose `**Reversible:**` line ends in a full stop, and with `--label agent:review`, and check that each ends with the `merge-base`, `risk` and `label` trailers before anything is pushed. Then run it with a body holding ``See `Fixes #12` here`` (refused with `reason: body`) and one holding ``Rename `foo` to `bar`; resolves #12`` (passes the body check: the keyword is outside every code span).

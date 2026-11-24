@@ -16,8 +16,8 @@ When asked to resolve an issue, follow these steps:
    - Create a new branch following [`docs/agents/branch-names.md`](../../docs/agents/branch-names.md) (mandatory SSOT).
    - Checkout/Switch to the new branch.
    - Make the necessary code changes to resolve the issue.
-   - Commit the changes with a clear message describing what was done to resolve the issue.
-   - Push the changes to the remote repository.
+   - Commit the changes with a clear message describing what was done to resolve the issue. Agents commit only through the `commit-change` skill and `scripts/development/commit-runner.sh`; see [`docs/agents/commit-pipeline.md`](../../docs/agents/commit-pipeline.md).
+   - Push the branch. Agents never run `git push`: they push and open a draft pull request in one step through the `create-pull-request` skill (`scripts/development/pr-runner.sh ... --draft`, see step 6 and [`docs/agents/pr-pipeline.md`](../../docs/agents/pr-pipeline.md)). People push as usual.
 4. **Test the Solution**: Ensure that the solution works as intended by running tests or manually testing the changes.
 5. **Document the Changes**: Update any relevant documentation to reflect the changes made to resolve the issue.
 6. **Create a Pull Request**: Once the issue is resolved, create a pull request with a clear description of the changes made and how they resolve the issue. Also include label(s) like `bug`, `enhancement`, or `documentation` as appropriate. Agents do this only through the `create-pull-request` skill and `scripts/development/pr-runner.sh`, which allows only the labels in [`docs/agents/pr-labels.txt`](../../docs/agents/pr-labels.txt); see [`docs/agents/pr-pipeline.md`](../../docs/agents/pr-pipeline.md).

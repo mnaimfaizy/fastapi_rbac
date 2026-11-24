@@ -44,7 +44,7 @@ You draft **one** pull request for the current branch from its commits, its diff
 8. Write the body from the diff, grouped by area (backend, react-frontend, docs, CI, agent tooling). Do not restate commit subjects.
 9. Judge the merge risk from the diff:
    - **Reversible** is `no` when a revert would not undo the merge: an Alembic migration under `backend/alembic/versions/` that drops or rewrites data, a change to the Redis token allowlist key format, JWT claims or password hashing that strands live sessions or stored hashes, a removed or renamed API response field the web app or another client reads, or a change to a stored format (audit events, stored settings). Otherwise it is `yes`.
-   - **Blast radius** is one word for what breaks if the change is wrong: `none`, `docs`, `ci`, `tooling` (agent and developer scripts), `backend`, `frontend`, `api`, `auth` or `stored-data`.
+   - **Blast radius** is one word for what breaks if the change is wrong, taken from `RADIUS_WORDS` in `scripts/development/pr-runner.sh` (read it; that is the only list). `tooling` means agent and developer scripts.
    - Call a merge irreversible, or a radius wide, only on what the diff shows.
 10. Choose labels from `docs/agents/pr-labels.txt` only (read it), from the combined diff. A linked issue's labels are hints, kept only when the diff supports them. Be sparing: one kind and at most one area. Leave the `LABELS:` line out when none fit.
 11. For each issue, write `Fixes #<n>` only when the branch resolves it. List an issue the branch only touches as `Related: #<n>`, with one clause and no keyword. Never put a closing keyword in backticks.
