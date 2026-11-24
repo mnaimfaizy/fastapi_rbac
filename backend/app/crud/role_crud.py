@@ -7,7 +7,7 @@ from fastapi_pagination.ext.sqlmodel import apaginate
 from redis.asyncio import Redis
 from sqlalchemy import exc
 from sqlalchemy.orm import selectinload
-from sqlmodel import select
+from sqlmodel import func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.crud.base_crud import CRUDBase
@@ -15,13 +15,32 @@ from app.models.permission_model import Permission
 from app.models.role_model import Role
 from app.models.role_permission_model import RolePermission
 from app.models.user_model import User
+from app.models.user_role_model import UserRole
 from app.schemas.role_schema import IRoleCreate, IRoleUpdate
 from app.utils.exceptions.common_exception import ResourceNotFoundException
 from app.utils.security_audit import create_audit_log
 
+# Permissions and their groups in two SELECTs, however many roles are on the page.
+# Role detail lists this many holders; the full count comes from user_count.
+HOLDERS_LIMIT = 25
+
+_ROLE_READ_OPTIONS = (selectinload(Role.permissions).selectinload(Permission.group),)
+
 
 class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
     """CRUD operations for Role model"""
+
+    async def get(self, *, id: UUID | str, db_session: AsyncSession | None = None) -> Role | None:
+        if db_session is None:
+            raise ValueError("db_session must be provided to CRUD methods")
+        statement = (
+            select(Role)
+            .where(Role.id == id)
+            .options(*_ROLE_READ_OPTIONS)
+            .execution_options(populate_existing=True)
+        )
+        result = await db_session.exec(statement)
+        return result.one_or_none()
 
     async def create(
         self,
@@ -81,8 +100,42 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
 
     async def get_all(self, *, db_session: AsyncSession) -> List[Role]:
         """Fetch all roles without pagination."""
-        result = await db_session.exec(select(Role).order_by(Role.name))  # Order by name for consistency
+        statement = (
+            select(Role)
+            .order_by(Role.name)
+            .options(*_ROLE_READ_OPTIONS)
+            .execution_options(populate_existing=True)
+        )
+        result = await db_session.exec(statement)
         return list(result.all())
+
+    async def count_users_by_role(self, *, role_ids: List[UUID], db_session: AsyncSession) -> dict[UUID, int]:
+        """How many users hold each role, in one grouped query."""
+        if not role_ids:
+            return {}
+        result = await db_session.exec(
+            select(UserRole.role_id, func.count())
+            .where(UserRole.role_id.in_(role_ids))  # type: ignore[attr-defined]
+            .group_by(UserRole.role_id)
+        )
+        found = {role_id: count for role_id, count in result.all()}
+        return {role_id: int(found.get(role_id, 0)) for role_id in role_ids}
+
+    async def list_holders(
+        self, *, role_id: UUID, db_session: AsyncSession, limit: int = HOLDERS_LIMIT
+    ) -> list[dict[str, Any]]:
+        """The first ``limit`` users who hold the role by email: identity columns only, one query."""
+        result = await db_session.exec(
+            select(User.id, User.email, User.first_name, User.last_name)
+            .join(UserRole, UserRole.user_id == User.id)  # type: ignore[arg-type]
+            .where(UserRole.role_id == role_id)
+            .order_by(User.email)
+            .limit(limit)
+        )
+        return [
+            {"id": user_id, "email": email, "first_name": first_name, "last_name": last_name}
+            for user_id, email, first_name, last_name in result.all()
+        ]
 
     async def add_role_to_user(self, *, user: User, role_id: UUID, db_session: AsyncSession) -> Role:
         role = await super().get(id=role_id, db_session=db_session)
@@ -363,7 +416,7 @@ class CRUDRole(CRUDBase[Role, IRoleCreate, IRoleUpdate]):
         else:
             stmt = query
 
-        stmt = stmt.options(selectinload(Role.permissions))
+        stmt = stmt.options(*_ROLE_READ_OPTIONS).execution_options(populate_existing=True)
         return await apaginate(db_session, stmt, params, unique=True)
 
 

@@ -14,6 +14,10 @@ export interface User {
   created_at: string;
   updated_at: string;
   last_changed_password_date: string | null;
+  /**
+   * Present once the API reports password expiry (#425). Display only.
+   */
+  password_expires_at?: string | null;
   contact_phone: string | null;
   number_of_failed_attempts: number | null;
   verification_code: string | null;
