@@ -7,6 +7,7 @@ import { SignOutEverywhereDialog } from '@/components/layout/UserMenu';
 import { Button } from '@/components/ui/button';
 import type { User } from '@/models/user';
 import { useAppSelector } from '@/store/hooks';
+import { parseApiTimestamp } from './parseApiTimestamp';
 import { SettingsSection } from './SettingsSection';
 
 /**
@@ -73,10 +74,8 @@ export function SecurityTab() {
 }
 
 function PasswordStatus({ user }: { user: User }) {
-  const changed = user.last_changed_password_date
-    ? new Date(user.last_changed_password_date)
-    : null;
-  const valid = changed && !Number.isNaN(changed.getTime()) ? changed : null;
+  // The API sends this as naive UTC; read it as UTC, not local time.
+  const valid = parseApiTimestamp(user.last_changed_password_date);
   const ageDays = valid
     ? Math.max(0, Math.floor((Date.now() - valid.getTime()) / DAY_MS))
     : null;
