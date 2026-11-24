@@ -119,7 +119,7 @@ describe('Signed-in home', () => {
       })
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('heading', { name: 'Dashboard Overview' })
+      screen.queryByRole('heading', { level: 1, name: 'Dashboard' })
     ).not.toBeInTheDocument();
   });
 
@@ -129,7 +129,7 @@ describe('Signed-in home', () => {
       renderLanding(role, '/login');
 
       expect(
-        await screen.findByRole('heading', { name: 'Dashboard Overview' })
+        await screen.findByRole('heading', { level: 1, name: 'Dashboard' })
       ).toBeInTheDocument();
       expect(
         screen.queryByRole('link', { name: /Edit profile/ })
@@ -145,7 +145,7 @@ describe('Signed-in home', () => {
     );
 
     expect(
-      await screen.findByRole('heading', { name: 'Dashboard Overview' })
+      await screen.findByRole('heading', { level: 1, name: 'Dashboard' })
     ).toBeInTheDocument();
   });
 });
