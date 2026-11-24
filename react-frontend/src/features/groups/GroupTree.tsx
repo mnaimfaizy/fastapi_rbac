@@ -2,6 +2,7 @@ import { Fragment, useMemo, useState, type ComponentType } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronDown, ChevronRight, FolderTree, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -45,6 +46,12 @@ export interface GroupTreeProps {
   actionsFor: (group: GroupNode) => RowAction[];
   /** What an empty tree shows. */
   emptyState: EmptyStateProps;
+  /**
+   * Whether the members behind the count chips are known. `loading` shows
+   * a placeholder and `unavailable` a dash, so a chip never shows a count
+   * the members have not arrived for.
+   */
+  memberCounts?: 'ready' | 'loading' | 'unavailable';
 }
 
 function hasRows(node: GroupNode) {
@@ -65,6 +72,7 @@ export function GroupTree({
   monoMembers = false,
   actionsFor,
   emptyState,
+  memberCounts = 'ready',
 }: GroupTreeProps) {
   const [query, setQuery] = useState('');
   // Until the viewer toggles something, the top-level groups start open.
@@ -186,9 +194,19 @@ export function GroupTree({
             {node.parentName ?? '—'}
           </TableCell>
           <TableCell>
-            <Badge variant="secondary" className="font-medium">
-              {memberSummary(node, memberNoun)}
-            </Badge>
+            {memberCounts === 'loading' ? (
+              <Skeleton
+                role="status"
+                aria-label={`Loading ${memberNoun.other}`}
+                className="h-5 w-20"
+              />
+            ) : memberCounts === 'unavailable' ? (
+              <span className="text-foreground-secondary">—</span>
+            ) : (
+              <Badge variant="secondary" className="font-medium">
+                {memberSummary(node, memberNoun)}
+              </Badge>
+            )}
           </TableCell>
           <TableCell className="text-foreground-secondary">
             {formatCreated(node.createdAt)}

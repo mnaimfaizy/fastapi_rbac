@@ -240,6 +240,49 @@ describe('Role groups page', () => {
     });
   });
 
+  describe('while the roles are still loading', () => {
+    it('shows a placeholder instead of a count', async () => {
+      let resolveRoles: (value: unknown) => void = () => {};
+      mockRoleService.getRoles.mockReturnValue(
+        new Promise((resolve) => {
+          resolveRoles = resolve;
+        }) as never
+      );
+      renderGroupsAt('/dashboard/role-groups', 'admin');
+
+      const operational = await waitFor(() => rowFor('Operational'));
+      expect(
+        within(operational).getByRole('status', { name: 'Loading roles' })
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/\d+ groups?$/)).not.toBeInTheDocument();
+
+      resolveRoles(page(roles));
+      expect(
+        await within(rowFor('Operational')).findByText('1 role · 1 group')
+      ).toBeVisible();
+      expect(
+        screen.queryByRole('status', { name: 'Loading roles' })
+      ).not.toBeInTheDocument();
+    });
+
+    it('shows the placeholder again while a roles retry runs', async () => {
+      const user = userEvent.setup();
+      mockRoleService.getRoles
+        .mockRejectedValueOnce(new Error('Network Error'))
+        .mockReturnValueOnce(new Promise(() => {}) as never);
+      renderGroupsAt('/dashboard/role-groups', 'admin');
+
+      await user.click(
+        await screen.findByRole('button', { name: 'Try again' })
+      );
+      expect(
+        within(rowFor('Operational')).getByRole('status', {
+          name: 'Loading roles',
+        })
+      ).toBeInTheDocument();
+    });
+  });
+
   describe('when only the roles fail to load', () => {
     it('keeps the tree, says the roles are missing, and retries them', async () => {
       const user = userEvent.setup();
@@ -251,6 +294,10 @@ describe('Role groups page', () => {
       expect(await screen.findByText('Couldn’t load roles')).toBeVisible();
       expect(screen.getByRole('link', { name: 'Support' })).toBeVisible();
       expect(screen.queryByText('8 users')).not.toBeInTheDocument();
+      // No count stands in for the roles that didn't arrive.
+      expect(
+        within(rowFor('Operational')).getAllByRole('cell')[2]
+      ).toHaveTextContent(/^—$/);
       expect(
         screen.queryByRole('heading', { name: 'Create your first role group' })
       ).not.toBeInTheDocument();

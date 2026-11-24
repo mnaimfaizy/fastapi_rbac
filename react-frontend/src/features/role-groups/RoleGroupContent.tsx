@@ -170,7 +170,7 @@ const RoleGroupContent = () => {
       {rolesFailed && !loadError ? (
         <LoadError
           title="Couldn’t load roles"
-          message="The groups are shown without their roles, so their counts leave roles out."
+          message="The groups are shown without their roles or role counts."
           onRetry={retryRoles}
         />
       ) : null}
@@ -185,6 +185,13 @@ const RoleGroupContent = () => {
           memberNoun={{ one: 'role', other: 'roles' }}
           memberIcon={Shield}
           actionsFor={actionsFor}
+          memberCounts={
+            !canReadRoles || roles !== null
+              ? 'ready'
+              : rolesFailed
+                ? 'unavailable'
+                : 'loading'
+          }
           emptyState={
             canCreate
               ? {
