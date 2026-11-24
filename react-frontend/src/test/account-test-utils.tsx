@@ -12,6 +12,7 @@ import roleGroupReducer from '../store/slices/roleGroupSlice';
 import dashboardReducer from '../store/slices/dashboardSlice';
 import { setAuthSessionHint, setStoredAccessToken } from '../lib/tokenStorage';
 import { renderWithProviders, type AppStore } from './test-utils';
+import type { User } from '../models/user';
 import { signedInAs, type ShellRole } from './shell-test-utils';
 
 /** Each seeded role with the name its header menu shows. */
@@ -22,11 +23,18 @@ export const ACCOUNT_ROLES: [ShellRole, string][] = [
 ];
 
 /**
- * The app's own route tree at `path`, signed in as `role`. Test files that
- * use it mock `auth.service`, `user.service` and `dashboard.service`.
+ * The app's own route tree at `path`, signed in as `role`, with any fields
+ * of the signed-in user replaced by `overrides`. Test files that use it mock
+ * `auth.service`, `user.service` and `dashboard.service`.
  */
-export function renderAccountAt(path: string, role: ShellRole = 'admin') {
+export function renderAccountAt(
+  path: string,
+  role: ShellRole = 'admin',
+  overrides: Partial<User> = {}
+) {
   window.history.pushState({}, '', path);
+  const state = signedInAs(role);
+  state.auth.user = { ...state.auth.user, ...overrides };
   const store = configureStore({
     reducer: {
       auth: authReducer,
@@ -37,7 +45,7 @@ export function renderAccountAt(path: string, role: ShellRole = 'admin') {
       roleGroup: roleGroupReducer,
       dashboard: dashboardReducer,
     },
-    preloadedState: signedInAs(role),
+    preloadedState: state,
   });
   return renderWithProviders(<Routes>{appRoutes}</Routes>, {
     testStore: store as unknown as AppStore,

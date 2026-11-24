@@ -83,6 +83,43 @@ export function RoleChip({
 }
 
 /**
+ * The Sign out everywhere confirmation, shared by the user menu and the
+ * Security tab of Account settings. Confirming ends every session, this
+ * one included, and lands on Sign in.
+ */
+export function SignOutEverywhereDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const dispatch = useAppDispatch();
+  const navigate = useNavigate();
+
+  async function signOutEverywhere() {
+    const revoked = await dispatch(logoutAllUser()).unwrap();
+    // Sign in shows "You’ve been signed out everywhere." only when the server
+    // revoked every session; a failed call still signs this device out.
+    navigate(
+      revoked ? `/login?notice=${SIGNED_OUT_EVERYWHERE_NOTICE}` : '/login',
+      { replace: true }
+    );
+  }
+
+  return (
+    <ConfirmDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Sign out everywhere?"
+      description="You’ll be signed out on this device too."
+      confirmLabel="Sign out everywhere"
+      onConfirm={signOutEverywhere}
+    />
+  );
+}
+
+/**
  * The header user menu: who is signed in, Account settings, a quick theme
  * switch, Sign out, and Sign out everywhere behind a confirmation.
  *
@@ -99,16 +136,6 @@ export function UserMenu({ user }: { user: User }) {
   async function signOut() {
     await dispatch(logoutUser());
     navigate('/login');
-  }
-
-  async function signOutEverywhere() {
-    const revoked = await dispatch(logoutAllUser()).unwrap();
-    // Sign in shows "You’ve been signed out everywhere." only when the server
-    // revoked every session; a failed call still signs this device out.
-    navigate(
-      revoked ? `/login?notice=${SIGNED_OUT_EVERYWHERE_NOTICE}` : '/login',
-      { replace: true }
-    );
   }
 
   return (
@@ -200,13 +227,9 @@ export function UserMenu({ user }: { user: User }) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <ConfirmDialog
+      <SignOutEverywhereDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title="Sign out everywhere?"
-        description="You’ll be signed out on this device too."
-        confirmLabel="Sign out everywhere"
-        onConfirm={signOutEverywhere}
       />
     </>
   );

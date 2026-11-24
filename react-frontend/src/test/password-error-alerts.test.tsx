@@ -1,10 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 import { ApiErrorAlert } from '../components/auth/ApiErrorAlert';
-import ChangePasswordContent from '../components/dashboard/ChangePasswordContent';
+import { ChangePasswordForm } from '../components/auth/ChangePasswordForm';
+import authService from '../services/auth.service';
 import PasswordResetConfirmPage from '../features/auth/PasswordResetConfirmPage';
 import { mockUser, renderWithProviders } from './test-utils';
+
+vi.mock('../services/auth.service');
 
 const COMPLEXITY_MESSAGE = 'Password does not meet complexity requirements.';
 const RULES = [
@@ -60,12 +64,28 @@ describe('ApiErrorAlert', () => {
 });
 
 describe('change-password and reset-confirm complexity errors', () => {
-  it('shows the specific complexity errors on the change-password page', () => {
-    renderWithProviders(<ChangePasswordContent />, {
-      preloadedState: { auth: authWithComplexityError },
+  it('shows the specific complexity errors on the change-password form', async () => {
+    vi.mocked(authService.changePassword).mockRejectedValue({
+      response: {
+        data: {
+          status: 'error',
+          message: COMPLEXITY_MESSAGE,
+          errors: RULES.map((message) => ({ message })),
+        },
+      },
     });
+    const user = userEvent.setup();
+    renderWithProviders(<ChangePasswordForm />);
 
-    expect(screen.getByText(COMPLEXITY_MESSAGE)).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Current password'), 'Old-Pass-123!');
+    await user.type(screen.getByLabelText('New password'), 'Quartz-Meadow-31');
+    await user.type(
+      screen.getByLabelText('Confirm new password'),
+      'Quartz-Meadow-31'
+    );
+    await user.click(screen.getByRole('button', { name: 'Update password' }));
+
+    expect(await screen.findByText(COMPLEXITY_MESSAGE)).toBeInTheDocument();
     expect(screen.getByText(RULES[0])).toBeInTheDocument();
     expect(screen.getByText(RULES[1])).toBeInTheDocument();
   });
