@@ -6,6 +6,8 @@ import { renderWithProviders, mockUser } from './test-utils';
 import RoleDetail from '../features/roles/RoleDetail';
 import { roleService } from '../services/role.service';
 import permissionService from '../services/permission.service';
+import roleGroupService from '../services/roleGroup.service';
+import MainLayout from '../components/layout/MainLayout';
 import { toast } from 'sonner';
 
 vi.mock('../services/role.service', () => ({
@@ -27,6 +29,12 @@ vi.mock('../services/permission.service', () => ({
   },
 }));
 
+vi.mock('../services/roleGroup.service', () => ({
+  default: {
+    getRoleGroups: vi.fn(),
+  },
+}));
+
 vi.mock('sonner', () => ({
   toast: {
     success: vi.fn(),
@@ -37,6 +45,7 @@ vi.mock('sonner', () => ({
 
 const mockRoleService = vi.mocked(roleService);
 const mockPermissionService = vi.mocked(permissionService);
+const mockRoleGroupService = vi.mocked(roleGroupService);
 
 const GROUPS = [
   'User',
@@ -198,6 +207,29 @@ describe('Role detail', () => {
     });
   });
 
+  beforeEach(() => {
+    mockRoleGroupService.getRoleGroups.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 'group-ops',
+            name: 'Operational',
+            created_at: '2024-01-01T00:00:00Z',
+            updated_at: '2024-01-01T00:00:00Z',
+          },
+        ],
+        total: 1,
+        page: 1,
+        size: 100,
+        pages: 1,
+        next_page: null,
+        previous_page: null,
+      },
+      message: 'ok',
+      meta: {},
+    } as never);
+  });
+
   afterEach(() => {
     window.history.pushState({}, '', '/');
     vi.restoreAllMocks();
@@ -314,6 +346,69 @@ describe('Role detail', () => {
     expect(
       screen.queryByRole('button', { name: /Add Permissions/i })
     ).not.toBeInTheDocument();
+  });
+
+  it('shows the role group chip and the created and updated dates', async () => {
+    renderWithProviders(
+      <Routes>
+        <Route path="/dashboard/roles/:roleId" element={<RoleDetail />} />
+      </Routes>,
+      { preloadedState: viewer([...MANAGER_GRANTED]) }
+    );
+
+    const heading = await screen.findByRole('heading', {
+      level: 1,
+      name: 'Manager',
+    });
+    expect(
+      await within(heading.parentElement as HTMLElement).findByText(
+        'Operational'
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByText('Created 12 Jan 2026')).toBeInTheDocument();
+    expect(screen.getByText('Updated 4 Nov 2026')).toBeInTheDocument();
+  });
+
+  it('leaves the group chip out without role_group.read', async () => {
+    renderWithProviders(
+      <Routes>
+        <Route path="/dashboard/roles/:roleId" element={<RoleDetail />} />
+      </Routes>,
+      {
+        preloadedState: viewer(
+          [...MANAGER_GRANTED].filter((name) => name !== 'role_group.read')
+        ),
+      }
+    );
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Manager' })
+    ).toBeInTheDocument();
+    expect(mockRoleGroupService.getRoleGroups).not.toHaveBeenCalled();
+    expect(screen.queryByText('Operational')).not.toBeInTheDocument();
+  });
+
+  it('ends the header breadcrumb with the role name', async () => {
+    renderWithProviders(
+      <Routes>
+        <Route element={<MainLayout />}>
+          <Route path="/dashboard/roles/:roleId" element={<RoleDetail />} />
+        </Route>
+      </Routes>,
+      { preloadedState: viewer([...MANAGER_GRANTED]) }
+    );
+
+    const breadcrumb = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    await waitFor(() =>
+      expect(within(breadcrumb).getByText('Manager')).toHaveAttribute(
+        'aria-current',
+        'page'
+      )
+    );
+    expect(breadcrumb).toHaveTextContent('Access');
+    expect(
+      within(breadcrumb).getByRole('link', { name: 'Roles' })
+    ).toHaveAttribute('href', '/dashboard/roles');
   });
 
   it('lets an admin open edit from the detail page', async () => {

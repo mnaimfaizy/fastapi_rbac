@@ -564,11 +564,12 @@ describe('RoleList Component', () => {
 
       renderRoleList();
 
-      const roleGroupLink = screen.getByRole('button', {
+      // A grey chip, as the artboard draws it, that still opens the group.
+      const roleGroupChip = screen.getByRole('button', {
         name: 'System Administration',
       });
-      expect(roleGroupLink).toBeInTheDocument();
-      expect(roleGroupLink).toHaveClass('text-primary', 'hover:underline');
+      expect(roleGroupChip).toHaveClass('bg-muted', 'rounded-md');
+      expect(roleGroupChip).not.toHaveClass('hover:underline');
     });
   });
 

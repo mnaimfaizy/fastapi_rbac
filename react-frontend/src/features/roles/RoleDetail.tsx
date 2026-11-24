@@ -4,6 +4,10 @@ import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '../../store';
 import { deleteRole, fetchRoleById } from '../../store/slices/roleSlice';
 import { fetchPermissions } from '../../store/slices/permissionSlice';
+import { fetchRoleGroups } from '../../store/slices/roleGroupSlice';
+import { format, isValid, parseISO } from 'date-fns';
+import { usePageCrumb } from '@/components/layout/pageCrumb';
+import { RoleGroupChip } from './RoleGroupChip';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Check, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -29,6 +33,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+
+/** "12 Jan 2026", or null when the API sent no usable timestamp. */
+function shortDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const date = parseISO(value);
+  return isValid(date) ? format(date, 'd MMM yyyy') : null;
+}
 
 const CRUD_VERBS = ['create', 'read', 'update', 'delete'] as const;
 type Verb = (typeof CRUD_VERBS)[number];
@@ -137,6 +148,7 @@ const RoleDetail: React.FC = () => {
   const canUpdateRoles = hasPermission('role.update');
   const canDeleteRoles = hasPermission('role.delete');
   const canReadPermissions = hasPermission('permission.read');
+  const canReadRoleGroups = hasPermission('role_group.read');
 
   const { currentRole, loading, error } = useSelector(
     (state: RootState) => state.role
@@ -144,6 +156,9 @@ const RoleDetail: React.FC = () => {
   const { permissions, totalItems: permissionTotal } = useSelector(
     (state: RootState) => state.permission
   );
+  const { roleGroups } = useSelector((state: RootState) => state.roleGroup);
+  // The header breadcrumb ends with this role's name (Access › Roles › Name).
+  usePageCrumb(currentRole?.id === roleId ? currentRole?.name : null);
 
   useEffect(() => {
     if (!canReadRoles) {
@@ -158,8 +173,19 @@ const RoleDetail: React.FC = () => {
       if (canReadPermissions) {
         dispatch(fetchPermissions({ page: 1, pageSize: 100 }));
       }
+      // The group chip needs the group's name, which needs role_group.read.
+      if (canReadRoleGroups) {
+        dispatch(fetchRoleGroups({ page: 1, size: 100 }));
+      }
     }
-  }, [dispatch, roleId, canReadRoles, canReadPermissions, navigate]);
+  }, [
+    dispatch,
+    roleId,
+    canReadRoles,
+    canReadPermissions,
+    canReadRoleGroups,
+    navigate,
+  ]);
 
   const handleDelete = async () => {
     if (!canDeleteRoles) {
@@ -229,6 +255,11 @@ const RoleDetail: React.FC = () => {
     currentRole.users !== undefined && currentRole.users !== null;
   const holders = currentRole.users ?? [];
   const userCount = currentRole.user_count ?? holders.length;
+  const groupName = currentRole.role_group_id
+    ? roleGroups.find((group) => group.id === currentRole.role_group_id)?.name
+    : undefined;
+  const created = shortDate(currentRole.created_at);
+  const updated = shortDate(currentRole.updated_at);
 
   return (
     <div className="space-y-6">
@@ -242,9 +273,12 @@ const RoleDetail: React.FC = () => {
         </Link>
         <div className="mt-2 flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {currentRole.name}
-            </h1>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="text-2xl font-semibold tracking-tight">
+                {currentRole.name}
+              </h1>
+              {groupName && <RoleGroupChip name={groupName} />}
+            </div>
             <p className="mt-1 text-sm text-muted-foreground">
               {currentRole.description || 'No description'}
             </p>
@@ -288,6 +322,12 @@ const RoleDetail: React.FC = () => {
             )}
           </div>
         </div>
+        {(created || updated) && (
+          <div className="mt-1.5 flex flex-wrap gap-4 text-[13px] text-muted-foreground">
+            {created && <span>Created {created}</span>}
+            {updated && <span>Updated {updated}</span>}
+          </div>
+        )}
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] items-start">

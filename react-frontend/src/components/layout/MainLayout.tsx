@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Link, Outlet, useLocation } from 'react-router-dom';
 import { ChevronRight, Menu, PanelLeft } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Meta } from '@/components/common/Meta';
@@ -13,6 +13,7 @@ import { AppSidebar } from './AppSidebar';
 import { BrandLockup } from './BrandLogo';
 import { RoleChip, UserAvatar, UserMenu } from './UserMenu';
 import { displayName } from './viewer';
+import { PageCrumbContext } from './pageCrumb';
 
 /** localStorage key that remembers a collapsed sidebar in this browser. */
 export const SIDEBAR_COLLAPSED_KEY = 'fastapi-rbac-sidebar-collapsed';
@@ -47,6 +48,7 @@ const MainLayout = () => {
   const metaInfo = usePageMeta();
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [crumb, setCrumb] = useState<string | null>(null);
 
   const groups = buildNavGroups(hasPermission);
   const active = findActiveNavItem(groups, pathname);
@@ -117,14 +119,16 @@ const MainLayout = () => {
                 aria-hidden="true"
                 className="hidden h-5 w-px bg-border lg:block"
               />
-              <Breadcrumb active={active} />
+              <Breadcrumb active={active} crumb={crumb} />
             </div>
 
             {user && <UserMenu user={user} />}
           </header>
 
           <main className="flex-1 space-y-6 p-4 sm:p-6 lg:p-8">
-            <Outlet />
+            <PageCrumbContext.Provider value={setCrumb}>
+              <Outlet />
+            </PageCrumbContext.Provider>
           </main>
         </div>
       </div>
@@ -134,8 +138,10 @@ const MainLayout = () => {
 
 function Breadcrumb({
   active,
+  crumb,
 }: {
   active: ReturnType<typeof findActiveNavItem>;
+  crumb: string | null;
 }) {
   if (!active) {
     return null;
@@ -154,9 +160,27 @@ function Breadcrumb({
           />
         </>
       )}
-      <span aria-current="page" className="font-medium text-foreground">
-        {active.item.label}
-      </span>
+      {crumb ? (
+        <>
+          <Link
+            to={active.item.to}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            {active.item.label}
+          </Link>
+          <ChevronRight
+            aria-hidden="true"
+            className="size-3.5 text-muted-foreground"
+          />
+          <span aria-current="page" className="font-medium text-foreground">
+            {crumb}
+          </span>
+        </>
+      ) : (
+        <span aria-current="page" className="font-medium text-foreground">
+          {active.item.label}
+        </span>
+      )}
     </nav>
   );
 }

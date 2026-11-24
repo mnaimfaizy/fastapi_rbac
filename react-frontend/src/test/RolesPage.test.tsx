@@ -256,6 +256,11 @@ describe('Roles list', () => {
       screen.queryByRole('menuitem', { name: 'Delete role' })
     ).not.toBeInTheDocument();
     expect(screen.getByText('Operational')).toBeInTheDocument();
+    // Role group as a grey chip, the table inside a bordered card (artboard).
+    expect(screen.getByText('Operational')).toHaveClass('bg-muted');
+    expect(screen.getByRole('table').closest('.rounded-xl')).toHaveClass(
+      'border'
+    );
     expect(screen.getByText('15')).toBeInTheDocument();
     expect(screen.getByText('8')).toBeInTheDocument();
   });
