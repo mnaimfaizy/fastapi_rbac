@@ -77,9 +77,14 @@ function ThemePreview({ preference }: { preference: ThemePreference }) {
       aria-hidden="true"
       className="flex h-[150px] overflow-hidden rounded-lg border"
     >
-      {preference !== 'dark' ? <MiniApp /> : null}
+      {preference !== 'dark' ? (
+        // `.light` and `.dark` scope the tokens, so each half shows its own
+        // palette whatever theme the page is in.
+        <div className="light flex flex-1">
+          <MiniApp />
+        </div>
+      ) : null}
       {preference !== 'light' ? (
-        // The dark tokens apply to whatever sits under `.dark`.
         <div className="dark flex flex-1">
           <MiniApp />
         </div>
