@@ -106,6 +106,20 @@ function card(title: string) {
   return within(root as HTMLElement);
 }
 
+/** A role distribution row as [role, users, share], read from the table. */
+function distributionRows(distribution: ReturnType<typeof within>) {
+  return distribution
+    .getAllByRole('row')
+    .filter((row) => within(row).queryByRole('rowheader'))
+    .map((row) => [
+      within(row).getByRole('rowheader').textContent ?? '',
+      ...within(row)
+        .getAllByRole('cell')
+        .map((cell) => cell.textContent?.trim() ?? '')
+        .filter(Boolean),
+    ]);
+}
+
 function filledDashboard(twelveAgo: Date, yesterday: Date): DashboardData {
   const stats: DashboardStats & { active_sessions?: number } = {
     total_users: 75,
@@ -192,9 +206,21 @@ describe('DashboardOverview', () => {
 
     const distribution = card('Role distribution');
     expect(distribution.getByText('Admin')).toBeInTheDocument();
-    expect(distribution.getByText('3 4%')).toBeInTheDocument();
-    expect(distribution.getByText('8 11%')).toBeInTheDocument();
-    expect(distribution.getByText('64 85%')).toBeInTheDocument();
+    expect(distributionRows(distribution)).toEqual([
+      ['Admin', '3', '4%'],
+      ['Manager', '8', '11%'],
+      ['User', '64', '85%'],
+    ]);
+    // One stacked bar, a segment per role, sized by share of assignments.
+    expect(
+      distribution.getByRole('img', { name: 'Admin 3, Manager 8, User 64' })
+    ).toBeInTheDocument();
+    const segments = distribution.getAllByTestId('role-distribution-segment');
+    expect(segments.map((segment) => segment.style.width)).toEqual([
+      '4%',
+      '10.67%',
+      '85.33%',
+    ]);
     expect(
       distribution.getByText('Users with several roles are counted in each.')
     ).toBeInTheDocument();
@@ -208,9 +234,13 @@ describe('DashboardOverview', () => {
       format(yesterday, 'd MMM yyyy, HH:mm')
     );
     expect(screen.getByText('mei.tanaka@example.com')).toBeInTheDocument();
+    const viewAll = screen.getByRole('link', { name: 'View all users' });
+    expect(viewAll).toHaveAttribute('href', '/dashboard/users');
+    // In the card header, beside the title, as the artboard places it.
+    expect(viewAll.closest('[data-slot="card-header"]')).not.toBeNull();
     expect(
-      screen.getByRole('link', { name: 'View all users' })
-    ).toHaveAttribute('href', '/dashboard/users');
+      screen.getByRole('heading', { level: 1, name: 'Dashboard' })
+    ).toBeInTheDocument();
 
     expect(screen.queryByText('0')).not.toBeInTheDocument();
     expect(screen.queryByText('Active Sessions')).not.toBeInTheDocument();
@@ -277,7 +307,10 @@ describe('DashboardOverview', () => {
         '[data-slot="card"]'
       ) as HTMLElement
     );
-    expect(distribution.getAllByText('10 100%')).toHaveLength(2);
+    expect(distributionRows(distribution)).toEqual([
+      ['Admin', '10', '100%'],
+      ['Manager', '10', '100%'],
+    ]);
     expect(distribution.queryByText(/50%/)).not.toBeInTheDocument();
     expect(
       distribution.getByText(

@@ -12,11 +12,13 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   Card,
   CardContent,
+  CardAction,
   CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
 import type { RecentSignIn, RoleCount } from '@/models/dashboard';
+import { cn } from '@/lib/utils';
 
 const ALL_USERS_HREF = '/dashboard/users';
 // The Roles and Permissions cards are for people who manage the access
@@ -69,6 +71,19 @@ function initials(name: string): string {
   return letters.slice(0, 2) || 'NA';
 }
 
+/** Series colours for the stacked bar, in order; the fifth repeats. */
+const SERIES = [
+  'bg-chart-1',
+  'bg-chart-2',
+  'bg-chart-3',
+  'bg-chart-4',
+  'bg-chart-5',
+];
+
+function seriesColour(index: number): string {
+  return SERIES[Math.min(index, SERIES.length - 1)];
+}
+
 function percentOf(count: number, total: number): number {
   if (total === 0) return 0;
   return Math.round((count / total) * 100);
@@ -79,15 +94,17 @@ function MetricCard({
   value,
   description,
   icon: Icon,
+  className,
 }: {
   title: string;
   value: number | null | undefined;
   description?: string;
   icon?: LucideIcon;
+  className?: string;
 }) {
   if (value == null) {
     return (
-      <Card>
+      <Card className={className}>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium">{title}</CardTitle>
         </CardHeader>
@@ -108,6 +125,7 @@ function MetricCard({
       value={value.toLocaleString()}
       description={description}
       icon={Icon}
+      className={className}
     />
   );
 }
@@ -128,9 +146,10 @@ function RoleDistribution({
   const shares = rows ?? [];
   const userTotal = totalUsers != null && totalUsers > 0 ? totalUsers : null;
   const showPercent = userTotal != null;
+  const assignments = shares.reduce((sum, row) => sum + row.count, 0);
 
   return (
-    <Card className="col-span-full lg:col-span-8">
+    <Card>
       <CardHeader>
         <CardTitle>Role distribution</CardTitle>
         <CardDescription>Users per role</CardDescription>
@@ -143,32 +162,68 @@ function RoleDistribution({
           />
         ) : (
           <div className="space-y-4">
-            <ul className="space-y-3">
-              {shares.map((row) => {
-                const percent =
-                  userTotal == null ? null : percentOf(row.count, userTotal);
-                return (
-                  <li key={row.name} className="space-y-1">
-                    <div className="flex items-baseline justify-between text-sm">
-                      <span className="font-medium">{row.name}</span>
-                      <span className="text-muted-foreground">
-                        {percent == null
-                          ? row.count.toLocaleString()
-                          : `${row.count.toLocaleString()} ${percent}%`}
-                      </span>
-                    </div>
-                    {percent != null && (
-                      <div className="bg-muted h-2 overflow-hidden rounded-full">
-                        <div
-                          className="bg-primary h-full"
-                          style={{ width: `${Math.min(percent, 100)}%` }}
-                        />
-                      </div>
+            {/* The bar shows how role assignments split, so each segment is a
+                share of the summed counts; the table's percentages are shares
+                of all users (see the note below the table). */}
+            <div
+              role="img"
+              aria-label={shares
+                .map((row) => `${row.name} ${row.count.toLocaleString()}`)
+                .join(', ')}
+              className="bg-muted flex h-3.5 gap-0.5 overflow-hidden rounded-full"
+            >
+              {assignments > 0 &&
+                shares.map((row, index) =>
+                  row.count > 0 ? (
+                    <span
+                      key={row.name}
+                      data-testid="role-distribution-segment"
+                      title={`${row.name}: ${row.count.toLocaleString()}`}
+                      className={cn('h-full', seriesColour(index))}
+                      style={{
+                        width: `${((row.count / assignments) * 100).toFixed(2)}%`,
+                      }}
+                    />
+                  ) : null
+                )}
+            </div>
+            <table className="w-full text-sm">
+              <caption className="sr-only">Users per role</caption>
+              <thead className="sr-only">
+                <tr>
+                  <th scope="col">Colour</th>
+                  <th scope="col">Role</th>
+                  <th scope="col">Users</th>
+                  {showPercent && <th scope="col">Share of all users</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {shares.map((row, index) => (
+                  <tr key={row.name} className="h-10 border-b">
+                    <td className="w-6">
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          'block size-2.5 rounded-[3px]',
+                          seriesColour(index)
+                        )}
+                      />
+                    </td>
+                    <th scope="row" className="text-left font-normal">
+                      {row.name}
+                    </th>
+                    <td className="w-16 text-right font-semibold">
+                      {row.count.toLocaleString()}
+                    </td>
+                    {showPercent && userTotal != null && (
+                      <td className="text-muted-foreground w-14 text-right text-[13px]">
+                        {percentOf(row.count, userTotal)}%
+                      </td>
                     )}
-                  </li>
-                );
-              })}
-            </ul>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
             <p className="text-muted-foreground text-xs">
               {ROLE_DISTRIBUTION_FOOTNOTE}
             </p>
@@ -186,10 +241,20 @@ function RoleDistribution({
 
 function RecentSignIns({ rows }: { rows: RecentSignIn[] | null | undefined }) {
   return (
-    <Card className="col-span-full lg:col-span-4">
+    <Card>
       <CardHeader>
         <CardTitle>Recent sign-ins</CardTitle>
         <CardDescription>Last 10, newest first</CardDescription>
+        {rows != null && rows.length > 0 && (
+          <CardAction>
+            <Link
+              to={ALL_USERS_HREF}
+              className="text-primary text-[13px] font-medium underline-offset-4 hover:underline"
+            >
+              View all users
+            </Link>
+          </CardAction>
+        )}
       </CardHeader>
       <CardContent>
         {rows == null || rows.length === 0 ? (
@@ -198,41 +263,33 @@ function RecentSignIns({ rows }: { rows: RecentSignIn[] | null | undefined }) {
             description="Successful sign-ins show up here."
           />
         ) : (
-          <div className="space-y-4">
-            <ul className="space-y-4">
-              {rows.map((signIn) => (
-                <li
-                  key={`${signIn.id}-${signIn.signed_in_at}`}
-                  className="flex items-center gap-4"
+          <ul className="space-y-4">
+            {rows.map((signIn) => (
+              <li
+                key={`${signIn.id}-${signIn.signed_in_at}`}
+                className="flex items-center gap-4"
+              >
+                <Avatar className="h-9 w-9">
+                  <AvatarFallback>{initials(signIn.name)}</AvatarFallback>
+                </Avatar>
+                <div className="min-w-0 flex-1 space-y-1">
+                  <p className="text-sm leading-none font-medium">
+                    {signIn.name}
+                  </p>
+                  <p className="text-muted-foreground truncate text-sm">
+                    {signIn.email}
+                  </p>
+                </div>
+                <time
+                  className="text-muted-foreground text-xs whitespace-nowrap"
+                  dateTime={signIn.signed_in_at}
+                  title={signInTitle(signIn.signed_in_at)}
                 >
-                  <Avatar className="h-9 w-9">
-                    <AvatarFallback>{initials(signIn.name)}</AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <p className="text-sm leading-none font-medium">
-                      {signIn.name}
-                    </p>
-                    <p className="text-muted-foreground truncate text-sm">
-                      {signIn.email}
-                    </p>
-                  </div>
-                  <time
-                    className="text-muted-foreground text-xs whitespace-nowrap"
-                    dateTime={signIn.signed_in_at}
-                    title={signInTitle(signIn.signed_in_at)}
-                  >
-                    {signInLabel(signIn.signed_in_at)}
-                  </time>
-                </li>
-              ))}
-            </ul>
-            <Link
-              to={ALL_USERS_HREF}
-              className="text-primary text-sm underline-offset-4 hover:underline"
-            >
-              View all users
-            </Link>
-          </div>
+                  {signInLabel(signIn.signed_in_at)}
+                </time>
+              </li>
+            ))}
+          </ul>
         )}
       </CardContent>
     </Card>
@@ -287,13 +344,19 @@ const DashboardOverview = () => {
       ? stats.total_users - stats.active_users
       : null;
 
-  return (
-    <div className="space-y-6">
-      <p className="text-lg">
-        {greeting(currentUser?.first_name, currentUser?.last_name)}
-      </p>
+  const showRoles = managesRoles && stats.total_roles != null;
+  const showPermissions = managesPermissions && stats.total_permissions != null;
 
-      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+  return (
+    <div className="mx-auto flex w-full max-w-[1120px] flex-col gap-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+        <p className="text-foreground-secondary mt-1 text-sm">
+          {greeting(currentUser?.first_name, currentUser?.last_name)}
+        </p>
+      </div>
+
+      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           title="Total users"
           value={stats.total_users}
@@ -316,7 +379,7 @@ const DashboardOverview = () => {
         />
         {/* A card needs both: the API sent the field (the caller may read it)
             and the caller manages that catalogue (see ROLE_MANAGEMENT). */}
-        {managesRoles && stats.total_roles != null ? (
+        {showRoles ? (
           <MetricCard
             title="Roles"
             value={stats.total_roles}
@@ -328,7 +391,7 @@ const DashboardOverview = () => {
             icon={ShieldCheck}
           />
         ) : null}
-        {managesPermissions && stats.total_permissions != null ? (
+        {showPermissions ? (
           <MetricCard
             title="Permissions"
             value={stats.total_permissions}
@@ -340,14 +403,17 @@ const DashboardOverview = () => {
             icon={Lock}
           />
         ) : null}
+        {/* Below a full row of four (admin), Locked accounts takes the
+            half-width slot the artboard gives it. */}
         <MetricCard
           title="Locked accounts"
           value={stats.locked_users}
           icon={Lock}
+          className={showRoles && showPermissions ? 'xl:col-span-2' : undefined}
         />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-12">
+      <div className="grid items-start gap-5 lg:grid-cols-2">
         <RoleDistribution
           rows={role_distribution}
           totalUsers={stats.total_users}
