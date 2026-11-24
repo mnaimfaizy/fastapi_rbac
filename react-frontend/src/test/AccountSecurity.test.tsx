@@ -233,7 +233,14 @@ describe('Security tab: sign out everywhere', () => {
         name: 'Sign out everywhere?',
       });
       expect(
-        within(dialog).getByText('You’ll be signed out on this device too.')
+        within(dialog).getByText(
+          'This ends your sessions on every device and browser where you’re signed in.'
+        )
+      ).toBeInTheDocument();
+      expect(
+        within(dialog).getByText(
+          'You’ll be signed out on this device too, and you’ll need to sign in again.'
+        )
       ).toBeInTheDocument();
       expect(mockAuthService.logoutAll).not.toHaveBeenCalled();
 

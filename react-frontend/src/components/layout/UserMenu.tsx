@@ -83,9 +83,10 @@ export function RoleChip({
 }
 
 /**
- * The Sign out everywhere confirmation, shared by the user menu and the
- * Security tab of Account settings. Confirming ends every session, this
- * one included, and lands on Sign in.
+ * The Sign out everywhere confirmation, shared by the user menu, User home
+ * and the Security tab of Account settings, as the
+ * `account-security-signout` artboard draws it. Confirming ends every
+ * session, this one included, and lands on Sign in.
  */
 export function SignOutEverywhereDialog({
   open,
@@ -94,7 +95,7 @@ export function SignOutEverywhereDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  // The redirect rule lives in useSignOutEverywhere, shared with User home.
+  // The redirect rule lives in useSignOutEverywhere.
   const signOutEverywhere = useSignOutEverywhere();
 
   return (
@@ -102,7 +103,19 @@ export function SignOutEverywhereDialog({
       open={open}
       onOpenChange={onOpenChange}
       title="Sign out everywhere?"
-      description="You’ll be signed out on this device too."
+      icon={<Smartphone />}
+      description={
+        <>
+          <span className="block">
+            This ends your sessions on every device and browser where you’re
+            signed in.
+          </span>
+          <span className="mt-3 block">
+            You’ll be signed out on this device too, and you’ll need to sign in
+            again.
+          </span>
+        </>
+      }
       confirmLabel="Sign out everywhere"
       onConfirm={signOutEverywhere}
     />
