@@ -88,6 +88,9 @@ function stamp(name: string) {
   };
 }
 
+const BLOCKED =
+  'This role cannot be deleted until its permissions are removed and its users are unassigned.';
+
 const roles = [
   {
     id: 'role-manager',
@@ -169,7 +172,7 @@ describe('Typed-name role delete', () => {
     );
   });
 
-  it('asks an admin to type the name when the role has holders', async () => {
+  it('explains that a role with holders cannot be deleted', async () => {
     const user = userEvent.setup();
     renderWithProviders(<RolesContent />, {
       preloadedState: viewer(ADMIN_PERMISSIONS),
@@ -183,30 +186,77 @@ describe('Typed-name role delete', () => {
     const dialog = await screen.findByRole('alertdialog', {
       name: 'Delete role ‘Manager’?',
     });
-    expect(dialog).toHaveAccessibleDescription(
-      '8 users hold this role. They’ll lose its 1 permission. Anyone without another role can only sign in and see their own profile.'
-    );
-    const confirm = within(dialog).getByRole('button', { name: 'Delete role' });
-    expect(confirm).toBeDisabled();
+    expect(dialog).toHaveAccessibleDescription(BLOCKED);
+    expect(within(dialog).queryByRole('textbox')).not.toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole('button', { name: 'Delete role' })
+    ).not.toBeInTheDocument();
+    expect(dialog).not.toHaveTextContent(/lose its/);
+    expect(dialog).not.toHaveTextContent(/sign in/);
+    await user.click(within(dialog).getByRole('button', { name: 'Dismiss' }));
 
-    await user.type(
-      within(dialog).getByRole('textbox', { name: 'Type Manager to confirm' }),
-      'manager'
-    );
-    expect(confirm).toBeDisabled();
-    await user.clear(
-      within(dialog).getByRole('textbox', { name: 'Type Manager to confirm' })
-    );
-    await user.type(
-      within(dialog).getByRole('textbox', { name: 'Type Manager to confirm' }),
-      'Manager'
-    );
-    expect(confirm).toBeEnabled();
-    await user.click(confirm);
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(mockRoleService.deleteRole).not.toHaveBeenCalled();
+  });
 
-    await waitFor(() => {
-      expect(mockRoleService.deleteRole).toHaveBeenCalledWith('role-manager');
+  it('blocks delete when permissions remain and nobody holds the role', async () => {
+    const user = userEvent.setup();
+    mockRoleService.getRoles.mockResolvedValue(
+      page([
+        {
+          ...roles[1],
+          id: 'role-editor',
+          name: 'Editor',
+          permissions: [stamp('user.read')],
+        },
+      ])
+    );
+    renderWithProviders(<RolesContent />, {
+      preloadedState: viewer(ADMIN_PERMISSIONS),
     });
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Actions for Editor' })
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'Delete role' }));
+
+    const dialog = await screen.findByRole('alertdialog', {
+      name: 'Delete role ‘Editor’?',
+    });
+    expect(dialog).toHaveAccessibleDescription(BLOCKED);
+    expect(
+      within(dialog).queryByRole('button', { name: 'Delete role' })
+    ).not.toBeInTheDocument();
+    expect(mockRoleService.deleteRole).not.toHaveBeenCalled();
+  });
+
+  it('blocks delete when the permission list is missing', async () => {
+    const user = userEvent.setup();
+    mockRoleService.getRoles.mockResolvedValue(
+      page([
+        {
+          id: 'role-spare',
+          name: 'Spare',
+          description: 'Unused role',
+          user_count: 0,
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-01T00:00:00Z',
+        },
+      ])
+    );
+    renderWithProviders(<RolesContent />, {
+      preloadedState: viewer(ADMIN_PERMISSIONS),
+    });
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Actions for Spare' })
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'Delete role' }));
+
+    expect(
+      await screen.findByRole('alertdialog', { name: 'Delete role ‘Spare’?' })
+    ).toHaveAccessibleDescription(BLOCKED);
+    expect(mockRoleService.deleteRole).not.toHaveBeenCalled();
   });
 
   it('uses a plain confirm when the role has no holders', async () => {
@@ -223,6 +273,9 @@ describe('Typed-name role delete', () => {
     const dialog = await screen.findByRole('alertdialog', {
       name: 'Delete role ‘Archive’?',
     });
+    expect(dialog).toHaveAccessibleDescription(
+      'No users hold this role. This cannot be undone.'
+    );
     expect(within(dialog).queryByRole('textbox')).not.toBeInTheDocument();
     await user.click(
       within(dialog).getByRole('button', { name: 'Delete role' })
@@ -253,7 +306,7 @@ describe('Typed-name role delete', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('requires the typed name on role detail and a plain confirm when nobody holds it', async () => {
+  it('explains on role detail that a role with holders cannot be deleted', async () => {
     const user = userEvent.setup();
     window.history.pushState({}, '', '/dashboard/roles/role-manager');
     renderWithProviders(
@@ -266,17 +319,15 @@ describe('Typed-name role delete', () => {
     await user.click(
       await screen.findByRole('button', { name: 'Delete role' })
     );
-    const dialog = await screen.findByRole('alertdialog');
-    const confirm = within(dialog).getByRole('button', { name: 'Delete role' });
-    expect(confirm).toBeDisabled();
-    await user.type(
-      within(dialog).getByRole('textbox', { name: 'Type Manager to confirm' }),
-      'Manager'
-    );
-    await user.click(confirm);
-    await waitFor(() => {
-      expect(mockRoleService.deleteRole).toHaveBeenCalledWith('role-manager');
+    const dialog = await screen.findByRole('alertdialog', {
+      name: 'Delete role ‘Manager’?',
     });
+    expect(dialog).toHaveAccessibleDescription(BLOCKED);
+    expect(within(dialog).queryByRole('textbox')).not.toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole('button', { name: 'Delete role' })
+    ).not.toBeInTheDocument();
+    expect(mockRoleService.deleteRole).not.toHaveBeenCalled();
   });
 
   it('confirms a holder-free role on the detail page without typing', async () => {
@@ -300,6 +351,9 @@ describe('Typed-name role delete', () => {
     const dialog = await screen.findByRole('alertdialog', {
       name: 'Delete role ‘Archive’?',
     });
+    expect(dialog).toHaveAccessibleDescription(
+      'No users hold this role. This cannot be undone.'
+    );
     expect(within(dialog).queryByRole('textbox')).not.toBeInTheDocument();
     await user.click(
       within(dialog).getByRole('button', { name: 'Delete role' })
@@ -309,15 +363,20 @@ describe('Typed-name role delete', () => {
     });
   });
 
-  it('keeps the role page and delete dialog mounted when delete is rejected', async () => {
+  it('keeps the role page mounted and shows the API detail when delete is rejected', async () => {
     const user = userEvent.setup();
-    const message =
-      "Role 'Manager' has associated permissions and cannot be deleted. Please remove permissions first.";
+    const detail =
+      "Role 'Archive' is assigned to one or more users and cannot be deleted. Please unassign the role from users first.";
+    mockRoleService.getRoleById.mockResolvedValue({
+      data: roles[1],
+      message: 'ok',
+      meta: {},
+    });
     mockRoleService.deleteRole.mockRejectedValue({
-      response: { data: { message } },
+      response: { data: { detail, message: detail } },
       message: 'Request failed',
     });
-    window.history.pushState({}, '', '/dashboard/roles/role-manager');
+    window.history.pushState({}, '', '/dashboard/roles/role-archive');
     renderWithProviders(
       <Routes>
         <Route path="/dashboard/roles/:roleId" element={<RoleDetail />} />
@@ -328,11 +387,9 @@ describe('Typed-name role delete', () => {
     await user.click(
       await screen.findByRole('button', { name: 'Delete role' })
     );
-    const dialog = await screen.findByRole('alertdialog');
-    await user.type(
-      within(dialog).getByRole('textbox', { name: 'Type Manager to confirm' }),
-      'Manager'
-    );
+    const dialog = await screen.findByRole('alertdialog', {
+      name: 'Delete role ‘Archive’?',
+    });
     await user.click(
       within(dialog).getByRole('button', { name: 'Delete role' })
     );
@@ -340,20 +397,15 @@ describe('Typed-name role delete', () => {
     // The dialog stays open, so the page behind it is aria-hidden.
     expect(
       await screen.findByRole('alert', { hidden: true })
-    ).toHaveTextContent(message);
+    ).toHaveTextContent(detail);
     expect(
       screen.getByRole('heading', {
         level: 1,
-        name: 'Manager',
+        name: 'Archive',
         hidden: true,
       })
     ).toBeInTheDocument();
     expect(screen.getByRole('alertdialog')).toBeInTheDocument();
-    expect(
-      within(screen.getByRole('alertdialog')).getByRole('button', {
-        name: 'Delete role',
-      })
-    ).toBeEnabled();
   });
 
   it.each([

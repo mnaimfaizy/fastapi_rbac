@@ -1,4 +1,13 @@
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 export interface RoleDeleteTarget {
   name: string;
@@ -13,26 +22,19 @@ interface RoleDeleteDialogProps {
   onConfirm: () => unknown;
 }
 
-function descriptionFor(role: RoleDeleteTarget): string {
-  const holders = role.user_count ?? 0;
-  if (holders <= 0) {
-    return 'No users hold this role. This cannot be undone.';
-  }
-  const people =
-    holders === 1
-      ? '1 user holds this role.'
-      : `${holders} users hold this role.`;
-  const permissions = role.permissions?.length ?? 0;
-  const lose =
-    permissions === 0
-      ? ''
-      : permissions === 1
-        ? ' They’ll lose its 1 permission.'
-        : ` They’ll lose its ${permissions} permissions.`;
-  return `${people}${lose} Anyone without another role can only sign in and see their own profile.`;
+const BLOCKED =
+  'This role cannot be deleted until its permissions are removed and its users are unassigned.';
+
+/** A delete reaches the API only when the role has no holders and no permissions. */
+function canDelete(role: RoleDeleteTarget): boolean {
+  return (
+    role.user_count === 0 &&
+    Array.isArray(role.permissions) &&
+    role.permissions.length === 0
+  );
 }
 
-/** Typed role name when someone still holds the role; plain confirm otherwise. */
+/** Plain confirm when the backend can delete the role; otherwise explain and dismiss. */
 export function RoleDeleteDialog({
   role,
   open,
@@ -40,15 +42,33 @@ export function RoleDeleteDialog({
   onConfirm,
 }: RoleDeleteDialogProps) {
   if (!role) return null;
-  const holders = role.user_count ?? 0;
+  const title = `Delete role ‘${role.name}’?`;
+
+  if (!canDelete(role)) {
+    return (
+      <AlertDialog open={open} onOpenChange={onOpenChange}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{title}</AlertDialogTitle>
+            <AlertDialogDescription className="text-foreground-secondary">
+              {BLOCKED}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Dismiss</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    );
+  }
+
   return (
     <ConfirmDialog
       open={open}
       onOpenChange={onOpenChange}
-      title={`Delete role ‘${role.name}’?`}
-      description={descriptionFor(role)}
+      title={title}
+      description="No users hold this role. This cannot be undone."
       confirmLabel="Delete role"
-      confirmText={holders > 0 ? role.name : undefined}
       onConfirm={onConfirm}
     />
   );
