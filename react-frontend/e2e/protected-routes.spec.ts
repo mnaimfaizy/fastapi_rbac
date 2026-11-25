@@ -196,15 +196,14 @@ test.describe('Public Routes', () => {
     expect(pageContent.length).toBeGreaterThan(0);
   });
 
-  test('should display unauthorized page when accessing without permissions', async ({
+  test('should redirect to login when accessing the unauthorized page without authentication', async ({
     page,
   }) => {
-    // Try to access unauthorized route directly
+    // /unauthorized is a protected route: it renders inside the app shell
+    // for a signed-in user, and a signed-out visitor is sent to Sign in.
     await page.goto(routes.unauthorized);
-    await page.waitForLoadState('networkidle');
 
-    // Should show unauthorized page or content
-    const url = page.url();
-    expect(url).toContain('unauthorized');
+    await page.waitForURL('**/login**', { timeout: 30000 });
+    await expect(page).toHaveURL(new RegExp(routes.login));
   });
 });
