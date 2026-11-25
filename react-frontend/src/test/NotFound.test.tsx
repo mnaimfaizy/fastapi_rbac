@@ -94,7 +94,9 @@ describe('Signed-out 404', () => {
     const user = userEvent.setup();
     renderAppAt('/no-such-page', null);
 
-    await user.click(await screen.findByRole('link', { name: 'Go to sign in' }));
+    await user.click(
+      await screen.findByRole('link', { name: 'Go to sign in' })
+    );
 
     expect(window.location.pathname).toBe('/login');
   });

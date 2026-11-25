@@ -161,6 +161,8 @@ export const appRoutes = (
       {/* Child routes rendered inside MainLayout's Outlet */}
       <Route index element={<Navigate to="/dashboard" replace />} />
       {/* Redirect / to /dashboard */}
+      {/* Unauthorized, inside the shell; signed out goes to Sign in */}
+      <Route path="unauthorized" element={<UnauthorizedPage />} />
       <Route path="dashboard" element={<DashboardPage />}>
         {/* Nested Dashboard Routes - Rendered inside Dashboard's Outlet */}
         <Route index element={<SignedInHome />} />
@@ -336,9 +338,6 @@ export const appRoutes = (
         />
       </Route>
     </Route>
-
-    {/* Unauthorized Page Route */}
-    <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
     {/* Not found: in the shell when signed in, in the auth layout when not */}
     <Route element={<SystemStateLayout />}>
