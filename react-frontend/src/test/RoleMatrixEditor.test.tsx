@@ -379,6 +379,94 @@ describe('Permission matrix editor', () => {
     ).toBeInTheDocument();
   });
 
+  it('reseeds the baseline from the last fulfilled save when a later call fails', async () => {
+    const user = userEvent.setup();
+    const renamed = { ...managerRole, name: 'ManagerPlus' };
+    const afterAssign = {
+      ...renamed,
+      permissions: [
+        ...managerRole.permissions,
+        permission({ name: 'user.delete', group: 'User' }),
+      ],
+    };
+    mockRoleService.updateRole.mockResolvedValue(roleResponse(renamed));
+    mockRoleService.assignPermissionsToRole.mockResolvedValue(
+      roleResponse(afterAssign)
+    );
+    mockRoleService.removePermissionsFromRole.mockRejectedValue({
+      response: { data: { message: CEILING } },
+    });
+
+    await openEdit();
+    const fetchesBeforeSave =
+      mockPermissionService.getPermissions.mock.calls.length;
+
+    const name = screen.getByRole('textbox', { name: 'Name' });
+    await user.clear(name);
+    await user.type(name, 'ManagerPlus');
+    await user.click(screen.getByRole('checkbox', { name: 'user.delete' }));
+    await user.click(
+      screen.getByRole('checkbox', { name: 'content.delete_article' })
+    );
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(CEILING);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Discard' })).toBeDisabled();
+    });
+    expect(mockPermissionService.getPermissions).toHaveBeenCalledTimes(
+      fetchesBeforeSave
+    );
+    expect(
+      screen.queryByText('Loading permissions...')
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue(
+      'ManagerPlus'
+    );
+    expect(screen.getByRole('checkbox', { name: 'user.delete' })).toBeChecked();
+    expect(
+      screen.getByRole('checkbox', { name: 'content.delete_article' })
+    ).toBeChecked();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('checkbox', { name: 'user.delete' }));
+    expect(screen.getByRole('status')).toHaveTextContent('1 change');
+    await user.click(screen.getByRole('button', { name: 'Discard' }));
+
+    expect(screen.getByRole('checkbox', { name: 'user.delete' })).toBeChecked();
+    expect(
+      screen.getByRole('checkbox', { name: 'content.delete_article' })
+    ).toBeChecked();
+    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue(
+      'ManagerPlus'
+    );
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(mockRoleService.updateRole).toHaveBeenCalledTimes(1);
+    expect(mockRoleService.assignPermissionsToRole).toHaveBeenCalledTimes(1);
+    expect(mockRoleService.removePermissionsFromRole).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a role permission that the catalog page does not include', async () => {
+    mockRoleService.getRoleById.mockResolvedValue(
+      roleResponse({
+        ...managerRole,
+        permissions: [
+          ...managerRole.permissions,
+          permission({ name: 'audit.export', group: 'Audit' }),
+        ],
+      })
+    );
+
+    await openEdit();
+
+    expect(
+      screen.getByRole('button', { name: 'audit.export' })
+    ).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      screen.queryByText('Loading permissions...')
+    ).not.toBeInTheDocument();
+  });
+
   it('creates a role once with the selected permission ids', async () => {
     const user = userEvent.setup();
     renderEditor('/dashboard/roles/new', ADMIN_PERMISSIONS);

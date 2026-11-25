@@ -19,6 +19,7 @@ import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { normalizeApiError } from '@/lib/apiError';
 import { usePageCrumb } from '@/components/layout/pageCrumb';
+import { Role } from '@/models/role';
 
 function holderLine(count: number): string {
   if (count === 1) {
@@ -68,8 +69,9 @@ const RoleFormContent: React.FC = () => {
     navigate('/dashboard/roles');
   };
 
-  const handleSubmit = async (data: RoleEditorSubmit) => {
+  const handleSubmit = async (data: RoleEditorSubmit): Promise<Role | void> => {
     setSubmitError(null);
+    let saved: Role | undefined;
     try {
       if (isEditMode && roleId && currentRole) {
         const nameChanged = data.name !== currentRole.name;
@@ -78,7 +80,7 @@ const RoleFormContent: React.FC = () => {
         const groupChanged =
           (data.role_group_id ?? '') !== (currentRole.role_group_id ?? '');
         if (nameChanged || descriptionChanged || groupChanged) {
-          await dispatch(
+          saved = await dispatch(
             updateRole({
               roleId,
               roleData: {
@@ -92,7 +94,7 @@ const RoleFormContent: React.FC = () => {
           ).unwrap();
         }
         if (data.addedPermissionIds.length > 0) {
-          await dispatch(
+          saved = await dispatch(
             assignPermissionsToRole({
               roleId,
               permissionIds: data.addedPermissionIds,
@@ -100,7 +102,7 @@ const RoleFormContent: React.FC = () => {
           ).unwrap();
         }
         if (data.removedPermissionIds.length > 0) {
-          await dispatch(
+          saved = await dispatch(
             removePermissionsFromRole({
               roleId,
               permissionIds: data.removedPermissionIds,
@@ -122,6 +124,7 @@ const RoleFormContent: React.FC = () => {
         toast.success('Role created successfully.');
       }
       navigate('/dashboard/roles');
+      return saved;
     } catch (err: unknown) {
       const message = normalizeApiError(
         err,
@@ -129,6 +132,7 @@ const RoleFormContent: React.FC = () => {
       ).message;
       setSubmitError(message);
       toast.error(message);
+      return saved;
     }
   };
 

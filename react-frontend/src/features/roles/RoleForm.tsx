@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -53,7 +53,7 @@ export interface RoleEditorSubmit {
 
 interface RoleFormProps {
   mode: 'create' | 'edit';
-  onSubmit: (data: RoleEditorSubmit) => Promise<void> | void;
+  onSubmit: (data: RoleEditorSubmit) => Promise<Role | void> | void;
   onCancel?: () => void;
   initialData?: Role | null;
   isLoading?: boolean;
@@ -62,6 +62,15 @@ interface RoleFormProps {
 
 function permissionIds(role: Role | null | undefined): string[] {
   return role?.permissions?.map((permission) => permission.id) ?? [];
+}
+
+function baselineFrom(role: Role | null | undefined) {
+  return {
+    name: role?.name || '',
+    description: role?.description || '',
+    roleGroupId: role?.role_group_id || '',
+    permissionIds: permissionIds(role),
+  };
 }
 
 function mergeCatalog(
@@ -101,12 +110,7 @@ const RoleForm: React.FC<RoleFormProps> = ({
   isLoading,
   roleGroups,
 }) => {
-  const [baseline] = useState(() => ({
-    name: initialData?.name || '',
-    description: initialData?.description || '',
-    roleGroupId: initialData?.role_group_id || '',
-    permissionIds: permissionIds(initialData),
-  }));
+  const [baseline, setBaseline] = useState(() => baselineFrom(initialData));
   const [selectedIds, setSelectedIds] = useState<string[]>(
     baseline.permissionIds
   );
@@ -124,6 +128,11 @@ const RoleForm: React.FC<RoleFormProps> = ({
     },
   });
 
+  const rolePermissionsRef = useRef(initialData?.permissions);
+  rolePermissionsRef.current = initialData?.permissions;
+
+  // The catalog is fetched once per role. A save replaces the role object, and
+  // depending on that object refetches and flashes "Loading permissions...".
   useEffect(() => {
     let cancelled = false;
     const loadPermissions = async () => {
@@ -133,12 +142,12 @@ const RoleForm: React.FC<RoleFormProps> = ({
         if (cancelled) return;
         const items = response.data.items || [];
         const total = response.data.total ?? items.length;
-        setCatalog(mergeCatalog(items, initialData?.permissions));
+        setCatalog(mergeCatalog(items, rolePermissionsRef.current));
         setCatalogIncomplete(total > items.length);
         setPermissionsError(null);
       } catch (error: unknown) {
         if (cancelled) return;
-        setCatalog(mergeCatalog([], initialData?.permissions));
+        setCatalog(mergeCatalog([], rolePermissionsRef.current));
         setCatalogIncomplete(false);
         setPermissionsError(
           normalizeApiError(error, 'Failed to load permissions').message
@@ -151,7 +160,17 @@ const RoleForm: React.FC<RoleFormProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [initialData]);
+  }, [initialData?.id]);
+
+  const missingPermissionIds = (initialData?.permissions ?? [])
+    .map((permission) => permission.id)
+    .filter((id) => !catalog.some((item) => item.id === id))
+    .join('\n');
+
+  useEffect(() => {
+    if (!missingPermissionIds) return;
+    setCatalog((current) => mergeCatalog(current, rolePermissionsRef.current));
+  }, [missingPermissionIds]);
 
   const watchedName = form.watch('name');
   const watchedDescription = form.watch('description') ?? '';
@@ -168,19 +187,24 @@ const RoleForm: React.FC<RoleFormProps> = ({
   const dirty = metadataDirty || changeCount > 0;
   const selectedCount = selectedIds.length;
 
-  const handleDiscard = () => {
-    setSelectedIds(baseline.permissionIds);
+  const applyBaseline = (next: ReturnType<typeof baselineFrom>) => {
+    setBaseline(next);
+    setSelectedIds(next.permissionIds);
     form.reset({
-      name: baseline.name,
-      description: baseline.description,
-      role_group_id: baseline.roleGroupId || undefined,
+      name: next.name,
+      description: next.description,
+      role_group_id: next.roleGroupId || undefined,
     });
   };
 
-  const handleFormSubmit: SubmitHandler<RoleFields> = (data) => {
+  const handleDiscard = () => {
+    applyBaseline(baseline);
+  };
+
+  const handleFormSubmit: SubmitHandler<RoleFields> = async (data) => {
     const diff = permissionDiff(baseline.permissionIds, selectedIds);
     const description = data.description?.trim();
-    return onSubmit({
+    const saved = await onSubmit({
       name: data.name,
       description: description ? description : undefined,
       role_group_id: data.role_group_id || undefined,
@@ -188,6 +212,9 @@ const RoleForm: React.FC<RoleFormProps> = ({
       removedPermissionIds: diff.removed,
       selectedPermissionIds: selectedIds,
     });
+    if (saved) {
+      applyBaseline(baselineFrom(saved));
+    }
   };
 
   const changeLabel = `${changeCount} ${changeCount === 1 ? 'change' : 'changes'}`;

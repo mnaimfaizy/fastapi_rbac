@@ -44,7 +44,7 @@ function groupRank(name: string): number {
   return index === -1 ? GROUP_ORDER.length : index;
 }
 
-/** Groups permissions the same way as the read-only role detail matrix. */
+/** Groups permissions for the editor and the read-only role detail matrix. */
 export function buildPermissionMatrix(catalog: Permission[]): MatrixRow[] {
   const byGroup = new Map<string, Permission[]>();
   for (const permission of catalog) {

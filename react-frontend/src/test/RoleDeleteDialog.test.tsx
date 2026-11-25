@@ -309,6 +309,53 @@ describe('Typed-name role delete', () => {
     });
   });
 
+  it('keeps the role page and delete dialog mounted when delete is rejected', async () => {
+    const user = userEvent.setup();
+    const message =
+      "Role 'Manager' has associated permissions and cannot be deleted. Please remove permissions first.";
+    mockRoleService.deleteRole.mockRejectedValue({
+      response: { data: { message } },
+      message: 'Request failed',
+    });
+    window.history.pushState({}, '', '/dashboard/roles/role-manager');
+    renderWithProviders(
+      <Routes>
+        <Route path="/dashboard/roles/:roleId" element={<RoleDetail />} />
+      </Routes>,
+      { preloadedState: viewer(ADMIN_PERMISSIONS) }
+    );
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Delete role' })
+    );
+    const dialog = await screen.findByRole('alertdialog');
+    await user.type(
+      within(dialog).getByRole('textbox', { name: 'Type Manager to confirm' }),
+      'Manager'
+    );
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Delete role' })
+    );
+
+    // The dialog stays open, so the page behind it is aria-hidden.
+    expect(
+      await screen.findByRole('alert', { hidden: true })
+    ).toHaveTextContent(message);
+    expect(
+      screen.getByRole('heading', {
+        level: 1,
+        name: 'Manager',
+        hidden: true,
+      })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('alertdialog')).getByRole('button', {
+        name: 'Delete role',
+      })
+    ).toBeEnabled();
+  });
+
   it.each([
     ['manager', MANAGER_PERMISSIONS],
     ['user', USER_PERMISSIONS],
