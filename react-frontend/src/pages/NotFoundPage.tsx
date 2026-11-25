@@ -13,7 +13,10 @@ import { SystemStateCard } from './SystemStateCard';
  * page picks the matching copy.
  */
 const NotFoundPage = () => {
-  const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated);
+  // The same test SystemStateLayout uses to pick the shell.
+  const signedIn = useAppSelector(
+    (state) => state.auth.isAuthenticated && state.auth.user !== null
+  );
 
   return (
     <>
@@ -21,7 +24,7 @@ const NotFoundPage = () => {
         title="Page not found"
         description="The page you're looking for doesn't exist."
       />
-      {isAuthenticated ? <InAppNotFound /> : <SignedOutNotFound />}
+      {signedIn ? <InAppNotFound /> : <SignedOutNotFound />}
     </>
   );
 };
@@ -34,6 +37,9 @@ function InAppNotFound() {
   // The home link reads like the viewer's own sidebar: Dashboard, or Home
   // for a plain user.
   const home = buildNavGroups(hasPermission)[0].items[0];
+  // React Router numbers its own history entries; at 0 this page was opened
+  // directly, and going back would leave the app, so Go back goes home.
+  const canGoBack = (window.history.state?.idx ?? 0) > 0;
 
   return (
     <SystemStateCard
@@ -44,7 +50,11 @@ function InAppNotFound() {
           <Button asChild>
             <Link to={HOME_PATH}>Go to {home.label.toLowerCase()}</Link>
           </Button>
-          <Button type="button" variant="outline" onClick={() => navigate(-1)}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => (canGoBack ? navigate(-1) : navigate(HOME_PATH))}
+          >
             Go back
           </Button>
         </>

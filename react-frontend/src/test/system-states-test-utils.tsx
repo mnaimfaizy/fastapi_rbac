@@ -26,12 +26,24 @@ export function signedOut() {
 }
 
 /**
- * The app's own route tree at `path`, signed in as `role`, or signed out
- * when `role` is `null`. Test files that use it mock `auth.service` and
+ * The app's own route tree at `path` (or the current URL when `null`),
+ * signed in as `role`, or signed out when `role` is `null`. With
+ * `userLoaded: false` the session is restored but the user record has not
+ * arrived yet. Test files that use it mock `auth.service` and
  * `dashboard.service`.
  */
-export function renderAppAt(path: string, role: ShellRole | null) {
-  window.history.pushState({}, '', path);
+export function renderAppAt(
+  path: string | null,
+  role: ShellRole | null,
+  { userLoaded = true }: { userLoaded?: boolean } = {}
+) {
+  if (path !== null) {
+    window.history.pushState({}, '', path);
+  }
+  const state = role ? signedInAs(role) : signedOut();
+  if (!userLoaded) {
+    state.auth = { ...state.auth, user: null } as typeof state.auth;
+  }
   const store = configureStore({
     reducer: {
       auth: authReducer,
@@ -42,7 +54,7 @@ export function renderAppAt(path: string, role: ShellRole | null) {
       roleGroup: roleGroupReducer,
       dashboard: dashboardReducer,
     },
-    preloadedState: role ? signedInAs(role) : signedOut(),
+    preloadedState: state,
   });
   return renderWithProviders(<Routes>{appRoutes}</Routes>, {
     testStore: store as unknown as AppStore,

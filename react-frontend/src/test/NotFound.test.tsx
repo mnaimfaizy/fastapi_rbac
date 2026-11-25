@@ -49,16 +49,45 @@ describe('In-app 404', () => {
     expect(queryShellSidebar()).toBeInTheDocument();
   });
 
-  it('goes back to the previous page', async () => {
+  it('goes back to the previous page in the app', async () => {
     const user = userEvent.setup();
-    window.history.pushState({}, '', '/dashboard/account/profile');
-    renderAppAt('/dashboard/settings/general', 'admin');
+    // Two entries React Router made: the profile tab, then the bad link.
+    window.history.replaceState(
+      { usr: null, key: 'a', idx: 0 },
+      '',
+      '/dashboard/account/profile'
+    );
+    window.history.pushState(
+      { usr: null, key: 'b', idx: 1 },
+      '',
+      '/dashboard/settings/general'
+    );
+    renderAppAt(null, 'admin');
 
     await user.click(await screen.findByRole('button', { name: 'Go back' }));
 
     await waitFor(() => {
       expect(window.location.pathname).toBe('/dashboard/account/profile');
     });
+  });
+
+  it('goes home instead of leaving the app when opened directly', async () => {
+    const user = userEvent.setup();
+    renderAppAt('/dashboard/settings/general', 'admin');
+
+    await user.click(await screen.findByRole('button', { name: 'Go back' }));
+
+    expect(window.location.pathname).toBe('/dashboard');
+  });
+
+  it('shows the auth-layout 404 until the signed-in user has loaded', async () => {
+    window.history.pushState({}, '', '/no-such-page');
+    renderAppAt(null, 'admin', { userLoaded: false });
+
+    expect(
+      await screen.findByRole('link', { name: 'Go to sign in' })
+    ).toBeInTheDocument();
+    expect(queryShellSidebar()).not.toBeInTheDocument();
   });
 });
 
