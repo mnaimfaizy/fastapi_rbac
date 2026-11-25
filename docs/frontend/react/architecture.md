@@ -62,7 +62,7 @@ const { user, isAuthenticated, hasPermission } = useAuth();
 </ProtectedRoute>
 ```
 
-A signed-out visitor is sent to Sign in. A signed-in viewer without the permission sees `UnauthorizedPage` inside the shell, naming the first missing permission (see [React UI components](ui.md#app-shell)).
+A signed-out visitor is sent to Sign in. A signed-in viewer without the permission sees `UnauthorizedPage` inside the shell, naming the first missing permission, or every alternative ("one of `a` or `b`") when the route needs only one of several (see [React UI components](ui.md#app-shell)).
 
 ### Permission checks
 
