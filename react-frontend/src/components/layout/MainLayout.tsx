@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { ChevronRight, Menu, PanelLeft } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -48,7 +48,7 @@ const MainLayout = () => {
   const metaInfo = usePageMeta();
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [crumb, setCrumb] = useState<string | null>(null);
+  const [crumbs, setCrumbs] = useState<string[]>([]);
 
   const groups = buildNavGroups(hasPermission);
   const active = findActiveNavItem(groups, pathname);
@@ -119,14 +119,14 @@ const MainLayout = () => {
                 aria-hidden="true"
                 className="hidden h-5 w-px bg-border lg:block"
               />
-              <Breadcrumb active={active} crumb={crumb} />
+              <Breadcrumb active={active} crumbs={crumbs} />
             </div>
 
             {user && <UserMenu user={user} />}
           </header>
 
           <main className="flex-1 space-y-6 p-4 sm:p-6 lg:p-8">
-            <PageCrumbContext.Provider value={setCrumb}>
+            <PageCrumbContext.Provider value={setCrumbs}>
               <Outlet />
             </PageCrumbContext.Provider>
           </main>
@@ -136,16 +136,21 @@ const MainLayout = () => {
   );
 };
 
+/**
+ * `Group › Nav item › …the page's own steps`. The nav item links back to its
+ * list once the page names steps after it; the last step is the current page.
+ */
 function Breadcrumb({
   active,
-  crumb,
+  crumbs,
 }: {
   active: ReturnType<typeof findActiveNavItem>;
-  crumb: string | null;
+  crumbs: string[];
 }) {
   if (!active) {
     return null;
   }
+  const last = crumbs.length - 1;
   return (
     <nav
       aria-label="Breadcrumb"
@@ -154,13 +159,10 @@ function Breadcrumb({
       {!active.item.standalone && (
         <>
           <span className="text-muted-foreground">{active.group.label}</span>
-          <ChevronRight
-            aria-hidden="true"
-            className="size-3.5 text-muted-foreground"
-          />
+          <CrumbSeparator />
         </>
       )}
-      {crumb ? (
+      {crumbs.length > 0 ? (
         <>
           <Link
             to={active.item.to}
@@ -168,13 +170,21 @@ function Breadcrumb({
           >
             {active.item.label}
           </Link>
-          <ChevronRight
-            aria-hidden="true"
-            className="size-3.5 text-muted-foreground"
-          />
-          <span aria-current="page" className="font-medium text-foreground">
-            {crumb}
-          </span>
+          {crumbs.map((label, index) => (
+            <Fragment key={index}>
+              <CrumbSeparator />
+              {index === last ? (
+                <span
+                  aria-current="page"
+                  className="font-medium text-foreground"
+                >
+                  {label}
+                </span>
+              ) : (
+                <span className="text-muted-foreground">{label}</span>
+              )}
+            </Fragment>
+          ))}
         </>
       ) : (
         <span aria-current="page" className="font-medium text-foreground">
@@ -182,6 +192,15 @@ function Breadcrumb({
         </span>
       )}
     </nav>
+  );
+}
+
+function CrumbSeparator() {
+  return (
+    <ChevronRight
+      aria-hidden="true"
+      className="size-3.5 text-muted-foreground"
+    />
   );
 }
 
