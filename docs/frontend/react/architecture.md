@@ -31,7 +31,7 @@ react-frontend/
 │   ├── hooks/               # useAuth, usePermissions, …
 │   ├── lib/                 # utils, token helpers, theme.ts (useThemePreference)
 │   ├── models/              # TypeScript interfaces
-│   ├── pages/               # top-level pages (404, unauthorized)
+│   ├── pages/               # 404, Unauthorized and the layout that picks the shell
 │   ├── services/            # Axios API clients
 │   ├── store/               # Redux store + slices
 │   ├── test/                # Vitest suites
@@ -61,6 +61,8 @@ const { user, isAuthenticated, hasPermission } = useAuth();
   <UserManagement />
 </ProtectedRoute>
 ```
+
+A signed-out visitor is sent to Sign in. A signed-in viewer without the permission sees `UnauthorizedPage` inside the shell, naming the first missing permission (see [React UI components](ui.md#app-shell)).
 
 ### Permission checks
 
