@@ -45,13 +45,14 @@ const MainLayout = () => {
   const { user } = useAppSelector((state) => state.auth);
   const { hasPermission } = usePermissions();
   const { pathname } = useLocation();
-  const metaInfo = usePageMeta();
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [crumbs, setCrumbs] = useState<string[]>([]);
 
   const groups = buildNavGroups(hasPermission);
   const active = findActiveNavItem(groups, pathname);
+  const homeLabel = groups[0]?.items[0]?.label;
+  const metaInfo = usePageMeta({ crumbs, homeLabel });
 
   function toggleCollapsed() {
     setCollapsed((current) => {

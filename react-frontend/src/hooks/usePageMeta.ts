@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { matchPath, useLocation } from 'react-router-dom';
+import { allNavItems, findActiveNavItem, HOME_PATH } from '@/lib/navigation';
 
 interface MetaInfo {
   title: string;
@@ -44,30 +45,40 @@ const routeMetaMap: Record<string, MetaInfo> = {
     description: 'Complete your password reset process',
   },
 
-  // Dashboard routes
+  // Signed-in routes; their titles come from the nav (see pageTitle below)
   '/dashboard': {
     title: 'Dashboard',
     description: 'Overview of your RBAC system',
     keywords: 'dashboard, overview, RBAC, management',
   },
-  '/dashboard/profile': {
-    title: 'User Profile',
-    description: 'View and edit your user profile',
+  '/dashboard/account': {
+    title: 'Account settings',
+    description: 'Your profile, password and appearance',
   },
   '/dashboard/users': {
-    title: 'User Management',
+    title: 'Users',
     description: 'Manage users in the RBAC system',
     keywords: 'users, management, RBAC, admin',
   },
   '/dashboard/roles': {
-    title: 'Role Management',
+    title: 'Roles',
     description: 'Manage roles in the RBAC system',
     keywords: 'roles, permissions, RBAC, admin',
   },
+  '/dashboard/role-groups': {
+    title: 'Role groups',
+    description: 'Organize roles into groups',
+    keywords: 'role groups, roles, RBAC, admin',
+  },
   '/dashboard/permissions': {
-    title: 'Permission Management',
+    title: 'Permissions',
     description: 'Manage permissions in the RBAC system',
     keywords: 'permissions, RBAC, admin',
+  },
+  '/dashboard/permission-groups': {
+    title: 'Permission groups',
+    description: 'Organize permissions into groups',
+    keywords: 'permission groups, permissions, RBAC, admin',
   },
 
   // Default
@@ -78,10 +89,64 @@ const routeMetaMap: Record<string, MetaInfo> = {
 };
 
 /**
- * Custom hook to manage meta information based on the current route
- * @returns The meta information for the current route
+ * Pages under a nav item that have a fixed name of their own. A page whose
+ * name is data (a role, a user) names itself with `usePageCrumb` instead.
  */
-export const usePageMeta = (): MetaInfo => {
+const SUB_PAGE_TITLES: [pattern: string, title: string][] = [
+  ['/dashboard/users/new', 'Add user'],
+  ['/dashboard/users/:userId/edit', 'Edit user'],
+  ['/dashboard/roles/new', 'Create role'],
+  ['/dashboard/roles/edit/:roleId', 'Edit role'],
+  ['/dashboard/role-groups/new', 'Create role group'],
+  ['/dashboard/role-groups/edit/:groupId', 'Edit role group'],
+  ['/dashboard/permissions/new', 'Create permission'],
+  ['/dashboard/permission-groups/new', 'Create permission group'],
+  ['/dashboard/permission-groups/edit/:groupId', 'Edit permission group'],
+];
+
+/** Separates the parts of a page title, most specific first. */
+const TITLE_SEPARATOR = ' · ';
+
+/**
+ * The title of a signed-in page: its own breadcrumb steps, most specific
+ * first, then the nav item it sits under. `Manager · Roles` on a role's
+ * detail page, `Profile · Account settings` on that tab. Without steps, a
+ * fixed sub-page name stands in (`Create role · Roles`). The landing page
+ * is titled with its nav label (Dashboard, or Home for a plain user).
+ * Returns undefined for a path outside the nav.
+ */
+export function pageTitle(
+  pathname: string,
+  { crumbs = [], homeLabel = 'Dashboard' }: PageTitleParts = {}
+): string | undefined {
+  const section = findActiveNavItem(
+    [{ label: '', items: allNavItems() }],
+    pathname
+  )?.item;
+  if (!section) return undefined;
+  const sectionLabel = section.to === HOME_PATH ? homeLabel : section.label;
+  const own =
+    crumbs.length > 0
+      ? [...crumbs].reverse()
+      : SUB_PAGE_TITLES.filter(([pattern]) => matchPath(pattern, pathname)).map(
+          ([, title]) => title
+        );
+  return [...own, sectionLabel].join(TITLE_SEPARATOR);
+}
+
+export interface PageTitleParts {
+  /** The page's own breadcrumb steps, as `usePageCrumb` named them. */
+  crumbs?: readonly string[];
+  /** What the viewer's nav calls the landing page: Dashboard or Home. */
+  homeLabel?: string;
+}
+
+/**
+ * Meta information for the current route, and the browser tab title.
+ * The shell passes the page's breadcrumb steps and the landing page's
+ * nav label so the title names the page on screen.
+ */
+export const usePageMeta = (parts: PageTitleParts = {}): MetaInfo => {
   const location = useLocation();
   const path = location.pathname;
 
@@ -113,10 +178,12 @@ export const usePageMeta = (): MetaInfo => {
     };
   }
 
+  const title = pageTitle(path, parts) ?? metaInfo.title;
+
   // Update document title when the route changes
   useEffect(() => {
-    document.title = `${metaInfo.title} | ${import.meta.env.VITE_APP_NAME || 'FastAPI RBAC'}`;
-  }, [path, metaInfo.title]);
+    document.title = `${title} | ${import.meta.env.VITE_APP_NAME || 'FastAPI RBAC'}`;
+  }, [title]);
 
-  return metaInfo;
+  return { ...metaInfo, title };
 };
