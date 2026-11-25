@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import { Route, Routes } from 'react-router-dom';
 import { configureStore } from '@reduxjs/toolkit';
 
@@ -16,7 +16,7 @@ import dashboardReducer from '../store/slices/dashboardSlice';
 import { roleService } from '../services/role.service';
 import { setAuthSessionHint, setStoredAccessToken } from '../lib/tokenStorage';
 import { mockRoles, renderWithProviders, type AppStore } from './test-utils';
-import { signedInAs, type ShellRole } from './shell-test-utils';
+import { shellViewers, signedInAs, type ShellRole } from './shell-test-utils';
 
 vi.mock('../services/auth.service');
 vi.mock('../services/dashboard.service');
@@ -29,35 +29,61 @@ const mockRoleService = vi.mocked(roleService);
 
 const APP = 'FastAPI RBAC';
 
-/** Every signed-in route in `App.tsx`, with the title its tab should read. */
-const ROUTES: [path: string, title: string][] = [
+/**
+ * Every signed-in route in `App.tsx`, the permission its route guard asks
+ * for (none for Account settings) and the title its tab should read for a
+ * viewer who holds it.
+ */
+const ROUTES: [path: string, title: string, permission?: string][] = [
   ['/dashboard/account/profile', 'Profile · Account settings'],
   ['/dashboard/account/security', 'Security · Account settings'],
   ['/dashboard/account/appearance', 'Appearance · Account settings'],
-  ['/dashboard/users', 'Users'],
-  ['/dashboard/users/new', 'Add user · Users'],
-  ['/dashboard/users/u1', 'Users'],
-  ['/dashboard/users/u1/edit', 'Edit user · Users'],
-  ['/dashboard/roles', 'Roles'],
-  ['/dashboard/roles/new', 'Create role · Roles'],
-  ['/dashboard/roles/r1', 'Roles'],
-  ['/dashboard/roles/edit/r1', 'Edit role · Roles'],
-  ['/dashboard/role-groups', 'Role groups'],
-  ['/dashboard/role-groups/new', 'Create role group · Role groups'],
-  ['/dashboard/role-groups/g1', 'Role groups'],
-  ['/dashboard/role-groups/edit/g1', 'Edit role group · Role groups'],
-  ['/dashboard/permissions', 'Permissions'],
-  ['/dashboard/permissions/new', 'Create permission · Permissions'],
-  ['/dashboard/permissions/p1', 'Permissions'],
-  ['/dashboard/permission-groups', 'Permission groups'],
+  ['/dashboard/users', 'Users', 'user.read'],
+  ['/dashboard/users/new', 'Add user · Users', 'user.create'],
+  ['/dashboard/users/u1', 'Users', 'user.read'],
+  ['/dashboard/users/u1/edit', 'Edit user · Users', 'user.update'],
+  ['/dashboard/roles', 'Roles', 'role.read'],
+  ['/dashboard/roles/new', 'Create role · Roles', 'role.create'],
+  ['/dashboard/roles/r1', 'Roles', 'role.read'],
+  ['/dashboard/roles/edit/r1', 'Edit role · Roles', 'role.update'],
+  ['/dashboard/role-groups', 'Role groups', 'role_group.read'],
+  [
+    '/dashboard/role-groups/new',
+    'Create role group · Role groups',
+    'role_group.create',
+  ],
+  ['/dashboard/role-groups/g1', 'Role groups', 'role_group.read'],
+  [
+    '/dashboard/role-groups/edit/g1',
+    'Edit role group · Role groups',
+    'role_group.update',
+  ],
+  ['/dashboard/permissions', 'Permissions', 'permission.read'],
+  [
+    '/dashboard/permissions/new',
+    'Create permission · Permissions',
+    'permission.create',
+  ],
+  ['/dashboard/permissions/p1', 'Permissions', 'permission.read'],
+  [
+    '/dashboard/permission-groups',
+    'Permission groups',
+    'permission_group.read',
+  ],
   [
     '/dashboard/permission-groups/new',
     'Create permission group · Permission groups',
+    'permission_group.create',
   ],
-  ['/dashboard/permission-groups/g1', 'Permission groups'],
+  [
+    '/dashboard/permission-groups/g1',
+    'Permission groups',
+    'permission_group.read',
+  ],
   [
     '/dashboard/permission-groups/edit/g1',
     'Edit permission group · Permission groups',
+    'permission_group.update',
   ],
 ];
 
@@ -104,12 +130,36 @@ describe('page titles', () => {
   });
 
   describe.each(['admin', 'manager', 'user'] as const)('as %s', (role) => {
-    it.each(ROUTES)('titles %s "%s"', async (path, title) => {
-      renderAppAt(path, role);
+    it.each(ROUTES)(
+      'titles %s "%s" by what the viewer can open',
+      async (path, title, permission) => {
+        const allowed =
+          !permission || shellViewers[role].permissions.includes(permission);
+        renderAppAt(path, role);
 
-      await waitFor(() => expect(document.title).toBe(`${title} | ${APP}`));
-      expect(document.title).not.toMatch(/^Dashboard\b/);
-    });
+        // A refused page is titled Unauthorized, never by the name of a page
+        // the viewer cannot see in the nav.
+        const expected = allowed ? title : 'Unauthorized';
+        await waitFor(() =>
+          expect(document.title).toBe(`${expected} | ${APP}`)
+        );
+        expect(document.title).not.toMatch(/^Dashboard\b/);
+      }
+    );
+  });
+
+  it('does not name a page the plain user cannot open', async () => {
+    renderAppAt('/dashboard/users', 'user');
+
+    await screen.findByRole('heading', { name: 'Unauthorized' });
+    expect(document.title).toBe(`Unauthorized | ${APP}`);
+  });
+
+  it('does not name a create page the manager lacks the permission for', async () => {
+    renderAppAt('/dashboard/roles/new', 'manager');
+
+    await screen.findByRole('heading', { name: 'Unauthorized' });
+    expect(document.title).toBe(`Unauthorized | ${APP}`);
   });
 
   it.each(['admin', 'manager'] as const)(

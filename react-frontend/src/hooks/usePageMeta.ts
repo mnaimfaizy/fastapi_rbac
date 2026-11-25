@@ -1,6 +1,11 @@
 import { useEffect } from 'react';
 import { matchPath, useLocation } from 'react-router-dom';
-import { allNavItems, findActiveNavItem, HOME_PATH } from '@/lib/navigation';
+import {
+  allNavItems,
+  findActiveNavItem,
+  HOME_PATH,
+  type NavGroup,
+} from '@/lib/navigation';
 
 interface MetaInfo {
   title: string;
@@ -89,23 +94,53 @@ const routeMetaMap: Record<string, MetaInfo> = {
 };
 
 /**
- * Pages under a nav item that have a fixed name of their own. A page whose
- * name is data (a role, a user) names itself with `usePageCrumb` instead.
+ * Pages under a nav item that have a fixed name of their own, with the
+ * permission their route guard in `App.tsx` asks for. A page whose name is
+ * data (a role, a user) names itself with `usePageCrumb` instead.
  */
-const SUB_PAGE_TITLES: [pattern: string, title: string][] = [
-  ['/dashboard/users/new', 'Add user'],
-  ['/dashboard/users/:userId/edit', 'Edit user'],
-  ['/dashboard/roles/new', 'Create role'],
-  ['/dashboard/roles/edit/:roleId', 'Edit role'],
-  ['/dashboard/role-groups/new', 'Create role group'],
-  ['/dashboard/role-groups/edit/:groupId', 'Edit role group'],
-  ['/dashboard/permissions/new', 'Create permission'],
-  ['/dashboard/permission-groups/new', 'Create permission group'],
-  ['/dashboard/permission-groups/edit/:groupId', 'Edit permission group'],
-];
+const SUB_PAGE_TITLES: [pattern: string, title: string, permission: string][] =
+  [
+    ['/dashboard/users/new', 'Add user', 'user.create'],
+    ['/dashboard/users/:userId/edit', 'Edit user', 'user.update'],
+    ['/dashboard/roles/new', 'Create role', 'role.create'],
+    ['/dashboard/roles/edit/:roleId', 'Edit role', 'role.update'],
+    ['/dashboard/role-groups/new', 'Create role group', 'role_group.create'],
+    [
+      '/dashboard/role-groups/edit/:groupId',
+      'Edit role group',
+      'role_group.update',
+    ],
+    ['/dashboard/permissions/new', 'Create permission', 'permission.create'],
+    [
+      '/dashboard/permission-groups/new',
+      'Create permission group',
+      'permission_group.create',
+    ],
+    [
+      '/dashboard/permission-groups/edit/:groupId',
+      'Edit permission group',
+      'permission_group.update',
+    ],
+  ];
 
 /** Separates the parts of a page title, most specific first. */
 const TITLE_SEPARATOR = ' · ';
+
+/** The title of a page the viewer's route guard refuses. */
+const UNAUTHORIZED_TITLE = 'Unauthorized';
+
+export interface PageTitleParts {
+  /** The page's own breadcrumb steps, as `usePageCrumb` named them. */
+  crumbs?: readonly string[];
+  /**
+   * The nav as this viewer sees it (`buildNavGroups`). A page under a nav
+   * item the viewer does not have is one the route guard refuses, so it is
+   * titled Unauthorized rather than named. Defaults to every item.
+   */
+  groups?: NavGroup[];
+  /** Whether the viewer holds a permission; defaults to every one. */
+  hasPermission?: (permission: string) => boolean;
+}
 
 /**
  * The title of a signed-in page: its own breadcrumb steps, most specific
@@ -113,44 +148,47 @@ const TITLE_SEPARATOR = ' · ';
  * detail page, `Profile · Account settings` on that tab. Without steps, a
  * fixed sub-page name stands in (`Create role · Roles`). The landing page
  * is titled with its nav label (Dashboard, or Home for a plain user). A
- * path outside the nav is titled by its steps alone (`Not found`), and
- * gets undefined when it names none.
+ * page the viewer cannot open is titled `Unauthorized`, never by name, as
+ * the nav hides what the viewer cannot use. A path outside the nav is
+ * titled by its steps alone (`Not found`), and gets undefined when it
+ * names none.
  */
 export function pageTitle(
   pathname: string,
-  { crumbs = [], homeLabel = 'Dashboard' }: PageTitleParts = {}
+  {
+    crumbs = [],
+    groups = [{ label: '', items: allNavItems() }],
+    hasPermission = () => true,
+  }: PageTitleParts = {}
 ): string | undefined {
-  const section = findActiveNavItem(
+  const known = findActiveNavItem(
     [{ label: '', items: allNavItems() }],
     pathname
   )?.item;
-  if (!section) {
+  if (!known) {
     // A page outside the nav (the in-app 404) is titled by its own steps.
     return crumbs.length > 0
       ? [...crumbs].reverse().join(TITLE_SEPARATOR)
       : undefined;
   }
+  const section = findActiveNavItem(groups, pathname)?.item;
+  const subPage = SUB_PAGE_TITLES.find(([pattern]) =>
+    matchPath(pattern, pathname)
+  );
+  if (!section || (subPage && !hasPermission(subPage[2]))) {
+    return UNAUTHORIZED_TITLE;
+  }
+  const homeLabel = groups[0]?.items[0]?.label ?? section.label;
   const sectionLabel = section.to === HOME_PATH ? homeLabel : section.label;
   const own =
-    crumbs.length > 0
-      ? [...crumbs].reverse()
-      : SUB_PAGE_TITLES.filter(([pattern]) => matchPath(pattern, pathname)).map(
-          ([, title]) => title
-        );
+    crumbs.length > 0 ? [...crumbs].reverse() : subPage ? [subPage[1]] : [];
   return [...own, sectionLabel].join(TITLE_SEPARATOR);
-}
-
-export interface PageTitleParts {
-  /** The page's own breadcrumb steps, as `usePageCrumb` named them. */
-  crumbs?: readonly string[];
-  /** What the viewer's nav calls the landing page: Dashboard or Home. */
-  homeLabel?: string;
 }
 
 /**
  * Meta information for the current route, and the browser tab title.
- * The shell passes the page's breadcrumb steps and the landing page's
- * nav label so the title names the page on screen.
+ * The shell passes the page's breadcrumb steps and the viewer's nav so the
+ * title names the page on screen.
  */
 export const usePageMeta = (parts: PageTitleParts = {}): MetaInfo => {
   const location = useLocation();

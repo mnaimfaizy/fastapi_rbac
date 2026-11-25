@@ -51,8 +51,7 @@ const MainLayout = () => {
 
   const groups = buildNavGroups(hasPermission);
   const active = findActiveNavItem(groups, pathname);
-  const homeLabel = groups[0]?.items[0]?.label;
-  const metaInfo = usePageMeta({ crumbs, homeLabel });
+  const metaInfo = usePageMeta({ crumbs, groups, hasPermission });
 
   function toggleCollapsed() {
     setCollapsed((current) => {
