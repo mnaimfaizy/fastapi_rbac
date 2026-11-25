@@ -122,7 +122,7 @@ describe('UsersList Component', () => {
       const preloadedState = {
         auth: {
           user: {
-            id: '1',
+            id: 'viewer-1',
             email: 'test@example.com',
             first_name: 'Test',
             last_name: 'User',
@@ -199,7 +199,7 @@ describe('UsersList Component', () => {
       const preloadedState = {
         auth: {
           user: {
-            id: '1',
+            id: 'viewer-1',
             email: 'test@example.com',
             first_name: 'Test',
             last_name: 'User',
@@ -221,7 +221,7 @@ describe('UsersList Component', () => {
       const preloadedState = {
         auth: {
           user: {
-            id: '1',
+            id: 'viewer-1',
             email: 'test@example.com',
             first_name: 'Test',
             last_name: 'User',
@@ -243,11 +243,18 @@ describe('UsersList Component', () => {
       const preloadedState = {
         auth: {
           user: {
-            id: '1',
+            id: 'viewer-1',
             email: 'test@example.com',
             first_name: 'Test',
             last_name: 'User',
-            permissions: ['user.read', 'user.update', 'user.delete'],
+            // role.read too: the rows hold roles, and removing them on the
+            // edit page needs it, so Delete is offered only with it.
+            permissions: [
+              'user.read',
+              'user.update',
+              'user.delete',
+              'role.read',
+            ],
             roles: [mockRoles[0]],
           },
           isAuthenticated: true,
@@ -289,7 +296,7 @@ describe('UsersList Component', () => {
       const preloadedState = {
         auth: {
           user: {
-            id: '1',
+            id: 'viewer-1',
             email: 'test@example.com',
             first_name: 'Test',
             last_name: 'User',
@@ -357,10 +364,11 @@ describe('UsersList Component', () => {
       });
     });
 
+    // The viewer is not a row: the list never offers Delete on your own row.
     const fullPermissionsState = {
       auth: {
         user: {
-          id: '1',
+          id: 'viewer-1',
           email: 'test@example.com',
           first_name: 'Test',
           last_name: 'User',
@@ -639,7 +647,7 @@ describe('UsersList Component', () => {
         preloadedState: {
           auth: {
             user: {
-              id: '1',
+              id: 'viewer-1',
               email: 'test@example.com',
               first_name: 'Test',
               last_name: 'User',
@@ -681,7 +689,7 @@ describe('UsersList Component', () => {
         preloadedState: {
           auth: {
             user: {
-              id: '1',
+              id: 'viewer-1',
               email: 'test@example.com',
               first_name: 'Test',
               last_name: 'User',

@@ -84,6 +84,8 @@ const UsersList = () => {
   const canUpdate = hasPermission('user.update');
   const canDelete = hasPermission('user.delete');
   const canCreate = hasPermission('user.create');
+  const canReadRoles = hasPermission('role.read');
+  const viewerId = useSelector((state: RootState) => state.auth.user?.id);
 
   const confirmDelete = async () => {
     if (!userToDelete) return;
@@ -132,10 +134,17 @@ const UsersList = () => {
             navigateRef.current(`/dashboard/users/${user.id}/edit`),
         });
       }
-      // A user who holds a role can't be deleted until the roles are removed,
-      // which needs user.update; without it the viewer can't act, so no Delete.
+      // A user who holds a role can't be deleted until the roles are removed
+      // on the edit page, which needs user.update, and whose Roles field
+      // needs role.read to list them; without both, no Delete. The API never
+      // lets anyone delete themselves. Same rule as user detail.
       const holdsRoles = (user.roles ?? []).length > 0;
-      if (canDelete && (!holdsRoles || canUpdate)) {
+      const canRemoveRoles = canUpdate && canReadRoles;
+      if (
+        canDelete &&
+        user.id !== viewerId &&
+        (!holdsRoles || canRemoveRoles)
+      ) {
         actions.push({
           label: 'Delete user',
           destructive: true,
@@ -152,7 +161,7 @@ const UsersList = () => {
         />
       );
     },
-    [canRead, canUpdate, canDelete]
+    [canRead, canUpdate, canDelete, canReadRoles, viewerId]
   );
 
   const columns = useMemo(

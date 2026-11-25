@@ -437,6 +437,31 @@ describe('UsersList (Web v1)', () => {
       expect(window.location.pathname).toBe('/dashboard/users');
     });
 
+    it('offers no Delete for a role holder without role.read, whose roles the edit page couldn’t list', async () => {
+      const noRoleRead = ADMIN.filter((code) => code !== 'role.read');
+      await renderList(noRoleRead, withNora);
+
+      expect(await openMenuFor('Marcus Webb')).not.toContain('Delete user');
+      await user.keyboard('{Escape}');
+      expect(await openMenuFor('Nora Free')).toContain('Delete user');
+    });
+
+    it('offers no Delete on the viewer’s own row', async () => {
+      // `viewer()` signs in as id 'viewer'; the API refuses self-delete.
+      const self = makeUser({
+        id: 'viewer',
+        first_name: 'Vera',
+        last_name: 'Self',
+        email: 'vera@example.com',
+        roles: [],
+      });
+      await renderList(ADMIN, [...withNora, self]);
+
+      const items = await openMenuFor('Vera Self');
+      expect(items).toContain('View details');
+      expect(items).not.toContain('Delete user');
+    });
+
     it('tells the truth about a user who holds roles, and offers Edit user', async () => {
       await renderList(ADMIN, withNora);
 
