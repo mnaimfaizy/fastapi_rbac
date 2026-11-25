@@ -43,6 +43,7 @@ function renderShellAt(
           path="/dashboard/roles/:roleId/*"
           element={<NamedPage crumb={crumb} />}
         />
+        <Route path="*" element={<NamedPage crumb={crumb} />} />
       </Route>
     </Routes>,
     { preloadedState: signedInAs('admin') }
@@ -115,5 +116,30 @@ describe('a page naming its own breadcrumb steps', () => {
       'aria-current',
       'page'
     );
+  });
+
+  it('shows a standalone step when no nav item matches the page', async () => {
+    renderShellAt('/dashboard/no-such-page', 'Not found');
+
+    await waitFor(() =>
+      expect(within(breadcrumb()).getByText('Not found')).toHaveAttribute(
+        'aria-current',
+        'page'
+      )
+    );
+    expect(breadcrumb()).toHaveTextContent(/^Not found$/);
+    expect(within(breadcrumb()).queryByRole('link')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(document.title).toBe('Not found | FastAPI RBAC')
+    );
+  });
+
+  it('shows no breadcrumb when no nav item matches and the page names none', async () => {
+    renderShellAt('/dashboard/no-such-page', null);
+
+    await screen.findByRole('heading', { name: 'Named page' });
+    expect(
+      screen.queryByRole('navigation', { name: 'Breadcrumb' })
+    ).not.toBeInTheDocument();
   });
 });

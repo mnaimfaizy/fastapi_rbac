@@ -112,8 +112,9 @@ const TITLE_SEPARATOR = ' · ';
  * first, then the nav item it sits under. `Manager · Roles` on a role's
  * detail page, `Profile · Account settings` on that tab. Without steps, a
  * fixed sub-page name stands in (`Create role · Roles`). The landing page
- * is titled with its nav label (Dashboard, or Home for a plain user).
- * Returns undefined for a path outside the nav.
+ * is titled with its nav label (Dashboard, or Home for a plain user). A
+ * path outside the nav is titled by its steps alone (`Not found`), and
+ * gets undefined when it names none.
  */
 export function pageTitle(
   pathname: string,
@@ -123,7 +124,12 @@ export function pageTitle(
     [{ label: '', items: allNavItems() }],
     pathname
   )?.item;
-  if (!section) return undefined;
+  if (!section) {
+    // A page outside the nav (the in-app 404) is titled by its own steps.
+    return crumbs.length > 0
+      ? [...crumbs].reverse().join(TITLE_SEPARATOR)
+      : undefined;
+  }
   const sectionLabel = section.to === HOME_PATH ? homeLabel : section.label;
   const own =
     crumbs.length > 0

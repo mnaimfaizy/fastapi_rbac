@@ -140,6 +140,8 @@ const MainLayout = () => {
 /**
  * `Group › Nav item › …the page's own steps`. The nav item links back to its
  * list once the page names steps after it; the last step is the current page.
+ * A page no nav item matches (the in-app 404) shows only its own steps, a
+ * standalone crumb, or no breadcrumb when it names none.
  */
 function Breadcrumb({
   active,
@@ -148,51 +150,50 @@ function Breadcrumb({
   active: ReturnType<typeof findActiveNavItem>;
   crumbs: string[];
 }) {
-  if (!active) {
+  if (!active && crumbs.length === 0) {
     return null;
   }
-  const last = crumbs.length - 1;
   return (
     <nav
       aria-label="Breadcrumb"
       className="hidden items-center gap-1.5 text-sm whitespace-nowrap lg:flex"
     >
-      {!active.item.standalone && (
+      {active && !active.item.standalone && (
         <>
           <span className="text-muted-foreground">{active.group.label}</span>
           <CrumbSeparator />
         </>
       )}
-      {crumbs.length > 0 ? (
-        <>
+      {active &&
+        (crumbs.length > 0 ? (
           <Link
             to={active.item.to}
             className="text-muted-foreground hover:text-foreground"
           >
             {active.item.label}
           </Link>
-          {crumbs.map((label, index) => (
-            <Fragment key={index}>
-              <CrumbSeparator />
-              {index === last ? (
-                <span
-                  aria-current="page"
-                  className="font-medium text-foreground"
-                >
-                  {label}
-                </span>
-              ) : (
-                <span className="text-muted-foreground">{label}</span>
-              )}
-            </Fragment>
-          ))}
-        </>
-      ) : (
-        <span aria-current="page" className="font-medium text-foreground">
-          {active.item.label}
-        </span>
-      )}
+        ) : (
+          <CurrentCrumb label={active.item.label} />
+        ))}
+      {crumbs.map((label, index) => (
+        <Fragment key={index}>
+          {(active || index > 0) && <CrumbSeparator />}
+          {index === crumbs.length - 1 ? (
+            <CurrentCrumb label={label} />
+          ) : (
+            <span className="text-muted-foreground">{label}</span>
+          )}
+        </Fragment>
+      ))}
     </nav>
+  );
+}
+
+function CurrentCrumb({ label }: { label: string }) {
+  return (
+    <span aria-current="page" className="font-medium text-foreground">
+      {label}
+    </span>
   );
 }
 
