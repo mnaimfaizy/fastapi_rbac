@@ -223,6 +223,71 @@ describe('Group form', () => {
     });
   });
 
+  describe('after saving an edit', () => {
+    it(
+      'shows a loading list, not the old parent, until the reload arrives',
+      { timeout: 30_000 },
+      async () => {
+        const user = userEvent.setup();
+        const support = roleGroup('support', 'Support', 'ops');
+        const stale = [administrative, { ...operational, children: [support] }];
+        mockRoleGroupService.getRoleGroups.mockResolvedValue(
+          page(stale) as never
+        );
+        mockRoleGroupService.getRoleGroupById.mockResolvedValue({
+          message: 'ok',
+          meta: {},
+          data: { ...support, roles: [], children: [] },
+        } as never);
+        mockRoleGroupService.updateRoleGroup.mockResolvedValue({
+          message: 'ok',
+          meta: {},
+          data: { ...support, parent_id: 'admin-group' },
+        } as never);
+        renderGroupsAt('/dashboard/role-groups/edit/support', 'admin');
+
+        await user.click(
+          await screen.findByRole('combobox', { name: 'Parent group' })
+        );
+        await user.click(
+          await screen.findByRole('option', { name: 'Administrative' })
+        );
+
+        // The list reloads slowly: the first fetch hands back the old tree.
+        let resolveReload: (value: unknown) => void = () => {};
+        mockRoleGroupService.getRoleGroups.mockReturnValueOnce(
+          new Promise((resolve) => {
+            resolveReload = resolve;
+          }) as never
+        );
+        await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+        expect(
+          await screen.findByText('Loading role groups', {}, { timeout: 5000 })
+        ).toBeInTheDocument();
+        expect(
+          screen.queryByRole('link', { name: 'Support' })
+        ).not.toBeInTheDocument();
+
+        resolveReload(
+          page([
+            {
+              ...administrative,
+              children: [{ ...support, parent_id: 'admin-group' }],
+            },
+            operational,
+          ])
+        );
+        const supportRow = await waitFor(() => rowFor('Support'), {
+          timeout: 5000,
+        });
+        expect(within(supportRow).getAllByRole('cell')[1]).toHaveTextContent(
+          'Administrative'
+        );
+      }
+    );
+  });
+
   describe('permission groups, as an admin', () => {
     it(
       'creates a child group that shows under its parent',

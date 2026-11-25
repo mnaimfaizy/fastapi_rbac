@@ -73,22 +73,30 @@ export function GroupForm({
     }
   });
 
+  // Laid out as `groups-form.dc.html` draws it: the content is left-aligned in
+  // a 1120px column with a 640px card, and Cancel and Save sit in a footer bar
+  // that spans the page and sticks to the bottom of the window. The negative
+  // margins pull the bar out to the edges of the shell's padded main area.
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
-      <div className="flex flex-col gap-3">
-        <Link
-          to={backHref}
-          className="text-foreground-secondary hover:text-foreground inline-flex w-fit items-center gap-1 text-sm"
-        >
-          <ArrowLeft aria-hidden="true" className="size-4" />
-          {backLabel}
-        </Link>
-        <PageHeader title={title} description={description} />
-      </div>
+    <Form {...form}>
+      <form
+        onSubmit={submit}
+        noValidate
+        className="flex min-h-[calc(100vh-6.5rem)] flex-col sm:min-h-[calc(100vh-7.5rem)] lg:min-h-[calc(100vh-8rem)]"
+      >
+        <div className="mx-auto flex w-full max-w-[1120px] flex-col gap-6">
+          <div className="flex flex-col gap-3">
+            <Link
+              to={backHref}
+              className="text-foreground-secondary hover:text-foreground inline-flex w-fit items-center gap-1 text-[13px] font-medium"
+            >
+              <ArrowLeft aria-hidden="true" className="size-4" />
+              {backLabel}
+            </Link>
+            <PageHeader title={title} description={description} />
+          </div>
 
-      <Form {...form}>
-        <form onSubmit={submit} noValidate className="flex flex-col gap-6">
-          <div className="bg-card flex flex-col gap-6 rounded-lg border p-6">
+          <div className="bg-card flex max-w-[640px] flex-col gap-5 rounded-xl border p-7">
             <FormField
               control={form.control}
               name="name"
@@ -123,8 +131,10 @@ export function GroupForm({
               )}
             />
           </div>
+        </div>
 
-          <div className="flex justify-end gap-3">
+        <div className="bg-background sticky bottom-0 z-10 mt-auto -mr-4 -mb-4 -ml-4 flex justify-center border-t px-4 py-3.5 sm:-mr-6 sm:-mb-6 sm:-ml-6 sm:px-6 lg:-mr-8 lg:-mb-8 lg:-ml-8 lg:px-8">
+          <div className="flex w-full max-w-[1120px] justify-end gap-2">
             <Button asChild variant="outline">
               <Link to={backHref}>Cancel</Link>
             </Button>
@@ -136,8 +146,8 @@ export function GroupForm({
               {submitLabel}
             </Button>
           </div>
-        </form>
-      </Form>
-    </div>
+        </div>
+      </form>
+    </Form>
   );
 }
