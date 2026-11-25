@@ -1,3 +1,4 @@
+import { Fragment, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -21,12 +22,23 @@ const VERB_CRUMBS: Record<string, string> = {
   update: 'Edit',
 };
 
+function PermissionCode({ children }: { children: ReactNode }) {
+  return (
+    <code className="text-foreground font-mono text-[13px]">{children}</code>
+  );
+}
+
 interface UnauthorizedPageProps {
   /**
    * The permission the viewer lacks, such as `role.update`. Without one
    * the page says only that the viewer can't open it.
    */
   permission?: string;
+  /**
+   * More than one permission would have been enough, so the page says
+   * "one of" and lists them. `permission` is the first of them.
+   */
+  anyOf?: string[];
 }
 
 /**
@@ -34,7 +46,7 @@ interface UnauthorizedPageProps {
  * don't allow: the permission they lack and a way back. `ProtectedRoute`
  * renders it in place of the refused page.
  */
-const UnauthorizedPage = ({ permission }: UnauthorizedPageProps) => {
+const UnauthorizedPage = ({ permission, anyOf }: UnauthorizedPageProps) => {
   const { hasPermission } = usePermissions();
   const [resource, verb] = permission?.split('.') ?? [];
   // The sidebar item for the resource's list, such as Roles for role.*.
@@ -75,11 +87,21 @@ const UnauthorizedPage = ({ permission }: UnauthorizedPageProps) => {
         {permission ? (
           <>
             You need{' '}
-            <code className="text-foreground font-mono text-[13px]">
-              {permission}
-            </code>{' '}
-            to {action ?? 'open this page'}. Ask an admin to add it to one of
-            your roles.
+            {anyOf && anyOf.length > 1 ? (
+              <>
+                one of{' '}
+                {anyOf.map((code, index) => (
+                  <Fragment key={code}>
+                    {index > 0 && (index === anyOf.length - 1 ? ' or ' : ', ')}
+                    <PermissionCode>{code}</PermissionCode>
+                  </Fragment>
+                ))}
+              </>
+            ) : (
+              <PermissionCode>{permission}</PermissionCode>
+            )}{' '}
+            to {action ?? 'open this page'}. Ask an admin to add{' '}
+            {anyOf && anyOf.length > 1 ? 'one' : 'it'} to one of your roles.
           </>
         ) : (
           <>

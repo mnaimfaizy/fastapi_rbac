@@ -60,7 +60,14 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       : missing.length === requiredPermissions.length;
 
     if (refused) {
-      return <UnauthorizedPage permission={missing[0]} />;
+      // One missing permission is the answer in all-mode; in any-mode every
+      // listed permission would have been enough.
+      return (
+        <UnauthorizedPage
+          permission={missing[0]}
+          anyOf={requireAllPermissions ? undefined : missing}
+        />
+      );
     }
   }
 
