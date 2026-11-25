@@ -415,11 +415,11 @@ describe('UsersList (Web v1)', () => {
       const dialog = screen.getByRole('alertdialog', {
         name: 'Delete user ‘Nora Free’?',
       });
-      expect(
-        within(dialog).getByText(
-          'They lose access straight away. This can’t be undone.'
-        )
-      ).toBeInTheDocument();
+      // users-delete artboard: who, what deleting does, and that it's final.
+      expect(dialog).toHaveTextContent(
+        'Nora loses access straight away and is signed out everywhere.'
+      );
+      expect(dialog).toHaveTextContent('This can’t be undone.');
       await user.click(
         within(dialog).getByRole('button', { name: 'Delete user' })
       );

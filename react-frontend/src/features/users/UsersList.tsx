@@ -41,6 +41,7 @@ import {
   roleNames,
   type StatusFilter,
 } from './users-list-model';
+import { deleteCopyFor, NO_DELETE_COPY, type DeleteCopy } from './user-delete';
 
 /**
  * The users API pages with at most 100 rows and has no search or filter
@@ -48,45 +49,6 @@ import {
  * pages in the browser.
  */
 const USERS_FETCH_LIMIT = 100;
-
-interface DeleteCopy {
-  title: string;
-  description: string;
-  confirmLabel: string;
-  holdsRoles: boolean;
-}
-
-const NO_DELETE_COPY: DeleteCopy = {
-  title: '',
-  description: '',
-  confirmLabel: 'Delete user',
-  holdsRoles: false,
-};
-
-/**
- * What the delete dialog says. The API deletes only a user who holds no
- * role (`remove_user` answers 409 otherwise), so for a role holder the
- * dialog says so and offers the edit page instead of a delete it would
- * refuse.
- */
-function deleteCopyFor(user: User): DeleteCopy {
-  const name = fullName(user);
-  const count = (user.roles ?? []).length;
-  if (count > 0) {
-    return {
-      title: `Remove ${name}’s roles first`,
-      description: `${name} holds ${count} ${count === 1 ? 'role' : 'roles'}. A user who holds a role can’t be deleted, so remove their roles on the edit page first.`,
-      confirmLabel: 'Edit user',
-      holdsRoles: true,
-    };
-  }
-  return {
-    title: `Delete user ‘${name}’?`,
-    description: 'They lose access straight away. This can’t be undone.',
-    confirmLabel: 'Delete user',
-    holdsRoles: false,
-  };
-}
 
 const UsersList = () => {
   const dispatch = useDispatch<AppDispatch>();
