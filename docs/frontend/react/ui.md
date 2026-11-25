@@ -73,6 +73,19 @@ Every signed-in page renders inside `MainLayout` (`src/components/layout/`), the
 
 On desktop (`lg` and up) the panels sit in two columns, Profile and Quick actions on the left, Security status and Roles on the right. Below `lg` they stack as Security status, Quick actions, Profile, Roles. The page renders the panels in the DOM in the order shown at each width, so keyboard and screen-reader order match what is on screen (WCAG 2.4.3). Do not reorder them with CSS `order`.
 
+## Lists
+
+The users list (`src/features/users/UsersList.tsx`, from the "05 · Users · List" artboards) is the first list on the Web v1 pattern:
+
+- **Table.** `DataTable` (`src/components/dashboard/users/data-table.tsx`) draws the table only: header, rows, an optional row click and a footer slot. The page passes in the rows to show and the column visibility, and owns search, filters, the column picker and pagination. A row click opens the row's detail page; clicks on links, buttons and the row's "…" menu keep their own behavior.
+- **Row menu.** `RowActionsMenu` gets only the actions the viewer can use, and destructive ones are confirmed with `ConfirmDialog`. The API deletes only a user who holds no role, so for a role holder the delete dialog says the roles must be removed first and offers Edit user; a viewer without `user.update` gets no Delete for a role holder.
+- **Status.** The status column shows `StatusBadge` for exceptions only, so a healthy row has an empty cell.
+- **Empty and no-match states.** Both use `EmptyState`: "No users match ‘xyz’" with Clear search, and a create action on an empty list only for viewers who can create.
+- **Status filter in the URL.** The users list reads and writes `?status=`, so other pages can link to a filtered list. The accepted values are `STATUS_FILTERS` in `src/features/users/users-list-model.ts`, matched in any case by `parseStatusFilter`; any other value shows everyone.
+- **Mobile.** Below the `md` breakpoint the list renders as stacked rows instead of the table.
+
+`GET /users/list` takes only `page` and `size`, so the users list loads one page of `USERS_FETCH_LIMIT` users (`src/features/users/UsersList.tsx`, the API's largest page size) and searches, filters and pages it in the browser. When the API reports more, the page says search covers the loaded users only. Sorting is not offered: the Web v1 artboards have none, and the list keeps the API's order.
+
 ## Group trees
 
 Role groups and permission groups share one module, `src/features/groups/`, built to the "07 · Groups" artboards:
