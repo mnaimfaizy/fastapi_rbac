@@ -390,6 +390,41 @@ describe('User create and edit forms (Web v1)', () => {
     });
   });
 
+  describe('own account', () => {
+    it('offers no Active switch and leaves the flag out on save, even for a superuser', async () => {
+      mockUserService.updateUser.mockResolvedValue(DANIEL);
+      await renderEdit(
+        makeUser({
+          id: 'viewer-superuser',
+          first_name: 'QA',
+          last_name: 'superuser',
+          email: 'superuser@example.com',
+          roles: [held(ADMIN_ROLE)],
+        }),
+        'superuser'
+      );
+
+      const status = section('Status');
+      expect(
+        within(status).getByText('You can’t disable your own account.')
+      ).toBeInTheDocument();
+      expect(
+        within(status).queryByRole('switch', { name: 'Active' })
+      ).toBeNull();
+
+      await user.clear(screen.getByLabelText('Last name'));
+      await user.type(screen.getByLabelText('Last name'), 'Owner');
+      await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+      await waitFor(() =>
+        expect(mockUserService.updateUser).toHaveBeenCalled()
+      );
+      const payload = mockUserService.updateUser.mock.calls[0][1];
+      expect(payload).toMatchObject({ last_name: 'Owner' });
+      expect(payload).not.toHaveProperty('is_active');
+    });
+  });
+
   describe('as a plain user', () => {
     it('shows no roles and no superuser switch', async () => {
       // The routes need user.create or user.update, which the seeded User

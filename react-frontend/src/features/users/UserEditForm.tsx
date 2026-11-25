@@ -159,6 +159,8 @@ const UserEditForm = ({ user }: UserEditFormProps) => {
   const canReadRoles = hasPermission('role.read');
   // The API never lets a non-superuser change their own roles.
   const ownRoles = editing && !isSuperuser && viewer?.id === user.id;
+  // The API refuses to let anyone, a superuser included, disable themselves.
+  const ownAccount = editing && viewer?.id === user.id;
 
   useEffect(() => {
     if (canReadRoles) {
@@ -219,7 +221,8 @@ const UserEditForm = ({ user }: UserEditFormProps) => {
       last_name: values.last_name.trim(),
       email: values.email.trim(),
       contact_phone: values.contact_phone.trim() || null,
-      is_active: values.is_active,
+      // On your own account the switch isn't offered; leave the flag alone.
+      ...(ownAccount ? {} : { is_active: values.is_active }),
       // Only a superuser may set the flag; anyone else leaves it out.
       ...(isSuperuser ? { is_superuser: values.is_superuser } : {}),
     };
@@ -458,18 +461,24 @@ const UserEditForm = ({ user }: UserEditFormProps) => {
         title="Status"
         description="Inactive users can’t sign in. Their data stays."
       >
-        <Controller
-          control={control}
-          name="is_active"
-          render={({ field }) => (
-            <FormSwitch
-              label="Active"
-              description="This person can sign in."
-              checked={field.value}
-              onCheckedChange={field.onChange}
-            />
-          )}
-        />
+        {ownAccount ? (
+          <p className="text-foreground-secondary text-sm">
+            You can’t disable your own account.
+          </p>
+        ) : (
+          <Controller
+            control={control}
+            name="is_active"
+            render={({ field }) => (
+              <FormSwitch
+                label="Active"
+                description="This person can sign in."
+                checked={field.value}
+                onCheckedChange={field.onChange}
+              />
+            )}
+          />
+        )}
       </FormSection>
 
       <div className="bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky bottom-0 z-10 -mx-1 flex items-center justify-between gap-3 border-t px-1 py-4 backdrop-blur">

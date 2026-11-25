@@ -40,7 +40,10 @@ const mockAuthService = vi.mocked(authService);
 const mockRoleService = vi.mocked(roleService);
 const mockRoleGroupService = vi.mocked(roleGroupService);
 
-async function renderDetail(target: User, viewer: ViewerKind = 'admin') {
+async function renderDetail(
+  target: User,
+  viewer: ViewerKind | ReturnType<typeof viewerState> = 'admin'
+) {
   mockUserService.getUserById.mockResolvedValue(target);
   const result = renderWithProviders(
     at(
@@ -57,7 +60,9 @@ async function renderDetail(target: User, viewer: ViewerKind = 'admin') {
         />
       </Routes>
     ),
-    { preloadedState: viewerState(viewer) }
+    {
+      preloadedState: typeof viewer === 'string' ? viewerState(viewer) : viewer,
+    }
   );
   await screen.findByRole('heading', {
     level: 1,
@@ -291,6 +296,43 @@ describe('User detail (Web v1)', () => {
 
       expect(mockUserService.deleteUser).not.toHaveBeenCalled();
       expect(await screen.findByText('Edit page')).toBeInTheDocument();
+    });
+
+    it('offers no Delete for a role holder without role.read, whose roles the edit page couldn’t list', async () => {
+      const state = viewerState('admin');
+      const noRoleRead = {
+        auth: {
+          ...state.auth,
+          user: {
+            ...state.auth.user,
+            permissions: state.auth.user.permissions.filter(
+              (code) => code !== 'role.read'
+            ),
+          },
+        },
+      };
+      await renderDetail(MARCUS, noRoleRead);
+      expect(
+        screen.queryByRole('button', { name: /^More actions for/ })
+      ).not.toBeInTheDocument();
+    });
+
+    it('still offers Delete for a user with no roles without role.read', async () => {
+      const state = viewerState('admin');
+      await renderDetail(NORA, {
+        auth: {
+          ...state.auth,
+          user: {
+            ...state.auth.user,
+            permissions: state.auth.user.permissions.filter(
+              (code) => code !== 'role.read'
+            ),
+          },
+        },
+      });
+      expect(
+        screen.getByRole('button', { name: 'More actions for Nora Free' })
+      ).toBeInTheDocument();
     });
 
     it('offers no Delete on the viewer’s own page', async () => {

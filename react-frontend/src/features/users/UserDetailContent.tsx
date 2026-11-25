@@ -154,11 +154,13 @@ const UserDetailContent = () => {
 
   const name = fullName(user);
   const holdsRoles = (user.roles ?? []).length > 0;
-  // A role holder can only be deleted once their roles are removed, which
-  // needs user.update; without it the viewer can't act, so no Delete.
+  // A role holder can only be deleted once their roles are removed on the
+  // edit page, which needs user.update, and whose Roles field needs
+  // role.read to list them. Without both the viewer can't act, so no Delete.
   // The API never lets anyone delete themselves.
+  const canRemoveRoles = canUpdate && canReadRoles;
   const showDelete =
-    canDelete && user.id !== viewerId && (!holdsRoles || canUpdate);
+    canDelete && user.id !== viewerId && (!holdsRoles || canRemoveRoles);
 
   const openDelete = () => {
     setDeleteCopy(deleteCopyFor(user));
