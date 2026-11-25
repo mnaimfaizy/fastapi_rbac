@@ -86,6 +86,14 @@ The users list (`src/features/users/UsersList.tsx`, from the "05 · Users · Lis
 
 `GET /users/list` takes only `page` and `size`, so the users list loads one page of `USERS_FETCH_LIMIT` users (`src/features/users/UsersList.tsx`, the API's largest page size) and searches, filters and pages it in the browser. When the API reports more, the page says search covers the loaded users only. Sorting is not offered: the Web v1 artboards have none, and the list keeps the API's order.
 
+## User detail and forms
+
+User detail (`src/features/users/UserDetailContent.tsx`) and the create and edit forms (`UserEditPage.tsx`, `UserEditForm.tsx`) follow the "05 · Users" detail, create, edit and delete artboards:
+
+- **Detail.** Basic information, Password and security, Account status and Roles panels. The user read model names roles without their permissions, so each held role's permissions come from `GET /roles/list` (shown only to viewers with `role.read`), grouped by permission group; the role group's name needs `role_group.read`. **Edit user** is the secondary action and **Delete user** sits in the "…" menu. A Pending user's Account status has **Resend verification email**, which calls the public resend endpoint and always shows the same neutral toast, so it never reveals the account's state. There is no Unlock account control: the API has no way to unlock.
+- **Delete.** List and detail share the dialog copy in `src/features/users/user-delete.tsx`. A user who holds no role gets "Delete user ‘Name’?" with what deleting does; a role holder gets "Remove Name’s roles first" and an **Edit user** button, because the API refuses to delete them.
+- **Forms.** Identity, Password (create only, with `PasswordChecklist`), Access and Status, each a titled section, then a sticky footer with Cancel and Create user or Save changes (and "Unsaved changes" on edit). The Roles field lists only the roles the viewer may grant: every role for a superuser, otherwise roles whose permissions the viewer all holds (`grantableRoles` in `user-form-model.ts`, mirroring the backend's role-grant ceiling). Held roles the viewer can't grant are sent back unchanged on save. The superuser switch renders only for a superuser viewer, and the flag is never sent otherwise. `components/ui` has no switch, so the forms use `FormSwitch.tsx`.
+
 ## Accessibility
 
 Use Radix-backed ShadCN controls for focus management and keyboard behavior. Keep labels associated with inputs; do not remove accessible attributes when wrapping primitives.

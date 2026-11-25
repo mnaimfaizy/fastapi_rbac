@@ -292,6 +292,14 @@ describe('User detail (Web v1)', () => {
       expect(mockUserService.deleteUser).not.toHaveBeenCalled();
       expect(await screen.findByText('Edit page')).toBeInTheDocument();
     });
+
+    it('offers no Delete on the viewer’s own page', async () => {
+      await renderDetail({ ...NORA, id: 'viewer-admin' });
+
+      expect(
+        screen.queryByRole('button', { name: /^More actions for/ })
+      ).not.toBeInTheDocument();
+    });
   });
 
   describe('as a manager', () => {

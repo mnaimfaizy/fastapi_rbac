@@ -98,6 +98,7 @@ const UserDetailContent = () => {
   const { selectedUser, loading, error } = useSelector(
     (state: RootState) => state.user
   );
+  const viewerId = useSelector((state: RootState) => state.auth.user?.id);
   const allRoles = useSelector((state: RootState) => state.role.allRoles);
   const roleGroups = useSelector(
     (state: RootState) => state.roleGroup.roleGroups
@@ -155,7 +156,9 @@ const UserDetailContent = () => {
   const holdsRoles = (user.roles ?? []).length > 0;
   // A role holder can only be deleted once their roles are removed, which
   // needs user.update; without it the viewer can't act, so no Delete.
-  const showDelete = canDelete && (!holdsRoles || canUpdate);
+  // The API never lets anyone delete themselves.
+  const showDelete =
+    canDelete && user.id !== viewerId && (!holdsRoles || canUpdate);
 
   const openDelete = () => {
     setDeleteCopy(deleteCopyFor(user));
