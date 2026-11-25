@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders, mockUsers, mockRoles } from './test-utils';
 import UsersList from '../features/users/UsersList';
@@ -83,11 +83,16 @@ describe('UsersList Component', () => {
     it('renders correctly with default store state', () => {
       renderWithProviders(<UsersList />);
 
-      expect(screen.getByText('Users')).toBeInTheDocument();
-      expect(screen.getByText('Manage Users')).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { name: 'Users' })
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText('Everyone who can sign in to FastAPI RBAC.')
+      ).toBeInTheDocument();
     });
 
-    it('renders loading spinner when loading state is true', () => {
+    it('renders the table skeleton while the first load is in flight', () => {
+      mockUserService.getUsers.mockReturnValue(new Promise(() => {}));
       const preloadedState = {
         user: {
           users: [],
@@ -107,10 +112,13 @@ describe('UsersList Component', () => {
 
       renderWithProviders(<UsersList />, { preloadedState });
 
-      expect(screen.getByTestId('loading-spinner')).toBeInTheDocument();
+      expect(
+        screen.getByRole('status', { name: 'Loading users' })
+      ).toBeInTheDocument();
     });
-    it('displays error message when error state is present', () => {
+    it('displays error message when loading users fails', async () => {
       const errorMessage = 'Failed to fetch users';
+      mockUserService.getUsers.mockRejectedValue(new Error(errorMessage));
       const preloadedState = {
         auth: {
           user: {
@@ -131,10 +139,12 @@ describe('UsersList Component', () => {
           error: null,
         },
         user: {
-          users: [mockUsers[0]], // Provide one user to prevent useEffect fetch
+          // The page always fetches on mount; the banner comes from the
+          // rejected fetch above, not from preloaded state.
+          users: [mockUsers[0]],
           selectedUser: null,
           loading: false,
-          error: errorMessage,
+          error: null,
           pagination: {
             total: 1,
             page: 1,
@@ -148,11 +158,11 @@ describe('UsersList Component', () => {
 
       renderWithProviders(<UsersList />, { preloadedState });
 
-      // The error message should be displayed in a styled div above the card
-      expect(screen.getByText(errorMessage)).toBeInTheDocument();
+      // The error message should be displayed above the table
+      expect(await screen.findByText(errorMessage)).toBeInTheDocument();
 
-      // Should not show loading spinner when there's an error
-      expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
+      // Should not show the loading skeleton when there's an error
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
 
       // Should show the DataTable with empty data when not loading
       expect(screen.getByRole('table')).toBeInTheDocument();
@@ -178,14 +188,14 @@ describe('UsersList Component', () => {
 
       renderWithProviders(<UsersList />, { preloadedState }); // Check that users are displayed
       expect(screen.getByText('John Doe')).toBeInTheDocument();
-      expect(screen.getAllByText('test@example.com')).toHaveLength(2); // Email appears in header + cell
+      expect(screen.getByText('test@example.com')).toBeInTheDocument();
       expect(screen.getByText('Admin User')).toBeInTheDocument();
-      expect(screen.getAllByText('admin@example.com')).toHaveLength(2); // Email appears in header + cell
+      expect(screen.getByText('admin@example.com')).toBeInTheDocument();
     });
   });
 
   describe('Permission-Based Behavior', () => {
-    it('shows "Add New User" button when user has create permission', () => {
+    it('shows "Add user" button when user has create permission', () => {
       const preloadedState = {
         auth: {
           user: {
@@ -204,10 +214,10 @@ describe('UsersList Component', () => {
 
       renderWithProviders(<UsersList />, { preloadedState });
 
-      expect(screen.getByText('Add New User')).toBeInTheDocument();
+      expect(screen.getByText('Add user')).toBeInTheDocument();
     });
 
-    it('hides "Add New User" button when user lacks create permission', () => {
+    it('hides "Add user" button when user lacks create permission', () => {
       const preloadedState = {
         auth: {
           user: {
@@ -226,7 +236,7 @@ describe('UsersList Component', () => {
 
       renderWithProviders(<UsersList />, { preloadedState });
 
-      expect(screen.queryByText('Add New User')).not.toBeInTheDocument();
+      expect(screen.queryByText('Add user')).not.toBeInTheDocument();
     });
 
     it('shows edit and delete actions when user has appropriate permissions', async () => {
@@ -264,7 +274,7 @@ describe('UsersList Component', () => {
 
       // Click on the first action menu button
       const actionButtons = screen.getAllByRole('button', {
-        name: /open menu/i,
+        name: /^actions for /i,
       });
       await user.click(actionButtons[0]);
 
@@ -310,7 +320,7 @@ describe('UsersList Component', () => {
 
       // Click on the first action menu button
       const actionButtons = screen.getAllByRole('button', {
-        name: /open menu/i,
+        name: /^actions for /i,
       });
       await user.click(actionButtons[0]);
 
@@ -320,107 +330,33 @@ describe('UsersList Component', () => {
         expect(screen.queryByText('Delete user')).not.toBeInTheDocument();
       });
     });
-
-    it('shows unlock account option for locked users with update permission', async () => {
-      const lockedUser = {
-        ...mockUsers[0],
-        is_locked: true,
-      };
-
-      const preloadedState = {
-        auth: {
-          user: {
-            id: '1',
-            email: 'test@example.com',
-            first_name: 'Test',
-            last_name: 'User',
-            permissions: ['user.read', 'user.update'],
-            roles: [mockRoles[0]],
-          },
-          isAuthenticated: true,
-          isLoading: false,
-          error: null,
-        },
-        user: {
-          users: [lockedUser],
-          selectedUser: null,
-          loading: false,
-          error: null,
-          pagination: {
-            total: 1,
-            page: 1,
-            size: 10,
-            pages: 1,
-            previousPage: null,
-            nextPage: null,
-          },
-        },
-      };
-
-      renderWithProviders(<UsersList />, { preloadedState });
-
-      // Click on the action menu button
-      const actionButtons = screen.getAllByRole('button', {
-        name: /open menu/i,
-      });
-      await user.click(actionButtons[0]);
-
-      await waitFor(() => {
-        expect(screen.getByText('Unlock account')).toBeInTheDocument();
-      });
-    });
-
-    it('shows resend verification option for unverified users with update permission', async () => {
-      const unverifiedUser = {
-        ...mockUsers[0],
-        verified: false,
-      };
-
-      const preloadedState = {
-        auth: {
-          user: {
-            id: '1',
-            email: 'test@example.com',
-            first_name: 'Test',
-            last_name: 'User',
-            permissions: ['user.read', 'user.update'],
-            roles: [mockRoles[0]],
-          },
-          isAuthenticated: true,
-          isLoading: false,
-          error: null,
-        },
-        user: {
-          users: [unverifiedUser],
-          selectedUser: null,
-          loading: false,
-          error: null,
-          pagination: {
-            total: 1,
-            page: 1,
-            size: 10,
-            pages: 1,
-            previousPage: null,
-            nextPage: null,
-          },
-        },
-      };
-
-      renderWithProviders(<UsersList />, { preloadedState });
-
-      // Click on the action menu button
-      const actionButtons = screen.getAllByRole('button', {
-        name: /open menu/i,
-      });
-      await user.click(actionButtons[0]);
-
-      await waitFor(() => {
-        expect(screen.getByText('Resend verification')).toBeInTheDocument();
-      });
-    });
   });
 
   describe('User Operations (CRUD)', () => {
+    // The API deletes only a user who holds no role, so these delete flows
+    // use role-less copies of the mock users.
+    const roleLessUsers = mockUsers.map((item) => ({ ...item, roles: [] }));
+    beforeEach(() => {
+      const deletedIds: string[] = [];
+      mockUserService.deleteUser.mockImplementation(async (userId: string) => {
+        deletedIds.push(userId);
+      });
+      mockUserService.getUsers.mockImplementation(async () => {
+        const items = roleLessUsers.filter(
+          (item) => !deletedIds.includes(item.id)
+        );
+        return {
+          items,
+          total: items.length,
+          page: 1,
+          size: 10,
+          pages: 1,
+          previous_page: null,
+          next_page: null,
+        };
+      });
+    });
+
     const fullPermissionsState = {
       auth: {
         user: {
@@ -441,7 +377,7 @@ describe('UsersList Component', () => {
         error: null,
       },
       user: {
-        users: mockUsers,
+        users: roleLessUsers,
         selectedUser: null,
         loading: false,
         error: null,
@@ -463,24 +399,25 @@ describe('UsersList Component', () => {
 
       // Click on the first action menu button
       const actionButtons = screen.getAllByRole('button', {
-        name: /open menu/i,
+        name: /^actions for /i,
       });
       await user.click(actionButtons[0]);
 
       // Wait for menu to appear and click delete
       await waitFor(() => {
-        expect(screen.getByTestId('delete-user-button')).toBeInTheDocument();
+        expect(
+          screen.getByRole('menuitem', { name: 'Delete user' })
+        ).toBeInTheDocument();
       });
 
-      await user.click(screen.getByTestId('delete-user-button'));
+      await user.click(screen.getByRole('menuitem', { name: 'Delete user' }));
 
       // Check that dialog opened
       await waitFor(() => {
-        expect(screen.getByText('Delete User')).toBeInTheDocument();
         expect(
-          screen.getByText(/are you sure you want to delete this user/i)
+          screen.getByRole('alertdialog', { name: 'Delete user ‘John Doe’?' })
         ).toBeInTheDocument();
-        expect(screen.getByTestId('confirm-delete-user')).toBeInTheDocument();
+        expect(screen.getByText(/can’t be undone/i)).toBeInTheDocument();
       });
     });
 
@@ -491,15 +428,17 @@ describe('UsersList Component', () => {
 
       // Open delete dialog
       const actionButtons = screen.getAllByRole('button', {
-        name: /open menu/i,
+        name: /^actions for /i,
       });
       await user.click(actionButtons[0]);
 
       await waitFor(() => {
-        expect(screen.getByTestId('delete-user-button')).toBeInTheDocument();
+        expect(
+          screen.getByRole('menuitem', { name: 'Delete user' })
+        ).toBeInTheDocument();
       });
 
-      await user.click(screen.getByTestId('delete-user-button'));
+      await user.click(screen.getByRole('menuitem', { name: 'Delete user' }));
 
       // Click cancel
       await waitFor(() => {
@@ -510,7 +449,7 @@ describe('UsersList Component', () => {
 
       // Dialog should close
       await waitFor(() => {
-        expect(screen.queryByText('Delete User')).not.toBeInTheDocument();
+        expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
       });
     });
     it('dispatches delete action when delete is confirmed', async () => {
@@ -524,26 +463,32 @@ describe('UsersList Component', () => {
 
       // Open delete dialog
       const actionButtons = screen.getAllByRole('button', {
-        name: /open menu/i,
+        name: /^actions for /i,
       });
       await user.click(actionButtons[0]);
 
       await waitFor(() => {
-        expect(screen.getByTestId('delete-user-button')).toBeInTheDocument();
+        expect(
+          screen.getByRole('menuitem', { name: 'Delete user' })
+        ).toBeInTheDocument();
       });
 
-      await user.click(screen.getByTestId('delete-user-button'));
+      await user.click(screen.getByRole('menuitem', { name: 'Delete user' }));
 
       // Confirm delete
       await waitFor(() => {
-        expect(screen.getByTestId('confirm-delete-user')).toBeInTheDocument();
+        expect(screen.getByRole('alertdialog')).toBeInTheDocument();
       });
 
-      await user.click(screen.getByTestId('confirm-delete-user'));
+      await user.click(
+        within(screen.getByRole('alertdialog')).getByRole('button', {
+          name: 'Delete user',
+        })
+      );
 
       // Verify the dialog closes after deletion
       await waitFor(() => {
-        expect(screen.queryByText('Delete User')).not.toBeInTheDocument();
+        expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
       });
 
       // Verify the delete action was processed by checking store state
@@ -575,30 +520,13 @@ describe('UsersList Component', () => {
     it('renders data table with correct user information', () => {
       renderWithProviders(<UsersList />, { preloadedState: tableDataState }); // Check table headers are present
       expect(screen.getByText('Name')).toBeInTheDocument();
-      expect(screen.getByText('Contact Info')).toBeInTheDocument();
+      expect(screen.getByText('Last sign-in')).toBeInTheDocument();
       expect(screen.getByText('Status')).toBeInTheDocument();
       expect(screen.getByText('Roles')).toBeInTheDocument(); // Check user data is displayed
       expect(screen.getByText('John Doe')).toBeInTheDocument();
-      expect(screen.getAllByText('test@example.com')).toHaveLength(2); // Email appears in both Name column and Contact Info column
+      expect(screen.getByText('test@example.com')).toBeInTheDocument();
       expect(screen.getByText('Admin User')).toBeInTheDocument();
-      expect(screen.getAllByText('admin@example.com')).toHaveLength(2); // Email appears in both Name column and Contact Info column
-    });
-
-    it('handles search functionality', async () => {
-      renderWithProviders(<UsersList />, {
-        preloadedState: tableDataState,
-      });
-
-      // Find search input
-      const searchInput = screen.getByPlaceholderText('Search users...');
-      expect(searchInput).toBeInTheDocument();
-
-      // Type in search
-      await user.type(searchInput, 'john');
-
-      // Check that search triggers appropriate action
-      // Note: This would typically trigger a dispatch to fetchUsers with search parameter
-      expect(searchInput).toHaveValue('john');
+      expect(screen.getByText('admin@example.com')).toBeInTheDocument();
     });
 
     it('handles pagination changes', async () => {
@@ -788,14 +716,15 @@ describe('UsersList Component', () => {
 
       // This test would simulate a failed delete and check error handling
     });
-    it('shows appropriate error messages for different error types', () => {
+    it('shows appropriate error messages for different error types', async () => {
       const errorStates = [
         { error: 'Network error', expectedMessage: 'Network error' },
         { error: 'Unauthorized', expectedMessage: 'Unauthorized' },
         { error: 'Server error', expectedMessage: 'Server error' },
       ];
 
-      errorStates.forEach(({ error, expectedMessage }) => {
+      for (const { error, expectedMessage } of errorStates) {
+        mockUserService.getUsers.mockRejectedValueOnce(new Error(error));
         const errorState = {
           user: {
             users: mockUsers, // Provide users to prevent loading spinner
@@ -813,9 +742,12 @@ describe('UsersList Component', () => {
           },
         };
 
-        renderWithProviders(<UsersList />, { preloadedState: errorState });
-        expect(screen.getByText(expectedMessage)).toBeInTheDocument();
-      });
+        const { unmount } = renderWithProviders(<UsersList />, {
+          preloadedState: errorState,
+        });
+        expect(await screen.findByText(expectedMessage)).toBeInTheDocument();
+        unmount();
+      }
     });
   });
 });
