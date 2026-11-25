@@ -45,14 +45,11 @@ export interface MemberNoun {
   other: string;
 }
 
-function byName(a: { name: string }, b: { name: string }) {
-  return a.name.localeCompare(b.name);
-}
-
 /**
  * Join a flat list of groups by parent id. A group whose parent is not in
- * the list, or that sits on a parent cycle, becomes a root. Siblings are
- * sorted by name.
+ * the list, or that sits on a parent cycle, becomes a root. Roots and
+ * siblings keep the order of `flat`, so a page decides how its groups are
+ * ordered.
  */
 export function buildGroupTree(flat: FlatGroup[]): GroupNode[] {
   const nodes = new Map<string, GroupNode>();
@@ -100,15 +97,10 @@ export function buildGroupTree(flat: FlatGroup[]): GroupNode[] {
     }
   }
 
-  const sortDeep = (list: GroupNode[]) => {
-    list.sort(byName);
-    for (const node of list) {
-      node.childCount = node.children.length;
-      sortDeep(node.children);
-    }
-    return list;
-  };
-  return sortDeep(roots);
+  for (const node of nodes.values()) {
+    node.childCount = node.children.length;
+  }
+  return roots;
 }
 
 /**

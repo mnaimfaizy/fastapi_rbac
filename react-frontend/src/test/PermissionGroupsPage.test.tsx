@@ -89,9 +89,44 @@ describe('Permission groups page', () => {
         'content.create_article',
         'content.read_article',
         'User',
-        'user.create',
       ]);
       expect(screen.getByText('Create articles')).toBeVisible();
+    });
+
+    it('lists groups oldest first, as the seed creates them', async () => {
+      const seeded = [
+        {
+          ...permissionGroups[2],
+          id: 'role',
+          name: 'Role',
+          created_at: '2026-01-12T10:00:02Z',
+          permissions: [],
+        },
+        {
+          ...permissionGroups[2],
+          id: 'user',
+          name: 'User',
+          created_at: '2026-01-12T10:00:01Z',
+          permissions: [],
+        },
+        {
+          ...permissionGroups[2],
+          id: 'content',
+          name: 'Content',
+          created_at: '2026-01-12T10:00:03Z',
+          permissions: [],
+        },
+      ];
+      mockPermissionService.getPermissionGroups.mockResolvedValue(
+        page(seeded) as never
+      );
+      renderGroupsAt('/dashboard/permission-groups', 'admin');
+
+      await waitFor(() => rowFor('User'));
+      const names = within(screen.getByRole('table'))
+        .getAllByRole('link')
+        .map((link) => link.textContent);
+      expect(names).toEqual(['User', 'Role', 'Content']);
     });
 
     it('expands and collapses a group', async () => {

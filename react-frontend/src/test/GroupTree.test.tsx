@@ -1,12 +1,21 @@
 import { describe, it, expect, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Shield } from 'lucide-react';
+import { FolderTree, ShieldCheck } from 'lucide-react';
 import { renderWithProviders } from './test-utils';
 import { GroupTree } from '../features/groups/GroupTree';
 import { buildGroupTree, type FlatGroup } from '../features/groups/treeModel';
 
+// In the order the Web v1 artboard draws them.
 const flat: FlatGroup[] = [
+  {
+    id: 'admin',
+    name: 'Administrative',
+    parentId: null,
+    createdAt: '2026-01-12T10:00:00Z',
+    href: '/dashboard/role-groups/admin',
+    members: [{ id: 'r-admin', name: 'Admin', detail: '3 users' }],
+  },
   {
     id: 'ops',
     name: 'Operational',
@@ -24,12 +33,12 @@ const flat: FlatGroup[] = [
     members: [],
   },
   {
-    id: 'admin',
-    name: 'Administrative',
+    id: 'standard',
+    name: 'StandardUser',
     parentId: null,
     createdAt: '2026-01-12T10:00:00Z',
-    href: '/dashboard/role-groups/admin',
-    members: [{ id: 'r-admin', name: 'Admin', detail: '3 users' }],
+    href: '/dashboard/role-groups/standard',
+    members: [{ id: 'r-user', name: 'User', detail: '2 users' }],
   },
 ];
 
@@ -40,7 +49,8 @@ function renderTree(groups: FlatGroup[] = flat) {
       groups={buildGroupTree(groups)}
       groupsLabel="role groups"
       memberNoun={{ one: 'role', other: 'roles' }}
-      memberIcon={Shield}
+      groupIcon={FolderTree}
+      memberIcon={ShieldCheck}
       actionsFor={(group) => [
         { label: 'Edit', onSelect: () => onEdit(group.id) },
       ]}
@@ -87,6 +97,7 @@ describe('GroupTree', () => {
       expect.stringMatching(/^Operational/),
       expect.stringMatching(/^Support/),
       expect.stringMatching(/^Manager8 users$/),
+      expect.stringMatching(/^StandardUser/),
     ]);
   });
 
@@ -122,6 +133,9 @@ describe('GroupTree', () => {
   it('expands and collapses every group at once', async () => {
     const user = userEvent.setup();
     renderTree();
+
+    await user.click(screen.getByRole('button', { name: 'Expand all' }));
+    expect(screen.getByText('2 users')).toBeVisible();
 
     await user.click(screen.getByRole('button', { name: 'Collapse all' }));
     expect(
@@ -161,7 +175,7 @@ describe('GroupTree', () => {
 
     await user.type(screen.getByRole('searchbox'), 'zzz');
     expect(
-      screen.getByRole('heading', { name: 'No role groups match “suppzzz”' })
+      screen.getByRole('heading', { name: 'No role groups match ‘suppzzz’' })
     ).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Clear search' }));
     expect(screen.getByRole('link', { name: 'Administrative' })).toBeVisible();
@@ -208,5 +222,50 @@ describe('GroupTree', () => {
     expect(
       within(rowFor('Operational')).getByText('1 role · 1 group')
     ).toBeVisible();
+  });
+
+  it('opens the first group and groups with child groups, and closes the rest', async () => {
+    const user = userEvent.setup();
+    renderTree();
+
+    // Administrative is first, Operational holds a child group; StandardUser
+    // is neither, so it starts closed.
+    expect(
+      screen.getByRole('button', { name: 'Collapse Administrative' })
+    ).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Collapse Operational' })
+    ).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Expand StandardUser' })
+    ).toBeVisible();
+    expect(screen.queryByText('2 users')).not.toBeInTheDocument();
+    // Not every group is open, so the toolbar offers to expand them all.
+    await user.click(screen.getByRole('button', { name: 'Expand all' }));
+    expect(screen.getByText('2 users')).toBeVisible();
+  });
+
+  it('keeps the order the page gives its groups', () => {
+    renderTree([flat[3], flat[1], flat[0], flat[2]]);
+
+    const names = screen
+      .getAllByRole('link')
+      .map((link) => link.textContent)
+      .filter((name) =>
+        ['StandardUser', 'Operational', 'Administrative'].includes(name ?? '')
+      );
+    expect(names).toEqual(['StandardUser', 'Operational', 'Administrative']);
+  });
+
+  it('draws the group and member icons it is given', () => {
+    renderTree();
+
+    expect(
+      within(rowFor('Operational')).getByText('Operational')
+        .previousElementSibling
+    ).toHaveClass('lucide-folder-tree');
+    expect(screen.getByText('Manager').previousElementSibling).toHaveClass(
+      'lucide-shield-check'
+    );
   });
 });

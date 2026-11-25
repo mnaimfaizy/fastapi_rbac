@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { KeyRound, Plus } from 'lucide-react';
+import { Layers, Plus } from 'lucide-react';
+import { PermissionKey } from '@/lib/navigation';
 import { toast } from 'sonner';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import {
@@ -35,7 +36,10 @@ const PermissionGroupsContent = () => {
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  // The group stays set while the dialog fades out, so its title keeps the
+  // name; only `confirming` closes it.
   const [toDelete, setToDelete] = useState<GroupNode | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -79,7 +83,10 @@ const PermissionGroupsContent = () => {
       actions.push({
         label: 'Delete',
         destructive: true,
-        onSelect: () => setToDelete(group),
+        onSelect: () => {
+          setToDelete(group);
+          setConfirming(true);
+        },
       });
     }
     return actions;
@@ -126,15 +133,15 @@ const PermissionGroupsContent = () => {
         />
       ) : null}
 
-      {loadError && permissionGroups.length === 0 ? null : !loaded &&
-        permissionGroups.length === 0 ? (
+      {loadError && permissionGroups.length === 0 ? null : !loaded ? (
         <TableSkeleton label="Loading permission groups" columns={5} />
       ) : (
         <GroupTree
           groups={tree}
           groupsLabel="permission groups"
           memberNoun={{ one: 'permission', other: 'permissions' }}
-          memberIcon={KeyRound}
+          groupIcon={Layers}
+          memberIcon={PermissionKey}
           monoMembers
           actionsFor={actionsFor}
           emptyState={
@@ -157,12 +164,8 @@ const PermissionGroupsContent = () => {
       )}
 
       <ConfirmDialog
-        open={toDelete !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setToDelete(null);
-          }
-        }}
+        open={confirming}
+        onOpenChange={setConfirming}
         title={`Delete permission group ‘${toDelete?.name ?? ''}’?`}
         description="The group must have no child groups or permissions. This can’t be undone."
         confirmLabel="Delete permission group"

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Shield } from 'lucide-react';
+import { FolderTree, Plus, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import {
@@ -41,7 +41,10 @@ const RoleGroupContent = () => {
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  // The group stays set while the dialog fades out, so its title keeps the
+  // name; only `confirming` closes it.
   const [toDelete, setToDelete] = useState<GroupNode | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
   const [rolesFailed, setRolesFailed] = useState(false);
   const [rolesAttempt, setRolesAttempt] = useState(0);
@@ -120,7 +123,10 @@ const RoleGroupContent = () => {
       actions.push({
         label: 'Delete',
         destructive: true,
-        onSelect: () => setToDelete(group),
+        onSelect: () => {
+          setToDelete(group);
+          setConfirming(true);
+        },
       });
     }
     return actions;
@@ -175,15 +181,15 @@ const RoleGroupContent = () => {
         />
       ) : null}
 
-      {loadError && roleGroups.length === 0 ? null : !loaded &&
-        roleGroups.length === 0 ? (
+      {loadError && roleGroups.length === 0 ? null : !loaded ? (
         <TableSkeleton label="Loading role groups" columns={5} />
       ) : (
         <GroupTree
           groups={tree}
           groupsLabel="role groups"
           memberNoun={{ one: 'role', other: 'roles' }}
-          memberIcon={Shield}
+          groupIcon={FolderTree}
+          memberIcon={ShieldCheck}
           actionsFor={actionsFor}
           memberCounts={
             !canReadRoles || roles !== null
@@ -213,12 +219,8 @@ const RoleGroupContent = () => {
       )}
 
       <ConfirmDialog
-        open={toDelete !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setToDelete(null);
-          }
-        }}
+        open={confirming}
+        onOpenChange={setConfirming}
         title={`Delete role group ‘${toDelete?.name ?? ''}’?`}
         description="The group must have no child groups or roles. This can’t be undone."
         confirmLabel="Delete role group"
