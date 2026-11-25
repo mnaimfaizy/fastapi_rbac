@@ -77,12 +77,15 @@ export function GroupForm({
   // a 1120px column with a 640px card, and Cancel and Save sit in a footer bar
   // that spans the page and sticks to the bottom of the window. The negative
   // margins pull the bar out to the edges of the shell's padded main area.
+  // The min-heights are the window less the shell's header and the main
+  // area's top and bottom padding (MainLayout: h-14 and p-4, sm:p-6, then
+  // lg:h-16 and lg:p-8), so a short form still ends flush with the window.
   return (
     <Form {...form}>
       <form
         onSubmit={submit}
         noValidate
-        className="flex min-h-[calc(100vh-6.5rem)] flex-col sm:min-h-[calc(100vh-7.5rem)] lg:min-h-[calc(100vh-8rem)]"
+        className="flex min-h-[calc(100vh-5.5rem)] flex-col sm:min-h-[calc(100vh-6.5rem)] lg:min-h-[calc(100vh-8rem)]"
       >
         <div className="mx-auto flex w-full max-w-[1120px] flex-col gap-6">
           <div className="flex flex-col gap-3">
