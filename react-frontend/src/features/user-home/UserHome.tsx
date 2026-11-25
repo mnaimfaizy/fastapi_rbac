@@ -2,9 +2,8 @@ import { useEffect, useId, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Smartphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { SignOutEverywhereDialog } from '@/components/layout/UserMenu';
 import { StatusBadge } from '@/components/common/StatusBadge';
-import { useSignOutEverywhere } from '@/features/auth/useSignOutEverywhere';
 import { ACCOUNT_SETTINGS_PATH, PermissionKey } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
 import type { User } from '@/models/user';
@@ -87,7 +86,6 @@ function Panel({
 /** The plain user's home: their account, not the admin dashboard. */
 export default function UserHome() {
   const user = useAppSelector((state) => state.auth.user);
-  const signOutEverywhere = useSignOutEverywhere();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const desktop = useDesktopHome();
 
@@ -279,13 +277,9 @@ export default function UserHome() {
         </div>
       )}
 
-      <ConfirmDialog
+      <SignOutEverywhereDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title="Sign out everywhere?"
-        description="You’ll be signed out on this device too."
-        confirmLabel="Sign out everywhere"
-        onConfirm={signOutEverywhere}
       />
     </div>
   );
