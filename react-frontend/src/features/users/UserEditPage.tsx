@@ -61,7 +61,11 @@ const UserEditPage = () => {
 
   const editedName =
     userId && load.state === 'ready' ? fullName(load.user) : null;
-  usePageCrumb(userId ? editedName : 'Add user');
+  // `Daniel Okafor › Edit` once the user has loaded; no lone "Edit" before
+  // that, so the title falls back to "Edit user".
+  usePageCrumb(
+    userId ? (editedName ? [editedName, 'Edit'] : null) : 'Add user'
+  );
 
   if (!userId) {
     return (
