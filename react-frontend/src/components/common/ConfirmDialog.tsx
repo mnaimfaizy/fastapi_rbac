@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 
 export interface ConfirmDialogProps {
   open: boolean;
@@ -35,6 +36,12 @@ export interface ConfirmDialogProps {
    * before the confirm button turns on.
    */
   confirmText?: string;
+  /**
+   * An optional icon beside the title, such as the phone the Sign out
+   * everywhere artboard draws. It sits in a tinted circle, red when
+   * `destructive`. Without it the header is title and description alone.
+   */
+  icon?: ReactNode;
 }
 
 /** One confirmation for every destructive or far-reaching action. */
@@ -48,6 +55,7 @@ export function ConfirmDialog({
   onConfirm,
   destructive = true,
   confirmText,
+  icon,
 }: ConfirmDialogProps) {
   const [typed, setTyped] = useState('');
   const [pending, setPending] = useState(false);
@@ -85,12 +93,34 @@ export function ConfirmDialog({
   return (
     <AlertDialog open={open} onOpenChange={handleOpenChange}>
       <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{title}</AlertDialogTitle>
-          <AlertDialogDescription className="text-foreground-secondary">
-            {description}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
+        {icon ? (
+          <div className="flex gap-4">
+            <span
+              aria-hidden="true"
+              className={cn(
+                'flex size-10 shrink-0 items-center justify-center rounded-full [&_svg]:size-5',
+                destructive
+                  ? 'bg-status-danger text-status-danger-foreground'
+                  : 'bg-muted text-foreground'
+              )}
+            >
+              {icon}
+            </span>
+            <AlertDialogHeader className="min-w-0 text-left">
+              <AlertDialogTitle>{title}</AlertDialogTitle>
+              <AlertDialogDescription className="text-foreground-secondary">
+                {description}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+          </div>
+        ) : (
+          <AlertDialogHeader>
+            <AlertDialogTitle>{title}</AlertDialogTitle>
+            <AlertDialogDescription className="text-foreground-secondary">
+              {description}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+        )}
         {confirmText !== undefined ? (
           <form
             className="flex flex-col gap-2"

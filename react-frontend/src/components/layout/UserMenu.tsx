@@ -83,6 +83,46 @@ export function RoleChip({
 }
 
 /**
+ * The Sign out everywhere confirmation, shared by the user menu, User home
+ * and the Security tab of Account settings, as the
+ * `account-security-signout` artboard draws it. Confirming ends every
+ * session, this one included, and lands on Sign in.
+ */
+export function SignOutEverywhereDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  // The redirect rule lives in useSignOutEverywhere.
+  const signOutEverywhere = useSignOutEverywhere();
+
+  return (
+    <ConfirmDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Sign out everywhere?"
+      icon={<Smartphone />}
+      description={
+        <>
+          <span className="block">
+            This ends your sessions on every device and browser where you’re
+            signed in.
+          </span>
+          <span className="mt-3 block">
+            You’ll be signed out on this device too, and you’ll need to sign in
+            again.
+          </span>
+        </>
+      }
+      confirmLabel="Sign out everywhere"
+      onConfirm={signOutEverywhere}
+    />
+  );
+}
+
+/**
  * The header user menu: who is signed in, Account settings, a quick theme
  * switch, Sign out, and Sign out everywhere behind a confirmation.
  *
@@ -94,7 +134,6 @@ export function UserMenu({ user }: { user: User }) {
   const navigate = useNavigate();
   const { preference, setPreference } = useThemePreference();
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const signOutEverywhere = useSignOutEverywhere();
   const name = displayName(user);
 
   async function signOut() {
@@ -191,13 +230,9 @@ export function UserMenu({ user }: { user: User }) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <ConfirmDialog
+      <SignOutEverywhereDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title="Sign out everywhere?"
-        description="You’ll be signed out on this device too."
-        confirmLabel="Sign out everywhere"
-        onConfirm={signOutEverywhere}
       />
     </>
   );

@@ -1,21 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { CircleCheck } from 'lucide-react';
+
+import { ApiErrorAlert } from '@/components/auth/ApiErrorAlert';
+import { Button } from '@/components/ui/button';
+import { PasswordChecklist } from '@/features/auth/components/PasswordChecklist';
+import { PasswordField } from '@/features/auth/components/PasswordField';
+import { passwordPolicySchema } from '@/lib/passwordPolicySchema';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import {
   changePassword,
   clearError,
   resetPasswordChangeSuccess,
 } from '../../store/slices/authSlice';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
-import { CheckCircle } from 'lucide-react';
-import { ApiErrorAlert } from '@/components/auth/ApiErrorAlert';
-import { PasswordRequirements } from '@/components/auth/PasswordRequirements';
-import { passwordPolicySchema } from '@/lib/passwordPolicySchema';
 
-// Define validation schema with Zod
 const passwordChangeSchema = z
   .object({
     currentPassword: z.string().min(1, 'Current password is required'),
@@ -35,22 +35,25 @@ interface ChangePasswordFormProps {
 }
 
 /**
- * The self-service change-password form. Used by the dashboard page and by
- * the change-password-required page a temporary password leads to (ADR 0014).
+ * The self-service change-password form on the Security tab of Account
+ * settings. The new password is checked against the password policy as it
+ * is typed (the live checklist) and again on submit; a refusal from the API
+ * lists each failed rule. The session stays signed in on this device.
+ *
+ * The change-password-required page a temporary password leads to has its
+ * own form (ADR 0014).
  */
 export const ChangePasswordForm = ({ onSuccess }: ChangePasswordFormProps) => {
   const { error, passwordChangeSuccess } = useAppSelector(
     (state) => state.auth
   );
   const dispatch = useAppDispatch();
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Initialize React Hook Form with Zod validation
   const {
     register,
     handleSubmit,
     watch,
-    formState: { errors },
+    formState: { errors, isSubmitting },
     reset,
   } = useForm<PasswordChangeFormData>({
     resolver: zodResolver(passwordChangeSchema),
@@ -61,14 +64,15 @@ export const ChangePasswordForm = ({ onSuccess }: ChangePasswordFormProps) => {
     },
   });
 
-  // Reset form and success state when unmounting
+  // Clear the shared success flag and any refusal when leaving the form.
   useEffect(() => {
+    dispatch(clearError());
     return () => {
       dispatch(resetPasswordChangeSuccess());
+      dispatch(clearError());
     };
   }, [dispatch]);
 
-  // Reset form after successful password change
   useEffect(() => {
     if (passwordChangeSuccess) {
       reset();
@@ -76,119 +80,89 @@ export const ChangePasswordForm = ({ onSuccess }: ChangePasswordFormProps) => {
   }, [passwordChangeSuccess, reset]);
 
   const onSubmit = async (data: PasswordChangeFormData) => {
-    if (isSubmitting) return;
-
-    // Clear any previous errors
     dispatch(clearError());
-    setIsSubmitting(true);
-
     try {
-      // Dispatch password change action
       await dispatch(
         changePassword({
           currentPassword: data.currentPassword,
           newPassword: data.newPassword,
         })
       ).unwrap();
-    } catch (error) {
-      // Error is handled by the auth slice
-      console.error('Error changing password:', error);
+    } catch {
+      // The slice stores the refusal, including each failed policy rule.
       return;
-    } finally {
-      setIsSubmitting(false);
     }
     onSuccess?.();
   };
 
-  return (
-    <>
-      {passwordChangeSuccess && (
-        <Alert className="mb-6 bg-green-50 border-green-200 text-green-800">
-          <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
-          <AlertDescription>Password successfully changed!</AlertDescription>
-        </Alert>
-      )}
+  // handleSubmit skips onSubmit when the form fails validation, so clear the
+  // last attempt's refusal or "Password updated." here too: otherwise it would
+  // sit beside the new field errors as if it were about this attempt.
+  const onInvalid = () => {
+    dispatch(clearError());
+    dispatch(resetPasswordChangeSuccess());
+  };
 
-      {error && (
+  const newPasswordError = errors.newPassword?.message;
+
+  return (
+    <form
+      noValidate
+      onSubmit={handleSubmit(onSubmit, onInvalid)}
+      className="flex flex-col gap-[18px]"
+    >
+      {passwordChangeSuccess ? (
+        <p
+          role="status"
+          className="bg-status-success text-status-success-foreground flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm"
+        >
+          <CircleCheck aria-hidden="true" className="size-4 shrink-0" />
+          Password updated.
+        </p>
+      ) : null}
+
+      {error ? (
         <ApiErrorAlert
           error={error}
-          className="mb-6"
-          fallbackMessage="Failed to change password. Please try again."
+          fallbackMessage="Your password wasn’t changed. Try again."
         />
-      )}
+      ) : null}
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        <div>
-          <label
-            htmlFor="currentPassword"
-            className="block text-sm font-medium text-gray-700 mb-1"
-          >
-            Current Password
-          </label>
-          <input
-            id="currentPassword"
-            type="password"
-            {...register('currentPassword')}
-            className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-          />
-          {errors.currentPassword && (
-            <p className="mt-1 text-sm text-red-600">
-              {errors.currentPassword.message}
-            </p>
-          )}
-        </div>
+      <PasswordField
+        id="current-password"
+        label="Current password"
+        autoComplete="current-password"
+        error={errors.currentPassword?.message}
+        {...register('currentPassword')}
+      />
 
-        <div>
-          <label
-            htmlFor="newPassword"
-            className="block text-sm font-medium text-gray-700 mb-1"
-          >
-            New Password
-          </label>
-          <input
-            id="newPassword"
-            type="password"
-            {...register('newPassword')}
-            className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-          />
-          <PasswordRequirements
-            value={watch('newPassword') ?? ''}
-            className="mt-2"
-          />
-          {errors.newPassword && (
-            <p className="mt-1 text-sm text-red-600">
-              {errors.newPassword.message}
-            </p>
-          )}
-        </div>
+      <div className="flex flex-col gap-2.5">
+        <PasswordField
+          id="new-password"
+          label="New password"
+          autoComplete="new-password"
+          error={
+            typeof newPasswordError === 'string' ? newPasswordError : undefined
+          }
+          {...register('newPassword')}
+        />
+        <PasswordChecklist value={watch('newPassword') ?? ''} />
+      </div>
 
-        <div>
-          <label
-            htmlFor="confirmPassword"
-            className="block text-sm font-medium text-gray-700 mb-1"
-          >
-            Confirm New Password
-          </label>
-          <input
-            id="confirmPassword"
-            type="password"
-            {...register('confirmPassword')}
-            className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-          />
-          {errors.confirmPassword && (
-            <p className="mt-1 text-sm text-red-600">
-              {errors.confirmPassword.message}
-            </p>
-          )}
-        </div>
+      <PasswordField
+        id="confirm-new-password"
+        label="Confirm new password"
+        autoComplete="new-password"
+        error={errors.confirmPassword?.message}
+        {...register('confirmPassword')}
+      />
 
-        <div>
-          <Button type="submit" disabled={isSubmitting} className="w-full">
-            {isSubmitting ? 'Updating...' : 'Change Password'}
-          </Button>
-        </div>
-      </form>
-    </>
+      <div className="flex justify-end">
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? 'Updating…' : 'Update password'}
+        </Button>
+      </div>
+    </form>
   );
 };
 

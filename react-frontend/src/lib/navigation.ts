@@ -47,10 +47,10 @@ export interface NavGroup {
 export const HOME_PATH = '/dashboard';
 
 /**
- * Account settings (#416) is not built yet, so the shell points at the
- * existing Profile page until it is.
+ * The Account settings page. It opens on its Profile tab; each tab has
+ * its own URL under this one (`/dashboard/account/security`, ...).
  */
-export const ACCOUNT_SETTINGS_PATH = '/dashboard/profile';
+export const ACCOUNT_SETTINGS_PATH = '/dashboard/account';
 
 const ACCESS_ITEMS: NavItem[] = [
   {
