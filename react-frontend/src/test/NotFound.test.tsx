@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { queryShellSidebar, renderAppAt } from './system-states-test-utils';
 
@@ -47,6 +47,22 @@ describe('In-app 404', () => {
       await screen.findByRole('heading', { name: 'Page not found' })
     ).toBeInTheDocument();
     expect(queryShellSidebar()).toBeInTheDocument();
+  });
+
+  it('names itself "Not found" in the breadcrumb and the tab title', async () => {
+    renderAppAt('/dashboard/settings/general', 'admin');
+
+    const breadcrumb = await screen.findByRole('navigation', {
+      name: 'Breadcrumb',
+    });
+    expect(breadcrumb).toHaveTextContent(/^Not found$/);
+    expect(within(breadcrumb).getByText('Not found')).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+    await waitFor(() => {
+      expect(document.title).toBe('Not found | FastAPI RBAC');
+    });
   });
 
   it('goes back to the previous page in the app', async () => {

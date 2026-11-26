@@ -2,6 +2,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { SearchX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Meta } from '@/components/common/Meta';
+import { usePageCrumb } from '@/components/layout/pageCrumb';
 import { usePermissions } from '@/hooks/usePermissions';
 import { buildNavGroups, HOME_PATH } from '@/lib/navigation';
 import { useAppSelector } from '@/store/hooks';
@@ -32,6 +33,7 @@ const NotFoundPage = () => {
 
 /** Inside the shell: names the missing path and offers a way home or back. */
 function InAppNotFound() {
+  usePageCrumb('Not found');
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { hasPermission } = usePermissions();
