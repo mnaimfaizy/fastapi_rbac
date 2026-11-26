@@ -151,6 +151,24 @@ describe.each(kinds)(
       expect(created()).not.toHaveBeenCalled();
     });
 
+    it('counts characters as the API does, not UTF-16 units', async () => {
+      const user = userEvent.setup();
+      renderGroupsAt(`${path}/new`, 'admin');
+
+      const field = await descriptionField();
+      await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Billing');
+      await user.click(field);
+      // 255 characters, 510 UTF-16 units.
+      await user.paste('\u{1F512}'.repeat(255));
+      await user.click(screen.getByRole('button', { name: submitCreate }));
+
+      await waitFor(() => {
+        expect(created()).toHaveBeenCalledWith(
+          body('Billing', '\u{1F512}'.repeat(255))
+        );
+      });
+    });
+
     it('shows the saved description on edit and saves a new one', async () => {
       const user = userEvent.setup();
       renderGroupsAt(`${path}/edit/support`, 'admin');
@@ -201,11 +219,10 @@ describe.each(kinds)(
       async (viewer, route) => {
         renderGroupsAt(`${path}/${route}`, viewer);
 
-        // The refusal's heading, in either wording: main renamed the page's
-        // "Unauthorized" to "You can’t …" (#463) after this branch was cut.
+        const action = route === 'new' ? 'create' : 'edit';
         expect(
           await screen.findByRole('heading', {
-            name: /^(Unauthorized$|You can’t )/,
+            name: `You can’t ${action} ${kind}s`,
           })
         ).toBeVisible();
         expect(
