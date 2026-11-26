@@ -52,6 +52,8 @@ export interface GroupTreeProps {
   memberIcon: Icon;
   /** Show member names in a monospace face, as for permission codes. */
   monoMembers?: boolean;
+  /** The Members column's width in pixels, from the artboard. */
+  membersWidth?: number;
   /** Only the actions the viewer can use. */
   actionsFor: (group: GroupNode) => RowAction[];
   /** What an empty tree shows. */
@@ -112,6 +114,7 @@ export function GroupTree({
   memberNoun,
   memberIcon: MemberIcon,
   monoMembers = false,
+  membersWidth = 140,
   actionsFor,
   emptyState,
   memberCounts = 'ready',
@@ -124,10 +127,8 @@ export function GroupTree({
     () => filterGroupTree(groups, query),
     [groups, query]
   );
-  const expandable = useMemo(
-    () => flattenTree(groups).filter(hasRows),
-    [groups]
-  );
+  // Every group has a chevron, empty ones too, as the artboards draw them.
+  const allGroups = useMemo(() => flattenTree(groups), [groups]);
 
   if (groups.length === 0) {
     return (
@@ -140,7 +141,7 @@ export function GroupTree({
   const open = expanded ?? initiallyOpen(groups);
   // A search opens every group on the way to a match.
   const isOpen = (id: string) => searching || open.has(id);
-  const allOpen = expandable.every((group) => open.has(group.id));
+  const allOpen = allGroups.every((group) => open.has(group.id));
 
   const toggle = (id: string) => {
     const next = new Set(open);
@@ -154,7 +155,7 @@ export function GroupTree({
 
   const toggleAll = () => {
     setExpanded(
-      allOpen ? new Set() : new Set(expandable.map((group) => group.id))
+      allOpen ? new Set() : new Set(allGroups.map((group) => group.id))
     );
   };
 
@@ -194,8 +195,7 @@ export function GroupTree({
   );
 
   const renderGroup = (node: GroupNode, depth: number) => {
-    const canExpand = hasRows(node);
-    const nodeOpen = canExpand && isOpen(node.id);
+    const nodeOpen = isOpen(node.id);
     return (
       <Fragment key={node.id}>
         <TableRow className={cn(depth > 0 && 'bg-muted/40')}>
@@ -205,26 +205,22 @@ export function GroupTree({
               style={{ paddingLeft: depth * STEP_PX }}
             >
               {depth > 0 ? <Guide depth={depth} /> : null}
-              {canExpand ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="text-foreground-secondary size-7"
-                  aria-expanded={nodeOpen}
-                  aria-label={`${nodeOpen ? 'Collapse' : 'Expand'} ${node.name}`}
-                  onClick={() => toggle(node.id)}
-                  disabled={searching}
-                >
-                  {nodeOpen ? (
-                    <ChevronDown aria-hidden="true" />
-                  ) : (
-                    <ChevronRight aria-hidden="true" />
-                  )}
-                </Button>
-              ) : (
-                <span className="w-7 shrink-0" />
-              )}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="text-foreground-secondary size-7"
+                aria-expanded={nodeOpen}
+                aria-label={`${nodeOpen ? 'Collapse' : 'Expand'} ${node.name}`}
+                onClick={() => toggle(node.id)}
+                disabled={searching}
+              >
+                {nodeOpen ? (
+                  <ChevronDown aria-hidden="true" />
+                ) : (
+                  <ChevronRight aria-hidden="true" />
+                )}
+              </Button>
               <GroupIcon
                 aria-hidden={true}
                 className="text-muted-foreground size-4 shrink-0"
@@ -247,7 +243,11 @@ export function GroupTree({
             ) : memberCounts === 'unavailable' ? (
               <span className="text-foreground-secondary">—</span>
             ) : (
-              <Badge variant="secondary" className="font-medium">
+              // A count too long for the column wraps rather than spill over.
+              <Badge
+                variant="secondary"
+                className="font-medium whitespace-normal"
+              >
                 {memberSummary(node, memberNoun)}
               </Badge>
             )}
@@ -291,7 +291,7 @@ export function GroupTree({
             className="pl-9"
           />
         </div>
-        {expandable.length > 0 && !searching ? (
+        {!searching ? (
           <Button type="button" variant="ghost" onClick={toggleAll}>
             {allOpen ? 'Collapse all' : 'Expand all'}
           </Button>
@@ -321,9 +321,14 @@ export function GroupTree({
               <TableRow className="bg-muted hover:bg-muted">
                 <TableHead className="h-11 px-4">Name</TableHead>
                 <TableHead className="h-11 w-[160px] px-4">Parent</TableHead>
-                <TableHead className="h-11 w-[140px] px-4">Members</TableHead>
+                <TableHead
+                  className="h-11 px-4"
+                  style={{ width: membersWidth }}
+                >
+                  Members
+                </TableHead>
                 <TableHead className="h-11 w-[150px] px-4">Created</TableHead>
-                <TableHead className="h-11 w-14 px-4">
+                <TableHead className="h-11 w-16 px-4">
                   <span className="sr-only">Actions</span>
                 </TableHead>
               </TableRow>

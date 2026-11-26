@@ -89,7 +89,12 @@ export function ParentGroupSelect({
         align="start"
         className="w-(--radix-popover-trigger-width) p-0"
       >
-        <Command shouldFilter={false}>
+        {/* The search field is bordered and inset, with no divider under it,
+            as groups-form.dc.html draws it. */}
+        <Command
+          shouldFilter={false}
+          className="[&_[data-slot=command-input-wrapper]]:border-input [&_[data-slot=command-input-wrapper]]:m-1.5 [&_[data-slot=command-input-wrapper]]:rounded-lg [&_[data-slot=command-input-wrapper]]:border"
+        >
           <CommandInput
             placeholder="Search groups"
             aria-label="Search groups"
@@ -128,7 +133,7 @@ export function ParentGroupSelect({
           </CommandList>
           {needle ? (
             <p
-              className="text-foreground-secondary border-t px-3 py-2 text-xs"
+              className="text-foreground-secondary px-3 py-2 text-xs"
               aria-live="polite"
             >
               {matches.length} of {options.length}{' '}

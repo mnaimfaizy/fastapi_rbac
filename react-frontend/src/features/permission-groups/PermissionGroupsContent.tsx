@@ -143,6 +143,7 @@ const PermissionGroupsContent = () => {
           groupIcon={Layers}
           memberIcon={PermissionKey}
           monoMembers
+          membersWidth={181}
           actionsFor={actionsFor}
           emptyState={
             canCreate

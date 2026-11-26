@@ -268,4 +268,18 @@ describe('GroupTree', () => {
       'lucide-shield-check'
     );
   });
+
+  it('draws a chevron on an empty group too, as the artboard does', async () => {
+    const user = userEvent.setup();
+    renderTree();
+
+    const expand = screen.getByRole('button', { name: 'Expand Support' });
+    expect(expand).toHaveAttribute('aria-expanded', 'false');
+    await user.click(expand);
+    expect(
+      screen.getByRole('button', { name: 'Collapse Support' })
+    ).toHaveAttribute('aria-expanded', 'true');
+    // There is nothing under it, so no row appears.
+    expect(rowTexts()).toHaveLength(6);
+  });
 });
