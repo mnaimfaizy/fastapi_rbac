@@ -89,6 +89,10 @@ function initiallyOpen(groups: GroupNode[]) {
 // Offsets from the Web v1 artboards: a child group steps in by one
 // chevron button plus its gap, and a member sits one chevron further in.
 const STEP_PX = 34;
+// The Parent, Created and Actions columns, and the narrowest Name column
+// that still fits a nested group's chevron, icon and name.
+const FIXED_COLUMNS_PX = 160 + 150 + 64;
+const NAME_MIN_PX = 240;
 const MEMBER_INDENT_PX = 62;
 const GUIDE_LEFT_PX = 27;
 
@@ -316,6 +320,10 @@ export function GroupTree({
           <Table
             aria-label={groupsLabel[0].toUpperCase() + groupsLabel.slice(1)}
             className="table-fixed"
+            // Narrower windows scroll sideways instead of squeezing Name.
+            style={{
+              minWidth: NAME_MIN_PX + FIXED_COLUMNS_PX + membersWidth,
+            }}
           >
             <TableHeader>
               <TableRow className="bg-muted hover:bg-muted">

@@ -282,4 +282,12 @@ describe('GroupTree', () => {
     // There is nothing under it, so no row appears.
     expect(rowTexts()).toHaveLength(6);
   });
+
+  it('keeps room for the names on a narrow window', () => {
+    renderTree();
+
+    // The fixed columns (160 + 150 + 64 + 140) leave Name at least 240px;
+    // anything narrower scrolls sideways.
+    expect(screen.getByRole('table').style.minWidth).toBe('754px');
+  });
 });
