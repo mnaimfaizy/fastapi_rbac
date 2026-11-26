@@ -209,7 +209,9 @@ describe('Role groups page', () => {
       renderGroupsAt('/dashboard/role-groups', 'user');
 
       expect(
-        await screen.findByRole('heading', { name: 'Unauthorized' })
+        await screen.findByRole('heading', {
+          name: 'You can’t view role groups',
+        })
       ).toBeVisible();
       expect(mockRoleGroupService.getRoleGroups).not.toHaveBeenCalled();
     });
