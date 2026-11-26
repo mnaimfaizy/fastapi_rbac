@@ -87,7 +87,18 @@ const ROUTES: [path: string, title: string, permission?: string][] = [
   ],
 ];
 
-function renderAppAt(path: string, role: ShellRole) {
+/** The signed-in state, holding exactly `permissions` when given. */
+function withPermissions(
+  state: ReturnType<typeof signedInAs>,
+  permissions?: string[]
+) {
+  if (permissions) {
+    state.auth.user = { ...state.auth.user, permissions };
+  }
+  return state;
+}
+
+function renderAppAt(path: string, role: ShellRole, permissions?: string[]) {
   window.history.pushState({}, '', path);
   const store = configureStore({
     reducer: {
@@ -99,7 +110,7 @@ function renderAppAt(path: string, role: ShellRole) {
       roleGroup: roleGroupReducer,
       dashboard: dashboardReducer,
     },
-    preloadedState: signedInAs(role),
+    preloadedState: withPermissions(signedInAs(role), permissions),
   });
   return renderWithProviders(<Routes>{appRoutes}</Routes>, {
     testStore: store as unknown as AppStore,
@@ -157,6 +168,30 @@ describe('page titles', () => {
 
   it('does not name a create page the manager lacks the permission for', async () => {
     renderAppAt('/dashboard/roles/new', 'manager');
+
+    await screen.findByRole('heading', { name: 'Unauthorized' });
+    expect(document.title).toBe(`Unauthorized | ${APP}`);
+  });
+
+  // A role can hold a create or update permission without the section's read
+  // one: the route opens, so the title names the page.
+  it.each([
+    ['/dashboard/users/new', 'user.create', 'Add user · Users'],
+    ['/dashboard/roles/edit/r1', 'role.update', 'Edit role · Roles'],
+  ])(
+    'names %s for a viewer holding only %s',
+    async (path, permission, title) => {
+      renderAppAt(path, 'user', [permission]);
+
+      await waitFor(() => expect(document.title).toBe(`${title} | ${APP}`));
+      expect(
+        screen.queryByRole('heading', { name: 'Unauthorized' })
+      ).not.toBeInTheDocument();
+    }
+  );
+
+  it('refuses the list to a viewer holding only user.create', async () => {
+    renderAppAt('/dashboard/users', 'user', ['user.create']);
 
     await screen.findByRole('heading', { name: 'Unauthorized' });
     expect(document.title).toBe(`Unauthorized | ${APP}`);

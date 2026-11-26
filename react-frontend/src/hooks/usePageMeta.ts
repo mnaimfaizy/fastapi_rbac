@@ -135,7 +135,8 @@ export interface PageTitleParts {
   /**
    * The nav as this viewer sees it (`buildNavGroups`). A page under a nav
    * item the viewer does not have is one the route guard refuses, so it is
-   * titled Unauthorized rather than named. Defaults to every item.
+   * titled Unauthorized rather than named, unless it is a fixed sub-page
+   * whose own permission the viewer holds. Defaults to every item.
    */
   groups?: NavGroup[];
   /** Whether the viewer holds a permission; defaults to every one. */
@@ -175,11 +176,15 @@ export function pageTitle(
   const subPage = SUB_PAGE_TITLES.find(([pattern]) =>
     matchPath(pattern, pathname)
   );
-  if (!section || (subPage && !hasPermission(subPage[2]))) {
+  // A fixed sub-page answers to its own guard, which may pass without the
+  // section's read permission; every other page needs the section.
+  const refused = subPage ? !hasPermission(subPage[2]) : !section;
+  if (refused) {
     return UNAUTHORIZED_TITLE;
   }
-  const homeLabel = groups[0]?.items[0]?.label ?? section.label;
-  const sectionLabel = section.to === HOME_PATH ? homeLabel : section.label;
+  const { to, label } = section ?? known;
+  const homeLabel = groups[0]?.items[0]?.label ?? label;
+  const sectionLabel = to === HOME_PATH ? homeLabel : label;
   const own =
     crumbs.length > 0 ? [...crumbs].reverse() : subPage ? [subPage[1]] : [];
   return [...own, sectionLabel].join(TITLE_SEPARATOR);
