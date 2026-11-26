@@ -36,12 +36,12 @@ const UserEditPage = () => {
     if (!userId) return;
     let current = true;
     setLoad({ state: 'loading' });
-    userService
-      .getUserById(userId)
-      .then((user) => {
+    const loadUser = async () => {
+      try {
+        const user = await userService.getUserById(userId);
+        if (!user) throw new Error('User not found');
         if (current) setLoad({ state: 'ready', user });
-      })
-      .catch((error: unknown) => {
+      } catch (error: unknown) {
         if (current) {
           setLoad({
             state: 'failed',
@@ -51,7 +51,9 @@ const UserEditPage = () => {
                 : 'Try again in a moment.',
           });
         }
-      });
+      }
+    };
+    void loadUser();
     return () => {
       current = false;
     };

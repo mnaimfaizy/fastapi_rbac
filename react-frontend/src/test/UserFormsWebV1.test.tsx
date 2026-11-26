@@ -390,6 +390,19 @@ describe('User create and edit forms (Web v1)', () => {
     });
   });
 
+  describe('edit load', () => {
+    it('shows the load failure when the service returns no user', async () => {
+      mockUserService.getUserById.mockResolvedValue(undefined as never);
+      renderWithProviders(at('/dashboard/users/u-gone/edit', routes()), {
+        preloadedState: viewerState('admin'),
+      });
+
+      expect(
+        await screen.findByText('This user didn’t load')
+      ).toBeInTheDocument();
+    });
+  });
+
   describe('own account', () => {
     it('offers no Active switch and leaves the flag out on save, even for a superuser', async () => {
       mockUserService.updateUser.mockResolvedValue(DANIEL);
