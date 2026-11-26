@@ -244,7 +244,9 @@ describe('Permission groups page', () => {
       renderGroupsAt('/dashboard/permission-groups', 'user');
 
       expect(
-        await screen.findByRole('heading', { name: 'Unauthorized' })
+        await screen.findByRole('heading', {
+          name: 'You can’t view permission groups',
+        })
       ).toBeVisible();
       expect(mockPermissionService.getPermissionGroups).not.toHaveBeenCalled();
     });

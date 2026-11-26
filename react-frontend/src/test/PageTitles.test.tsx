@@ -162,14 +162,14 @@ describe('page titles', () => {
   it('does not name a page the plain user cannot open', async () => {
     renderAppAt('/dashboard/users', 'user');
 
-    await screen.findByRole('heading', { name: 'Unauthorized' });
+    await screen.findByRole('heading', { name: 'You can’t view users' });
     expect(document.title).toBe(`Unauthorized | ${APP}`);
   });
 
   it('does not name a create page the manager lacks the permission for', async () => {
     renderAppAt('/dashboard/roles/new', 'manager');
 
-    await screen.findByRole('heading', { name: 'Unauthorized' });
+    await screen.findByRole('heading', { name: 'You can’t create roles' });
     expect(document.title).toBe(`Unauthorized | ${APP}`);
   });
 
@@ -185,7 +185,7 @@ describe('page titles', () => {
 
       await waitFor(() => expect(document.title).toBe(`${title} | ${APP}`));
       expect(
-        screen.queryByRole('heading', { name: 'Unauthorized' })
+        screen.queryByRole('heading', { name: /^You can’t/ })
       ).not.toBeInTheDocument();
     }
   );
@@ -193,7 +193,7 @@ describe('page titles', () => {
   it('refuses the list to a viewer holding only user.create', async () => {
     renderAppAt('/dashboard/users', 'user', ['user.create']);
 
-    await screen.findByRole('heading', { name: 'Unauthorized' });
+    await screen.findByRole('heading', { name: 'You can’t view users' });
     expect(document.title).toBe(`Unauthorized | ${APP}`);
   });
 
