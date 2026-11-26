@@ -169,4 +169,27 @@ describe('ConfirmDialog', () => {
       expect(screen.getByText('Dialog closed')).toBeInTheDocument()
     );
   });
+
+  it('shows an icon beside the title when one is given', () => {
+    render(
+      <Harness onConfirm={vi.fn()} icon={<svg data-testid="dialog-icon" />} />
+    );
+
+    const dialog = screen.getByRole('alertdialog', {
+      name: 'Delete role ‘Manager’?',
+    });
+    expect(screen.getByTestId('dialog-icon')).toBeInTheDocument();
+    expect(dialog).toHaveAccessibleDescription(
+      '8 users hold this role. They’ll lose its 15 permissions.'
+    );
+  });
+
+  it('shows no icon unless one is given', () => {
+    render(<Harness onConfirm={vi.fn()} />);
+
+    expect(screen.queryByTestId('dialog-icon')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('alertdialog', { name: 'Delete role ‘Manager’?' })
+    ).toBeInTheDocument();
+  });
 });

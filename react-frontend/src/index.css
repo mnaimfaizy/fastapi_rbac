@@ -69,7 +69,8 @@
  * changing the primary values here. Components use these tokens, never
  * literal colors.
  */
-:root {
+:root,
+.light {
   --radius: 0.625rem;
 
   /* Surfaces */

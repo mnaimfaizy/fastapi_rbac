@@ -1,94 +1,127 @@
-import React, { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
-import { AppDispatch, RootState } from '../../store';
-import {
-  fetchRoleGroupById,
-  createRoleGroup,
-  updateRoleGroup,
-  clearCurrentRoleGroup,
-  clearRoleGroupErrors,
-  fetchRoleGroups,
-} from '../../store/slices/roleGroupSlice';
-import { RoleGroupCreate, RoleGroupUpdate } from '../../models/roleGroup';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import RoleGroupForm from './RoleGroupForm';
+import { AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import {
+  clearCurrentRoleGroup,
+  createRoleGroup,
+  fetchRoleGroupById,
+  fetchRoleGroups,
+  updateRoleGroup,
+} from '@/store/slices/roleGroupSlice';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { DetailSkeleton } from '@/components/common/Skeletons';
+import { GroupForm, type GroupFormValues } from '../groups/GroupForm';
+import { subtreeIds } from '../groups/treeModel';
+import { roleGroupsToFlat } from './roleGroupTree';
 
-const RoleGroupFormContent: React.FC = () => {
+const LIST = '/dashboard/role-groups';
+
+function message(err: unknown, fallback: string) {
+  return typeof err === 'string' && err ? err : fallback;
+}
+
+/** Create or edit a role group: name and parent group. */
+const RoleGroupFormContent = () => {
   const { groupId } = useParams<{ groupId: string }>();
-  const isEditMode = Boolean(groupId);
   const navigate = useNavigate();
-  const dispatch = useDispatch<AppDispatch>();
-
-  const { currentRoleGroup, loading, error, roleGroups } = useSelector(
-    (state: RootState) => state.roleGroup
-  );
+  const dispatch = useAppDispatch();
+  const roleGroups = useAppSelector((state) => state.roleGroup.roleGroups);
+  const current = useAppSelector((state) => state.roleGroup.currentRoleGroup);
+  const [groupsLoaded, setGroupsLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  // The id whose fresh copy has arrived. A copy left in the store by the
+  // detail page may be stale, so the form waits for this one.
+  const [fetchedId, setFetchedId] = useState<string | null>(null);
 
   useEffect(() => {
-    // Load all role groups for parent selection
-    dispatch(fetchRoleGroups({ page: 1, size: 100 }));
-
-    // If editing, load the role group data
-    if (isEditMode && groupId) {
-      dispatch(fetchRoleGroupById(groupId));
+    // Without the group list the parent select would be wrong, so a
+    // failed load blocks the form.
+    dispatch(fetchRoleGroups({ page: 1, size: 100 }))
+      .unwrap()
+      .then(() => setGroupsLoaded(true))
+      .catch((err: unknown) =>
+        setLoadError(message(err, 'The role groups couldn’t be loaded.'))
+      );
+    if (groupId) {
+      dispatch(fetchRoleGroupById(groupId))
+        .unwrap()
+        .then(() => setFetchedId(groupId))
+        .catch((err: unknown) =>
+          setLoadError(message(err, 'The role group couldn’t be loaded.'))
+        );
     }
-
-    // Cleanup when component unmounts
     return () => {
       dispatch(clearCurrentRoleGroup());
-      dispatch(clearRoleGroupErrors());
     };
-  }, [dispatch, isEditMode, groupId]);
+  }, [dispatch, groupId]);
 
-  const handleSubmit = async (data: RoleGroupCreate | RoleGroupUpdate) => {
+  const parentOptions = useMemo(() => {
+    const flat = roleGroupsToFlat(roleGroups, null);
+    const excluded = groupId ? subtreeIds(flat, groupId) : new Set<string>();
+    return flat
+      .filter((group) => !excluded.has(group.id))
+      .map(({ id, name }) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [roleGroups, groupId]);
+
+  const save = async ({ name, parentId }: GroupFormValues) => {
     try {
-      if (isEditMode && groupId) {
-        // Update existing role group
+      if (groupId) {
         await dispatch(
           updateRoleGroup({
             groupId,
-            roleGroupData: data as RoleGroupUpdate,
+            roleGroupData: { name, parent_id: parentId },
           })
         ).unwrap();
-        toast.success('Role group updated successfully');
+        toast.success(`Role group ‘${name}’ saved`);
       } else {
-        // Create new role group
-        await dispatch(createRoleGroup(data as RoleGroupCreate)).unwrap();
-        toast.success('Role group created successfully');
+        await dispatch(createRoleGroup({ name, parent_id: parentId })).unwrap();
+        toast.success(`Role group ‘${name}’ created`);
       }
-      navigate('/dashboard/role-groups');
     } catch (err) {
-      console.error('Failed to save role group:', err);
-      toast.error('Failed to save role group');
+      toast.error(message(err, 'Couldn’t save the role group'));
+      throw err;
     }
+    navigate(LIST);
   };
 
-  if (isEditMode && loading && !currentRoleGroup) {
+  if (loadError) {
     return (
-      <div className="flex justify-center items-center py-8">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
+      <Alert variant="destructive">
+        <AlertCircle aria-hidden="true" />
+        <AlertTitle>Couldn’t load the role group</AlertTitle>
+        <AlertDescription>{loadError}</AlertDescription>
+      </Alert>
     );
   }
 
+  const editing = Boolean(groupId);
+  const ready =
+    groupsLoaded &&
+    (!editing || (fetchedId === groupId && current?.id === groupId));
+  if (!ready) {
+    return <DetailSkeleton label="Loading role group" sections={1} />;
+  }
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>
-          {isEditMode ? 'Edit Role Group' : 'Create Role Group'}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <RoleGroupForm
-          initialData={isEditMode ? currentRoleGroup : null}
-          isLoading={loading}
-          error={error}
-          onSubmit={handleSubmit}
-          availableParents={roleGroups}
-        />
-      </CardContent>
-    </Card>
+    <GroupForm
+      key={current?.id ?? 'new'}
+      title={editing ? 'Edit role group' : 'Create role group'}
+      description="Groups keep related roles together."
+      backHref={LIST}
+      backLabel="Role groups"
+      nameHelp="Shown in lists and on each role in this group."
+      parentOptions={parentOptions}
+      initialValues={
+        editing && current
+          ? { name: current.name, parentId: current.parent_id ?? null }
+          : undefined
+      }
+      submitLabel={editing ? 'Save changes' : 'Create role group'}
+      onSubmit={save}
+    />
   );
 };
 

@@ -48,25 +48,21 @@ describe('ChangePasswordForm inside ProtectedRoute', () => {
     renderChangePasswordInProtectedRoute();
 
     await user.type(
-      screen.getByLabelText('Current Password'),
+      screen.getByLabelText('Current password'),
       'OldPassword!99'
     );
-    await user.type(screen.getByLabelText('New Password'), 'NewPassword!42');
+    await user.type(screen.getByLabelText('New password'), 'Quartz-Meadow-31');
     await user.type(
-      screen.getByLabelText('Confirm New Password'),
-      'NewPassword!42'
+      screen.getByLabelText('Confirm new password'),
+      'Quartz-Meadow-31'
     );
-    await user.click(screen.getByRole('button', { name: 'Change Password' }));
+    await user.click(screen.getByRole('button', { name: 'Update password' }));
 
     await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: 'Updating...' })
-      ).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Updating…' })).toBeDisabled();
     });
     expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
-    expect(
-      screen.queryByText('Password successfully changed!')
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Password updated.')).not.toBeInTheDocument();
 
     resolveChange({
       ...mockToken,
@@ -74,13 +70,11 @@ describe('ChangePasswordForm inside ProtectedRoute', () => {
       user: mockUser,
     });
 
-    expect(
-      await screen.findByText('Password successfully changed!')
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Password updated.')).toBeInTheDocument();
     expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
     expect(mockAuthService.changePassword).toHaveBeenCalledWith(
       'OldPassword!99',
-      'NewPassword!42'
+      'Quartz-Meadow-31'
     );
   });
 });

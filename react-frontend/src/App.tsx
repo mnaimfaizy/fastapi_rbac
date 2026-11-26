@@ -23,6 +23,7 @@ import AuthLayout from './components/layout/AuthLayout';
 import LoginPage from './features/auth/LoginPage';
 import DashboardPage from './features/dashboard/DashboardPage';
 import NotFoundPage from './pages/NotFoundPage';
+import SystemStateLayout from './pages/SystemStateLayout';
 import { RegistrationSuccessPage } from './features/auth/RegistrationSuccessPage';
 import PasswordResetRequestPage from './features/auth/PasswordResetRequestPage';
 import PasswordResetPage from './features/auth/PasswordResetPage';
@@ -30,8 +31,7 @@ import PasswordResetConfirmPage from './features/auth/PasswordResetConfirmPage';
 import ChangePasswordRequiredPage from './features/auth/ChangePasswordRequiredPage';
 import SignupPage from './features/auth/SignupPage';
 import SignedInHome from './features/user-home/SignedInHome';
-import ProfileContent from './components/dashboard/ProfileContent';
-import ChangePasswordContent from './components/dashboard/ChangePasswordContent';
+import AccountSettingsPage from './features/account/AccountSettingsPage';
 import UsersList from './features/users/UsersList';
 import UserEditPage from './features/users/UserEditPage';
 import UserDetailContent from './features/users/UserDetailContent';
@@ -161,13 +161,23 @@ export const appRoutes = (
       {/* Child routes rendered inside MainLayout's Outlet */}
       <Route index element={<Navigate to="/dashboard" replace />} />
       {/* Redirect / to /dashboard */}
+      {/* Unauthorized, inside the shell; signed out goes to Sign in */}
+      <Route path="unauthorized" element={<UnauthorizedPage />} />
       <Route path="dashboard" element={<DashboardPage />}>
         {/* Nested Dashboard Routes - Rendered inside Dashboard's Outlet */}
         <Route index element={<SignedInHome />} />
-        <Route path="/dashboard/profile" element={<ProfileContent />} />
+        {/* Account settings, one URL per tab; the old pages redirect */}
+        <Route
+          path="/dashboard/account/:tab?"
+          element={<AccountSettingsPage />}
+        />
+        <Route
+          path="/dashboard/profile"
+          element={<Navigate to="/dashboard/account/profile" replace />}
+        />
         <Route
           path="/dashboard/change-password"
-          element={<ChangePasswordContent />}
+          element={<Navigate to="/dashboard/account/security" replace />}
         />
         {/* User management routes - updated with new components */}
         <Route
@@ -329,11 +339,10 @@ export const appRoutes = (
       </Route>
     </Route>
 
-    {/* Unauthorized Page Route */}
-    <Route path="/unauthorized" element={<UnauthorizedPage />} />
-
-    {/* Not Found Route */}
-    <Route path="*" element={<NotFoundPage />} />
+    {/* Not found: in the shell when signed in, in the auth layout when not */}
+    <Route element={<SystemStateLayout />}>
+      <Route path="*" element={<NotFoundPage />} />
+    </Route>
   </>
 );
 
