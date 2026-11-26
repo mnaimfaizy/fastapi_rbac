@@ -49,6 +49,13 @@ jobs:
       - name: Third-party actions are pinned
         run: python3 .github/scripts/check-action-pins.py
 
+      # Skills live in .agents/skills; .claude/skills must stay a link to it.
+      - name: Script tests
+        run: python3 -m unittest discover -s scripts/development -p "test_*.py"
+
+      - name: Skills link is intact
+        run: python3 scripts/development/check_skills_link.py
+
   # Each area runs when detection says its files changed, and also whenever
   # detection did not succeed (fail open). `!cancelled()` lets that happen
   # after a failed `changes` job.

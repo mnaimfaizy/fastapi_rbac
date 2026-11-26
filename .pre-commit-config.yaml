@@ -21,6 +21,8 @@ repos:
         exclude: ^react-frontend/
       - id: check-added-large-files
         exclude: ^react-frontend/
+      # Catches .claude/skills turning from a link into a plain file.
+      - id: destroyed-symlinks
   - repo: https://github.com/psf/black
     rev: 25.12.0 # Keep in sync with backend/requirements.txt
     hooks:
@@ -141,6 +143,16 @@ repos:
         language: python
         pass_filenames: false
         files: ^\.github/(workflows/|actions/|scripts/check-action-pins\.py$)
+  # Skills live in .agents/skills; .claude/skills is the one tracked link to it.
+  # ci.yml runs the same check. See docs/agents/skills-and-agents.md.
+  - repo: local
+    hooks:
+      - id: skills-link
+        name: .claude/skills links to .agents/skills
+        entry: python scripts/development/check_skills_link.py
+        language: python
+        pass_filenames: false
+        always_run: true
   # Refresh the local graphify graph after commits and merges/pulls that touch
   # source. Runs in the background and never fails the git command. No-op for
   # anyone without graphify installed and a graph built. See docs/agents/graphify.md.
