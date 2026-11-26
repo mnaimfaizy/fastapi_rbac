@@ -7,6 +7,7 @@ import { usePageCrumb } from '@/components/layout/pageCrumb';
 import { usePermissions } from '@/hooks/usePermissions';
 import { allNavItems, buildNavGroups, HOME_PATH } from '@/lib/navigation';
 import { SystemStateCard } from './SystemStateCard';
+import { primaryAction } from './systemStateActions';
 
 /** How each permission verb reads in "You can't <verb> roles". */
 const VERB_PHRASES: Record<string, string> = {
@@ -71,14 +72,14 @@ const UnauthorizedPage = ({ permission, anyOf }: UnauthorizedPageProps) => {
         title={action ? `You can’t ${action}` : 'You can’t open this page'}
         actions={
           backToList ? (
-            <Button asChild>
+            <Button asChild className={primaryAction}>
               <Link to={list.to}>
                 <ArrowLeft aria-hidden="true" />
                 Back to {list.label.toLowerCase()}
               </Link>
             </Button>
           ) : (
-            <Button asChild>
+            <Button asChild className={primaryAction}>
               <Link to={HOME_PATH}>Go to {home.label.toLowerCase()}</Link>
             </Button>
           )

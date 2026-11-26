@@ -6,6 +6,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { buildNavGroups, HOME_PATH } from '@/lib/navigation';
 import { useAppSelector } from '@/store/hooks';
 import { SystemStateCard } from './SystemStateCard';
+import { primaryAction, secondaryAction } from './systemStateActions';
 
 /**
  * What an unknown URL shows. `SystemStateLayout` puts it in the shell for
@@ -47,12 +48,13 @@ function InAppNotFound() {
       title="Page not found"
       actions={
         <>
-          <Button asChild>
+          <Button asChild className={primaryAction}>
             <Link to={HOME_PATH}>Go to {home.label.toLowerCase()}</Link>
           </Button>
           <Button
             type="button"
             variant="outline"
+            className={secondaryAction}
             onClick={() => (canGoBack ? navigate(-1) : navigate(HOME_PATH))}
           >
             Go back
@@ -70,11 +72,11 @@ function InAppNotFound() {
 function SignedOutNotFound() {
   return (
     <div className="flex flex-col items-start gap-5">
-      <span className="bg-muted text-foreground-secondary flex size-12 items-center justify-center rounded-xl">
+      <span className="bg-muted text-foreground-secondary flex size-12 items-center justify-center rounded-[12px]">
         <SearchX aria-hidden="true" className="size-6" />
       </span>
       <div>
-        <h1 className="text-foreground text-[26px] leading-tight font-semibold tracking-tight">
+        <h1 className="text-foreground text-[26px] leading-tight font-semibold tracking-[-0.015em]">
           Page not found
         </h1>
         <p className="text-foreground-secondary mt-1.5 text-sm leading-[1.55]">
@@ -82,7 +84,7 @@ function SignedOutNotFound() {
           what you need.
         </p>
       </div>
-      <Button asChild size="lg" className="w-full">
+      <Button asChild size="lg" className="w-full shadow-none">
         <Link to="/login">Go to sign in</Link>
       </Button>
     </div>

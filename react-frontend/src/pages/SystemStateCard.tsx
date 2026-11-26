@@ -21,12 +21,12 @@ export function SystemStateCard({
 }: SystemStateCardProps) {
   return (
     <div className="mx-auto flex max-w-[1120px] flex-col gap-6">
-      <section className="bg-card text-card-foreground mt-10 rounded-xl border p-6">
+      <section className="bg-card text-card-foreground mt-10 rounded-[12px] border p-6">
         <div className="flex flex-col items-center gap-2.5 px-6 py-16 text-center">
-          <span className="bg-card text-foreground-secondary flex size-12 items-center justify-center rounded-xl border">
+          <span className="bg-card text-foreground-secondary flex size-12 items-center justify-center rounded-[12px] border">
             <Icon aria-hidden="true" className="size-[22px]" />
           </span>
-          <h2 className="mt-1 text-lg font-semibold">{title}</h2>
+          <h2 className="mt-1 text-lg leading-[22px] font-semibold">{title}</h2>
           <p className="text-foreground-secondary max-w-[420px] text-sm leading-[1.55]">
             {children}
           </p>
