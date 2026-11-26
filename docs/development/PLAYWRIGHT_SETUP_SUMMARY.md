@@ -85,7 +85,7 @@ Created 31 E2E tests across 3 test files:
   - API endpoint protection
   - Authentication state clearing
   - Home page access
-  - Unauthorized page display
+  - Unauthorized route redirects to Sign in when signed out
 
 ### 5. CI/CD Integration
 
