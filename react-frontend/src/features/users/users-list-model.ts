@@ -43,6 +43,27 @@ const EXCEPTION_FOR: Record<StatusFilter, UserException> = {
   Disabled: 'disabled',
 };
 
+/** What `GET /users/list?status=` takes for each status filter. */
+export function statusQuery(
+  status: StatusFilter | null
+): UserException | undefined {
+  return status ? EXCEPTION_FOR[status] : undefined;
+}
+
+/**
+ * Locked as the dashboard counts it: `is_locked`, and a lockout window that
+ * has not passed. A lock with no window, or an expired one, is not locked.
+ */
+export function isLockedNow(user: User, now: Date = new Date()): boolean {
+  if (!user.is_locked || !user.locked_until) return false;
+  // The API stores naive UTC and may send no offset; read that as UTC.
+  const hasOffset = /(Z|[+-]\d{2}:?\d{2})$/i.test(user.locked_until);
+  const until = new Date(
+    hasOffset ? user.locked_until : `${user.locked_until}Z`
+  );
+  return until > now;
+}
+
 /** `?status=locked` and `?status=Locked` both work; anything else is "All". */
 export function parseStatusFilter(
   value: string | null | undefined
@@ -74,7 +95,9 @@ export function filterUsers(users: User[], filters: UserListFilters): User[] {
     ) {
       return false;
     }
-    if (
+    if (filters.status === 'Locked') {
+      if (!isLockedNow(user)) return false;
+    } else if (
       filters.status &&
       !userExceptions(user).includes(EXCEPTION_FOR[filters.status])
     ) {

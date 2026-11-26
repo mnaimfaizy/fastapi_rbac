@@ -21,6 +21,8 @@ import type { RecentSignIn, RoleCount } from '@/models/dashboard';
 import { cn } from '@/lib/utils';
 
 const ALL_USERS_HREF = '/dashboard/users';
+// The users list reads `?status=` and asks the API for those users only.
+const LOCKED_USERS_HREF = '/dashboard/users?status=Locked';
 // The Roles and Permissions cards are for people who manage the access
 // catalogue. Reading roles or permissions is not enough: a manager holds
 // role.read and permission.read but is read-only there, so those cards stay
@@ -95,12 +97,14 @@ function MetricCard({
   description,
   icon: Icon,
   className,
+  link,
 }: {
   title: string;
   value: number | null | undefined;
   description?: string;
   icon?: LucideIcon;
   className?: string;
+  link?: { to: string; label: string };
 }) {
   if (value == null) {
     return (
@@ -114,6 +118,30 @@ function MetricCard({
             title="No data yet"
             description="This metric isn't available."
           />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (link) {
+    // StatsCard has no slot for a link, so this mirrors its markup.
+    return (
+      <Card className={className}>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">{title}</CardTitle>
+          {Icon && <Icon className="text-muted-foreground h-4 w-4" />}
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">{value.toLocaleString()}</div>
+          {description && (
+            <p className="text-muted-foreground text-xs">{description}</p>
+          )}
+          <Link
+            to={link.to}
+            className="text-primary mt-2 inline-block text-[13px] font-medium underline-offset-4 hover:underline"
+          >
+            {link.label}
+          </Link>
         </CardContent>
       </Card>
     );
@@ -409,6 +437,7 @@ const DashboardOverview = () => {
           title="Locked accounts"
           value={stats.locked_users}
           icon={Lock}
+          link={{ to: LOCKED_USERS_HREF, label: 'View locked users' }}
           className={showRoles && showPermissions ? 'xl:col-span-2' : undefined}
         />
       </div>

@@ -45,11 +45,17 @@ export const fetchUsers = createAsyncThunk(
       page = 1,
       limit = 10,
       search,
-    }: { page?: number; limit?: number; search?: string },
+      status,
+    }: {
+      page?: number;
+      limit?: number;
+      search?: string;
+      status?: 'locked' | 'pending' | 'disabled';
+    },
     { rejectWithValue }
   ) => {
     try {
-      return await userService.getUsers(page, limit, search);
+      return await userService.getUsers(page, limit, search, status);
     } catch (error) {
       return rejectWithValue((error as Error).message);
     }

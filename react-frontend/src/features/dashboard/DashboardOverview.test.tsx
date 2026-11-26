@@ -1,12 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { Route, Routes } from 'react-router-dom';
 import { configureStore } from '@reduxjs/toolkit';
 import { format } from 'date-fns';
 import { renderWithProviders, type AppStore } from '@/test/test-utils';
 import authReducer from '@/store/slices/authSlice';
 import dashboardReducer from '@/store/slices/dashboardSlice';
+import userReducer from '@/store/slices/userSlice';
 import { dashboardService } from '../../services/dashboard.service';
+import userService from '../../services/user.service';
 import type { DashboardData, DashboardStats } from '@/models/dashboard';
+import type { User } from '@/models/user';
+import UsersList from '../users/UsersList';
 import DashboardOverview from './DashboardOverview';
 
 vi.mock('../../services/dashboard.service', () => ({
@@ -14,6 +20,9 @@ vi.mock('../../services/dashboard.service', () => ({
     getDashboardData: vi.fn(),
   },
 }));
+vi.mock('../../services/user.service');
+
+const getUsers = vi.mocked(userService.getUsers);
 
 const getDashboardData = vi.mocked(dashboardService.getDashboardData);
 
@@ -172,6 +181,87 @@ const emptyDashboard: DashboardData = {
 describe('DashboardOverview', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.history.pushState({}, '', '/');
+  });
+
+  it('opens the users list filtered to locked users from the Locked accounts card', async () => {
+    const person = (id: string, name: string, overrides: Partial<User> = {}) =>
+      ({
+        ...viewer('User', false, []),
+        id,
+        email: `${name.toLowerCase()}@example.com`,
+        first_name: name,
+        last_name: 'Person',
+        roles: [],
+        ...overrides,
+      }) as unknown as User;
+    const everyone = [
+      person('u-locked', 'Marcus', {
+        is_locked: true,
+        locked_until: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      }),
+      person('u-expired', 'Elena', {
+        is_locked: true,
+        locked_until: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      }),
+      person('u-healthy', 'Hannah'),
+    ];
+    // Like the API: `status=locked` answers with the locked users only.
+    getUsers.mockImplementation(async (_page, _limit, _search, status) => {
+      const items = status === 'locked' ? [everyone[0]] : everyone;
+      return {
+        items,
+        total: items.length,
+        page: 1,
+        size: 100,
+        pages: 1,
+        previous_page: null,
+        next_page: null,
+      };
+    });
+    getDashboardData.mockResolvedValue(filledDashboard(new Date(), new Date()));
+    const testStore = configureStore({
+      reducer: {
+        auth: authReducer,
+        dashboard: dashboardReducer,
+        user: userReducer,
+      },
+      preloadedState: {
+        auth: {
+          user: viewer('Admin', true, ADMIN_PERMISSIONS),
+          accessToken: 'token',
+          refreshToken: null,
+          isAuthenticated: true,
+          isLoading: false,
+          error: null,
+          passwordChangeSuccess: false,
+          passwordResetRequested: false,
+          passwordResetSuccess: false,
+        },
+      },
+    });
+    window.history.pushState({}, '', '/dashboard');
+    renderWithProviders(
+      <Routes>
+        <Route path="/dashboard" element={<DashboardOverview />} />
+        <Route path="/dashboard/users" element={<UsersList />} />
+      </Routes>,
+      { testStore: testStore as unknown as AppStore }
+    );
+
+    await userEvent.click(
+      await screen.findByRole('link', { name: 'View locked users' })
+    );
+
+    expect(await screen.findByText('marcus@example.com')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/dashboard/users');
+    expect(window.location.search).toBe('?status=Locked');
+    expect(screen.queryByText('elena@example.com')).not.toBeInTheDocument();
+    expect(screen.queryByText('hannah@example.com')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /filter by status/i })
+    ).toHaveTextContent('Status:Locked');
+    expect(getUsers).toHaveBeenLastCalledWith(1, 100, undefined, 'locked');
   });
 
   it('shows the admin metrics, the role chart and real sign-in times', async () => {
@@ -201,8 +291,8 @@ describe('DashboardOverview', () => {
     ).toBeInTheDocument();
     expect(card('Locked accounts').getByText('2')).toBeInTheDocument();
     expect(
-      screen.queryByRole('link', { name: /locked users/i })
-    ).not.toBeInTheDocument();
+      card('Locked accounts').getByRole('link', { name: 'View locked users' })
+    ).toHaveAttribute('href', '/dashboard/users?status=Locked');
 
     const distribution = card('Role distribution');
     expect(distribution.getByText('Admin')).toBeInTheDocument();
@@ -281,8 +371,8 @@ describe('DashboardOverview', () => {
       )
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('link', { name: /locked users/i })
-    ).not.toBeInTheDocument();
+      card('Locked accounts').getByRole('link', { name: 'View locked users' })
+    ).toHaveAttribute('href', '/dashboard/users?status=Locked');
     expect(screen.queryByText('Illustrative data')).not.toBeInTheDocument();
     expect(screen.queryByText('0')).not.toBeInTheDocument();
   });

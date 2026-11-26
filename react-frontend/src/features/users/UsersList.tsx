@@ -39,13 +39,14 @@ import {
   fullName,
   parseStatusFilter,
   roleNames,
+  statusQuery,
   type StatusFilter,
 } from './users-list-model';
 
 /**
- * The users API pages with at most 100 rows and has no search or filter
- * parameters, so the list loads one full page and searches, filters and
- * pages in the browser.
+ * The users API pages with at most 100 rows and filters by status, not by
+ * search or role, so the list asks for one full page of the chosen status and
+ * searches, filters by role and pages in the browser.
  */
 const USERS_FETCH_LIMIT = 100;
 
@@ -109,9 +110,17 @@ const UsersList = () => {
   const [deleteCopy, setDeleteCopy] = useState<DeleteCopy>(NO_DELETE_COPY);
   const isMobile = useMediaQuery('(max-width: 767px)');
 
+  const statusParam = statusQuery(status);
   const loadUsers = useCallback(
-    () => dispatch(fetchUsers({ page: 1, limit: USERS_FETCH_LIMIT })),
-    [dispatch]
+    () =>
+      dispatch(
+        fetchUsers({
+          page: 1,
+          limit: USERS_FETCH_LIMIT,
+          status: statusParam,
+        })
+      ),
+    [dispatch, statusParam]
   );
 
   useEffect(() => {
@@ -249,8 +258,12 @@ const UsersList = () => {
 
   const isFirstLoad = loading && allUsers.length === 0;
   const loadFailed = !loading && !!error && allUsers.length === 0;
-  const noUsers = !isFirstLoad && !error && allUsers.length === 0;
-  const noMatch = allUsers.length > 0 && filtered.length === 0;
+  const emptyList = !isFirstLoad && !error && allUsers.length === 0;
+  // The API filters by status, so an empty answer under a status is a filter
+  // with no match, not a system with no users.
+  const noUsers = emptyList && !status;
+  const noMatch =
+    (allUsers.length > 0 && filtered.length === 0) || (emptyList && !!status);
   // Compare with what the last fetch reported, not the local list, which
   // shrinks on delete while `pagination.total` stays as fetched.
   const truncated = pagination.total > USERS_FETCH_LIMIT;

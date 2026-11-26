@@ -1,11 +1,14 @@
 import logging
-from typing import Any, Optional
+from datetime import datetime, timezone
+from typing import Any, Literal, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
 from fastapi_pagination import Params
 from redis.asyncio import Redis as AsyncRedis
+from sqlalchemy import Boolean, cast
+from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app import crud
@@ -37,17 +40,35 @@ router = APIRouter()
 @router.get("/list")
 async def read_users_list(
     params: Params = Depends(),
+    status_filter: Literal["locked", "pending", "disabled"] | None = Query(None, alias="status"),
     db_session: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user(required_permissions=["user.read"])),
 ) -> IGetResponsePaginated[Any]:
     """
     Retrieve users. Requires admin or manager role
 
+    Optional ``status`` (locked, pending or disabled) narrows the list. Locked
+    means sign-in would still refuse the account: locked, with a lockout window
+    that has not passed, as the dashboard's Locked accounts count.
+
     Required roles:
     - admin
     - manager
     """
-    users = await crud.user.get_multi_paginated(params=params, db_session=db_session)
+    query = None
+    if status_filter == "locked":
+        # The same three conditions as dashboard_metrics.count_locked_users.
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        query = select(User).where(
+            cast(User.is_locked, Boolean).is_(True),
+            col(User.locked_until).is_not(None),
+            col(User.locked_until) > now,
+        )
+    elif status_filter == "pending":
+        query = select(User).where(cast(User.verified, Boolean).is_(False))
+    elif status_filter == "disabled":
+        query = select(User).where(cast(User.is_active, Boolean).is_(False))
+    users = await crud.user.get_multi_paginated(params=params, query=query, db_session=db_session)
 
     # paginate() builds the page class from this route's return annotation, so
     # it returns an IGetResponsePaginated, not a Page: the rows live at
