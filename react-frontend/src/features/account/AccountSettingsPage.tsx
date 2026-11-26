@@ -1,6 +1,7 @@
 import { Link, Navigate, useParams } from 'react-router-dom';
 
 import { PageHeader } from '@/components/common/PageHeader';
+import { usePageCrumb } from '@/components/layout/pageCrumb';
 import { ACCOUNT_SETTINGS_PATH } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
 import { AppearanceTab } from './AppearanceTab';
@@ -29,6 +30,8 @@ function accountTabPath(tab: AccountTab) {
 const AccountSettingsPage = () => {
   const { tab } = useParams();
   const active = TABS.find((candidate) => candidate.id === tab);
+  // The header breadcrumb ends with the tab: You › Account settings › Profile.
+  usePageCrumb(active?.label);
 
   if (!active) {
     return <Navigate to={accountTabPath('profile')} replace />;

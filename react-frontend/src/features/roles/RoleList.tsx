@@ -20,16 +20,6 @@ import {
 import { Link, useNavigate } from 'react-router-dom';
 import { Role } from '@/models/role';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -38,7 +28,9 @@ import {
 import { toast } from 'sonner';
 import { AlertCircle, MoreHorizontal } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { normalizeApiError } from '@/lib/apiError';
 import { RoleGroupChip } from './RoleGroupChip';
+import { RoleDeleteDialog } from './RoleDeleteDialog';
 
 const RoleList: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -103,16 +95,16 @@ const RoleList: React.FC = () => {
       toast.success('Role deleted successfully');
       dispatch(fetchRoles({ page: currentPage, size: pageSize }));
     } catch (deleteError: unknown) {
-      let errorMessage = 'Failed to delete role';
-      if (deleteError instanceof Error) {
-        errorMessage = deleteError.message;
-      }
+      const errorMessage = normalizeApiError(
+        deleteError,
+        'Failed to delete role'
+      ).message;
       toast.error(errorMessage, {
         duration: 5000,
       });
-    } finally {
-      setIsDeleteDialogOpen(false);
-      setDeleteRoleId(null);
+      throw deleteError instanceof Error
+        ? deleteError
+        : new Error(errorMessage);
     }
   };
 
@@ -289,46 +281,15 @@ const RoleList: React.FC = () => {
         </Table>
       </div>
 
-      <AlertDialog
+      <RoleDeleteDialog
+        role={rolePendingDelete ?? null}
         open={isDeleteDialogOpen}
-        onOpenChange={setIsDeleteDialogOpen}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Role</AlertDialogTitle>
-            <AlertDialogDescription>
-              <p>
-                Are you sure you want to delete the role &quot;
-                {rolePendingDelete?.name}
-                &quot;? This action cannot be undone.
-              </p>
-              {rolePendingDelete?.permissions &&
-                rolePendingDelete.permissions.length > 0 && (
-                  <div className="mt-4 p-4 bg-destructive/10 border border-destructive rounded-md">
-                    <p className="text-destructive font-medium">
-                      Warning: This role has{' '}
-                      {rolePendingDelete.permissions.length} permission
-                      {rolePendingDelete.permissions.length === 1
-                        ? ''
-                        : 's'}{' '}
-                      assigned. Deleting this role will remove these permissions
-                      from all users who have this role.
-                    </p>
-                  </div>
-                )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteConfirm}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        onOpenChange={(open) => {
+          setIsDeleteDialogOpen(open);
+          if (!open) setDeleteRoleId(null);
+        }}
+        onConfirm={handleDeleteConfirm}
+      />
 
       {pagination && pagination.pages > 1 && (
         <div className="flex items-center justify-between border-t pt-4">

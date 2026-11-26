@@ -355,7 +355,9 @@ describe('Group form', () => {
       renderGroupsAt('/dashboard/role-groups/new', role);
 
       expect(
-        await screen.findByRole('heading', { name: 'Unauthorized' })
+        await screen.findByRole('heading', {
+          name: 'You can’t create role groups',
+        })
       ).toBeVisible();
       expect(
         screen.queryByRole('textbox', { name: 'Name' })
