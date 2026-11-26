@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import { Route, Routes } from 'react-router-dom';
 import { configureStore } from '@reduxjs/toolkit';
 
@@ -195,6 +195,39 @@ describe('page titles', () => {
 
     await screen.findByRole('heading', { name: 'Unauthorized' });
     expect(document.title).toBe(`Unauthorized | ${APP}`);
+  });
+
+  // A browser stores a title with each history entry and shows it again on
+  // Back, and ignores a write that repeats the document's current title. So
+  // arriving on another entry must change the title, even to the same words.
+  it('sets the title anew when only the history entry changes', async () => {
+    renderAppAt('/dashboard/users', 'user');
+    const refused = `Unauthorized | ${APP}`;
+    await waitFor(() => expect(document.title).toBe(refused));
+    const titles = Object.getOwnPropertyDescriptor(
+      Document.prototype,
+      'title'
+    )!;
+    const writes: string[] = [];
+    Object.defineProperty(document, 'title', {
+      configurable: true,
+      get: () => titles.get!.call(document),
+      set: (value: string) => {
+        writes.push(value);
+        titles.set!.call(document, value);
+      },
+    });
+
+    try {
+      act(() => {
+        window.history.pushState({ key: 'next' }, '', '/dashboard/roles');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      });
+
+      await waitFor(() => expect(writes).toEqual(['', refused]));
+    } finally {
+      delete (document as { title?: string }).title;
+    }
   });
 
   it.each(['admin', 'manager'] as const)(

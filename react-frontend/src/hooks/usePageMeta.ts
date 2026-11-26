@@ -229,10 +229,14 @@ export const usePageMeta = (parts: PageTitleParts = {}): MetaInfo => {
 
   const title = pageTitle(path, parts) ?? metaInfo.title;
 
-  // Update document title when the route changes
+  // Update the document title when the title or the history entry changes.
+  // A browser stores a title with each entry and shows it again on Back or
+  // Forward, but ignores a write that repeats the document's current title,
+  // so clear it first: two entries can share a title (Unauthorized).
   useEffect(() => {
+    document.title = '';
     document.title = `${title} | ${import.meta.env.VITE_APP_NAME || 'FastAPI RBAC'}`;
-  }, [title]);
+  }, [location.key, path, title]);
 
   return { ...metaInfo, title };
 };
