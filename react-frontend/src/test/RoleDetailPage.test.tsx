@@ -435,10 +435,16 @@ describe('Role detail', () => {
     ).not.toBeInTheDocument();
 
     await userEvent.click(deleteButton);
-    const confirm = await within(
-      await screen.findByRole('alertdialog')
-    ).findByRole('button', { name: 'Delete role' });
-    expect(confirm).toHaveClass('bg-destructive');
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveAccessibleDescription(
+      'This role cannot be deleted until its permissions are removed and its users are unassigned.'
+    );
+    expect(
+      within(dialog).queryByRole('button', { name: 'Delete role' })
+    ).not.toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('button', { name: 'Dismiss' })
+    ).toBeInTheDocument();
   });
 
   it('does not fetch the permission catalog without permission.read and labels the list as partial', async () => {

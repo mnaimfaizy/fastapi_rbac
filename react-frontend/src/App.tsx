@@ -23,6 +23,7 @@ import AuthLayout from './components/layout/AuthLayout';
 import LoginPage from './features/auth/LoginPage';
 import DashboardPage from './features/dashboard/DashboardPage';
 import NotFoundPage from './pages/NotFoundPage';
+import SystemStateLayout from './pages/SystemStateLayout';
 import { RegistrationSuccessPage } from './features/auth/RegistrationSuccessPage';
 import PasswordResetRequestPage from './features/auth/PasswordResetRequestPage';
 import PasswordResetPage from './features/auth/PasswordResetPage';
@@ -160,6 +161,8 @@ export const appRoutes = (
       {/* Child routes rendered inside MainLayout's Outlet */}
       <Route index element={<Navigate to="/dashboard" replace />} />
       {/* Redirect / to /dashboard */}
+      {/* Unauthorized, inside the shell; signed out goes to Sign in */}
+      <Route path="unauthorized" element={<UnauthorizedPage />} />
       <Route path="dashboard" element={<DashboardPage />}>
         {/* Nested Dashboard Routes - Rendered inside Dashboard's Outlet */}
         <Route index element={<SignedInHome />} />
@@ -336,11 +339,10 @@ export const appRoutes = (
       </Route>
     </Route>
 
-    {/* Unauthorized Page Route */}
-    <Route path="/unauthorized" element={<UnauthorizedPage />} />
-
-    {/* Not Found Route */}
-    <Route path="*" element={<NotFoundPage />} />
+    {/* Not found: in the shell when signed in, in the auth layout when not */}
+    <Route element={<SystemStateLayout />}>
+      <Route path="*" element={<NotFoundPage />} />
+    </Route>
   </>
 );
 

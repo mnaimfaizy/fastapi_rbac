@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
@@ -230,6 +230,48 @@ describe('RoleList Component', () => {
         <RoleList />
       </BrowserRouter>
     );
+  };
+
+  const listRoles = (roles: typeof mockRoles) => {
+    const mockUseSelector = vi.mocked(useSelector);
+    mockUseSelector.mockImplementation((selector: any) => {
+      const mockState = {
+        role: {
+          roles,
+          allRoles: roles,
+          currentRole: null,
+          pagination: {
+            total: roles.length,
+            page: 1,
+            size: 10,
+            pages: 1,
+          },
+          loading: false,
+          error: null,
+        },
+        roleGroup: {
+          roleGroups: mockRoleGroups,
+          currentRoleGroup: null,
+          loading: false,
+          error: null,
+          pagination: {
+            total: mockRoleGroups.length,
+            page: 1,
+            size: 10,
+            pages: 1,
+            previousPage: null,
+            nextPage: null,
+          },
+        },
+      };
+      return selector(mockState);
+    });
+  };
+
+  const deletableUser = {
+    ...mockRoles[0],
+    permissions: [] as (typeof mockRoles)[0]['permissions'],
+    user_count: 0,
   };
 
   afterEach(() => {
@@ -766,14 +808,22 @@ describe('RoleList Component', () => {
       const deleteButton = screen.getByTestId('delete-role-button');
       await user.click(deleteButton);
 
-      // Check if delete dialog is opened
-      expect(screen.getByText('Delete Role')).toBeInTheDocument();
+      const dialog = screen.getByRole('alertdialog', {
+        name: 'Delete role ‘user’?',
+      });
+      expect(dialog).toHaveAccessibleDescription(
+        'This role cannot be deleted until its permissions are removed and its users are unassigned.'
+      );
       expect(
-        screen.getByText(/Are you sure you want to delete the role "user"/)
+        within(dialog).queryByRole('button', { name: 'Delete role' })
+      ).not.toBeInTheDocument();
+      expect(
+        within(dialog).getByRole('button', { name: 'Dismiss' })
       ).toBeInTheDocument();
     });
 
-    it('shows warning message in delete dialog when role has permissions', async () => {
+    it('uses a plain confirm when nobody holds the role and it has no permissions', async () => {
+      listRoles([deletableUser]);
       renderRoleList();
 
       await user.click(
@@ -782,13 +832,20 @@ describe('RoleList Component', () => {
       const deleteButton = screen.getByTestId('delete-role-button');
       await user.click(deleteButton);
 
-      // Check if warning message is shown for role with permissions
+      const dialog = screen.getByRole('alertdialog', {
+        name: 'Delete role ‘user’?',
+      });
+      expect(dialog).toHaveAccessibleDescription(
+        'No users hold this role. This cannot be undone.'
+      );
+      expect(within(dialog).queryByRole('textbox')).not.toBeInTheDocument();
       expect(
-        screen.getByText(/Warning: This role has 4 permissions assigned/)
-      ).toBeInTheDocument();
+        within(dialog).getByRole('button', { name: 'Delete role' })
+      ).toBeEnabled();
     });
 
     it('successfully deletes role when confirmed', async () => {
+      listRoles([deletableUser]);
       const mockRoleService = vi.mocked(roleService);
       mockRoleService.deleteRole.mockResolvedValueOnce(undefined);
 
@@ -814,7 +871,7 @@ describe('RoleList Component', () => {
       const deleteButton = screen.getByTestId('delete-role-button');
       await user.click(deleteButton);
 
-      const confirmButton = screen.getByRole('button', { name: 'Delete' });
+      const confirmButton = screen.getByRole('button', { name: 'Delete role' });
       await user.click(confirmButton);
 
       await waitFor(() => {
@@ -823,6 +880,7 @@ describe('RoleList Component', () => {
     });
 
     it('handles delete error gracefully', async () => {
+      listRoles([deletableUser]);
       const errorMessage = 'Failed to delete role';
       const mockRoleService = vi.mocked(roleService);
       mockRoleService.deleteRole.mockRejectedValueOnce(new Error(errorMessage));
@@ -854,7 +912,7 @@ describe('RoleList Component', () => {
       const deleteButton = screen.getByTestId('delete-role-button');
       await user.click(deleteButton);
 
-      const confirmButton = screen.getByRole('button', { name: 'Delete' });
+      const confirmButton = screen.getByRole('button', { name: 'Delete role' });
       await user.click(confirmButton);
 
       await waitFor(() => {
@@ -865,6 +923,7 @@ describe('RoleList Component', () => {
     });
 
     it('cancels delete when cancel button is clicked', async () => {
+      listRoles([deletableUser]);
       const mockRoleService = vi.mocked(roleService);
 
       renderRoleList();
@@ -878,8 +937,9 @@ describe('RoleList Component', () => {
       const cancelButton = screen.getByRole('button', { name: 'Cancel' });
       await user.click(cancelButton);
 
-      // Dialog should be closed
-      expect(screen.queryByText('Delete Role')).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('alertdialog', { name: 'Delete role ‘user’?' })
+      ).not.toBeInTheDocument();
       expect(mockRoleService.deleteRole).not.toHaveBeenCalled();
     });
   });

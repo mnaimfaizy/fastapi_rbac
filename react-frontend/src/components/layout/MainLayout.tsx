@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { ChevronRight, Menu, PanelLeft } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -45,13 +45,13 @@ const MainLayout = () => {
   const { user } = useAppSelector((state) => state.auth);
   const { hasPermission } = usePermissions();
   const { pathname } = useLocation();
-  const metaInfo = usePageMeta();
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [crumb, setCrumb] = useState<string | null>(null);
+  const [crumbs, setCrumbs] = useState<string[]>([]);
 
   const groups = buildNavGroups(hasPermission);
   const active = findActiveNavItem(groups, pathname);
+  const metaInfo = usePageMeta({ crumbs, groups, hasPermission });
 
   function toggleCollapsed() {
     setCollapsed((current) => {
@@ -119,14 +119,14 @@ const MainLayout = () => {
                 aria-hidden="true"
                 className="hidden h-5 w-px bg-border lg:block"
               />
-              <Breadcrumb active={active} crumb={crumb} />
+              <Breadcrumb active={active} crumbs={crumbs} />
             </div>
 
             {user && <UserMenu user={user} />}
           </header>
 
           <main className="flex-1 space-y-6 p-4 sm:p-6 lg:p-8">
-            <PageCrumbContext.Provider value={setCrumb}>
+            <PageCrumbContext.Provider value={setCrumbs}>
               <Outlet />
             </PageCrumbContext.Provider>
           </main>
@@ -136,14 +136,20 @@ const MainLayout = () => {
   );
 };
 
+/**
+ * `Group › Nav item › …the page's own steps`. The nav item links back to its
+ * list once the page names steps after it; the last step is the current page.
+ * A page no nav item matches (the in-app 404) shows only its own steps, a
+ * standalone crumb, or no breadcrumb when it names none.
+ */
 function Breadcrumb({
   active,
-  crumb,
+  crumbs,
 }: {
   active: ReturnType<typeof findActiveNavItem>;
-  crumb: string | null;
+  crumbs: string[];
 }) {
-  if (!active) {
+  if (!active && crumbs.length === 0) {
     return null;
   }
   return (
@@ -151,37 +157,51 @@ function Breadcrumb({
       aria-label="Breadcrumb"
       className="hidden items-center gap-1.5 text-sm whitespace-nowrap lg:flex"
     >
-      {!active.item.standalone && (
+      {active && !active.item.standalone && (
         <>
           <span className="text-muted-foreground">{active.group.label}</span>
-          <ChevronRight
-            aria-hidden="true"
-            className="size-3.5 text-muted-foreground"
-          />
+          <CrumbSeparator />
         </>
       )}
-      {crumb ? (
-        <>
+      {active &&
+        (crumbs.length > 0 ? (
           <Link
             to={active.item.to}
             className="text-muted-foreground hover:text-foreground"
           >
             {active.item.label}
           </Link>
-          <ChevronRight
-            aria-hidden="true"
-            className="size-3.5 text-muted-foreground"
-          />
-          <span aria-current="page" className="font-medium text-foreground">
-            {crumb}
-          </span>
-        </>
-      ) : (
-        <span aria-current="page" className="font-medium text-foreground">
-          {active.item.label}
-        </span>
-      )}
+        ) : (
+          <CurrentCrumb label={active.item.label} />
+        ))}
+      {crumbs.map((label, index) => (
+        <Fragment key={index}>
+          {(active || index > 0) && <CrumbSeparator />}
+          {index === crumbs.length - 1 ? (
+            <CurrentCrumb label={label} />
+          ) : (
+            <span className="text-muted-foreground">{label}</span>
+          )}
+        </Fragment>
+      ))}
     </nav>
+  );
+}
+
+function CurrentCrumb({ label }: { label: string }) {
+  return (
+    <span aria-current="page" className="font-medium text-foreground">
+      {label}
+    </span>
+  );
+}
+
+function CrumbSeparator() {
+  return (
+    <ChevronRight
+      aria-hidden="true"
+      className="size-3.5 text-muted-foreground"
+    />
   );
 }
 

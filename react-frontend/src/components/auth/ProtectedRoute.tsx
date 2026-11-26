@@ -2,6 +2,7 @@ import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { usePermissions } from '../../hooks/usePermissions';
+import UnauthorizedPage from '../../pages/UnauthorizedPage';
 
 interface ProtectedRouteProps {
   requiredRoles?: string[];
@@ -42,39 +43,30 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <Navigate to="/change-password-required" replace />;
   }
 
-  // Check for required roles if specified
+  // A refusal stays inside the shell and names what is missing.
   if (requiredRoles.length > 0) {
     const hasRequiredRole = requiredRoles.some((roleName) => hasRole(roleName));
     if (!hasRequiredRole) {
-      return (
-        <div className="flex justify-center items-center min-h-screen">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold text-red-600">Unauthorized</h1>
-            <p className="mt-2 text-gray-600">
-              You don&apos;t have permission to access this page.
-            </p>
-          </div>
-        </div>
-      );
+      return <UnauthorizedPage />;
     }
   }
 
-  // Check for required permissions if specified
   if (requiredPermissions.length > 0) {
-    const hasRequiredPermission = requireAllPermissions
-      ? requiredPermissions.every((permission) => hasPermission(permission))
-      : requiredPermissions.some((permission) => hasPermission(permission));
+    const missing = requiredPermissions.filter(
+      (permission) => !hasPermission(permission)
+    );
+    const refused = requireAllPermissions
+      ? missing.length > 0
+      : missing.length === requiredPermissions.length;
 
-    if (!hasRequiredPermission) {
+    if (refused) {
+      // One missing permission is the answer in all-mode; in any-mode every
+      // listed permission would have been enough.
       return (
-        <div className="flex justify-center items-center min-h-screen">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold text-red-600">Unauthorized</h1>
-            <p className="mt-2 text-gray-600">
-              You don&apos;t have permission to access this page.
-            </p>
-          </div>
-        </div>
+        <UnauthorizedPage
+          permission={missing[0]}
+          anyOf={requireAllPermissions ? undefined : missing}
+        />
       );
     }
   }
