@@ -15,12 +15,20 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { PageHeader } from '@/components/common/PageHeader';
 import { ParentGroupSelect, type ParentOption } from './ParentGroupSelect';
+
+/** The longest description the API stores. */
+const DESCRIPTION_MAX = 255;
 
 const schema = z.object({
   name: z.string().trim().min(1, 'Enter a name'),
   parentId: z.string().nullable(),
+  description: z
+    .string()
+    .trim()
+    .max(DESCRIPTION_MAX, `Use ${DESCRIPTION_MAX} characters or fewer`),
 });
 
 export type GroupFormValues = z.infer<typeof schema>;
@@ -52,7 +60,7 @@ export function GroupForm({
   backLabel,
   nameHelp,
   parentOptions,
-  initialValues = { name: '', parentId: null },
+  initialValues = { name: '', parentId: null, description: '' },
   submitLabel,
   onSubmit,
 }: GroupFormProps) {
@@ -65,7 +73,8 @@ export function GroupForm({
   const submit = form.handleSubmit(async (values) => {
     setSaving(true);
     try {
-      await onSubmit({ name: values.name.trim(), parentId: values.parentId });
+      // The schema has already trimmed the name and the description.
+      await onSubmit(values);
     } catch {
       // The caller has shown the error; the form stays as typed.
     } finally {
@@ -127,6 +136,29 @@ export function GroupForm({
                       onChange={field.onChange}
                       onBlur={field.onBlur}
                       options={parentOptions}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="gap-1">
+                    Description{' '}
+                    <span className="text-muted-foreground font-normal">
+                      (optional)
+                    </span>
+                  </FormLabel>
+                  <FormControl>
+                    <Textarea
+                      rows={3}
+                      className="field-sizing-fixed resize-y"
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />

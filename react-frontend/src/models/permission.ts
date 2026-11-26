@@ -11,6 +11,7 @@ export interface Permission {
 export interface PermissionGroup {
   id: string;
   name: string;
+  description?: string | null;
   permission_group_id?: string;
   created_at: string;
   updated_at: string;
@@ -28,12 +29,14 @@ export interface PermissionCreate {
 export interface PermissionGroupCreate {
   name: string;
   permission_group_id?: string | null;
+  description?: string | null;
 }
 
 // Keeping PermissionGroupUpdate for permission groups functionality
 export interface PermissionGroupUpdate {
   name?: string;
   permission_group_id?: string | null;
+  description?: string | null;
 }
 
 export interface PermissionResponse {
