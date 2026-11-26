@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '../../store';
@@ -12,19 +12,14 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, Check, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePermissions } from '@/hooks/usePermissions';
-import { Permission } from '@/models/permission';
 import { RoleHolder } from '@/models/role';
+import { normalizeApiError } from '@/lib/apiError';
+import { RoleDeleteDialog } from './RoleDeleteDialog';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+  CRUD_VERBS,
+  buildPermissionMatrix,
+  idsInRow,
+} from './permissionMatrix';
 import {
   Table,
   TableBody,
@@ -39,91 +34,6 @@ function shortDate(value: string | null | undefined): string | null {
   if (!value) return null;
   const date = parseISO(value);
   return isValid(date) ? format(date, 'd MMM yyyy') : null;
-}
-
-const CRUD_VERBS = ['create', 'read', 'update', 'delete'] as const;
-type Verb = (typeof CRUD_VERBS)[number];
-
-function actionOf(name: string): string {
-  const dot = name.indexOf('.');
-  return dot === -1 ? name : name.slice(dot + 1);
-}
-
-function verbOf(action: string): Verb | null {
-  if ((CRUD_VERBS as readonly string[]).includes(action)) {
-    return action as Verb;
-  }
-  const head = action.split('_')[0];
-  if (
-    (CRUD_VERBS as readonly string[]).includes(head) &&
-    action.startsWith(`${head}_`)
-  ) {
-    return head as Verb;
-  }
-  return null;
-}
-
-interface MatrixRow {
-  group: string;
-  granted: number;
-  total: number;
-  cells: Record<Verb, Permission | null>;
-  other: Permission[];
-}
-
-function buildMatrix(catalog: Permission[], grantedIds: Set<string>) {
-  const byGroup = new Map<string, Permission[]>();
-  for (const permission of catalog) {
-    const group = permission.group?.name || 'No group';
-    const list = byGroup.get(group) ?? [];
-    list.push(permission);
-    byGroup.set(group, list);
-  }
-
-  const rows: MatrixRow[] = [];
-  for (const [group, permissions] of byGroup) {
-    const verbs = permissions.map((permission) =>
-      verbOf(actionOf(permission.name))
-    );
-    const counts = new Map<string, number>();
-    for (const verb of verbs) {
-      if (verb) counts.set(verb, (counts.get(verb) ?? 0) + 1);
-    }
-    const clean = verbs.every(
-      (verb) => verb !== null && counts.get(verb) === 1
-    );
-    const cells: Record<Verb, Permission | null> = {
-      create: null,
-      read: null,
-      update: null,
-      delete: null,
-    };
-    const other: Permission[] = [];
-    for (const permission of permissions) {
-      const action = actionOf(permission.name);
-      const verb = verbOf(action);
-      if (clean && verb) {
-        cells[verb] = permission;
-      } else if ((CRUD_VERBS as readonly string[]).includes(action)) {
-        cells[action as Verb] = permission;
-      } else {
-        other.push(permission);
-      }
-    }
-    rows.push({
-      group,
-      granted: permissions.filter((permission) => grantedIds.has(permission.id))
-        .length,
-      total: permissions.length,
-      cells,
-      other,
-    });
-  }
-
-  const granted = catalog.filter((permission) =>
-    grantedIds.has(permission.id)
-  ).length;
-  return { rows, granted, total: catalog.length };
 }
 
 function holderName(user: RoleHolder): string {
@@ -157,6 +67,7 @@ const RoleDetail: React.FC = () => {
     (state: RootState) => state.permission
   );
   const { roleGroups } = useSelector((state: RootState) => state.roleGroup);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   // The header breadcrumb ends with this role's name (Access › Roles › Name).
   usePageCrumb(currentRole?.id === roleId ? currentRole?.name : null);
 
@@ -199,11 +110,14 @@ const RoleDetail: React.FC = () => {
         toast.success('Role deleted successfully');
         navigate('/dashboard/roles');
       } catch (deleteError: unknown) {
-        const errorMessage =
-          deleteError instanceof Error
-            ? deleteError.message
-            : 'Failed to delete role';
+        const errorMessage = normalizeApiError(
+          deleteError,
+          'Failed to delete role'
+        ).message;
         toast.error(errorMessage, { duration: 5000 });
+        throw deleteError instanceof Error
+          ? deleteError
+          : new Error(errorMessage);
       }
     }
   };
@@ -220,7 +134,9 @@ const RoleDetail: React.FC = () => {
     );
   }
 
-  if (error) {
+  // A failed delete sets this error while the role is still loaded. Replacing
+  // the page would unmount RoleDeleteDialog, so the error is a banner instead.
+  if (error && !currentRole) {
     return (
       <div className="p-4 bg-destructive/10 border border-destructive text-destructive rounded">
         {error}
@@ -249,7 +165,11 @@ const RoleDetail: React.FC = () => {
         !catalogPermissions.some((item) => item.id === permission.id)
     ),
   ];
-  const matrix = buildMatrix(catalog, grantedIds);
+  const rows = buildPermissionMatrix(catalog);
+  const granted = catalog.filter((permission) =>
+    grantedIds.has(permission.id)
+  ).length;
+  const total = catalog.length;
   // users is sent only to callers who also hold user.read.
   const canSeeHolders =
     currentRole.users !== undefined && currentRole.users !== null;
@@ -293,32 +213,10 @@ const RoleDetail: React.FC = () => {
               </Button>
             )}
             {canDeleteRoles && (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive">
-                    <Trash2 className="h-4 w-4" />
-                    Delete role
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete Role</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This action cannot be undone. This will permanently delete
-                      this role from the system.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={handleDelete}
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    >
-                      Delete role
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+              <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
+                <Trash2 className="h-4 w-4" />
+                Delete role
+              </Button>
             )}
           </div>
         </div>
@@ -330,14 +228,23 @@ const RoleDetail: React.FC = () => {
         )}
       </div>
 
+      {error ? (
+        <div
+          role="alert"
+          className="p-4 bg-destructive/10 border border-destructive text-destructive rounded"
+        >
+          {error}
+        </div>
+      ) : null}
+
       <div className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] items-start">
         <section className="rounded-xl border p-6 space-y-4 min-w-0">
           <div>
             <h2 className="text-base font-semibold">Permissions</h2>
             <p className="text-sm text-muted-foreground">
               {catalogComplete
-                ? `${matrix.granted} of ${matrix.total} granted, by permission group`
-                : `${matrix.granted} ${matrix.granted === 1 ? 'permission' : 'permissions'} granted (partial list: the full catalog is not available to you)`}
+                ? `${granted} of ${total} granted, by permission group`
+                : `${granted} ${granted === 1 ? 'permission' : 'permissions'} granted (partial list: the full catalog is not available to you)`}
             </p>
           </div>
           <div className="rounded-xl border overflow-x-auto">
@@ -353,7 +260,11 @@ const RoleDetail: React.FC = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {matrix.rows.map((row) => {
+                {rows.map((row) => {
+                  const rowIds = idsInRow(row);
+                  const rowGranted = rowIds.filter((id) =>
+                    grantedIds.has(id)
+                  ).length;
                   const grantedOther = row.other.filter((permission) =>
                     grantedIds.has(permission.id)
                   );
@@ -362,7 +273,7 @@ const RoleDetail: React.FC = () => {
                       <TableCell>
                         <span className="font-medium">{row.group}</span>{' '}
                         <span className="text-xs text-muted-foreground">
-                          {row.granted}/{row.total}
+                          {rowGranted}/{rowIds.length}
                         </span>
                       </TableCell>
                       {CRUD_VERBS.map((verb) => {
@@ -479,6 +390,12 @@ const RoleDetail: React.FC = () => {
           )}
         </section>
       </div>
+      <RoleDeleteDialog
+        role={currentRole}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 };
