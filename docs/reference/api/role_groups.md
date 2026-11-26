@@ -265,6 +265,8 @@ Authorization: Bearer <access_token>
 
 Clone a role group (with all role assignments) to a new name.
 
+The copy's `description` is always `null`, whatever the source group's is; set one with `PUT /api/v1/role-groups/{group_id}`.
+
 **Request Headers:**
 
 ```
