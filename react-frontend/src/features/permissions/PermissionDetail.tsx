@@ -18,13 +18,12 @@ import { RowActionsMenu } from '@/components/common/RowActionsMenu';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Permission } from '@/models/permission';
 import permissionService from '@/services/permission.service';
+import { parseApiTimestamp } from '@/features/account/parseApiTimestamp';
 
 function formatCreated(value: string | undefined) {
-  if (!value) {
-    return '—';
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
+  // The API sends created_at as naive UTC; read it as UTC, not local time.
+  const date = parseApiTimestamp(value);
+  if (!date) {
     return '—';
   }
   return new Intl.DateTimeFormat('en-GB', {
