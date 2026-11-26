@@ -498,16 +498,36 @@ describe('Permission matrix editor', () => {
   });
 
   it.each([
-    ['manager', MANAGER_PERMISSIONS, '/dashboard/roles/edit/role-manager'],
-    ['user', USER_PERMISSIONS, '/dashboard/roles/edit/role-manager'],
-    ['manager', MANAGER_PERMISSIONS, '/dashboard/roles/new'],
-    ['user', USER_PERMISSIONS, '/dashboard/roles/new'],
+    [
+      'manager',
+      MANAGER_PERMISSIONS,
+      '/dashboard/roles/edit/role-manager',
+      'You can’t edit roles',
+    ],
+    [
+      'user',
+      USER_PERMISSIONS,
+      '/dashboard/roles/edit/role-manager',
+      'You can’t edit roles',
+    ],
+    [
+      'manager',
+      MANAGER_PERMISSIONS,
+      '/dashboard/roles/new',
+      'You can’t create roles',
+    ],
+    [
+      'user',
+      USER_PERMISSIONS,
+      '/dashboard/roles/new',
+      'You can’t create roles',
+    ],
   ])(
     'does not open the editor for a %s at %s',
-    async (_label, permissionNames, path) => {
+    async (_label, permissionNames, path, heading) => {
       renderEditor(path, permissionNames);
       expect(
-        await screen.findByRole('heading', { name: 'Unauthorized' })
+        await screen.findByRole('heading', { name: heading })
       ).toBeInTheDocument();
       expect(mockRoleService.getRoleById).not.toHaveBeenCalled();
       expect(mockRoleService.createRole).not.toHaveBeenCalled();
