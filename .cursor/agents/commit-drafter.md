@@ -4,8 +4,9 @@ description: Drafts a commit message from the staged diff. Read-only; it never s
 model: fast
 readonly: true
 ---
+<!-- Generated from .github/agents/commit-drafter.agent.md by scripts/development/sync_agents.py. Edit that file, then run it with --apply. -->
 
-# Commit Drafter (Cursor)
+# Commit Drafter
 
 Harness wrapper for Cursor. **Behavior SSOT:** [`docs/agents/commit-pipeline.md`](../../docs/agents/commit-pipeline.md) and the message format in [`docs/agents/commit-messages.md`](../../docs/agents/commit-messages.md). Do not redefine either here.
 

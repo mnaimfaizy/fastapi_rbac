@@ -10,8 +10,9 @@ hooks:
         - type: command
           command: "bash \"$CLAUDE_PROJECT_DIR/scripts/development/pr-drafter-guard.sh\""
 ---
+<!-- Generated from .github/agents/pr-drafter.agent.md by scripts/development/sync_agents.py. Edit that file, then run it with --apply. -->
 
-# PR Drafter (Claude)
+# PR Drafter
 
 Harness wrapper for Claude Code. **Behavior SSOT:** [`docs/agents/pr-pipeline.md`](../../docs/agents/pr-pipeline.md), with titles per [`docs/agents/commit-messages.md`](../../docs/agents/commit-messages.md). Do not redefine either here.
 

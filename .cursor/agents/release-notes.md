@@ -1,4 +1,10 @@
-# Release Notes Agent (Cursor)
+---
+name: release-notes
+description: Drafts the release-notes markdown section for a release from the version, previous tag and commit list. Used by the release skill.
+---
+<!-- Generated from .github/agents/release-notes.agent.md by scripts/development/sync_agents.py. Edit that file, then run it with --apply. -->
+
+# Release Notes Agent
 
 Harness wrapper for Cursor agents. **Behavior SSOT:** [`docs/agents/release-notes-agent.md`](../../docs/agents/release-notes-agent.md)
 
@@ -14,7 +20,7 @@ Pick a model in Cursor’s agent / Task UI for this sub-agent when invoking it.
 
 ## How to invoke
 
-When the release orchestrator (`.claude/skills/release`) or a human needs release notes:
+When the release orchestrator (`.agents/skills/release`) or a human needs release notes:
 
 1. Gather version, previous tag, commit list (`git log <prev>..HEAD`), and today’s date.
 2. Use the Task tool (`generalPurpose` or equivalent) with those inputs.

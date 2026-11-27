@@ -1,4 +1,10 @@
-# Release Notes Agent (Claude)
+---
+name: release-notes
+description: Drafts the release-notes markdown section for a release from the version, previous tag and commit list. Used by the release skill.
+---
+<!-- Generated from .github/agents/release-notes.agent.md by scripts/development/sync_agents.py. Edit that file, then run it with --apply. -->
+
+# Release Notes Agent
 
 Harness wrapper for Claude Code / Claude agents. **Behavior SSOT:** [`docs/agents/release-notes-agent.md`](../../docs/agents/release-notes-agent.md)
 

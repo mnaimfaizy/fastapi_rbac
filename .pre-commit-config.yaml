@@ -153,6 +153,16 @@ repos:
         language: python
         pass_filenames: false
         always_run: true
+  # .claude/agents and .cursor/agents are generated from .github/agents/*.agent.md.
+  # ci.yml runs the same check. See docs/agents/skills-and-agents.md.
+  - repo: local
+    hooks:
+      - id: agents-sync
+        name: sub-agent files match .github/agents
+        entry: python scripts/development/sync_agents.py --check
+        language: python
+        pass_filenames: false
+        files: ^(\.github/agents/|\.claude/agents/|\.cursor/agents/|scripts/development/sync_agents\.py$)
   # Refresh the local graphify graph after commits and merges/pulls that touch
   # source. Runs in the background and never fails the git command. No-op for
   # anyone without graphify installed and a graph built. See docs/agents/graphify.md.

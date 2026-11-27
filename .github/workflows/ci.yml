@@ -56,6 +56,9 @@ jobs:
       - name: Skills link is intact
         run: python3 scripts/development/check_skills_link.py
 
+      - name: Sub-agent files match their canonical files
+        run: python3 scripts/development/sync_agents.py --check
+
   # Each area runs when detection says its files changed, and also whenever
   # detection did not succeed (fail open). `!cancelled()` lets that happen
   # after a failed `changes` job.
