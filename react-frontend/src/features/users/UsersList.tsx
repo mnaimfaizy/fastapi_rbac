@@ -55,7 +55,7 @@ const UsersList = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
   const { hasPermission } = usePermissions();
-  const { users, loading, error, pagination } = useSelector(
+  const { users, loading, error, pagination, loadedStatus } = useSelector(
     (state: RootState) => state.user
   );
   const [searchParams, setSearchParams] = useSearchParams();
@@ -178,7 +178,13 @@ const UsersList = () => {
     [renderActions]
   );
 
-  const allUsers = useMemo(() => users ?? [], [users]);
+  // Rows loaded for another status are not this list's rows: show loading,
+  // not the old rows or an empty-filter state, until the new answer lands.
+  const rowsMatchStatus = loadedStatus === statusParam;
+  const allUsers = useMemo(
+    () => (rowsMatchStatus ? (users ?? []) : []),
+    [users, rowsMatchStatus]
+  );
   const roles = useMemo(() => roleNames(allUsers), [allUsers]);
   // A role nobody on the list holds any more (its last holder was deleted)
   // stops filtering, so the trigger never says "All" while a role applies.

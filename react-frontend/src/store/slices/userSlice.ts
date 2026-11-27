@@ -1,9 +1,11 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import { User, PaginatedItems } from '../../models/user';
+import { User } from '../../models/user';
 import userService, {
   UserCreatePayload,
   UserUpdatePayload,
 } from '../../services/user.service';
+
+export type UserStatusFilter = 'locked' | 'pending' | 'disabled';
 
 // Define the initial state interface
 interface UserState {
@@ -11,6 +13,9 @@ interface UserState {
   selectedUser: User | null;
   loading: boolean;
   error: string | null;
+  // Status of the latest fetchUsers request, and of the request the rows came from.
+  requestedStatus: UserStatusFilter | undefined;
+  loadedStatus: UserStatusFilter | undefined;
   pagination: {
     total: number;
     page: number;
@@ -27,6 +32,8 @@ const initialState: UserState = {
   selectedUser: null,
   loading: false,
   error: null,
+  requestedStatus: undefined,
+  loadedStatus: undefined,
   pagination: {
     total: 0,
     page: 1,
@@ -50,7 +57,7 @@ export const fetchUsers = createAsyncThunk(
       page?: number;
       limit?: number;
       search?: string;
-      status?: 'locked' | 'pending' | 'disabled';
+      status?: UserStatusFilter;
     },
     { rejectWithValue }
   ) => {
@@ -137,49 +144,51 @@ const userSlice = createSlice({
   extraReducers: (builder) => {
     builder
       // Fetch users
-      .addCase(fetchUsers.pending, (state) => {
+      .addCase(fetchUsers.pending, (state, action) => {
         state.loading = true;
         state.error = null;
+        state.requestedStatus = action.meta.arg.status;
       })
-      .addCase(
-        fetchUsers.fulfilled,
-        (state, action: PayloadAction<PaginatedItems<User>>) => {
-          state.loading = false;
-          // Handle undefined or null payload
-          if (!action.payload || !action.payload.items) {
-            state.users = [];
-            state.pagination = {
-              total: 0,
-              page: 1,
-              size: 10,
-              pages: 0,
-              previousPage: null,
-              nextPage: null,
-            };
-            return;
-          }
-
-          // Ensure dates are properly formatted and handle nulls
-          state.users = action.payload.items.map((user) => ({
-            ...user,
-            created_at: user.created_at ? String(user.created_at) : null,
-            updated_at: user.updated_at ? String(user.updated_at) : null,
-            last_changed_password_date: user.last_changed_password_date
-              ? String(user.last_changed_password_date)
-              : null,
-            locked_until: user.locked_until ? String(user.locked_until) : null,
-          })) as unknown as User[];
+      .addCase(fetchUsers.fulfilled, (state, action) => {
+        // A newer request for another status is in flight: this answer is stale.
+        if (action.meta.arg.status !== state.requestedStatus) return;
+        state.loading = false;
+        state.loadedStatus = action.meta.arg.status;
+        // Handle undefined or null payload
+        if (!action.payload || !action.payload.items) {
+          state.users = [];
           state.pagination = {
-            total: action.payload.total || 0,
-            page: action.payload.page || 1,
-            size: action.payload.size || 10,
-            pages: action.payload.pages || 0,
-            previousPage: action.payload.previous_page,
-            nextPage: action.payload.next_page,
+            total: 0,
+            page: 1,
+            size: 10,
+            pages: 0,
+            previousPage: null,
+            nextPage: null,
           };
+          return;
         }
-      )
+
+        // Ensure dates are properly formatted and handle nulls
+        state.users = action.payload.items.map((user) => ({
+          ...user,
+          created_at: user.created_at ? String(user.created_at) : null,
+          updated_at: user.updated_at ? String(user.updated_at) : null,
+          last_changed_password_date: user.last_changed_password_date
+            ? String(user.last_changed_password_date)
+            : null,
+          locked_until: user.locked_until ? String(user.locked_until) : null,
+        })) as unknown as User[];
+        state.pagination = {
+          total: action.payload.total || 0,
+          page: action.payload.page || 1,
+          size: action.payload.size || 10,
+          pages: action.payload.pages || 0,
+          previousPage: action.payload.previous_page,
+          nextPage: action.payload.next_page,
+        };
+      })
       .addCase(fetchUsers.rejected, (state, action) => {
+        if (action.meta.arg.status !== state.requestedStatus) return;
         state.loading = false;
         state.error = action.payload as string;
       })

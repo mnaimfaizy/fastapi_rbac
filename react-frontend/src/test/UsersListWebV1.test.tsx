@@ -359,6 +359,23 @@ describe('UsersList (Web v1)', () => {
       );
     });
 
+    it('shows the loading state, not old rows, while a status change loads', async () => {
+      mockUserService.getUsers.mockResolvedValueOnce(pageOf(listUsers));
+      renderWithProviders(<UsersList />, { preloadedState: viewer(ADMIN) });
+      await screen.findByText('marcus@example.com');
+
+      mockUserService.getUsers.mockReturnValueOnce(new Promise(() => {}));
+      await pickFilter('Filter by status', 'Locked');
+
+      expect(
+        await screen.findByRole('status', { name: 'Loading users' })
+      ).toBeInTheDocument();
+      expect(screen.queryByText('marcus@example.com')).not.toBeInTheDocument();
+      expect(
+        screen.queryByText('No users match these filters')
+      ).not.toBeInTheDocument();
+    });
+
     it('does not list a lock whose window has passed under Locked', async () => {
       window.history.pushState({}, '', '/dashboard/users?status=Locked');
       const expired = makeUser({
