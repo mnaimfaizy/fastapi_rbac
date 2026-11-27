@@ -1,13 +1,9 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAppDispatch, useAppSelector } from '../../hooks/redux';
-import {
-  fetchPermissions,
-  deletePermission,
-  setPage,
-  setPageSize,
-} from '../../store/slices/permissionSlice';
-import { usePermissions } from '@/hooks/usePermissions';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Table,
   TableBody,
@@ -16,354 +12,287 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { MoreHorizontal, ChevronDown, Eye, Trash2 } from 'lucide-react';
-import { Permission } from '../../models/permission';
-import { RootState } from '../../store';
-import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { EmptyState } from '@/components/common/EmptyState';
+import { RowActionsMenu } from '@/components/common/RowActionsMenu';
+import { TableSkeleton } from '@/components/common/Skeletons';
+import { usePermissions } from '@/hooks/usePermissions';
+import { Permission } from '@/models/permission';
+import permissionService from '@/services/permission.service';
 
-interface SortState {
-  column: string | null;
-  direction: 'asc' | 'desc';
+const PAGE_CHUNK = 100;
+
+async function loadPermissions(): Promise<Permission[]> {
+  const collected: Permission[] = [];
+  let page = 1;
+  let total = 0;
+  do {
+    const response = await permissionService.getPermissions(page, PAGE_CHUNK);
+    const batch = response.data?.items ?? [];
+    total = response.data?.total ?? batch.length;
+    collected.push(...batch);
+    if (batch.length === 0) {
+      break;
+    }
+    page += 1;
+  } while (collected.length < total && page <= 50);
+  return collected;
 }
 
 export default function PermissionsDataTable() {
-  const dispatch = useAppDispatch();
-  const navigate = useNavigate();
-  const { permissions, isLoading, totalItems, page, pageSize } = useAppSelector(
-    (state: RootState) => state.permission
-  );
   const { hasPermission } = usePermissions();
-  const canViewPermission = hasPermission('permission.read');
-  const canDeletePermission = hasPermission('permission.delete');
+  const canDelete = hasPermission('permission.delete');
+  const [permissions, setPermissions] = useState<Permission[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [group, setGroup] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [deleteTarget, setDeleteTarget] = useState<Permission | null>(null);
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [sort, setSort] = useState<SortState>({
-    column: null,
-    direction: 'asc',
-  });
-  // Add state for delete confirmation dialog
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [deleteItemId, setDeleteItemId] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setPermissions(await loadPermissions());
+    } catch (err) {
+      setPermissions([]);
+      setError(
+        err instanceof Error ? err.message : 'Could not load permissions.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    dispatch(fetchPermissions({ page, pageSize }));
-  }, [dispatch, page, pageSize]);
+    void load();
+  }, [load]);
 
-  const handleSort = (column: string) => {
-    setSort((prev) => ({
-      column,
-      direction:
-        prev.column === column && prev.direction === 'asc' ? 'desc' : 'asc',
-    }));
-  };
-
-  const handlePageChange = (newPage: number) => {
-    dispatch(setPage(newPage));
-  };
-
-  const handlePageSizeChange = (newSize: number) => {
-    dispatch(setPageSize(newSize));
-    dispatch(setPage(1)); // Reset to first page when changing page size
-  };
-
-  const handleView = (id: string) => {
-    if (canViewPermission) {
-      navigate(`/dashboard/permissions/${id}`);
-    } else {
-      toast.error("You don't have permission to view details.");
+  const groupNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const permission of permissions) {
+      if (permission.group?.name) {
+        names.add(permission.group.name);
+      }
     }
-  };
+    return [...names].sort((a, b) => a.localeCompare(b));
+  }, [permissions]);
 
-  const openDeleteDialog = (id: string) => {
-    if (canDeletePermission) {
-      setDeleteItemId(id);
-      setIsDeleteDialogOpen(true);
-    } else {
-      toast.error("You don't have permission to delete.");
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return permissions.filter((permission) => {
+      if (group && permission.group?.name !== group) {
+        return false;
+      }
+      if (!query) {
+        return true;
+      }
+      return (
+        permission.name.toLowerCase().includes(query) ||
+        (permission.description ?? '').toLowerCase().includes(query)
+      );
+    });
+  }, [permissions, group, search]);
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const startIndex = (safePage - 1) * pageSize;
+  const rows = filtered.slice(startIndex, startIndex + pageSize);
+  const startItem = filtered.length === 0 ? 0 : startIndex + 1;
+  const endItem = Math.min(startIndex + pageSize, filtered.length);
+
+  async function confirmDelete() {
+    if (!deleteTarget) {
+      return;
     }
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (!deleteItemId) return;
-
     try {
-      await dispatch(deletePermission(deleteItemId)).unwrap();
-      toast.success('Permission deleted successfully');
-      dispatch(fetchPermissions({ page, pageSize }));
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
-      const errorMessage =
-        error?.response?.data?.detail ||
-        (error instanceof Error
-          ? error.message
-          : 'Failed to delete permission');
-      toast.error(errorMessage);
-    } finally {
-      setIsDeleteDialogOpen(false);
-      setDeleteItemId(null);
+      await permissionService.deletePermission(deleteTarget.id);
+      toast.success('Permission deleted');
+      setDeleteTarget(null);
+      await load();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : 'Failed to delete permission'
+      );
+      throw err;
     }
-  };
+  }
 
-  // Filter permissions based on search term (including group name)
-  const filteredPermissions = permissions.filter(
-    (permission: Permission) =>
-      permission.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (permission.description &&
-        permission.description
-          .toLowerCase()
-          .includes(searchTerm.toLowerCase())) ||
-      (permission.group &&
-        permission.group.name.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
-
-  // Sort permissions
-  const sortedPermissions = [...filteredPermissions].sort((a, b) => {
-    if (!sort.column) return 0;
-
-    // Use more specific types for sorting values
-    let aValue: string | undefined | null;
-    let bValue: string | undefined | null;
-
-    // Handle sorting by group name
-    if (sort.column === 'group') {
-      aValue = a.group?.name?.toLowerCase();
-      bValue = b.group?.name?.toLowerCase();
-    } else {
-      // Access properties safely, default to null if not string
-      const key = sort.column as keyof Permission;
-      const rawA = a[key];
-      const rawB = b[key];
-      aValue = typeof rawA === 'string' ? rawA.toLowerCase() : null;
-      bValue = typeof rawB === 'string' ? rawB.toLowerCase() : null;
-    }
-
-    // Comparison logic (handles null/undefined)
-    if (aValue === bValue) return 0;
-    if (aValue === null || aValue === undefined)
-      return sort.direction === 'asc' ? 1 : -1;
-    if (bValue === null || bValue === undefined)
-      return sort.direction === 'asc' ? -1 : 1;
-
-    // String comparison
-    return sort.direction === 'asc'
-      ? aValue.localeCompare(bValue)
-      : bValue.localeCompare(aValue);
-  });
-
-  // Calculate pagination values
-  const totalPages = Math.ceil(totalItems / pageSize);
-  const startItem = (page - 1) * pageSize + 1;
-  const endItem = Math.min(page * pageSize, totalItems);
+  if (loading) {
+    return <TableSkeleton label="Loading permissions" columns={4} />;
+  }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Input
-            placeholder="Search permissions..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="max-w-sm"
-          />
+    <div className="flex flex-col gap-4">
+      {error ? (
+        <p className="text-destructive text-sm" role="alert">
+          {error}
+        </p>
+      ) : null}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <Input
+          aria-label="Search permissions"
+          placeholder="Search codes or descriptions"
+          value={search}
+          onChange={(event) => {
+            setSearch(event.target.value);
+            setPage(1);
+          }}
+          className="max-w-sm"
+        />
+        <div className="text-foreground-secondary flex items-center gap-2 text-sm">
+          <span>Group</span>
+          <select
+            aria-label="Filter by group"
+            value={group}
+            onChange={(event) => {
+              setGroup(event.target.value);
+              setPage(1);
+            }}
+            className="border-input bg-card text-foreground h-9 rounded-md border px-3 text-sm"
+          >
+            <option value="">All</option>
+            {groupNames.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[250px]">
-                <Button
-                  variant="ghost"
-                  onClick={() => handleSort('name')}
-                  className="flex items-center gap-1 p-0 hover:bg-transparent"
-                >
-                  Name
-                  {sort.column === 'name' && (
-                    <ChevronDown
-                      className={`h-4 w-4 transition-transform ${
-                        sort.direction === 'desc' ? 'rotate-180' : ''
-                      }`}
-                    />
-                  )}
-                </Button>
-              </TableHead>
-              <TableHead className="w-[350px]">Description</TableHead>
-              <TableHead>
-                <Button
-                  variant="ghost"
-                  onClick={() => handleSort('group')}
-                  className="flex items-center gap-1 p-0 hover:bg-transparent"
-                >
-                  Group Name
-                  {sort.column === 'group' && (
-                    <ChevronDown
-                      className={`h-4 w-4 transition-transform ${
-                        sort.direction === 'desc' ? 'rotate-180' : ''
-                      }`}
-                    />
-                  )}
-                </Button>
-              </TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
+      {rows.length === 0 ? (
+        <EmptyState
+          title={
+            search.trim()
+              ? `No permissions match '${search.trim()}'`
+              : group
+                ? 'No permissions match this group'
+                : 'No permissions yet'
+          }
+          action={
+            search.trim()
+              ? {
+                  label: 'Clear search',
+                  variant: 'secondary',
+                  onClick: () => {
+                    setSearch('');
+                    setPage(1);
+                  },
+                }
+              : undefined
+          }
+        />
+      ) : (
+        <div className="rounded-lg border">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={4} className="h-24 text-center">
-                  Loading permissions...
-                </TableCell>
+                <TableHead>Code</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>Group</TableHead>
+                {canDelete ? (
+                  <TableHead className="w-12">Actions</TableHead>
+                ) : null}
               </TableRow>
-            ) : sortedPermissions.length > 0 ? (
-              sortedPermissions.map((permission) => (
+            </TableHeader>
+            <TableBody>
+              {rows.map((permission) => (
                 <TableRow key={permission.id}>
-                  <TableCell className="font-medium">
-                    {permission.name}
+                  <TableCell>
+                    <Link
+                      to={`/dashboard/permissions/${permission.id}`}
+                      className="text-foreground font-mono"
+                    >
+                      {permission.name}
+                    </Link>
                   </TableCell>
                   <TableCell>{permission.description}</TableCell>
-                  <TableCell>{permission.group?.name ?? 'N/A'}</TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                          <span className="sr-only">Open menu</span>
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        {canViewPermission && (
-                          <DropdownMenuItem
-                            onClick={() => handleView(permission.id)}
-                          >
-                            <Eye className="mr-2 h-4 w-4" />
-                            View details
-                          </DropdownMenuItem>
-                        )}
-                        {canDeletePermission && (
-                          <DropdownMenuItem
-                            onClick={() => openDeleteDialog(permission.id)}
-                            className="text-destructive focus:text-destructive"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
+                  <TableCell>{permission.group?.name ?? 'No group'}</TableCell>
+                  {canDelete ? (
+                    <TableCell>
+                      <RowActionsMenu
+                        label={`Actions for ${permission.name}`}
+                        actions={[
+                          {
+                            label: 'Delete',
+                            destructive: true,
+                            icon: <Trash2 aria-hidden="true" />,
+                            onSelect: () => setDeleteTarget(permission),
+                          },
+                        ]}
+                      />
+                    </TableCell>
+                  ) : null}
                 </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={4} className="h-24 text-center">
-                  No permissions found.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      {/* Delete Confirmation AlertDialog */}
-      <AlertDialog
-        open={isDeleteDialogOpen}
-        onOpenChange={setIsDeleteDialogOpen}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Permission</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this permission? This action
-              cannot be undone. Any roles using this permission will lose this
-              capability.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteConfirm}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Pagination */}
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-gray-500">
-          Showing {totalItems > 0 ? startItem : 0} to {endItem} of {totalItems}{' '}
-          permissions
-        </div>
-        <div className="flex items-center gap-2">
-          <select
-            value={pageSize}
-            onChange={(e) => handlePageSizeChange(parseInt(e.target.value))}
-            className="border p-1 rounded text-sm"
-          >
-            <option value={5}>5 per page</option>
-            <option value={10}>10 per page</option>
-            <option value={20}>20 per page</option>
-            <option value={50}>50 per page</option>
-          </select>
-          <div className="flex gap-1">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handlePageChange(page - 1)}
-              disabled={page === 1}
-            >
-              Previous
-            </Button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1)
-              .filter(
-                (p) => Math.abs(p - page) < 3 || p === 1 || p === totalPages
-              )
-              .map((p) => (
-                <Button
-                  key={p}
-                  variant={p === page ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => handlePageChange(p)}
-                >
-                  {p}
-                </Button>
               ))}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handlePageChange(page + 1)}
-              disabled={page === totalPages}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-foreground-secondary text-sm">
+          Showing {startItem}–{endItem} of {filtered.length} permissions
+        </p>
+        <div className="flex items-center gap-2">
+          <div className="text-foreground-secondary flex items-center gap-2 text-sm">
+            <span>Rows per page</span>
+            <select
+              aria-label="Rows per page"
+              value={pageSize}
+              onChange={(event) => {
+                setPageSize(Number(event.target.value));
+                setPage(1);
+              }}
+              className="border-input bg-card text-foreground h-9 rounded-md border px-2 text-sm"
             >
-              Next
-            </Button>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+            </select>
           </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-label="Previous page"
+            disabled={safePage <= 1}
+            onClick={() => setPage(safePage - 1)}
+          >
+            Previous
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-label="Next page"
+            disabled={safePage >= pageCount || filtered.length === 0}
+            onClick={() => setPage(safePage + 1)}
+          >
+            Next
+          </Button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteTarget(null);
+          }
+        }}
+        title={
+          deleteTarget
+            ? `Delete permission ‘${deleteTarget.name}’?`
+            : 'Delete permission?'
+        }
+        description="Roles that grant it will lose this action. This cannot be undone."
+        confirmLabel="Delete permission"
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }
