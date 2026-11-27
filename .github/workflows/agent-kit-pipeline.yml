@@ -63,7 +63,7 @@ jobs:
     permissions:
       contents: read
       issues: write
-    uses: mnaimfaizy/agent-kit/.github/workflows/agent-plan-reusable.yml@v1.0.0-beta.9
+    uses: mnaimfaizy/agent-kit/.github/workflows/agent-plan-reusable.yml@v1.0.0-beta.11
     with:
       kill_switch: ${{ vars.CLAUDE_AGENT_FLOW_ENABLED != 'true' || vars.CLAUDE_PLAN_ENABLED == 'false' }}
       model: ${{ vars.CLAUDE_PLAN_MODEL || vars.CLAUDE_MODEL || 'claude-opus-5-5' }}
@@ -87,7 +87,7 @@ jobs:
       issues: write
       pull-requests: write
       id-token: write
-    uses: mnaimfaizy/agent-kit/.github/workflows/agent-implement-reusable.yml@v1.0.0-beta.9
+    uses: mnaimfaizy/agent-kit/.github/workflows/agent-implement-reusable.yml@v1.0.0-beta.11
     with:
       kill_switch: ${{ vars.CLAUDE_AGENT_FLOW_ENABLED != 'true' || vars.CLAUDE_IMPLEMENT_ENABLED == 'false' }}
       model: ${{ vars.CLAUDE_IMPLEMENT_MODEL || vars.CLAUDE_MODEL || 'claude-opus-5-5' }}
@@ -179,7 +179,7 @@ jobs:
       issues: read
       pull-requests: write
       actions: write
-    uses: mnaimfaizy/agent-kit/.github/workflows/agent-review-reusable.yml@v1.0.0-beta.9
+    uses: mnaimfaizy/agent-kit/.github/workflows/agent-review-reusable.yml@v1.0.0-beta.11
     with:
       kill_switch: ${{ vars.CLAUDE_AGENT_FLOW_ENABLED != 'true' || vars.CLAUDE_REVIEW_ENABLED == 'false' }}
       model: ${{ vars.CLAUDE_REVIEW_MODEL || vars.CLAUDE_MODEL || 'claude-opus-5-5' }}

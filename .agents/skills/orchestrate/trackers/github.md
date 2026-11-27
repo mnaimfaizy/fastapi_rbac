@@ -2,7 +2,7 @@
 
 - **Id:** `github`
 - **Support Level:** `documented`. No Team Run has been recorded on GitHub yet; the first one that reaches its close-out moves it, citing its Activity Logs.
-- **Facts from:** the `gh` CLI, version 2.102.0, read on 2026-11-19 (`gh issue view --json`, `gh issue edit`, `gh pr view --json`, `gh repo view --json`, `gh label list --json`, `gh api user`, `gh api` for issue comments), and GitHub's REST API for sub-issues and issue dependencies, as [SPEC.md](../SPEC.md#read-the-spec) reads them, on 2026-11-13.
+- **Facts from:** the `gh` CLI, version 2.102.0, read on 2026-11-19 (`gh issue view --json`, `gh pr view --json`, `gh repo view --json`, `gh label list --json`, `gh api user`, `gh api` for issue comments), GitHub's REST API for issue labels (`POST repos/{owner}/{repo}/issues/{n}/labels`, `DELETE repos/{owner}/{repo}/issues/{n}/labels/{name}`), read on 2026-11-26, and GitHub's REST API for sub-issues and issue dependencies, as [SPEC.md](../SPEC.md#read-the-spec) reads them, on 2026-11-13.
 
 Every command runs from the repository root, with `gh` signed in as the teammate. `<owner>/<repo>` is `gh repo view --json nameWithOwner --jq .nameWithOwner`.
 
@@ -88,11 +88,13 @@ An edit of a comment that was deleted fails with `HTTP 404`: the row is re-creat
 ### `set-state`
 
 ```bash
-gh issue edit <n> --add-label "<new>" --remove-label "<old>" [--remove-label "<old>" …]
+gh api -X POST repos/<owner>/<repo>/issues/<n>/labels -f "labels[]=<new>"
+encoded="$(node -p 'encodeURIComponent(process.argv[1])' "<old>")"
+[ -n "$encoded" ] && { err="$(gh api -X DELETE "repos/<owner>/<repo>/issues/<n>/labels/$encoded" 2>&1)" || case "$err" in *"HTTP 404"*) ;; *) printf '%s\n' "$err" >&2; false ;; esac; }
 gh issue view <n> --json labels --jq '.labels[].name'
 ```
 
-The first adds the label for the ticket's coarse state and removes each other state label it carries, in one edit; a label the ticket does not carry is not named. The second reads the labels back. GitHub drops a label change silently, with no error, when the teammate has no Triage or Write access to the repository: when the read-back does not show exactly the new state label among the six, each name compared ignoring case and spaces at either end, as GitHub compares label names, the label write did not hold, and the row comment stays the record ([TEAM.md](../TEAM.md#states-and-labels)). `--add-label` with a label the repository does not have fails with an error, so a missing state label is never named here. `--add-label` and `--remove-label` split their value on commas, so a state label whose name has a comma cannot be set here: `gh` would name two labels, and the write does not hold, as above. `config.mjs check` does not refuse such a name, and the default `team.labels` have none.
+First adds the label for the ticket's coarse state with `POST`, then encodes each other state label it carries with Node (`encodeURIComponent`, so no standalone `jq` is needed) and removes it with `DELETE` only when `encoded` is non-empty (an empty path would hit `DELETE .../labels/`, which strips every label); a label the ticket does not carry is not named, and an `HTTP 404` on `DELETE` counts as already removed, not as a failure. Last, reads the labels back. GitHub drops a label change silently, with no error, when the teammate has no Triage or Write access to the repository: when the read-back does not show exactly the new state label among the six, each name compared ignoring case and spaces at either end, as GitHub compares label names, the label write did not hold, and the row comment stays the record ([TEAM.md](../TEAM.md#states-and-labels)). REST `POST .../labels` creates any named label the repository does not have, so `set-state` must still only ever name labels the repository already has.
 
 ### `pull-head`
 
@@ -107,6 +109,6 @@ The first gives the pull request's `state`, its head branch and its head commit.
 
 - `closedByPullRequestsReferences` lists the pull requests whose body closes the issue; a pull request that only mentions it is not listed. A merged pull request is still listed: on 2026-11-19, with `gh` 2.102.0, an issue closed by a merged pull request listed it, both in `gh issue view --json closedByPullRequestsReferences` and in the GraphQL field, with and without `includeClosedPrs: true`, which gave its `state` as `MERGED`. GitHub describes the field as listing open pull requests, and `includeClosedPrs` defaults to false, so one closed without being merged may be left out: it is not merged either way. The first Team Run that relies on `merged` records in its Activity Log what it returned.
 - The sub-issues and dependencies endpoints, as [SPEC.md](../SPEC.md#read-the-spec) says.
-- Whether `gh issue edit` exits non-zero when GitHub drops a label change ([#303](https://github.com/mnaimfaizy/agent-kit/issues/303)) is not confirmed, which is why `set-state` reads the labels back. The first Team Run that writes a state label records the read-back in its Activity Log.
+- Whether `gh api -X POST .../labels` exits non-zero when GitHub drops a label change ([#303](https://github.com/mnaimfaizy/agent-kit/issues/303)) is not confirmed, which is why `set-state` reads the labels back. The first Team Run that writes a state label records the read-back in its Activity Log.
 - That `PATCH` on a deleted comment fails with `HTTP 404`. The first Team Run that re-creates a deleted row records in its Activity Log what the edit printed.
 - The `row` filter reads the `body` of every comment on the ticket, page by page; not confirmed past a few hundred comments.

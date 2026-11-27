@@ -19,18 +19,50 @@
 # Decision Requests cell until that message is sent. An in-progress diff is
 # not delivery.
 #
-# The heartbeat on Cursor is a foreground watch. A turn cut by a human
-# message or by compaction still lets an in-flight watch append the activity
-# log, including a line whose time is earlier than the line above it. A late
-# line is not a new event.
+# The heartbeat on Cursor is a foreground watch. From v1.0.0-beta.11 it is
+# strictly read-only (inspection and stdout only) and fenced by a watch.gen
+# generation id, and --resume checks decisions.md, report.md, git, the
+# tracker and CI rather than acting on activity.md lines.
 #
-# Scenarios a QA Delegation leaves for a person are run by the human, or by
-# resuming that QA Delegation. The Chief of Staff does not start the QA Stack
-# to drive them. Driver facts for this API and this web app are in qa.config.yml.
+# QA (v1.0.0-beta.11). The Chief of Staff never runs QA scenarios itself.
+# In a `go autonomous` run, approving QA in the Dispatch Plan means QA asks
+# nothing mid-run: facts only the human knows are asked once in the plan, the
+# rest goes to "QA held for you". Scoped QA Delegations merge into one QA
+# Report per head. Scenarios left for a person are run by the human, or by
+# resuming that QA Delegation. Driver facts are in qa.config.yml.
 #
-# Writes. gh pr edit fails on this repository's classic Projects field. Add a
-# label and edit a pull-request body with gh api. routes.merge is unset: the
-# close-out prints no merge command, and the skill never merges.
+# Run Records. Every run writes Run Events, a Run Record and a live
+# board.html into run_dir (gitignored by tmp/; board.html holds Activity Log
+# prose). `records.sink` is the private GitHub repository
+# mnaimfaizy/orchestrate-run-records (sinks/github.md): close-out shows a
+# disclosure and offers the upload, with "Not now"; nothing uploads without a
+# yes. The upload goes ahead only while that repository is private. Access
+# comes from the gh login of whoever runs the skill, never from this file:
+# the uploader needs Contents: write there (naimfaizy-bot must be a
+# collaborator with push access). Records land at
+# records/github.com/mnaimfaizy/fastapi_rbac/<login>/<run-id>.json and are
+# kept until someone deletes them by hand. `/orchestrate --dashboard` reads
+# them back. `prune` is unset, so the first close-out asks once about pruning
+# at 90 days.
+#
+# models. Mirrors the CI model routing (the CLAUDE_*_MODEL and
+# CLAUDE_*_EFFORT repository variables) as Cursor CLI model ids, where the
+# effort is part of the id (`agent models` lists them): analysis = Plan,
+# Opus 5.5 Medium; build = Implement, Sonnet 5.5 High; review = Review,
+# Sonnet 5.5 High. qa has no CI flow; it uses Sonnet 5.5 High like build and
+# review. Security Audit (Fabel 5.2 High) and Review Response (Sonnet 5.5
+# Medium) are CI-only flows with no orchestrate role, so they stay in the
+# repository variables. On another harness, change these to its model names.
+#
+# regate. `config.mjs regate <sha> --out <file>` runs the commands below.
+# CI on main is green, so there are no allowed_failures and regate stays a
+# plain list; switch to the commands/allowed_failures mapping when a test
+# fails on main too.
+#
+# Writes. gh pr edit fails on this repository's classic Projects field. From
+# v1.0.0-beta.11 the skills write labels, bodies and assignees through gh api
+# REST (agent-kit#389), and pr-runner.sh already does. routes.merge is unset:
+# the close-out prints no merge command, and the skill never merges.
 #
 # Team Run (`/orchestrate --spec <n> --team`). Setup and how-to:
 # docs/agents/agent-kit.md#orchestrate-team-run.
@@ -50,13 +82,9 @@
 # the run otherwise asks to create them as the human (a Decision Request).
 # The gh label create commands are in docs/agents/agent-kit.md.
 #
-# set-state. trackers/github.md writes the state label with gh issue edit,
-# which reads the same classic Projects field: on 2026-11-19, gh 2.104.0,
-# `gh issue view --json projectCards` failed here with "Projects (classic)
-# is being deprecated". If gh issue edit fails the same way, write the label
-# with gh api instead (POST repos/mnaimfaizy/fastapi_rbac/issues/<n>/labels
-# -f "labels[]=<new>", then DELETE .../issues/<n>/labels/<old>, URL-encoded),
-# and read the labels back as set-state says.
+# set-state. trackers/github.md writes state labels with gh api REST
+# (add, then remove, then read back), so the classic Projects error that
+# gh issue edit hit here on 2026-11-19 no longer applies.
 #
 # This repository is public: Shared Board rows and state labels are
 # readable by anyone. Briefs, reports and the Ruling Ledger stay in run_dir.
@@ -96,3 +124,15 @@ team:
     ready_to_merge: "team: ready to merge" # Ready to Merge
     merged: "team: merged" # its pull request is merged
   recent_activity: 5 # milestones a Shared Board row keeps in its Recent activity list
+
+models:
+  analysis: claude-opus-5-5-medium # Plan: Opus 5.5 Medium
+  build: claude-sonnet-5-5-high # Implement: Sonnet 5.5 High
+  review: claude-sonnet-5-5-high # Review: Sonnet 5.5 High
+  qa: claude-sonnet-5-5-high # no CI flow; same as build and review
+
+records:
+  upload: offer # close-out offers the upload; nothing uploads without a yes
+  sink:
+    type: github
+    repo: mnaimfaizy/orchestrate-run-records # private; branch unset uses its default branch

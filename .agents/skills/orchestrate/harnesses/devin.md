@@ -16,11 +16,11 @@
 - `await`: the process's end; nothing announces it. The heartbeat is the foreground watch ([HARNESSES.md](../HARNESSES.md#waiting-an-event-and-a-heartbeat)): while the run waits on a Delegation, the Chief of Staff does not end its turn, and the process's end is one more change the watch sees.
 - `report`: the absolute path, when the approved permission mode lets it write there; else its last message.
 - Analysis: a background `subagent_explore`, or a custom read-only profile with `model:` set; its end is announced. It shares the Chief of Staff's checkout.
-- A QA Delegation: a Desktop session the human starts in the worktree on the brief, where the human types `/qa-plan <n> [--answers <working_dir>/qa-readiness.json]` and later `/manual-qa <plan file>`. With `go`, that is the typed route; with `go autonomous`, on a `stack` target, the same session follows its brief instead, reading each QA skill's `SKILL.md` from the paths the brief gives, so no command is sent or typed. A `url` target stays on the typed route.
+- A QA Delegation: a Desktop session the human starts in the worktree on the brief, where the human types `/qa-plan <n> [--answers <working_dir>/qa-readiness.json]` and later `/manual-qa <plan file>`. With `go`, that is the typed route; with `go autonomous`, on a `stack` or a `url` target, the same session follows its brief instead, reading each QA skill's `SKILL.md` from the paths the brief gives, so no command is sent or typed. A `url` target runs from the brief too, with its hosts typed in the Dispatch Plan and relayed through the brief.
 
 ## Limits
 
-- On the typed route (with `go`, or a `url` target), every QA Delegation is a session the human starts and types the two commands in, until a run shows a headless run can take them.
+- On the typed route (with `go`), every QA Delegation is a session the human starts and types the two commands in, until a run shows a headless run can take them.
 - Devin documents `.claude/skills` in the project, not `~/.claude/skills`.
 - Desktop sessions in their own worktree can be opened and talked to, but only the human can start one.
 - The human cannot open a headless run while it works.
@@ -28,6 +28,7 @@
 
 ## Check before use
 
+- Whether a QA session accepts a host relayed through its brief: that it checks it again with `adapter.mjs host` before any sign-in, and holds its scenarios (never asks) when it refuses it. A harness whose session does not holds every scenario of a `url` target. Record what was found.
 - How long a foreground shell command, and a turn, may run, since the foreground watch depends on both. A shell tool's own time limit could cut the watch short (not yet confirmed).
 - That `-p` combines with `-r` for a follow-up, and how a run reports its session id.
 - What `-p` does when a tool call needs approval.

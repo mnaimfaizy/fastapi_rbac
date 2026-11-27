@@ -1,6 +1,6 @@
 ---
 name: security-audit
-description: Medium+ threat-led security audit for a repository (`full` or `pr`) with private delivery requirements and no auto-fix.
+description: Medium+ threat-led security audit for a repository (`full`, `pr` or `deep`) with private delivery requirements and no auto-fix.
 disable-model-invocation: true
 metadata:
   agent-kit-scope: repo
@@ -16,6 +16,7 @@ Report shape: [report-format.md](report-format.md)
 
 - `full`: whole repository, optionally narrowed by path
 - `pr`: diff vs base plus adjacent call sites
+- `deep`: a Deep scan, which also builds, runs and probes the repository's own code inside a sandbox. Its procedure is [DEEP.md](DEEP.md), read only in `deep` mode.
 
 `pr` mode does not file dependency-advisory findings.
 
@@ -28,6 +29,7 @@ Report shape: [report-format.md](report-format.md)
 ## Contract rules
 
 - Severity floor is Medium.
+- Never deliver a runnable exploit: no payload, script, request body or step-by-step recipe goes into the report or the draft advisory, not even privately.
 - Never include finding bodies in public logs, artifacts, or public issues.
 - Deliver full findings privately, as a draft security advisory (GHSA), which the kit contract requires. In CI the reusable workflow files the draft advisory from this report. By hand, nothing files it for you: file the draft advisory yourself, and keep the report out of anywhere public.
 - `pr` public comments, when used, are counts only.

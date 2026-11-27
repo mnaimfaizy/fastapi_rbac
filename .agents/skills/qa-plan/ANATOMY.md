@@ -21,14 +21,14 @@ A plan is one Markdown file. Its first line is the marker, then the title, then 
 No other `##` section. A section with nothing to say says so in one line (`None.`); it is never dropped.
 
 ```markdown
-<!-- qa-plan format=3 subject=#118 pr=#130 -->
+<!-- qa-plan format=4 subject=#118 pr=#130 -->
 
 # QA Plan: <the subject issue's title>
 ```
 
 The marker is how a revision finds the plan it replaces (on a tracker issue or a PR comment) and how `manual-qa` recognises a plan. `format` is this file's version; `subject` and `pr` are the anchors below.
 
-The composer writes `format=3`. This copy reads `format=1`, `format=2` and `format=3`, and refuses any other `format`, so a stale copy stops on a newer plan rather than ignoring a field it does not know. A `format=1` plan carries no per-scenario field: a scenario's [**Surface:**](#scenarios) and **Observes:** are `format=2` or later. A `format=2` plan carries no **Capture:** or **Expected before:**: they are `format=3` or later. The plan check refuses a field in a plan whose format is older than the field, naming the field and the format it needs.
+The composer writes `format=4`. This copy reads `format=1`, `format=2`, `format=3` and `format=4`, and refuses any other `format`, so a stale copy stops on a newer plan rather than ignoring a field it does not know. A `format=1` plan carries no per-scenario field: a scenario's [**Surface:**](#scenarios) and **Observes:** are `format=2` or later. A `format=2` plan carries no **Capture:** or **Expected before:**: they are `format=3` or later. A `format=3` plan carries no **Story:**: it is `format=4` or later. The plan check refuses a field in a plan whose format is older than the field, naming the field and the format it needs.
 
 ### First-word values
 
@@ -97,8 +97,10 @@ The **Residue**: only what a passing CI run does not establish. One `###` headin
 - **Sessions:** in place of **Signs in as:**, only in a scenario that needs two or more people signed in at once: `A = <id>, B = <id>`, one per [Session](#sessions). A scenario carries **Signs in as:** or **Sessions:**, never both and never neither.
 - **Creates:** only in a scenario that creates an account during the run, so a later scenario can sign in as it. The id of each [Scenario account](#scenario-accounts) it creates, then prose.
 - **Surface:** when this scenario drives another surface than the Run brief's **Surface:** (one that repeats the Run brief's is accepted and changes nothing), chosen from what its expected result must observe: a response header, a cookie's attributes (`HttpOnly`), a status code or a response body is seen on `api`; rendered copy, a flow or a layout on `web`; the app itself on `desktop` or `mobile`. One of `web`, `desktop`, `mobile` or `api`, as a [first-word value](#first-word-values), right after the scenario's sign-in field (Signs in as or Sessions, then Creates when present) and before its steps, once at most. It overrides the Run brief's for this scenario only; a scenario without one drives the Run brief's. `format=2` or later.
-- **Observes:** only when the expected result needs something not every driver of its surface can see: in practice a response header, an `HttpOnly` cookie or a local file. One or more of `headers`, `cookies`, `httponly-cookies`, `status`, `body`, `screen`, `local-file`, read as **Creates:**'s ids are ([Scenario accounts](#scenario-accounts)): joined by commas, and any other space, a semicolon, a colon or a parenthesis ends the list, the rest prose. The plan check refuses any other value, naming it. Right after the scenario's **Surface:**, or after its sign-in field (Signs in as or Sessions, then Creates when present) when it has none, and before its steps, once at most. `manual-qa` leaves the scenario for a person when no one driver here observes all of them. Whether a driver can see a value is checked at run time, against what that run has, not by the plan check: a value no driver of the scenario's surface sees still passes the check. `format=2` or later.
+- **Service:** only on a scenario for a hosted (`url`) target that tests a named service of its own, such as `billing`, in place of its surface's address. A service name: letters, digits, `_` and `-`, as a [first-word value](#first-word-values). Right after the scenario's **Surface:**, or after its sign-in field (Signs in as or Sessions, then Creates when present) when it has none, and before its steps, once at most. A scenario without one uses the run's entry for its surface. The name is the `name` of an entry in the config's `run.hosts` list or in the hosts the run confirmed; the plan check reads only its shape, and `manual-qa` leaves the scenario for a person when the run has no such service. The plan never holds an address: a URL in a plan is not confirmation. `format=2` or later.
+- **Observes:** only when the expected result needs something not every driver of its surface can see: in practice a response header, an `HttpOnly` cookie or a local file. One or more of `headers`, `cookies`, `httponly-cookies`, `status`, `body`, `screen`, `local-file`, read as **Creates:**'s ids are ([Scenario accounts](#scenario-accounts)): joined by commas, and any other space, a semicolon, a colon or a parenthesis ends the list, the rest prose. The plan check refuses any other value, naming it. Right after the scenario's **Surface:**, or after its sign-in field (Signs in as or Sessions, then Creates when present) when it has none, and before its steps, once at most. `manual-qa` leaves the scenario for a person when no one driver here observes all of them. Whether a driver can see a value is checked at run time, against what that run has, not by the plan check: a value no driver of the scenario's surface sees still passes the check, unless no single Surface's drivers can observe all of them (`status` and `screen`, say), which the plan check refuses and says to split into one scenario per Surface. `format=2` or later.
 - **Capture:** what evidence the run keeps for this scenario, as a [first-word value](#first-word-values): `screenshot`, `video`, `transcript` or `none`. Prose may follow the word. `transcript` is for a scenario whose surface (its own **Surface:**, else the Run brief's) is `api`; `screenshot` and `video` are for one with a screen, never `api`; `none` is for any. Missing, it means `screenshot` on a screen surface and `transcript` on `api`. Right after the scenario's **Observes:**, or wherever **Observes:** would sit when it has none (after **Surface:**, else after the sign-in field), and before its steps, once at most. The plan check refuses any other value, or one the scenario's surface does not take, naming it. `format=3` or later.
+- **Story:** the scenario's story, as a numbered list with one sentence per [Scene](#scenes-and-cuts), in order: the sentence that opens each Scene of its video on a Title card, and heads that Scene's steps in its Storyboard. In the product's own words, under the same public-text rules as **Expected result:**, and read as plain text: the plan reader strips paired inline Markdown, so `**Members**` shows as Members. A single-session scenario is one Scene, so its Story is one sentence. In a multi-session scenario, each step whose `In session <name>,` differs from the previous step's is a Cut and starts a new Scene. A Scene that opens a Session signed in as a [Scenario account](#scenario-accounts) says the person is already signed in, since that sign-in is never on camera. Right after the scenario's **Capture:**, or wherever **Capture:** would sit when it has none, and before its steps, once at most. The plan check refuses a Story whose sentence count differs from the Scenes its steps make, naming the scenario and both counts, and a `Capture: video` scenario without one. `format=4` or later: a `format=3` or older plan's `Capture: video` scenario carries no Story, and still reads.
 - **Steps:** a numbered list. Each step quotes the real label, button text or copy from the source (`Click **Save changes**`), never an imagined one. A step is a product action, never a shell command, and the plan check reports one as it does in [Setup](#setup): a promise that only a command can observe is either observable through the product surface, or it is not Residue.
 - **Expected result:** what the tester sees when it works, in the product's own words. Write it as a comparison between product outputs, or a value the product itself shows during the run; never a number or default read from source or a config file, since the stack the plan runs on may set it differently. For example: the session lifetime on **Settings** equals the one on **Profile**, not: the session lifetime is `144000` minutes.
 - **Expected before:** only in a [fix scenario](#fix-scenarios): what the tester sees at the merge-base, where the change is not yet made. In the product's own words, under the same rules as **Expected result:**. Right after **Expected result:**, once at most. `format=3` or later.
@@ -161,16 +163,32 @@ A **Session** is one signed-in identity, with cookies and storage no other sessi
 - Every numbered step starts `In session <name>,` (or `In <name>,`), naming a declared session. The steps run one at a time, in order. A step's own nested list is prose.
 - Every session signs in at the one address the run checked. Tabs in one browser profile share cookies, so they are not separate sessions; `manual-qa` leaves the scenario for a person when it has no driver that keeps each session apart.
 
+#### Scenes and Cuts
+
+A multi-session scenario's steps tell one story across its Sessions, and its video follows them in order. A run of consecutive steps in one Session is a **Scene**. A step whose Session is not the previous step's is a **Cut**: the story moves to that Session there, and a new Scene starts. A single-session scenario is one Scene. The scenario's **Story:** carries one sentence per Scene, in order ([Scenarios](#scenarios)).
+
+- **At each Cut, show the new Session's on-screen result before the story moves on.** A Scene ends on what its person sees, never on a click: the admin's confirming screen after the action, the page the user lands on after a reload. Give that result a step of its own, so the Storyboard gives it a row. This is the plan author's judgement; no check reads it.
+- **A Scene that opens a Session signed in as a [Scenario account](#scenario-accounts)** has a sentence that says the person is already signed in. A Scenario account's values never go into the evidence, so its sign-in is never on camera, and its Scene opens after it. A role's sign-in plays on camera before the first step, so its sentence may say the person signs in, as S3's first does; the sign-in is never a step of its own.
+- **An `api`-shaped promise whose product has a screen gets a sibling.** When a promise reads as an `api` one (a status code, a response body) and a person also meets it on a screen, such as a revoked session the user sees as the sign-in page, keep the `api` scenario and add a sibling `Surface: web`, `Capture: video` multi-session scenario that tells the story on screen. The sibling earns its Residue place only by what the screen shows (the page the user lands on, the copy the admin reads), never by the status code or body the `api` scenario already proves.
+
+Here an admin ends a user's session. The story has four beats: the user is signed in, the admin's confirming screen, the user reloads, and the user lands on the sign-in page. It makes three Scenes (A, B, A), so the Story has three sentences:
+
 ```markdown
 ### S3: An admin's password reset ends the user's session
 
 - **Why only a human can prove it:** …
 - **Sessions:** A = `user`, B = `admin`
+- **Capture:** `video`
+- **Story:**
+  1. The user signs in and opens their profile.
+  2. The admin signs in, sets a new password for the user, and sees it saved.
+  3. The user reloads their profile and lands on the sign-in page.
 - **Steps:**
   1. In session A, open **Profile**.
-  2. In session B, open **Users**, pick the user, and click **Set password**.
+  2. In session B, open **Users**, pick the user, click **Set password**, and see **Password updated**.
   3. In session A, reload **Profile**.
-- **Expected result:** session A shows **Sign in to continue**; session B still shows **Users**.
+  4. In session A, see the page it lands on.
+- **Expected result:** session A shows **Sign in to continue**; session B shows **Password updated**.
 - …
 ```
 
@@ -179,6 +197,8 @@ A **Session** is one signed-in identity, with cookies and storage no other sessi
 One unticked box per scenario (`- [ ] S1: <what is verified>`), plus one per Setup step a person must confirm, plus one `Review:` box per promise only reading can check. Ticked by whoever runs the plan, except a `Review:` box, which the person who reads it ticks.
 
 A promise only reading can check (the copy of a doc, a static file the app does not serve, a code comment) has no surface to drive, so it is not a scenario. It is a box: `- [ ] Review: <what to read, and what it must say>`, such as `- [ ] Review: docs/x.html says the token lasts 30 days`. The text after `Review:` is required, and `Review:` is written exactly, with a space after it: the plan check reports a box that reads as one but is not (`review:`, `**Review:**`, `Review:docs`), since as an ordinary box it would reach no one.
+
+A box also says **where** a person checks it, its Place, drawn from the config's `report.places` (`local`, `staging` and `production` by default; ADR 0033): `- [ ] Review: [<place>] <what to read, and what it must say>`, such as `- [ ] Review: [local] docs/x.html says the token lasts 30 days`. The Place is one lowercase word in brackets right after `Review:`, and the plan check refuses a box whose Place is not in the list. A box with no Place, from a plan made before Places, is read as the first Place that holds a merge; `qa-plan` always writes one. A Place that holds a merge (`local` by default) counts as left for a person in the posted QA Report; the others are deferred and never hold. With Places turned off, the box carries no Place.
 
 - A `Review:` box is no scenario's box: each scenario still needs its own.
 - `manual-qa` runs nothing for one. It is never a Results row or a PASS: the QA Report's **Follow-ups** lists each open one for a person.

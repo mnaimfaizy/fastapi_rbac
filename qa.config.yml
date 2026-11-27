@@ -27,30 +27,41 @@
 # Context from the 2026-11-19 run on pull request 403. These are comments:
 # the checker refuses an unknown key, and a comment does not change a run.
 #
-# run.surface is one word: web, desktop, mobile or api. This file says web.
-# A scenario may name its own Surface once. One scenario cannot be both api
-# and web, and Capture transcript is refused on a screen surface. That gap is
-# agent-kit#378. A multi-session MP4 follows the one session `proves` names, so it
-# never cuts to the other person: agent-kit#377.
+# Agent-kit v1.0.0-beta.11 (QA Plans are format=4; re-plan older plans).
+#
+# run.surface lists [api, web]: QA here covers both the API and the UI. Each
+# scenario still drives one Surface, and a promise that needs both is planned
+# as two scenarios (agent-kit ADR 0045); a mixed-Surface scenario is refused.
+# A multi-session MP4 now cuts between Sessions in Scenes (a scenario's
+# **Story:**), so it shows the other person too.
 #
 # API. Mutating routes need X-CSRF-Token set to the unsigned token in
 # data.csrf_token from GET /api/v1/auth/csrf-token. The fastapi-csrf-token
 # cookie is the signed token and is HttpOnly (backend/app/api/v1/endpoints/auth.py,
-# get_csrf_token). http.mjs can send {{cookie:name}} and can record a response
-# header. It cannot copy a JSON field into the next request, so it cannot
-# drive a mutating call on this API. POST /api/v1/auth/login is limited to
-# 5/minute (auth.py). A burst of sign-ins returns 429, which is the limiter,
-# not the change under test.
+# get_csrf_token). http.mjs sends it with {{cookie:name}} and copies the
+# body's token into the next request with {{json:<n>:data.csrf_token}}, so an
+# api scenario can drive a mutating call. POST /api/v1/auth/login is limited
+# to 5/minute (auth.py). A 429 with Retry-After of 60 seconds or less retries
+# the scenario once; a longer wait leaves it for a person. Plan sign-ins so a
+# run stays under the limit.
 #
-# Web. web.mjs loads Playwright from the package.json of its working directory
-# (manual-qa adapter.mjs findPlaywright). This repository's package.json is
-# react-frontend/package.json, not the root. Run the driver with that working
-# directory. The page origin is http://localhost:3000. The CSRF cookie is
-# SameSite=lax, and a document on 127.0.0.1 is a different site from
-# localhost, so the cookie is not sent. The API is published on
+# Web. run.playwright points web.mjs, storyboard.mjs and mp4.mjs at
+# react-frontend/package.json, where Playwright is installed; evidence paths
+# stay relative to the repository root. The page origin is
+# http://localhost:3000 (run.stack.address, since `up` prints none). The CSRF
+# cookie is SameSite=lax, and a document on 127.0.0.1 is a different site
+# from localhost, so the cookie is not sent. The API is published on
 # http://127.0.0.1:8000 and http://localhost:8000. web.mjs blocks a document
 # navigation that leaves the page origin; an XHR to the API on the same host
-# is allowed. `up` prints no address.
+# is allowed.
+#
+# Machine-local defaults, not keys: on the bot PC the QA Stack's ports are
+# bound to 127.0.0.1 through local compose overrides, scenarios run in
+# parallel on up to 4 CPUs with short waits (web.mjs waits default to 5 s).
+#
+# report.places tags each item a posted QA Report leaves for a person. There
+# is no staging environment, so the Places are local and production; only
+# local holds a merge, and production items are deferred to release checks.
 
 working_dir: tmp/qa # gitignored
 
@@ -72,12 +83,14 @@ plan:
 
 run:
   target: stack
-  surface: web
+  surface: [api, web]
+  playwright: react-frontend
   stack:
     up: "node scripts/qa/prepare-stack.mjs && docker compose -f backend/docker-compose.dev.yml -f backend/docker-compose.qa.yml up -d --wait fastapi_rbac_dev && docker compose -f react-frontend/docker-compose.dev.yml up -d --wait"
     migrate: "docker exec fastapi_rbac_dev alembic upgrade head"
     seed: "docker exec fastapi_rbac_dev python app/initial_data.py && docker exec fastapi_rbac_dev python -m app.qa_accounts seed"
     down: "docker compose -f react-frontend/docker-compose.dev.yml down && docker compose -f backend/docker-compose.dev.yml -f backend/docker-compose.qa.yml down"
+    address: http://localhost:3000
   accounts:
     print: "docker exec fastapi_rbac_dev python -m app.qa_accounts print"
     restore: "docker exec fastapi_rbac_dev python -m app.qa_accounts seed --restore --account {id}"
@@ -90,3 +103,7 @@ run:
         purpose: "an ordinary user who manages only their own profile"
   evidence:
     upload: none
+
+report:
+  places: [local, production]
+  holds: [local]

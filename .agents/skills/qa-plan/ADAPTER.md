@@ -50,7 +50,8 @@ Tabs, anchors, aliases, multi-line scalars, flow collections that span lines, es
 | `plan.publish`  | working copy | Where a confirmed plan goes. See below.                                                                                                                               |
 | `plan.tracker`  | `none`       | `github`, or `none`. `none` keeps every plan in the working copy, whatever `publish` says. A `tracker-issue` or `pr-comment` rule with no `tracker` set is a problem. |
 | `hazards`       | none         | Hazard packs, as `{ pack: <path> }`. See below.                                                                                                                       |
-| `run`           | none         | `manual-qa`'s section. `check --for plan` does not check it; `manual-qa`'s `ADAPTER.md` documents it, and `check --for run` checks it.                                |
+| `run`           | none         | `manual-qa`'s section. `check --for plan` does not check it; `manual-qa`'s `ADAPTER.md` documents its keys, and `check --for run` checks it.                          |
+| `report`        | see below    | The Places a QA Report's items left for a person are tagged with, and which of them hold a merge. See [Places](#places).                                              |
 
 ### `plan.suites` entries
 
@@ -85,6 +86,21 @@ A list; the **first rule that matches wins**. Each rule has exactly one matcher 
 | `label`      | `tracker-issue` only: a label for the issue it creates.                                                                                                                                           |
 
 With no rule matching, or no `publish` key, the plan stays in the working copy. `node "<skill>/adapter.mjs" delivery --label <label> …` prints the target for a subject's labels, and which rule chose it.
+
+## Places
+
+An item left for a person (a `Review:` box in the plan) carries a **Place**: where a person checks it. `qa-plan` writes each box as `Review: [<place>] <text>`, picking the Place from this list, and `adapter.mjs plan` refuses a box whose Place is not in it. `manual-qa` posts the items under their Places, and counts the ones in a Place that holds a merge as `left-for-person` in the posted header, and the rest as `deferred` (ADR 0033).
+
+```yml
+report:
+  places: [local, staging, production] # lowercase words; or `none` to turn Places off
+  holds: [local] # the Places that hold a merge; the others are deferred
+```
+
+- **Default:** with no `report` key, the Places are `local` (holds a merge), `staging` and `production` (deferred).
+- **Rename or add:** list your own in `places` and name the ones that hold in `holds`, which must then be given and be a non-empty subset of `places`. With only `holds`, it picks among the defaults.
+- **Turn off:** `places: none`. Items are untagged (`Review: <text>`, `- <text>`), and all of them hold a merge. `holds` is then a problem.
+- **A Place is one lowercase word** (letters, digits and `-`), so `[<place>]` reads back unambiguously.
 
 ## Readiness check
 

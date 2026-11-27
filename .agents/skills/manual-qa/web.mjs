@@ -21,13 +21,18 @@
 //     about (its box), that element's visible text, the Session and the time.
 //     A still is withheld while a password field, or any field holding a
 //     sign-in value, has a value, or while a sign-in value is on the screen.
-//   - With `--video`, a video per Session, Playwright's own `webm`.
+//   - With `--video`, a video per Session, Playwright's own `webm`, made to look
+//     like a person working: a literal value is typed key by key, and a pointer
+//     marker moves to each click target before the click. A `{{env:QA_…}}` value
+//     is still filled in one go, masked first, and the pointer is taken out of
+//     the page for every still, so no still and no crop changes.
 //
-//   Playwright is the repository's own, loaded from its `node_modules`; this
-//   driver never installs it, and Agent-kit takes no dependency on it.
+//   Playwright is the repository's own, loaded from `run.playwright` (or
+//   `--playwright-dir`), else its root `node_modules`; this driver never installs
+//   it, and Agent-kit takes no dependency on it.
 //
 // CLI (run from the repository root)
-//   node web.mjs run <sequence.json> --base <address> --out <dir> [--video]
+//   node web.mjs run <sequence.json> --base <address> --out <dir> [--video] [--playwright-dir <dir>]
 //
 //   Exit 0: every action completed. Exit 1: the sequence was refused (nothing
 //   run), or an action did not complete (the step file holds every step up to
@@ -38,7 +43,7 @@ import { mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSy
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { findPlaywright } from "./adapter.mjs";
+import { resolvePlaywright } from "./adapter.mjs";
 import { Redactor, encodedForms } from "./http.mjs";
 
 /** The actions a sequence can hold, each with the other keys it may carry. */
@@ -80,6 +85,25 @@ const popupWhy = (n) =>
   "without following; drive that step with a browser tool";
 /** How long the driver waits after the last action for a late tab or window. */
 export const SETTLE_MS = 500;
+/** With `--video`, the pause after each key of a literal value typed key by key. */
+export const KEY_DELAY_MS = 60;
+/** With `--video`, a literal value's key pauses add up to at most this: a long one types faster. */
+export const TYPING_BUDGET_MS = 3_000;
+/** With `--video`, how long the pointer takes to move to a click target. */
+const POINTER_MOVE_MS = 400;
+/** The element id of the pointer marker drawn into each Session's page with `--video`. */
+export const POINTER_ID = "agent-kit-qa-pointer";
+const POINTER_SIZE = 22;
+/** The input types a literal is typed into key by key with `--video`: the text-like ones. */
+const TYPED_INPUTS = ["text", "search", "email", "url", "tel", "number"];
+/**
+ * A literal typed key by key: printable keyboard characters only. A line break would
+ * press Enter (and could submit a form mid-fill), and a character off the keyboard
+ * arrives with no key event, so such a value is filled in one go, as without `--video`.
+ */
+const TYPABLE = /^[\x20-\x7e]+$/;
+/** With `--video`, the time allowed for each key on top of its pause, in a typing's bound. */
+const PER_KEY_SLACK_MS = 5;
 const VIEWPORT = { width: 1280, height: 720 };
 const MIN_SECRET_LENGTH = 4;
 
@@ -353,6 +377,106 @@ async function mask(page, values) {
       .catch(() => {});
 }
 
+// ── With --video: a person at work ─────────────────────────────────────────
+
+/**
+ * Draws the pointer marker at `x, y` (its centre, in viewport pixels), adding it when
+ * the page has none, and moves it there over `ms`. It is a fixed, see-through ring
+ * the page cannot click or read: `aria-hidden`, no text, no pointer events, and
+ * on `<html>`, outside `<body>`, so it changes no layout, no element's box and no
+ * text a step records. Runs in the page.
+ * @param {[string, number, number, number, number]} args id, x, y, ms, size
+ */
+function placePointer([id, x, y, ms, size]) {
+  let marker = document.getElementById(id);
+  const at = (left, top) =>
+    `translate(${Math.round(left - size / 2)}px, ${Math.round(top - size / 2)}px)`;
+  if (!marker) {
+    marker = document.createElement("div");
+    marker.id = id;
+    marker.setAttribute("aria-hidden", "true");
+    const style = {
+      all: "initial",
+      position: "fixed",
+      left: "0",
+      top: "0",
+      width: `${size}px`,
+      height: `${size}px`,
+      "box-sizing": "border-box",
+      "border-radius": "50%",
+      border: "3px solid #fff",
+      background: "rgba(220, 38, 38, 0.55)",
+      "box-shadow": "0 0 0 1px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.45)",
+      "pointer-events": "none",
+      "z-index": "2147483647",
+      display: "block",
+      transform: at(x, y),
+    };
+    for (const [key, value] of Object.entries(style))
+      marker.style.setProperty(key, value, "important");
+    document.documentElement.append(marker);
+    return;
+  }
+  // Commit where it is now, so the move below animates from there.
+  marker.getBoundingClientRect();
+  marker.style.setProperty(
+    "transition",
+    ms ? `transform ${ms}ms ease-in-out` : "none",
+    "important",
+  );
+  marker.style.setProperty("transform", at(x, y), "important");
+}
+
+/**
+ * The pointer for one Session's page, with `--video` only: drawn after every action,
+ * moved to each click target before the click, and taken out of the page for every
+ * still. Drawing is best-effort: a page that is navigating or refuses the element
+ * leaves the video without a pointer for a moment, and the action runs as before.
+ * @param {any} page
+ */
+function pointerFor(page) {
+  let x = VIEWPORT.width / 2;
+  let y = VIEWPORT.height / 2;
+  const draw = (ms = 0) =>
+    page.evaluate(placePointer, [POINTER_ID, x, y, ms, POINTER_SIZE]).catch(() => {});
+  return {
+    draw: () => draw(),
+    /** Moves to the target's centre, scrolling it into view as the click would. */
+    async moveTo(target) {
+      // Only a target that is there now: a missing, hidden or ambiguous one is left
+      // to the click, which fails with its own error, after its own wait.
+      const box = await target
+        .isVisible()
+        .then((visible) =>
+          visible ? target.scrollIntoViewIfNeeded().then(() => target.boundingBox()) : null,
+        )
+        .catch(() => null);
+      if (!box) return;
+      await draw();
+      x = box.x + box.width / 2;
+      y = box.y + box.height / 2;
+      await draw(POINTER_MOVE_MS);
+      await page.waitForTimeout(POINTER_MOVE_MS);
+    },
+    /** Takes the marker out of the page for a still; false when that could not be confirmed. */
+    hide: () =>
+      page
+        .evaluate((id) => {
+          document.getElementById(id)?.remove();
+          return document.getElementById(id) === null;
+        }, POINTER_ID)
+        .catch(() => false),
+  };
+}
+
+/**
+ * The pause after each key of a literal value typed with `--video`: `KEY_DELAY_MS`,
+ * shortened for a long value so its pauses add up to at most `TYPING_BUDGET_MS`.
+ * @param {string} text
+ */
+export const keyDelay = (text) =>
+  Math.min(KEY_DELAY_MS, Math.floor(TYPING_BUDGET_MS / Math.max(text.length, 1)));
+
 /** Whether a page's address is the checked one (or the blank page a context opens on). */
 const onAddress = (url, origin) => {
   if (url === "about:blank") return true;
@@ -362,6 +486,87 @@ const onAddress = (url, origin) => {
     return false;
   }
 };
+
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+const hostnameOf = (url) => url.hostname.toLowerCase().replace(/\.$/, "");
+
+/**
+ * Returns the trimmed `Retry-After` header value from a Playwright Response, or
+ * null when absent or blank.
+ * @param {any} response
+ * @returns {string | null}
+ */
+function retryAfterHeader(response) {
+  const headers = typeof response?.headers === "function" ? response.headers() : null;
+  if (!headers || typeof headers !== "object") return null;
+  for (const [k, v] of Object.entries(headers))
+    if (k.toLowerCase() === "retry-after" && typeof v === "string" && v.trim() !== "")
+      return v.trim();
+  return null;
+}
+
+/**
+ * Extracts a rate-limit record if `response` is a `429`, or a `503` with
+ * `Retry-After`; returns null for any other HTTP status (never reads body).
+ * @param {any} response
+ * @param {{session: string, step: number | null, redact: Redactor}} context
+ */
+export function rateLimitEntry(response, { session, step, redact }) {
+  const status = typeof response?.status === "function" ? response.status() : null;
+  if (status !== 429 && status !== 503) return null;
+  const rawRetryAfter = retryAfterHeader(response);
+  if (status === 503 && rawRetryAfter === null) return null;
+  const req = typeof response.request === "function" ? response.request() : null;
+  const method = typeof req?.method === "function" ? req.method() : "GET";
+  const rawUrl = typeof req?.url === "function" ? req.url() : "";
+  let host = "";
+  let path;
+  try {
+    const parsed = new URL(rawUrl);
+    host = parsed.host;
+    path = `${parsed.pathname}${parsed.search}`;
+  } catch {
+    path = rawUrl;
+  }
+  return {
+    session,
+    step,
+    method,
+    host: redact.text(host),
+    path: redact.text(path),
+    status,
+    retryAfter: rawRetryAfter !== null ? redact.text(rawRetryAfter) : null,
+  };
+}
+
+/**
+ * If a page at a loopback address calls another loopback host spelled differently
+ * (`127.0.0.1:3000` calling `localhost:8000`), returns a note explaining why
+ * SameSite cookies are not shared; otherwise null.
+ * @param {string} baseUrl
+ * @param {string} requestUrl
+ * @returns {string | null}
+ */
+export function loopbackNote(baseUrl, requestUrl) {
+  let base;
+  let req;
+  try {
+    base = new URL(baseUrl);
+    req = new URL(requestUrl);
+  } catch {
+    return null;
+  }
+  if (!["http:", "https:"].includes(req.protocol)) return null;
+  const baseHostname = hostnameOf(base);
+  const reqHostname = hostnameOf(req);
+  if (
+    !LOOPBACK_HOSTS.has(baseHostname) ||
+    !LOOPBACK_HOSTS.has(reqHostname) ||
+    baseHostname === reqHostname
+  )
+    return null;
+  return `the page at ${base.host} called ${req.host}; a SameSite cookie set by one is not sent from the other`;
+}
 
 /** The first line of an error, with no colour codes: Playwright's call logs stay out. */
 const why = (error) =>
@@ -452,17 +657,35 @@ export async function runSequence(
         if (value && !values.some((held) => held.value === value))
           values.push({ value, exact: usernameOnly(name) });
       }
+  for (const name of Object.keys(env)) {
+    if (!ENV_NAME.test(name) || !SECRET_VARIABLE.test(name)) continue;
+    const value = envValue(env, name);
+    if (value && value.length >= MIN_SECRET_LENGTH) redact.add(value, `[redacted:${name}]`);
+  }
 
   const start = clock();
   const steps = [];
   /** @type {Record<string, {startedAtMs: number, video: string | null}>} */
   const sessionInfo = {};
+  const notedHosts = new Set();
+  /** @type {string[]} */
+  const notes = [];
+  /** @type {{session: string, step: number | null, method: string, host: string, path: string, status: number, retryAfter: string | null}[]} */
+  const rateLimits = [];
+  const recordLoopback = (url) => {
+    const note = loopbackNote(base, url);
+    if (!note) return;
+    const host = new URL(url).host;
+    if (notedHosts.has(host)) return;
+    notedHosts.add(host);
+    notes.push(note);
+  };
   /** The action that did not complete, once one has not; also in the step file. */
   let error = null;
   const writeSteps = () =>
     writeFileSync(
       join(out, "steps.json"),
-      `${JSON.stringify({ steps, sessions: sessionInfo, error }, null, 2)}\n`,
+      `${JSON.stringify({ steps, sessions: sessionInfo, notes, rateLimits, error }, null, 2)}\n`,
     );
   writeSteps();
 
@@ -470,7 +693,7 @@ export async function runSequence(
   // Playwright's own list. An activated prerender is guarded by the main-frame
   // rule below, which decides per request.
   const browser = await playwright.chromium.launch({ headless: true });
-  /** @type {Map<string, {context: any, page: any, state: {left: boolean}}>} */
+  /** @type {Map<string, {context: any, page: any, state: {left: boolean, popup: boolean, action: number | null}}>} */
   const sessions = new Map();
   const open = async (session) => {
     if (sessions.has(session)) return sessions.get(session);
@@ -482,8 +705,13 @@ export async function runSequence(
     });
     context.setDefaultTimeout(ACTION_TIMEOUT_MS);
     context.setDefaultNavigationTimeout(NAVIGATION_TIMEOUT_MS);
-    const state = { left: false, popup: false };
+    const state = { left: false, popup: false, action: null };
     const page = await context.newPage();
+    if (typeof page.on === "function")
+      page.on("response", (response) => {
+        const entry = rateLimitEntry(response, { session, step: state.action, redact });
+        if (entry) rateLimits.push(entry);
+      });
     // A page that tries to leave the checked address is stopped before the request
     // is sent: a link, a script, or a redirect at any hop, since a 307 after a
     // sign-in POST would resend the form. Playwright's routes see only a redirect's
@@ -525,7 +753,10 @@ export async function runSequence(
     // included (a `target="_blank"` sign-in form would carry its password out).
     await context.route("**/*", (route) => {
       const request = route.request();
-      if (!request.isNavigationRequest()) return route.continue();
+      if (!request.isNavigationRequest()) {
+        recordLoopback(request.url());
+        return route.continue();
+      }
       // A popup's first request comes before Playwright knows its page, so it has
       // no frame yet: that, or any page but the Session's, is a popup.
       let ours = false;
@@ -534,7 +765,10 @@ export async function runSequence(
       } catch {
         // no frame yet
       }
-      if (ours) return route.continue();
+      if (ours) {
+        if (request.frame().parentFrame?.()) recordLoopback(request.url());
+        return route.continue();
+      }
       state.popup = true;
       return route.abort("blockedbyclient");
     });
@@ -544,7 +778,7 @@ export async function runSequence(
       opened.close().catch(() => {});
     });
     sessionInfo[session] = { startedAtMs: Math.round(clock() - start), video: null };
-    const opened = { context, page, state };
+    const opened = { context, page, state, pointer: video ? pointerFor(page) : null };
     sessions.set(session, opened);
     return opened;
   };
@@ -567,10 +801,14 @@ export async function runSequence(
       const { session } = action;
       const [verb] = Object.keys(ACTIONS).filter((v) => v in action);
       try {
-        const { page, state } = await open(session);
+        const { page, state, pointer } = await open(session);
+        state.action = i + 1;
         if (verb === "goto") await page.goto(new URL(action.goto, origin).href);
-        else if (verb === "click") await locate(page, action.click).click();
-        else if (verb === "press") await page.keyboard.press(action.press);
+        else if (verb === "click") {
+          const target = locate(page, action.click);
+          if (pointer) await pointer.moveTo(target);
+          await target.click();
+        } else if (verb === "press") await page.keyboard.press(action.press);
         else if (verb === "wait")
           await locate(page, action.wait).waitFor({
             state: "visible",
@@ -578,13 +816,39 @@ export async function runSequence(
           });
         else if (verb === "fill") {
           const field = locate(page, action.fill);
-          const type = await field.evaluate((e) => (e instanceof HTMLInputElement ? e.type : ""));
+          const { type, typable } = await field.evaluate((e, inputs) => {
+            const input = e instanceof HTMLInputElement;
+            const editable =
+              (input && inputs.includes(e.type)) ||
+              e instanceof HTMLTextAreaElement ||
+              /** @type {HTMLElement} */ (e).isContentEditable;
+            const locked =
+              /** @type {HTMLInputElement} */ (e).disabled ||
+              /** @type {HTMLInputElement} */ (e).readOnly;
+            return { type: input ? e.type : "", typable: Boolean(editable && !locked) };
+          }, TYPED_INPUTS);
           if (type === "password" && action.value !== "" && !onlyPlaceholders(action.value))
             throw new Error("a literal value into a password field; give it as {{env:QA_…}}");
           // A field filled from a sign-in value shows dots, as a password field does,
           // so the value as typed reaches no still or video frame (best-effort: see `mask`).
-          if (action.value.match(PLACEHOLDER)) await field.evaluate(maskField);
-          await field.fill(fill(action.value));
+          if (action.value.match(PLACEHOLDER)) {
+            await field.evaluate(maskField);
+            // Always in one go: a sign-in value is never typed key by key, so it is
+            // masked before any of it arrives, with `--video` or without.
+            await field.fill(fill(action.value));
+          } else if (video && typable && TYPABLE.test(action.value)) {
+            // A literal, with `--video`: typed as a person types it, over the
+            // field's old text, selected first, so each character is one key. Any
+            // other field (a select, a date, one that is read-only) is filled as
+            // without `--video`, and fails the same way.
+            await field.selectText();
+            await field.pressSequentially(action.value, {
+              delay: keyDelay(action.value),
+              // The bound is the typing's, not the element's: `selectText` found it.
+              timeout:
+                ACTION_TIMEOUT_MS + TYPING_BUDGET_MS + PER_KEY_SLACK_MS * action.value.length,
+            });
+          } else await field.fill(action.value);
         } else {
           let subject = null;
           let text = null;
@@ -608,7 +872,13 @@ export async function runSequence(
                 : visible;
           }
           const index = steps.length + 1;
-          let withheld = await withholdReason(page, values);
+          // The pointer is the video's, never a still's: out of the page from the
+          // first check to the last, and drawn again once the step is done, as after
+          // every action. A pointer that may still be there withholds the still.
+          const hidden = pointer ? await pointer.hide() : true;
+          let withheld = hidden
+            ? await withholdReason(page, values)
+            : "the pointer could not be taken out of the page, so the still is withheld";
           let still = withheld
             ? null
             : `step-${String(index).padStart(2, "0")}-${session.toLowerCase()}.png`;
@@ -641,6 +911,7 @@ export async function runSequence(
         // counts, and is named by the last action that ran, not blamed on it.
         if (opened()) throw new Error(popupWhy(i + 1));
         await mask(page, values);
+        if (pointer) await pointer.draw();
         done += 1;
       } catch (failure) {
         const left = sessions.get(session)?.state.left;
@@ -689,13 +960,16 @@ export async function runSequence(
     actions: done,
     steps,
     videos,
+    notes,
+    rateLimits,
     ...(error ? { error } : {}),
   };
 }
 
 // ── CLI ─────────────────────────────────────────────────────────────────────
 
-const USAGE = "usage: node web.mjs run <sequence.json> --base <address> --out <dir> [--video]\n";
+const USAGE =
+  "usage: node web.mjs run <sequence.json> --base <address> --out <dir> [--video] [--playwright-dir <dir>]\n";
 const INSTALL =
   "web.mjs needs Playwright with Chromium in this repository, and never installs it. " +
   "To use it, run `npm install --save-dev playwright` and `npx playwright install chromium` here; " +
@@ -717,7 +991,11 @@ export async function main(argv, io = {}) {
   for (let i = 0; i < rest.length; i += 1) {
     const flag = rest[i];
     if (flag === "--video" && !("--video" in options)) options[flag] = true;
-    else if (["--base", "--out"].includes(flag) && rest[i + 1] !== undefined && !(flag in options))
+    else if (
+      ["--base", "--out", "--playwright-dir"].includes(flag) &&
+      rest[i + 1] !== undefined &&
+      !(flag in options)
+    )
       options[flag] = rest[++i];
     else return usage;
   }
@@ -758,7 +1036,9 @@ export async function main(argv, io = {}) {
   const problems = checkSequence(sequence, env);
   if (problems.length) return { code: 1, out: json({ completed: false, problems }) };
 
-  const found = findPlaywright(io.cwd ?? process.cwd());
+  const resolved = resolvePlaywright(io.cwd ?? process.cwd(), options["--playwright-dir"]);
+  if (resolved.error) return { code: 2, out: `${resolved.error}\n` };
+  const found = resolved.found;
   if (!found.module) return { code: 2, out: INSTALL };
   if (!found.chromium)
     return {
@@ -791,6 +1071,8 @@ export async function main(argv, io = {}) {
     stills: result.steps.filter((s) => s.still).length,
     withheld: result.steps.filter((s) => s.withheld).length,
     videos: result.videos,
+    ...(result.notes.length ? { notes: result.notes } : {}),
+    ...(result.rateLimits.length ? { rateLimits: result.rateLimits } : {}),
     ...(result.error ? { error: result.error } : {}),
   };
   return { code: result.completed ? 0 : 1, out: json(summary) };

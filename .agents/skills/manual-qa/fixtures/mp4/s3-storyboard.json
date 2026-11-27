@@ -1,0 +1,38 @@
+{
+  "scenario": "S3",
+  "title": "Ending a member's session signs them out",
+  "result": "PASS",
+  "after": {
+    "steps": "s3-web/steps.json",
+    "expected": "The member lands on the sign-in page",
+    "observed": "The member landed on the sign-in page",
+    "judged": "expected",
+    "startedAt": "2026-11-16T10:10:00.000+11:00"
+  },
+  "before": {
+    "steps": "s3-before-web/steps.json",
+    "state": "matched",
+    "expected": "The member stays on the dashboard",
+    "observed": "The member stayed on the dashboard",
+    "judged": "expected",
+    "startedAt": "2026-11-16T10:08:00.000+11:00"
+  },
+  "commits": {
+    "base": "1111111aaaaaaa2222222bbbbbbb3333333ccccc",
+    "head": "4444444ddddddd5555555eeeeeee6666666fffff"
+  },
+  "context": {
+    "accounts": ["member", "admin"],
+    "sessions": [
+      { "session": "A", "account": "member", "kind": "role" },
+      { "session": "B", "account": "admin", "kind": "role" }
+    ]
+  },
+  "proves": { "session": "A", "index": 3 },
+  "story": [
+    "The member is signed in and on their dashboard.",
+    "The admin ends the member's session.",
+    "The member reloads and lands on the sign-in page."
+  ],
+  "variables": []
+}

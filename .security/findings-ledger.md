@@ -1,6 +1,6 @@
 # Findings ledger
 
-Fingerprints of known findings from the Agent-kit security audit, so repeat runs dedupe. This repository is public, and so is this file. Record **only** the concept id, status and dates. Never record the attack path, evidence or location. The Advisory column names the public advisory once one is published; until then it names the private draft, which holds the detail.
+Fingerprints of known findings from the Agent-kit security audit, so repeat runs dedupe. This repository is public, and so is this file. Record **only** the concept id, status and dates. Never record the attack path, evidence or location. The Advisory column names the public advisory once one is published; until then it names the private draft, which holds the detail. From Agent-kit v1.0.0-beta.10, only a Security Response Run's `close` (the `security-response` skill) or the maintainer, by hand, writes this file; `security-finding-triage` proposes a row and never edits it. `close` only appends lines.
 
 | Concept id | Status | First seen | Advisory | Notes |
 | --- | --- | --- | --- | --- |
