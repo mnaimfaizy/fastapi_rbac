@@ -1,5 +1,4 @@
 import logging
-from datetime import datetime, timezone
 from typing import Any, Literal, Optional
 from uuid import UUID
 
@@ -8,13 +7,14 @@ from fastapi.responses import JSONResponse
 from fastapi_pagination import Params
 from redis.asyncio import Redis as AsyncRedis
 from sqlalchemy import Boolean, cast
-from sqlmodel import col, select
+from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app import crud
 from app.api import deps
 from app.api.deps import get_redis_client
 from app.core.config import settings
+from app.dashboard_metrics import locked_now_clauses
 from app.deps import user_deps
 from app.models import User
 from app.schemas.response_schema import (
@@ -57,13 +57,7 @@ async def read_users_list(
     """
     query = None
     if status_filter == "locked":
-        # The same three conditions as dashboard_metrics.count_locked_users.
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
-        query = select(User).where(
-            cast(User.is_locked, Boolean).is_(True),
-            col(User.locked_until).is_not(None),
-            col(User.locked_until) > now,
-        )
+        query = select(User).where(*locked_now_clauses())
     elif status_filter == "pending":
         query = select(User).where(cast(User.verified, Boolean).is_(False))
     elif status_filter == "disabled":
