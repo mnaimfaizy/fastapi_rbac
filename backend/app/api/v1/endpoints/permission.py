@@ -10,7 +10,8 @@ from app.api import deps
 from app.deps import permission_deps
 from app.models.permission_model import Permission
 from app.models.user_model import User
-from app.schemas.permission_schema import IPermissionCreate, IPermissionRead
+from app.schemas.permission_group_schema import IPermissionGroupRead
+from app.schemas.permission_schema import IPermissionCreate, IPermissionDetailRead, IPermissionRead
 from app.schemas.response_schema import (
     IDeleteResponseBase,
     IGetResponseBase,
@@ -60,22 +61,36 @@ async def get_permissions(
         return create_response(data=permissions)
 
 
-@router.get("/{permission_id}", response_model=IGetResponseBase[IPermissionRead])
+@router.get("/{permission_id}", response_model=IGetResponseBase[IPermissionDetailRead])
 async def get_permission_by_id(
     permission_id: UUID,
     db_session: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user(required_permissions=["permission.read"])),
-) -> IGetResponseBase[IPermissionRead]:
+) -> IGetResponseBase[IPermissionDetailRead]:
     """
-    Gets a permission by its ID
+    Gets a permission by its ID, including every role that grants it.
     """
     permission = await crud.permission.get_permission_by_id(
         permission_id=permission_id, db_session=db_session
     )
-    if permission:
-        return create_response(data=permission)
-    else:
+    if not permission:
         raise IdNotFoundException(Permission, id=permission_id)
+
+    group = None
+    if permission.group is not None:
+        group = IPermissionGroupRead.model_validate(permission.group, from_attributes=True)
+    detail = IPermissionDetailRead(
+        id=permission.id,
+        name=permission.name,
+        description=permission.description,
+        group_id=permission.group_id,
+        group=group,
+        created_at=permission.created_at,
+        roles=await crud.permission.list_roles_granting_permission(
+            permission_id=permission.id, db_session=db_session
+        ),
+    )
+    return create_response(data=detail)
 
 
 @router.post("")

@@ -96,6 +96,7 @@ describe('Group form', () => {
         expect(mockRoleGroupService.createRoleGroup).toHaveBeenCalledWith({
           name: 'Support',
           parent_id: 'ops',
+          description: null,
         });
         expect(
           await screen.findByRole(
@@ -156,6 +157,7 @@ describe('Group form', () => {
         expect(mockRoleGroupService.createRoleGroup).toHaveBeenCalledWith({
           name: 'Finance',
           parent_id: null,
+          description: null,
         });
       });
     });
@@ -217,7 +219,7 @@ describe('Group form', () => {
       await waitFor(() => {
         expect(mockRoleGroupService.updateRoleGroup).toHaveBeenCalledWith(
           'support',
-          { name: 'Support', parent_id: 'admin-group' }
+          { name: 'Support', parent_id: 'admin-group', description: null }
         );
       });
     });
@@ -336,6 +338,7 @@ describe('Group form', () => {
         ).toHaveBeenCalledWith({
           name: 'Articles',
           permission_group_id: 'content',
+          description: null,
         });
         const articlesRow = await waitFor(() => rowFor('Articles'), {
           timeout: 5000,

@@ -32,7 +32,7 @@ Authorization: Bearer <access_token>
 
 ### GET /api/v1/permissions/{permission_id}
 
-Get a permission by its ID.
+Get a permission by its ID, with every role that grants it. Requires `permission.read`; an unknown ID returns `404`.
 
 **Request Headers:**
 
@@ -44,9 +44,21 @@ Authorization: Bearer <access_token>
 
 ```json
 {
-  "data": { "id": "uuid", "name": "user.create", "description": "Create user permission", ... }
+  "data": {
+    "id": "uuid",
+    "name": "user.create",
+    "description": "Create user permission",
+    "group_id": "uuid",
+    "group": { "id": "uuid", "name": "User", ... },
+    "created_at": "2026-01-12T00:00:00Z",
+    "roles": [
+      { "id": "uuid", "name": "Admin", "role_group": "Administrative", "user_count": 3 }
+    ]
+  }
 }
 ```
+
+`roles` lists only the roles that grant the permission, ordered by role name. Each entry has the role's `id` and `name`, its role group's name in `role_group` (`null` when the role has no group), and `user_count`, the number of users who hold the role (`0` when none do). It is `[]` when no role grants the permission. The list endpoint above does not include `roles` or `created_at`.
 
 ### POST /api/v1/permissions
 

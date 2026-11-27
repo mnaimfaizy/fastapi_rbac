@@ -26,6 +26,7 @@ Authorization: Bearer <access_token>
     {
       "id": "uuid",
       "name": "user-management",
+      "description": "Permissions for managing users",
       "created_at": "...",
       "updated_at": "...",
       "created_by_id": "uuid",
@@ -54,6 +55,7 @@ Authorization: Bearer <access_token>
   "data": {
     "id": "uuid",
     "name": "user-management",
+    "description": "Permissions for managing users",
     "created_at": "...",
     "updated_at": "...",
     "created_by_id": "uuid",
@@ -77,15 +79,18 @@ Authorization: Bearer <access_token>
 
 ```json
 {
-  "name": "admin-permissions"
+  "name": "admin-permissions",
+  "description": "Permissions held by administrators"
 }
 ```
+
+`description` is optional on both kinds of write: at most 255 characters, trimmed, and a blank string or `null` means the group has none.
 
 **Response:**
 
 ```json
 {
-  "data": { "id": "uuid", "name": "admin-permissions", ... }
+  "data": { "id": "uuid", "name": "admin-permissions", "description": "Permissions held by administrators", ... }
 }
 ```
 
@@ -103,15 +108,18 @@ Authorization: Bearer <access_token>
 
 ```json
 {
-  "name": "updated_group"
+  "name": "updated_group",
+  "description": "What the group is for"
 }
 ```
+
+`description` is optional on both kinds of write: at most 255 characters, trimmed, and a blank string or `null` means the group has none. Leaving it out keeps the saved description.
 
 **Response:**
 
 ```json
 {
-  "data": { "id": "uuid", "name": "updated_group", ... }
+  "data": { "id": "uuid", "name": "updated_group", "description": "What the group is for", ... }
 }
 ```
 

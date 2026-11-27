@@ -8,7 +8,10 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.crud.base_crud import CRUDBase
 from app.models import RolePermission
 from app.models.permission_model import Permission
-from app.schemas.permission_schema import IPermissionCreate, IPermissionUpdate
+from app.models.role_group_model import RoleGroup
+from app.models.role_model import Role
+from app.models.user_role_model import UserRole
+from app.schemas.permission_schema import IPermissionCreate, IPermissionRoleGrant, IPermissionUpdate
 
 
 class CRUDPermission(CRUDBase[Permission, IPermissionCreate, IPermissionUpdate]):
@@ -246,6 +249,40 @@ class CRUDPermission(CRUDBase[Permission, IPermissionCreate, IPermissionUpdate])
         result = await db_session.exec(stmt)
         count = result.one()
         return count > 0
+
+    async def list_roles_granting_permission(
+        self, *, permission_id: UUID, db_session: AsyncSession
+    ) -> list[IPermissionRoleGrant]:
+        """
+        Roles that grant one permission, each with its role group name and user count.
+
+        One grouped query: a role with no users counts as zero, and a role that
+        does not grant the permission is absent.
+        """
+        role_group_name = RoleGroup.name.label("role_group_name")
+        user_count = func.count(UserRole.user_id).label("user_count")
+        stmt = (
+            select(Role.id, Role.name, role_group_name, user_count)
+            .select_from(Role)
+            .join(RolePermission, RolePermission.role_id == Role.id)
+            .outerjoin(RoleGroup, RoleGroup.id == Role.role_group_id)
+            .outerjoin(UserRole, UserRole.role_id == Role.id)
+            .where(RolePermission.permission_id == permission_id)
+            .group_by(Role.id, Role.name, RoleGroup.name)
+            .order_by(Role.name)
+        )
+        result = await db_session.exec(stmt)
+        grants: list[IPermissionRoleGrant] = []
+        for role_id, role_name, group_name, holders in result.all():
+            grants.append(
+                IPermissionRoleGrant(
+                    id=role_id,
+                    name=role_name or "",
+                    role_group=group_name,
+                    user_count=int(holders or 0),
+                )
+            )
+        return grants
 
 
 permission_crud = CRUDPermission(Permission)

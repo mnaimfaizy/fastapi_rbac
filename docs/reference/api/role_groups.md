@@ -26,6 +26,7 @@ Authorization: Bearer <access_token>
     {
       "id": "uuid",
       "name": "core-admins",
+      "description": "Roles that administer the platform",
       "parent_id": null,
       "children": [ ... ],
       "roles": [ ... ],
@@ -59,6 +60,7 @@ Authorization: Bearer <access_token>
   "data": {
     "id": "uuid",
     "name": "core-admins",
+    "description": "Roles that administer the platform",
     "parent_id": null,
     "children": [ ... ],
     "roles": [ ... ],
@@ -84,15 +86,18 @@ Authorization: Bearer <access_token>
 ```json
 {
   "name": "managers",
+  "description": "Roles for team leads",
   "parent_id": "uuid-optional"
 }
 ```
+
+`description` is optional on both kinds of write: at most 255 characters, trimmed, and a blank string or `null` means the group has none.
 
 **Response:**
 
 ```json
 {
-  "data": { "id": "uuid", "name": "managers", "parent_id": null, ... }
+  "data": { "id": "uuid", "name": "managers", "description": "Roles for team leads", "parent_id": null, ... }
 }
 ```
 
@@ -111,15 +116,18 @@ Authorization: Bearer <access_token>
 ```json
 {
   "name": "updated_group",
+  "description": "What the group is for",
   "parent_id": "uuid-optional"
 }
 ```
+
+`description` is optional on both kinds of write: at most 255 characters, trimmed, and a blank string or `null` means the group has none. Leaving it out keeps the saved description.
 
 **Response:**
 
 ```json
 {
-  "data": { "id": "uuid", "name": "updated_group", "parent_id": null, ... }
+  "data": { "id": "uuid", "name": "updated_group", "description": "What the group is for", "parent_id": null, ... }
 }
 ```
 
@@ -154,7 +162,7 @@ Authorization: Bearer <access_token>
 **Request Body:**
 
 ```json
-[{ "name": "group1" }, { "name": "group2", "parent_id": "uuid-optional" }]
+[{ "name": "group1", "description": "Optional" }, { "name": "group2", "parent_id": "uuid-optional" }]
 ```
 
 **Response:**
@@ -256,6 +264,8 @@ Authorization: Bearer <access_token>
 ### POST /api/v1/role-groups/{group_id}/clone
 
 Clone a role group (with all role assignments) to a new name.
+
+The copy's `description` is always `null`, whatever the source group's is; set one with `PUT /api/v1/role-groups/{group_id}`.
 
 **Request Headers:**
 

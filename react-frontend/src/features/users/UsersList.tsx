@@ -42,6 +42,7 @@ import {
   statusQuery,
   type StatusFilter,
 } from './users-list-model';
+import { deleteCopyFor, NO_DELETE_COPY, type DeleteCopy } from './user-delete';
 
 /**
  * The users API pages with at most 100 rows and filters by status, not by
@@ -49,45 +50,6 @@ import {
  * searches, filters by role and pages in the browser.
  */
 const USERS_FETCH_LIMIT = 100;
-
-interface DeleteCopy {
-  title: string;
-  description: string;
-  confirmLabel: string;
-  holdsRoles: boolean;
-}
-
-const NO_DELETE_COPY: DeleteCopy = {
-  title: '',
-  description: '',
-  confirmLabel: 'Delete user',
-  holdsRoles: false,
-};
-
-/**
- * What the delete dialog says. The API deletes only a user who holds no
- * role (`remove_user` answers 409 otherwise), so for a role holder the
- * dialog says so and offers the edit page instead of a delete it would
- * refuse.
- */
-function deleteCopyFor(user: User): DeleteCopy {
-  const name = fullName(user);
-  const count = (user.roles ?? []).length;
-  if (count > 0) {
-    return {
-      title: `Remove ${name}’s roles first`,
-      description: `${name} holds ${count} ${count === 1 ? 'role' : 'roles'}. A user who holds a role can’t be deleted, so remove their roles on the edit page first.`,
-      confirmLabel: 'Edit user',
-      holdsRoles: true,
-    };
-  }
-  return {
-    title: `Delete user ‘${name}’?`,
-    description: 'They lose access straight away. This can’t be undone.',
-    confirmLabel: 'Delete user',
-    holdsRoles: false,
-  };
-}
 
 const UsersList = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -131,6 +93,8 @@ const UsersList = () => {
   const canUpdate = hasPermission('user.update');
   const canDelete = hasPermission('user.delete');
   const canCreate = hasPermission('user.create');
+  const canReadRoles = hasPermission('role.read');
+  const viewerId = useSelector((state: RootState) => state.auth.user?.id);
 
   const confirmDelete = async () => {
     if (!userToDelete) return;
@@ -179,10 +143,17 @@ const UsersList = () => {
             navigateRef.current(`/dashboard/users/${user.id}/edit`),
         });
       }
-      // A user who holds a role can't be deleted until the roles are removed,
-      // which needs user.update; without it the viewer can't act, so no Delete.
+      // A user who holds a role can't be deleted until the roles are removed
+      // on the edit page, which needs user.update, and whose Roles field
+      // needs role.read to list them; without both, no Delete. The API never
+      // lets anyone delete themselves. Same rule as user detail.
       const holdsRoles = (user.roles ?? []).length > 0;
-      if (canDelete && (!holdsRoles || canUpdate)) {
+      const canRemoveRoles = canUpdate && canReadRoles;
+      if (
+        canDelete &&
+        user.id !== viewerId &&
+        (!holdsRoles || canRemoveRoles)
+      ) {
         actions.push({
           label: 'Delete user',
           destructive: true,
@@ -199,7 +170,7 @@ const UsersList = () => {
         />
       );
     },
-    [canRead, canUpdate, canDelete]
+    [canRead, canUpdate, canDelete, canReadRoles, viewerId]
   );
 
   const columns = useMemo(
@@ -429,6 +400,7 @@ const UsersList = () => {
         title={deleteCopy.title}
         description={deleteCopy.description}
         confirmLabel={deleteCopy.confirmLabel}
+        icon={deleteCopy.icon}
         destructive={!deleteCopy.holdsRoles}
         onConfirm={confirmDelete}
       />

@@ -14,6 +14,7 @@ import roleReducer from '../store/slices/roleSlice';
 import roleGroupReducer from '../store/slices/roleGroupSlice';
 import dashboardReducer from '../store/slices/dashboardSlice';
 import { roleService } from '../services/role.service';
+import permissionService from '../services/permission.service';
 import { setAuthSessionHint, setStoredAccessToken } from '../lib/tokenStorage';
 import { mockRoles, renderWithProviders, type AppStore } from './test-utils';
 import { shellViewers, signedInAs, type ShellRole } from './shell-test-utils';
@@ -26,6 +27,7 @@ vi.mock('../services/roleGroup.service');
 vi.mock('../services/permission.service');
 
 const mockRoleService = vi.mocked(roleService);
+const mockPermissionService = vi.mocked(permissionService);
 
 const APP = 'FastAPI RBAC';
 
@@ -123,6 +125,19 @@ beforeEach(() => {
   setStoredAccessToken('mock-access-token');
   setAuthSessionHint();
   document.title = '';
+  // The permission detail page loads its permission on mount.
+  mockPermissionService.getPermissionById.mockResolvedValue({
+    data: {
+      id: 'p1',
+      name: 'user.read',
+      description: 'Read users',
+      roles: [],
+      created_at: '2026-01-12T00:00:00Z',
+      updated_at: '2026-01-12T00:00:00Z',
+    },
+    message: '',
+    meta: {},
+  });
 });
 
 afterEach(() => {

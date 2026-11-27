@@ -23,6 +23,7 @@ class IPermissionGroupBase(BaseModel):
 
     id: UUID
     name: str | None = None
+    description: str | None = None
     permission_group_id: UUID | None = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
