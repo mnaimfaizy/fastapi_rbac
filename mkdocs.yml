@@ -56,6 +56,7 @@ nav:
       - "Dependency Upgrades": "development/DEPENDENCY_UPGRADES.md"
       - "Knowledge Graph (graphify)": "agents/graphify.md"
       - "Agent-kit integration": "agents/agent-kit.md"
+      - "Skills and agents layout": "agents/skills-and-agents.md"
       - "Commit pipeline": "agents/commit-pipeline.md"
       - "Pull request pipeline": "agents/pr-pipeline.md"
       - "Sandcastle runbook": "agents/sandcastle.md"

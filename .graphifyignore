@@ -25,6 +25,7 @@ pgadmin/
 **/vite-env.d.ts
 
 # Agent harness files, CI and editor config.
+.agents/
 .claude/
 .cursor/
 .github/

@@ -26,7 +26,7 @@ LINT_SCOPE_PATTERN='^(flake8|mypy)\.+Failed'
 LINT_HINT_TEMPLATE='pre-commit run %s --files $(git diff --cached --name-only)'
 
 EXPLAINER_PATTERN='^explainer pages match the code\.+Failed'
-EXPLAINER_HINT='python scripts/docs/check_explainers.py   (then the command for each scope; see .claude/skills/commit-change/SKILL.md)'
+EXPLAINER_HINT='python scripts/docs/check_explainers.py   (then the command for each scope; see .agents/skills/commit-change/SKILL.md)'
 
 HOOK_PATTERN='\.+Failed|pre-commit'
 

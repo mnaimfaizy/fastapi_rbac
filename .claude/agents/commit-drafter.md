@@ -10,8 +10,9 @@ hooks:
         - type: command
           command: "bash \"$CLAUDE_PROJECT_DIR/scripts/development/commit-drafter-guard.sh\""
 ---
+<!-- Generated from .github/agents/commit-drafter.md by scripts/development/sync_agents.py. Edit that file, then run it with --apply. -->
 
-# Commit Drafter (Claude)
+# Commit Drafter
 
 Harness wrapper for Claude Code. **Behavior SSOT:** [`docs/agents/commit-pipeline.md`](../../docs/agents/commit-pipeline.md) and the message format in [`docs/agents/commit-messages.md`](../../docs/agents/commit-messages.md). Do not redefine either here.
 

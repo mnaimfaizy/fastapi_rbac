@@ -8,7 +8,7 @@ name: Agent-kit security audit
 # "true" (the Kill switch). Needs the CLAUDE_CODE_OAUTH_TOKEN and
 # AGENT_KIT_ADVISORIES_TOKEN secrets.
 #
-# The uses: pin and the files copied from Agent-kit (.claude/skills/{code-review,
+# The uses: pin and the files copied from Agent-kit (.agents/skills/{code-review,
 # security-audit,security-finding-triage,security-response,explainer},
 # .github/{agent-runtime,agent-pipeline,security-audit}) must be the same tag.
 # Upgrade them together, along with agent-kit-pipeline.yml:

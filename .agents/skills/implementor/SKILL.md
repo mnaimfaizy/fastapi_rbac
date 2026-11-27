@@ -1,5 +1,7 @@
 ---
-mode: agent
+name: implementor
+description: Use when asked to implement a feature from an implementation guide file, completing every step in it.
+disable-model-invocation: true
 ---
 
 You are a software engineer tasked with implementing the feature described in the attached file.

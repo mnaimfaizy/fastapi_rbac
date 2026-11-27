@@ -1,6 +1,6 @@
 # Explainer skill: repository configuration
 
-Read by the `explainer` skill (`.claude/skills/explainer/SKILL.md`, *Consumer configuration*).
+Read by the `explainer` skill (`.agents/skills/explainer/SKILL.md`, *Consumer configuration*).
 
 | Key | Value |
 | --- | --- |

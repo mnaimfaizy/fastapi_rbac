@@ -5,12 +5,13 @@
 # an unknown key, so a fact that is not a key stays a comment.
 #
 # Harness. This repository is developed in Cursor. Support Level is tried
-# (.claude/skills/orchestrate/harnesses/cursor.md). harness is left unset so
+# (.agents/skills/orchestrate/harnesses/cursor.md). harness is left unset so
 # the run still detects it. Pin it only after a run is recorded as verified.
 #
 # Which copy. Cursor can load ~/.claude/skills/orchestrate and this
-# repository's .claude/skills/orchestrate. The first command of a run is
-# `node .claude/skills/orchestrate/config.mjs where orchestrate`. use: repository
+# repository's .agents/skills/orchestrate (.claude/skills is a link to it). The
+# first command of a run is
+# `node .agents/skills/orchestrate/config.mjs where orchestrate`. use: repository
 # means stop and follow the SKILL.md that load names.
 #
 # message reaches a building sub-agent only after it has ended:
@@ -100,7 +101,7 @@ read_first:
 
 routes:
   commit: "Conventional Commits per docs/agents/commit-messages.md (type(scope): subject, no emoji, one logical change). Commit only through the commit-change skill, which runs `bash scripts/development/commit-runner.sh --message-file <path>`; never plain `git commit`. Branch names per docs/agents/branch-names.md."
-  pull_request: "Open and update pull requests only through the create-pull-request skill, which runs `bash scripts/development/pr-runner.sh ... --draft`; never plain gh pr create, gh pr edit or git push. The body lists Fixes and the issue number under Issues, as .github/instructions/resolve-issue.instructions.md requires. See docs/agents/pr-pipeline.md."
+  pull_request: "Open and update pull requests only through the create-pull-request skill, which runs `bash scripts/development/pr-runner.sh ... --draft`; never plain gh pr create, gh pr edit or git push. The body lists Fixes and the issue number under Issues, as .agents/skills/resolve-issue/SKILL.md requires. See docs/agents/pr-pipeline.md."
 
 regate:
   - 'cd backend && uv run --no-project --python 3.10 --with-requirements requirements.txt --with "python-dotenv[cli]" dotenv -f .env.test.example run -- pytest test/unit/ test/api/ -q -p no:cacheprovider'

@@ -1,5 +1,6 @@
 ---
-applyTo: "**"
+name: resolve-issue
+description: Use when asked to resolve or fix a GitHub issue in this repository
 ---
 
 # Resolve Issue
@@ -13,14 +14,14 @@ When asked to resolve an issue, follow these steps:
 3. **Implement the Solution**: If a solution is available, implement it in the codebase. If not, create a new solution based on your understanding of the issue. But for that follow these steps:
    - Switch to main branch.
    - Pull the latest changes if any.
-   - Create a new branch following [`docs/agents/branch-names.md`](../../docs/agents/branch-names.md) (mandatory SSOT).
+   - Create a new branch following [`docs/agents/branch-names.md`](../../../docs/agents/branch-names.md) (mandatory SSOT).
    - Checkout/Switch to the new branch.
    - Make the necessary code changes to resolve the issue.
-   - Commit the changes with a clear message describing what was done to resolve the issue. Agents commit only through the `commit-change` skill and `scripts/development/commit-runner.sh`; see [`docs/agents/commit-pipeline.md`](../../docs/agents/commit-pipeline.md).
-   - Push the branch. Agents never run `git push`: they push and open a draft pull request in one step through the `create-pull-request` skill (`scripts/development/pr-runner.sh ... --draft`, see step 6 and [`docs/agents/pr-pipeline.md`](../../docs/agents/pr-pipeline.md)). People push as usual.
+   - Commit the changes with a clear message describing what was done to resolve the issue. Agents commit only through the `commit-change` skill and `scripts/development/commit-runner.sh`; see [`docs/agents/commit-pipeline.md`](../../../docs/agents/commit-pipeline.md).
+   - Push the branch. Agents never run `git push`: they push and open a draft pull request in one step through the `create-pull-request` skill (`scripts/development/pr-runner.sh ... --draft`, see step 6 and [`docs/agents/pr-pipeline.md`](../../../docs/agents/pr-pipeline.md)). People push as usual.
 4. **Test the Solution**: Ensure that the solution works as intended by running tests or manually testing the changes.
 5. **Document the Changes**: Update any relevant documentation to reflect the changes made to resolve the issue.
-6. **Create a Pull Request**: Once the issue is resolved, create a pull request with a clear description of the changes made and how they resolve the issue. Also include label(s) like `bug`, `enhancement`, or `documentation` as appropriate. Agents do this only through the `create-pull-request` skill and `scripts/development/pr-runner.sh`, which allows only the labels in [`docs/agents/pr-labels.txt`](../../docs/agents/pr-labels.txt); see [`docs/agents/pr-pipeline.md`](../../docs/agents/pr-pipeline.md).
+6. **Create a Pull Request**: Once the issue is resolved, create a pull request with a clear description of the changes made and how they resolve the issue. Also include label(s) like `bug`, `enhancement`, or `documentation` as appropriate. Agents do this only through the `create-pull-request` skill and `scripts/development/pr-runner.sh`, which allows only the labels in [`docs/agents/pr-labels.txt`](../../../docs/agents/pr-labels.txt); see [`docs/agents/pr-pipeline.md`](../../../docs/agents/pr-pipeline.md).
 7. **Link the Issue**: In the pull request description, link to the issue being resolved by mentioning it (e.g., "Fixes #issue_number").
 8. **Review and Merge**: After the pull request is reviewed and all the CI builds are passed and approved, merge it into the main branch.
 9. **Close the Issue**: Once the pull request is merged, close the issue if it has not been closed automatically by the pull request.

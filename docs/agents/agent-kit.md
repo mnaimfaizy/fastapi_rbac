@@ -26,21 +26,21 @@ Agent-kit uses a split contract: the reusable workflows are referenced remotely 
 
 ## Kit-owned files
 
-These files are copied from the pinned tag and committed. They are an explicit exception to the rule that engineering skills come from the user-level install. **Do not edit them by hand.** Change them only by re-copying from a new tag. The tag's `kit-owned-paths.txt` is the authoritative list; this table mirrors it.
+These files are copied from the pinned tag and committed. They are an explicit exception to the rule that engineering skills come from the user-level install. **Do not edit them by hand.** Change them only by re-copying from a new tag. The tag's `kit-owned-paths.txt` is the authoritative list; this table mirrors it, except that the skill paths are written where they sit in this repository, `.agents/skills/<name>/`. The tag's manifest names them `.claude/skills/<name>/`, which here is a symlink to the same folders (see [Skills and agents layout](skills-and-agents.md)).
 
 | Path | Used by |
 | --- | --- |
-| `.claude/skills/code-review/` | review flow; also replaces the user-level `code-review` skill inside this repo, so local reviews match CI |
-| `.claude/skills/security-audit/` | audit flow (`full` and `pr` modes). A third mode, `deep` (`DEEP.md`, from v1.0.0-beta.10), runs through the `agent-kit deep-scan` launcher in a sandbox; not adopted here (no Scan recipe, no `deep-scan` Caller) |
-| `.claude/skills/security-finding-triage/` | triaging an audit advisory by hand |
-| `.claude/skills/security-response/` | responding to a confirmed finding by hand, as a Security Response Run: a private local board in `tmp/security-response/<date>/` (gitignored by `tmp/`). Only its `close` writes `.security/findings-ledger.md`; `security-finding-triage` proposes a ledger row and never edits the ledger (v1.0.0-beta.10) |
-| `.claude/skills/explainer/` | optional: writing an Explainer Page by hand; no flow uses it |
-| `.claude/skills/instruction-drift-audit/` | optional: comparing repo-owned instructions to upstream docs by hand; no flow uses it |
-| `.claude/skills/qa-plan/` | by hand (`/qa-plan` on an open pull request): writes a QA Plan of the manual checks CI does not prove. Reads `qa.config.yml` |
-| `.claude/skills/manual-qa/` | by hand (`/manual-qa` on a QA Plan): runs it against a QA Stack or a hosted test environment, and saves a local screenshot at each scenario's result. Reads `qa.config.yml` and the QA Accounts seeder |
-| `.claude/skills/plain-prose/` | optional: `/plain-prose` on a file or pasted text rewrites prose a person reads (PR bodies, READMEs, ADRs) into plain sentences; no flow uses it |
-| `.claude/skills/address-pr-review/` | review response flow; also by hand (`/address-pr-review <n>` on an open pull request): answers its unresolved review threads, shows every reply first and posts only after you confirm. Optional config `address-pr-review.config.yml` (not added here; defaults apply) |
-| `.claude/skills/orchestrate/` | optional: `/orchestrate #12 #34` runs a set of issues through other agent sessions; reads `orchestrate.config.yml`. `/orchestrate --spec <n> --team` is a Team Run ([below](#orchestrate-team-run)); no flow uses it |
+| `.agents/skills/code-review/` | review flow; also replaces the user-level `code-review` skill inside this repo, so local reviews match CI |
+| `.agents/skills/security-audit/` | audit flow (`full` and `pr` modes). A third mode, `deep` (`DEEP.md`, from v1.0.0-beta.10), runs through the `agent-kit deep-scan` launcher in a sandbox; not adopted here (no Scan recipe, no `deep-scan` Caller) |
+| `.agents/skills/security-finding-triage/` | triaging an audit advisory by hand |
+| `.agents/skills/security-response/` | responding to a confirmed finding by hand, as a Security Response Run: a private local board in `tmp/security-response/<date>/` (gitignored by `tmp/`). Only its `close` writes `.security/findings-ledger.md`; `security-finding-triage` proposes a ledger row and never edits the ledger (v1.0.0-beta.10) |
+| `.agents/skills/explainer/` | optional: writing an Explainer Page by hand; no flow uses it |
+| `.agents/skills/instruction-drift-audit/` | optional: comparing repo-owned instructions to upstream docs by hand; no flow uses it |
+| `.agents/skills/qa-plan/` | by hand (`/qa-plan` on an open pull request): writes a QA Plan of the manual checks CI does not prove. Reads `qa.config.yml` |
+| `.agents/skills/manual-qa/` | by hand (`/manual-qa` on a QA Plan): runs it against a QA Stack or a hosted test environment, and saves a local screenshot at each scenario's result. Reads `qa.config.yml` and the QA Accounts seeder |
+| `.agents/skills/plain-prose/` | optional: `/plain-prose` on a file or pasted text rewrites prose a person reads (PR bodies, READMEs, ADRs) into plain sentences; no flow uses it |
+| `.agents/skills/address-pr-review/` | review response flow; also by hand (`/address-pr-review <n>` on an open pull request): answers its unresolved review threads, shows every reply first and posts only after you confirm. Optional config `address-pr-review.config.yml` (not added here; defaults apply) |
+| `.agents/skills/orchestrate/` | optional: `/orchestrate #12 #34` runs a set of issues through other agent sessions; reads `orchestrate.config.yml`. `/orchestrate --spec <n> --team` is a Team Run ([below](#orchestrate-team-run)); no flow uses it |
 | `.github/agent-runtime/` | every flow: hooks that confine agent reads to the workspace and, for implement, writes to the working tree; implement's git-config and push guards; review's `review-threads.mjs`, which posts each finding as an inline thread |
 | `.github/agent-pipeline/` | plan and implement (prompts, draft-PR fallback) |
 | `.github/security-audit/` | audit (prompt, advisory publisher, email notifier) |
@@ -224,7 +224,7 @@ No new secret is needed: the flow uses `CLAUDE_CODE_OAUTH_TOKEN` and the job tok
 
 ## Orchestrate Team Run
 
-A Team Run (`/orchestrate --spec <n> --team`, from v1.0.0-beta.9) splits one spec's tickets between teammates. Each teammate runs their own Chief of Staff, on their own machine, over the tickets assigned to them alone. Everyone reads one **Shared Board** on GitHub: one row comment and one `team: …` state label per ticket. The skill's own guide is `.claude/skills/orchestrate/TEAM.md`.
+A Team Run (`/orchestrate --spec <n> --team`, from v1.0.0-beta.9) splits one spec's tickets between teammates. Each teammate runs their own Chief of Staff, on their own machine, over the tickets assigned to them alone. Everyone reads one **Shared Board** on GitHub: one row comment and one `team: …` state label per ticket. The skill's own guide is `.agents/skills/orchestrate/TEAM.md`.
 
 Set up in `orchestrate.config.yml`: `tracker: github` (pinned) and the six `team.labels`, the agent-kit defaults. There is no member list. Whose ticket it is comes only from its GitHub assignee, and who is running comes from the `gh` login. Today the teammates are `mnaimfaizy` and `naimfaizy-bot` (the bot PC). Any other teammate needs write access, so they can be assigned, plus their own clone and `gh` login.
 
@@ -288,6 +288,17 @@ Use the `@mnaimfaizy/agent-kit` CLI, at the same version as the new tag. It need
    TAG=v1.0.0-beta.11   # the new tag; the CLI version is the tag without the leading v
    npx "@mnaimfaizy/agent-kit@${TAG#v}" upgrade --tag "$TAG"   # add --yes when there is no terminal
    ```
+
+   **The CLI refuses here, because `.claude/skills` is a link.** `upgrade` and `init` stop with `".claude/skills" is a symbolic link or junction; the CLI does not delete or write through links` ([layout and sources](skills-and-agents.md)). Until Agent-kit can write to `.agents/skills/` or follow a skills-root link, copy the skills by hand. From an Agent-kit clone at the new tag, for each skill path in the tag's `kit-owned-paths.txt` that starts with `.claude/skills/`:
+
+   ```bash
+   # in this repository
+   rm -rf ".agents/skills/<name>"
+   # in the Agent-kit clone, at the new tag
+   git -C <agent-kit-clone> archive "$TAG" ".claude/skills/<name>" | tar -x --strip-components=2 -C ".agents/skills"
+   ```
+
+   Copy the `.github/...` paths from the manifest as before, rewrite the four `uses:` pins, and update `ref` and each `skillFolderHash` in `skills-lock.json`. Then check each skill matches its tag: `git rev-parse HEAD:.agents/skills/<name>` must equal that skill's `skillFolderHash`, and `python scripts/development/check_skills_link.py` must pass.
 
    The v1.0.0-beta.7 and v1.0.0-beta.8 CLIs refused their own tag's manifest (`".github/agent-review-response/" is not a permitted Kit-owned path`); v1.0.0-beta.9 fixed it ([agent-kit#301](https://github.com/mnaimfaizy/agent-kit/issues/301)). If `upgrade` ever refuses a manifest line, copy each path in the tag's `kit-owned-paths.txt` by hand instead (delete, then `git archive <tag> <path>`), and rewrite the `uses:` pins.
 3. Apply anything relevant from the printed `examples/` diff to the Callers by hand (new or renamed inputs), and update the pin above.

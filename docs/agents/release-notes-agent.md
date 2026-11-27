@@ -2,7 +2,7 @@
 
 **This file is the single source of truth for drafting a release-notes section.**
 
-Harness wrappers under `.claude/agents/`, `.cursor/agents/`, and `.github/agents/` only configure how to invoke this agent and which model to use. They must not redefine categorization rules.
+The harness wrapper is one canonical file, `.github/agents/release-notes.agent.md`. `.claude/agents/release-notes.md` and `.cursor/agents/release-notes.md` are generated from it with `scripts/development/sync_agents.py`. They only configure how to invoke this agent and which model to use. They must not redefine categorization rules.
 
 ## Role
 
