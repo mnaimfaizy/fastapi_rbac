@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Trash } from 'lucide-react';
 import type { User } from '@/models/user';
 import { fullName } from './users-list-model';
 
@@ -6,6 +7,8 @@ export interface DeleteCopy {
   title: string;
   description: ReactNode;
   confirmLabel: string;
+  /** The trash icon beside the title, on the delete itself only. */
+  icon?: ReactNode;
   /** The user holds a role, so the dialog offers the edit page instead. */
   holdsRoles: boolean;
 }
@@ -50,6 +53,7 @@ export function deleteCopyFor(user: User): DeleteCopy {
       </>
     ),
     confirmLabel: 'Delete user',
+    icon: <Trash aria-hidden="true" />,
     holdsRoles: false,
   };
 }

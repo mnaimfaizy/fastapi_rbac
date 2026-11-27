@@ -387,6 +387,7 @@ const UsersList = () => {
         title={deleteCopy.title}
         description={deleteCopy.description}
         confirmLabel={deleteCopy.confirmLabel}
+        icon={deleteCopy.icon}
         destructive={!deleteCopy.holdsRoles}
         onConfirm={confirmDelete}
       />

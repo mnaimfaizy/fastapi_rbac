@@ -420,6 +420,7 @@ describe('UsersList (Web v1)', () => {
         'Nora loses access straight away and is signed out everywhere.'
       );
       expect(dialog).toHaveTextContent('This can’t be undone.');
+      expect(dialog.querySelector('svg.lucide-trash')).toBeInTheDocument();
       await user.click(
         within(dialog).getByRole('button', { name: 'Delete user' })
       );

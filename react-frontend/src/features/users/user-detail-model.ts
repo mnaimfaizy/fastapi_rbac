@@ -4,6 +4,7 @@ import {
   groupPermissions,
   type PermissionGroupSection,
 } from '@/features/user-home/summary';
+import { parseApiTimestamp } from '@/features/account/parseApiTimestamp';
 
 /**
  * Everything user detail says about one held role. The user read model
@@ -79,11 +80,18 @@ const dateTime = new Intl.DateTimeFormat('en-GB', {
   timeZone: 'UTC',
 });
 
-/** "15 Nov 2026, 14:32" (UTC), or null when there is no date. */
+/** "15 Nov 2026, 14:32 UTC", or null when there is no date. */
 export function formatUtcDateTime(value: string | null | undefined) {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : `${dateTime.format(date)} UTC`;
+  const date = parseApiTimestamp(value);
+  return date ? `${dateTime.format(date)} UTC` : null;
+}
+
+/**
+ * An API timestamp with its zone made explicit, for the shared formatters:
+ * the API sends naive UTC, which `new Date` would read as local time.
+ */
+export function apiInstant(value: string | null | undefined): string | null {
+  return parseApiTimestamp(value)?.toISOString() ?? null;
 }
 
 /** The person's first name for sentences, falling back to their email. */

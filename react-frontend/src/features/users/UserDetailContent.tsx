@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { ArrowLeft, CircleAlert, Lock, Mail, Pencil } from 'lucide-react';
+import { ArrowLeft, CircleAlert, Info, Lock, Mail, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { AppDispatch, RootState } from '../../store';
 import {
@@ -27,7 +27,9 @@ import { passwordAge } from '@/features/user-home/summary';
 import { formatDay, fullName } from './users-list-model';
 import { UserAvatar, UserStatusBadges } from './user-table-columns';
 import { deleteCopyFor, NO_DELETE_COPY, type DeleteCopy } from './user-delete';
+import { useListedDates } from './useListedDates';
 import {
+  apiInstant,
   callName,
   formatUtcDateTime,
   groupNameMap,
@@ -129,6 +131,7 @@ const UserDetailContent = () => {
   // A user left over from another page is not this one.
   const user = selectedUser?.id === userId ? selectedUser : null;
   usePageCrumb(user ? fullName(user) : null);
+  const listed = useListedDates(user);
 
   const groupNames = useMemo(() => groupNameMap(roleGroups), [roleGroups]);
   const roles = useMemo(
@@ -194,7 +197,12 @@ const UserDetailContent = () => {
       // The public resend endpoint answers the same way for every account
       // state, so the toast does too and never reveals which one this is.
       await AuthService.resendVerificationEmail(user.email);
-      toast.success(RESEND_TOAST);
+      // The artboard draws this one as a neutral info toast, bottom right:
+      // it reports that a request was made, not that an email was sent.
+      toast(RESEND_TOAST, {
+        icon: <Info className="text-primary size-4" aria-hidden="true" />,
+        position: 'bottom-right',
+      });
     } catch {
       toast.error('Couldn’t send the email. Try again.');
     } finally {
@@ -206,7 +214,8 @@ const UserDetailContent = () => {
     ? [{ label: 'Delete user', destructive: true, onSelect: openDelete }]
     : [];
 
-  const age = passwordAge(user.last_changed_password_date, new Date());
+  const lastChanged = apiInstant(user.last_changed_password_date);
+  const age = passwordAge(lastChanged, new Date());
   const lockedAt = formatUtcDateTime(user.locked_until);
   const failed = user.number_of_failed_attempts ?? 0;
 
@@ -266,17 +275,21 @@ const UserDetailContent = () => {
               <Fact label="Last name">{user.last_name || DASH}</Fact>
               <Fact label="Email">{user.email}</Fact>
               <Fact label="Phone">{user.contact_phone || DASH}</Fact>
-              <Fact label="Created">{formatDay(user.created_at)}</Fact>
-              <Fact label="Last updated">{formatDay(user.updated_at)}</Fact>
+              <Fact label="Created">
+                {formatDay(apiInstant(user.created_at ?? listed?.created_at))}
+              </Fact>
+              <Fact label="Last updated">
+                {formatDay(apiInstant(user.updated_at ?? listed?.updated_at))}
+              </Fact>
             </Facts>
           </Panel>
 
           <Panel title="Password and security">
             <Facts>
-              <Fact label="Last changed">
-                {formatDay(user.last_changed_password_date)}
+              <Fact label="Last changed">{formatDay(lastChanged)}</Fact>
+              <Fact label="Expires">
+                {formatDay(apiInstant(user.password_expires_at))}
               </Fact>
-              <Fact label="Expires">{formatDay(user.password_expires_at)}</Fact>
               <Fact label="Password age">{age ?? DASH}</Fact>
               <Fact label="Change required at next sign-in">
                 {user.needs_to_change_password ? 'Yes' : 'No'}
@@ -350,6 +363,7 @@ const UserDetailContent = () => {
         title={deleteCopy.title}
         description={deleteCopy.description}
         confirmLabel={deleteCopy.confirmLabel}
+        icon={deleteCopy.icon}
         destructive={!deleteCopy.holdsRoles}
         onConfirm={confirmDelete}
       />

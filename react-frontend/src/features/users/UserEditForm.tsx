@@ -76,7 +76,7 @@ function FormSection({
   return (
     <section
       aria-labelledby={id}
-      className="bg-card grid gap-5 rounded-xl border p-5 sm:p-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] md:gap-8"
+      className="bg-card grid gap-5 rounded-xl border p-5 sm:p-6 md:grid-cols-[260px_minmax(0,1fr)] md:gap-8"
     >
       <div>
         <h2 id={id} className="text-base font-semibold">

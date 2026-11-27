@@ -32,7 +32,11 @@ vi.mock('../services/roleGroup.service', () => ({
   default: { getRoleGroups: vi.fn() },
 }));
 vi.mock('sonner', () => ({
-  toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
+  toast: Object.assign(vi.fn(), {
+    success: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+  }),
 }));
 
 const mockUserService = vi.mocked(userService);
@@ -207,8 +211,9 @@ describe('User detail (Web v1)', () => {
         'hannah.lindqvist@example.com'
       );
       await waitFor(() =>
-        expect(toast.success).toHaveBeenCalledWith(
-          'If this account still needs verifying, an email is on its way.'
+        expect(toast).toHaveBeenCalledWith(
+          'If this account still needs verifying, an email is on its way.',
+          expect.anything()
         )
       );
     });
@@ -228,7 +233,7 @@ describe('User detail (Web v1)', () => {
           'Couldn’t send the email. Try again.'
         )
       );
-      expect(toast.success).not.toHaveBeenCalled();
+      expect(toast).not.toHaveBeenCalled();
     });
 
     it('deletes a user who holds no role from the menu, naming them, and returns to the list', async () => {
@@ -364,8 +369,9 @@ describe('User detail (Web v1)', () => {
         screen.getByRole('button', { name: 'Resend verification email' })
       );
       await waitFor(() =>
-        expect(toast.success).toHaveBeenCalledWith(
-          'If this account still needs verifying, an email is on its way.'
+        expect(toast).toHaveBeenCalledWith(
+          'If this account still needs verifying, an email is on its way.',
+          expect.anything()
         )
       );
     });
