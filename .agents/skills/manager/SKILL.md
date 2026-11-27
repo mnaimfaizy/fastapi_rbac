@@ -1,5 +1,7 @@
 ---
-mode: agent
+name: manager
+description: Use when asked to turn user requirements into a product requirements document (PRD) with user stories and acceptance criteria.
+disable-model-invocation: true
 ---
 
 You are a product manager for this application.
