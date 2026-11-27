@@ -16,6 +16,8 @@ import {
   ANCHOR_LABELS,
   COMMAND_WORDS,
   COMMAND_MARKS,
+  FORMAT,
+  FORMATS,
   COPY_WORDS,
   SCRIPT_EXTENSIONS,
   PLAN_SECTIONS,
@@ -92,9 +94,11 @@ test("the good plan reads with no problems, and its parts are read out", () => {
       creates: [],
       surface: "web",
       observes: [],
+      service: null,
       capture: "screenshot",
       captureGiven: false,
       expectedBefore: null,
+      story: [],
     },
     {
       id: "S2",
@@ -104,9 +108,11 @@ test("the good plan reads with no problems, and its parts are read out", () => {
       creates: [],
       surface: "web",
       observes: [],
+      service: null,
       capture: "screenshot",
       captureGiven: false,
       expectedBefore: null,
+      story: [],
     },
   ]);
   assert.equal(plan.executed, false);
@@ -143,11 +149,11 @@ test("a heading inside a fenced block is not a section", () => {
 
 test("something that is not a plan stops at the marker", () => {
   assert.deepEqual(problemsOf("# Notes\n\nNothing here.\n"), [
-    "line 1: expected the marker `<!-- qa-plan format=3 subject=#<n> pr=#<n> -->`: this is not a QA Plan",
+    "line 1: expected the marker `<!-- qa-plan format=4 subject=#<n> pr=#<n> -->`: this is not a QA Plan",
   ]);
 });
 
-test("a format=1 plan with no per-scenario fields still reads; a format=4 plan is refused", () => {
+test("a format=1 plan with no per-scenario fields still reads; a format=5 plan is refused", () => {
   const old = validatePlan(broken("format=2", "format=1"));
   assert.deepEqual(old.problems, []);
   assert.equal(old.plan.format, 1);
@@ -155,8 +161,8 @@ test("a format=1 plan with no per-scenario fields still reads; a format=4 plan i
     old.plan.scenarios.map((s) => s.surface),
     ["web", "web"],
   );
-  assert.deepEqual(problemsOf(broken("format=2", "format=4")), [
-    "line 1: format=4: this copy of ANATOMY.md reads format=1, format=2 and format=3 only",
+  assert.deepEqual(problemsOf(broken("format=2", "format=5")), [
+    "line 1: format=5: this copy of ANATOMY.md reads format=1, format=2, format=3 and format=4 only",
   ]);
 });
 
@@ -1385,12 +1391,40 @@ test("**Observes:** reads into the scenario's list; a scenario without one obser
   const prose = withObserves("- **Observes:** `headers`, **status** (the `Set-Cookie` line)");
   assert.deepEqual(problemsOf(prose), []);
   assert.deepEqual(validatePlan(prose).plan.scenarios[1].observes, ["headers", "status"]);
-  // Every value in the list reads.
+  // Every value in the list reads across single-surface sets; mixing api-only and screen is flagged.
+  const apiSet = withObserves(
+    "- **Observes:** headers, cookies, httponly-cookies, status, body, local-file",
+  );
+  assert.deepEqual(problemsOf(apiSet), []);
+  assert.equal(validatePlan(apiSet).plan.scenarios[1].observes.length, 6);
+  const webSet = withSurface("- **Surface:** `web`\n- **Observes:** body, screen, local-file");
+  assert.deepEqual(problemsOf(webSet), []);
+  assert.equal(validatePlan(webSet).plan.scenarios[1].observes.length, 3);
+  const apiStatusBody = withObserves("- **Observes:** status, body");
+  assert.deepEqual(problemsOf(apiStatusBody), []);
   const all = withObserves(
     "- **Observes:** headers, cookies, httponly-cookies, status, body, screen, local-file",
   );
-  assert.deepEqual(problemsOf(all), []);
   assert.equal(validatePlan(all).plan.scenarios[1].observes.length, 7);
+  assertProblem(all, /split it into one scenario per Surface/);
+});
+
+test("**Observes:** needing values no single Surface can see is a problem saying to split it (#378)", () => {
+  for (const line of [
+    "- **Observes:** status, screen",
+    "- **Observes:** headers, screen",
+    "- **Observes:** httponly-cookies, screen",
+  ]) {
+    const mixed = withSurface(line);
+    const probs = problemsOf(mixed);
+    assert.equal(probs.length, 1, line);
+    assert.match(probs[0], /S2: \*\*Observes:\*\*/, line);
+    assert.match(
+      probs[0],
+      /no single Surface's drivers can observe all of them; split it into one scenario per Surface/,
+      line,
+    );
+  }
 });
 
 test("**Observes:** with a value outside the list is a problem naming it, on its line", () => {
@@ -1733,11 +1767,13 @@ test("a `Review:` box reads, and is in the parsed plan's review list", () => {
   const { plan, problems } = validatePlan(withReview());
   assert.deepEqual(problems, []);
   assert.deepEqual(plan.reviews, [
-    { text: "docs/x.html says the token lasts 30 days", ticked: false },
+    { text: "docs/x.html says the token lasts 30 days", ticked: false, place: null },
   ]);
   assert.deepEqual(validatePlan(GOOD).plan.reviews, []);
   const ticked = validatePlan(withReview("* [x] Review: README.md names the new flag")).plan;
-  assert.deepEqual(ticked.reviews, [{ text: "README.md names the new flag", ticked: true }]);
+  assert.deepEqual(ticked.reviews, [
+    { text: "README.md names the new flag", ticked: true, place: null },
+  ]);
 });
 
 test("a `Review:` box says what to read, and what it must say", () => {
@@ -1771,6 +1807,7 @@ test("a `Review:` box is no scenario's box, so a scenario without its own is sti
     {
       text: "S2 docs/members.md says signed-out visitors are sent to sign in",
       ticked: false,
+      place: null,
     },
   ]);
 });
@@ -1820,4 +1857,318 @@ test("`plan` with no file reads the plan from stdin", () => {
 test("`plan` works with no config, and over a config with problems", () => {
   const io = { read: (p) => (p === "qa.config.yml" ? "nope: 1\n" : null), stdin: () => GOOD };
   assert.equal(main(["plan"], io).code, 0);
+});
+
+// ── A Story, one sentence per Scene (format=4) ──────────────────────────────
+
+const GOOD4 = readFileSync(new URL("fixtures/plans/good-format-4.md", import.meta.url), "utf8");
+/** The format 4 example plan with one replacement; the replacement must apply. */
+function broken4(from, to) {
+  assert.ok(GOOD4.includes(from), `good-format-4.md has no ${JSON.stringify(from)}`);
+  return GOOD4.replace(from, to);
+}
+const problems4 = (text) => validatePlan(text).problems;
+/** The 1-based numbers of the lines of `text` that start with `start`, in order. */
+const linesOf4 = (text, start) =>
+  text.split("\n").flatMap((line, n) => (line.startsWith(start) ? [n + 1] : []));
+/** The first of them: S2's line, for a field S2 and S4 both carry. */
+const firstLineOf4 = (text, start) => linesOf4(text, start)[0];
+/** The last of them: S4's line. */
+const lastLineOf4 = (text, start) => linesOf4(text, start).at(-1);
+const S2_STORY =
+  "- **Story:**\n  1. A signed-out visitor opens the members page and is sent to sign in.\n";
+const S4_LAST = "  3. The member reloads **Members** and lands on the sign-in page.\n";
+const STORY_POSITION =
+  "**Story:** is out of position: it goes right after the scenario's **Capture:**, or wherever **Capture:** would sit when it has none, before **Steps:**";
+
+test("the composer writes format=4, and the reader takes formats 1 to 4", () => {
+  assert.equal(FORMAT, 4);
+  assert.deepEqual([...FORMATS], [1, 2, 3, 4]);
+  assert.deepEqual(problems4(GOOD4.replace("format=4", "format=5")), [
+    "line 1: format=5: this copy of ANATOMY.md reads format=1, format=2, format=3 and format=4 only",
+  ]);
+});
+
+test("a format=4 plan whose Stories match their Scenes reads, with each scenario's story", () => {
+  const { plan, problems } = validatePlan(GOOD4);
+  assert.deepEqual(problems, []);
+  assert.equal(plan.format, 4);
+  assert.deepEqual(
+    plan.scenarios.map((s) => [s.id, s.capture, s.story]),
+    [
+      ["S1", "screenshot", []],
+      ["S2", "video", ["A signed-out visitor opens the members page and is sent to sign in."]],
+      ["S3", "transcript", []],
+      [
+        "S4",
+        "video",
+        [
+          "The member signs in and opens Members.",
+          "The admin signs in, removes the member, and sees the list without them.",
+          "The member reloads Members and lands on the sign-in page.",
+        ],
+      ],
+    ],
+  );
+});
+
+test("a Story sentence reads as plain text: paired inline Markdown is stripped, snake_case and a lone * stay", () => {
+  const story = (sentence) =>
+    validatePlan(broken4(S2_STORY, `- **Story:**\n  1. ${sentence}\n`)).plan.scenarios[1].story;
+  assert.deepEqual(story("The member signs in and opens **Members**."), [
+    "The member signs in and opens Members.",
+  ]);
+  assert.deepEqual(
+    story(
+      "A __visitor__ opens *the* _members_ page at `/members` and reads [the guide](https://example.test/guide).",
+    ),
+    ["A visitor opens the members page at /members and reads the guide."],
+  );
+  assert.deepEqual(story("The member_id field shows 5 * 3 and a_b."), [
+    "The member_id field shows 5 * 3 and a_b.",
+  ]);
+  assert.deepEqual(story("The `__init__` file and `*.md` glob read as written."), [
+    "The __init__ file and *.md glob read as written.",
+  ]);
+  assert.deepEqual(story("It opens [the guide](https://example.test/a_(b)) now."), [
+    "It opens the guide now.",
+  ]);
+});
+
+test("a single-session scenario is one Scene: a one-sentence Story reads, a second sentence is refused", () => {
+  assert.deepEqual(problems4(GOOD4), []);
+  const two = broken4(S2_STORY, `${S2_STORY}  2. The sign-in page asks for an email.\n`);
+  assert.deepEqual(problems4(two), [
+    `line ${firstLineOf4(two, "- **Story:**")}: S2: **Story:** has 2 sentences, and its steps make 1 Scene: write one sentence per Scene, in order`,
+  ]);
+});
+
+test("each change of `In session <name>,` starts a Scene; a Story of another count is refused, naming both counts", () => {
+  // S4's steps run A, B, B, A, A: three Scenes.
+  const short = broken4(S4_LAST, "");
+  assert.deepEqual(problems4(short), [
+    `line ${lastLineOf4(short, "- **Story:**")}: S4: **Story:** has 2 sentences, and its steps make 3 Scenes: write one sentence per Scene, in order`,
+  ]);
+  const long = broken4(S4_LAST, `${S4_LAST}  4. The admin sees the member gone.\n`);
+  assert.deepEqual(problems4(long), [
+    `line ${lastLineOf4(long, "- **Story:**")}: S4: **Story:** has 4 sentences, and its steps make 3 Scenes: write one sentence per Scene, in order`,
+  ]);
+  // The same steps with one Cut fewer make two Scenes.
+  const merged = broken4("  1. In session A, open **Members**.\n", "");
+  assert.deepEqual(problems4(merged), [
+    `line ${lastLineOf4(merged, "- **Story:**")}: S4: **Story:** has 3 sentences, and its steps make 2 Scenes: write one sentence per Scene, in order`,
+  ]);
+  // A sentence's own nested list is prose, not another sentence.
+  const nested = broken4(S4_LAST, `${S4_LAST}     - the page reads **Sign in to continue**\n`);
+  assert.deepEqual(problems4(nested), []);
+});
+
+test("a `Capture: video` scenario with no Story is refused at format=4", () => {
+  const text = broken4(S2_STORY, "");
+  assert.deepEqual(problems4(text), [
+    `line ${firstLineOf4(text, "- **Capture:** `video`")}: S2: **Capture:** \`video\` needs a **Story:**, one sentence per Scene, in order, so each Scene of the video opens on its Title card`,
+  ]);
+});
+
+test("an older plan's `Capture: video` scenario still reads with no Story", () => {
+  const text = GOOD4.replace("format=4", "format=3").replace(S2_STORY, "");
+  const s4 = text.slice(text.indexOf("### S4"));
+  const story = s4.slice(s4.indexOf("- **Story:**"), s4.indexOf("- **Steps:**"));
+  const { plan, problems } = validatePlan(text.replace(story, ""));
+  assert.deepEqual(problems, []);
+  assert.deepEqual(
+    plan.scenarios.map((s) => [s.id, s.capture, s.story]),
+    [
+      ["S1", "screenshot", []],
+      ["S2", "video", []],
+      ["S3", "transcript", []],
+      ["S4", "video", []],
+    ],
+  );
+});
+
+test("a Story in a format=3 or older plan is refused, naming the field and format=4", () => {
+  const text = GOOD4.replace("format=4", "format=3");
+  const stories = linesOf4(text, "- **Story:**");
+  assert.deepEqual(problems4(text), [
+    `line ${stories[0]}: S2: **Story:** is a format=4 field: mark the plan \`format=4\`, or leave it out`,
+    `line ${stories[1]}: S4: **Story:** is a format=4 field: mark the plan \`format=4\`, or leave it out`,
+  ]);
+  for (const format of ["format=1", "format=2"])
+    assert.ok(
+      problems4(GOOD4.replace("format=4", format)).includes(
+        `line ${stories[0]}: S2: **Story:** is a format=4 field: mark the plan \`format=4\`, or leave it out`,
+      ),
+      format,
+    );
+});
+
+test("a Story sits right after Capture, before Steps, once, as a numbered list", () => {
+  // Before **Capture:**.
+  const early = broken4(
+    `- **Capture:** \`video\`\n${S2_STORY}`,
+    `${S2_STORY}- **Capture:** \`video\`\n`,
+  );
+  assert.deepEqual(problems4(early), [
+    `line ${firstLineOf4(early, "- **Story:**")}: S2: ${STORY_POSITION}`,
+  ]);
+  // After **Steps:**.
+  const late = broken4(
+    `${S2_STORY}- **Steps:**\n  1. Open \`/members\` while signed out.\n`,
+    `- **Steps:**\n  1. Open \`/members\` while signed out.\n${S2_STORY}`,
+  );
+  assert.deepEqual(problems4(late), [
+    `line ${firstLineOf4(late, "- **Story:**")}: S2: ${STORY_POSITION}`,
+  ]);
+  // With no **Capture:**, right after the sign-in field.
+  const s1 = broken4(
+    "- **Capture:** `screenshot`, of the list after the invite is sent\n",
+    "- **Story:**\n  1. The admin signs in and invites a new member.\n",
+  );
+  assert.deepEqual(problems4(s1), []);
+  // Twice.
+  const twice = broken4(S2_STORY, `${S2_STORY}${S2_STORY}`);
+  assert.ok(
+    problems4(twice).includes(
+      `line ${linesOf4(twice, "- **Story:**")[1]}: S2: a second **Story:**: a scenario has at most one`,
+    ),
+    problems4(twice).join("\n"),
+  );
+  // Inline prose, or nothing, in place of a numbered list.
+  for (const story of [
+    "- **Story:** A signed-out visitor is sent to sign in.\n",
+    "- **Story:**\n",
+    "- **Story:**\n  - A signed-out visitor is sent to sign in.\n",
+  ]) {
+    const text = broken4(S2_STORY, story);
+    assert.deepEqual(
+      problems4(text),
+      [
+        `line ${firstLineOf4(text, "- **Story:**")}: S2: **Story:** expected a numbered list, one sentence per Scene, in order`,
+      ],
+      story,
+    );
+  }
+});
+
+// --- Places on a `Review:` box (#416, ADR 0033) ---
+
+const PLACES = [
+  { name: "local", holds: true },
+  { name: "staging", holds: false },
+  { name: "production", holds: false },
+];
+const placeProblems = (box, places) =>
+  validatePlan(withReview(box), { places }).problems.join("\n");
+
+test("a `Review:` box may lead with a Place, which the parsed plan keeps beside the whole text", () => {
+  const { plan, problems } = validatePlan(
+    withReview("- [ ] Review: [local] docs/x.html says 30 days"),
+  );
+  assert.deepEqual(problems, []);
+  assert.deepEqual(plan.reviews, [
+    { text: "[local] docs/x.html says 30 days", ticked: false, place: "local" },
+  ]);
+});
+
+test("with the configured Places, a `Review:` box that names a Place names one of them", () => {
+  assert.equal(placeProblems("- [ ] Review: [staging] docs/x.html says 30 days", PLACES), "");
+  // A box with no Place, from a plan made before Places, still runs: it is read as the first Place that holds.
+  assert.equal(placeProblems("- [ ] Review: docs/x.html says 30 days", PLACES), "");
+  assert.equal(
+    validatePlan(withReview("- [ ] Review: docs/x.html says 30 days"), { places: PLACES }).plan
+      .reviews[0].place,
+    null,
+  );
+  assert.match(
+    placeProblems("- [ ] Review: [prod] docs/x.html says 30 days", PLACES),
+    /Place `prod` is not configured \(local, staging, production\)/,
+  );
+  assert.match(
+    placeProblems("- [ ] Review: [Local] docs/x.html says 30 days", PLACES),
+    /Place `Local` is not configured/,
+  );
+  assert.match(placeProblems("- [ ] Review: [local]", PLACES), /nothing after it/);
+});
+
+test("with Places turned off, a `Review:` box carries no Place", () => {
+  assert.equal(placeProblems("- [ ] Review: docs/x.html says 30 days", null), "");
+  assert.match(
+    placeProblems("- [ ] Review: [local] docs/x.html says 30 days", null),
+    /Places are off: write the box with no Place/,
+  );
+});
+
+test("with Places off, a `Review:` box whose text starts with a bracket is text, not a Place", () => {
+  assert.equal(placeProblems("- [ ] Review: [WIP] docs/x.html says 30 days", null), "");
+  assert.equal(placeProblems("- [ ] Review: [the docs](docs/x.html) say 30 days", null), "");
+});
+
+test("a plan checked with no Places given reads any tag as a Place and demands none", () => {
+  assert.deepEqual(problemsOf(withReview("- [ ] Review: docs/x.html says 30 days")), []);
+  assert.deepEqual(problemsOf(withReview("- [ ] Review: [anywhere] docs/x.html says 30 days")), []);
+});
+
+test("`adapter.mjs plan` checks a box's Place against the repository's config", () => {
+  const plan = withReview("- [ ] Review: [prod] docs/x.html says 30 days");
+  const run = (config) =>
+    main(["plan"], {
+      stdin: () => plan,
+      read: (path) => (path === "qa.config.yml" ? config : null),
+    });
+  assert.equal(run("report:\n  places: [local, prod]\n  holds: [local]\n").code, 0);
+  assert.match(run("report:\n  places: none\n").out, /Places are off/);
+  assert.match(run(null).out, /Place `prod` is not configured \(local, staging, production\)/);
+});
+
+// ── Which service a scenario tests (format=2, #418) ─────────────────────────
+
+const withService = (line = "- **Service:** `billing`", { after: anchor = S2_SIGNS } = {}) =>
+  broken(anchor, `${anchor}${line}\n`);
+
+test("a scenario with **Service:** validates and `plan` prints it; one without prints null", () => {
+  assert.deepEqual(problemsOf(withService()), []);
+  const result = main(["plan"], { read: () => null, stdin: () => withService() });
+  assert.equal(result.code, 0);
+  assert.deepEqual(
+    JSON.parse(result.out).plan.scenarios.map((s) => s.service),
+    [null, "billing"],
+  );
+});
+
+test("**Service:** sits after **Surface:** and before **Observes:**", () => {
+  const ok = broken(
+    S2_SIGNS,
+    `${S2_SIGNS}- **Surface:** api\n- **Service:** billing\n- **Observes:** status\n`,
+  );
+  assert.deepEqual(problemsOf(ok), []);
+  const before = broken(S2_SIGNS, `${S2_SIGNS}- **Service:** billing\n- **Surface:** api\n`);
+  assertProblem(before, /S2: \*\*Service:\*\* is out of position/);
+  const afterObserves = broken(
+    S2_SIGNS,
+    `${S2_SIGNS}- **Observes:** status\n- **Service:** billing\n`,
+  );
+  // The later field is the one out of position: **Observes:** goes after **Service:**.
+  assertProblem(afterObserves, /S2: \*\*Observes:\*\* is out of position/);
+});
+
+test("**Service:** is read as a first-word name; an empty, repeated or malformed one is a problem", () => {
+  assertProblem(withService("- **Service:**"), /S2: \*\*Service:\*\* is empty/);
+  assertProblem(
+    withService("- **Service:** billing\n- **Service:** auth"),
+    /S2: a second \*\*Service:\*\*: a scenario has at most one/,
+  );
+  assertProblem(
+    withService("- **Service:** `@billing`"),
+    /S2: \*\*Service:\*\* expected a service name: letters, digits, `_` and `-`/,
+  );
+  assert.deepEqual(problemsOf(withService("- **Service:** **billing**, the billing API")), []);
+});
+
+test("a format=1 plan carries no **Service:**", () => {
+  const text = withService().replace("format=2", "format=1");
+  assertProblem(
+    text,
+    /S2: \*\*Service:\*\* is a format=2 field: mark the plan `format=2`, or leave it out/,
+  );
 });

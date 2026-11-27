@@ -9,25 +9,36 @@ A run lives in its own folder inside the config's `run_dir`, which is gitignored
 ```text
 <run_dir>/<run>/
   board.md                  the board: one row per Delegation
+  board.html                the live board, written beside board.md each time it is rewritten (private prose: never shared or hosted)
   activity.md               the Chief of Staff's Activity Log
   answers.json              the answers given in chat, when the config did not say
-  qa-readiness.json         the QA readiness answers the Dispatch Plan asked for, the JSON object qa-plan's --answers takes
+  qa-readiness.json         the QA readiness answers the Dispatch Plan asked for, the JSON object qa-plan's --answers takes, with a run-only change to the Places as its `report` key
   qa-readiness-<base>.json  the same, for a pull request with another base branch, once the human has answered for it
+  qa-run.json               the run answers manual-qa's check --for run listed, asked in the same message, the JSON object manual-qa's --answers takes (approved QA only)
+  events.jsonl              the Chief of Staff's Run Events, appended as each step happens
   rulings.md                the Ruling Ledger, in an autonomous run
+  qa-hosts.json             the hosts the human typed in the Dispatch Plan, each with its `host` verdict and its environment's seeder answer, for a `url` target (approved QA only); never written to a config, and deleted at close-out
+  qa-held.md                the QA held for you list, in an approved-QA run: each held item, with its row, evidence and options, and its answer once given (not Rulings, so not in the Ledger)
   evidence/                 command output a Ruling cites, one file each: R<n>-<k>.txt
   shared-board/<n>.md       in a Team Run, ticket <n>'s Shared Board row as this run last wrote it
+  watch.gen                 on foreground-watch harnesses, monotonic generation id fencing the active watch; incremented before each watch and on --resume, deleted at close-out or park
+  watch.pid                 optional PID of the active foreground watch process, cleaned up before a new watch and at close-out or park
   delegations/<id>/
     brief.md                the brief, as spawned
     activity.md             the Delegation's Activity Log
+    events.jsonl            the Delegation's own Run Events
     report.md               its latest report
     decisions.md            its Decision Requests, appended, each marked answered when it is (by the human, or by a Ruling's id)
     qa-plan.md              a QA Delegation's QA Plan, as drafted, then as delivered
     qa-report.md            a QA Delegation's QA Report
+    review-quotes.md        a QA Delegation's quote of each open Review box's file at its pinned head, each box marked literal, quoted or needs judgment
 ```
 
-`<run>` is the date and the issue numbers, `2026-11-13-12-34`, with `.2`, `.3` added when that folder is already there (a dot, so a second run for #12 is never read as a run for #12 and #2). A spec run's `<run>` is the date and the spec, `2026-11-13-spec-50`, with the same `.2`. A Delegation's `<id>` is `d<issue>`, `d12`; a second Delegation for the same issue adds `-2`, a third `-3`, and so on: the next suffix not yet used in the run, so a restart never reuses a folder. A phase of a spec with no tickets is `d<spec>-p<k>`, `d50-p2` for its second phase ([SPEC.md](SPEC.md#phases)), and a fix Delegation on an integration branch is `d<spec>-fix<k>`. A QA Delegation is `d<issue>-qa` for the first QA of that issue's pull request, then `d<issue>-qa2`, `-qa3` for each later one, on a new head or the same one.
+`<run>` is the date and the issue numbers, `2026-11-13-12-34`, with `.2`, `.3` added when that folder is already there (a dot, so a second run for #12 is never read as a run for #12 and #2). A spec run's `<run>` is the date and the spec, `2026-11-13-spec-50`, with the same `.2`. A Delegation's `<id>` is `d<issue>`, `d12`; a second Delegation for the same issue adds `-2`, a third `-3`, and so on: the next suffix not yet used in the run, so a restart never reuses a folder. A phase of a spec with no tickets is `d<spec>-p<k>`, `d50-p2` for its second phase ([SPEC.md](SPEC.md#phases)), the integration review of a spec run is `d<spec>-review` ([SPEC.md](SPEC.md#on-an-integration-branch)), and a fix Delegation on an integration branch, one that review's findings start included, is `d<spec>-fix<k>`. A QA Delegation is `d<issue>-qa` for the first QA of that issue's pull request, then `d<issue>-qa2`, `-qa3` for each later one, on a new head, the same one, or scoped to scenarios left for a person ([BRIEF.md](BRIEF.md#the-qa-brief)).
 
 A Team Run adds `shared-board/`, holding the copy of each of this teammate's ticket rows as last written: a row is written only when its new rendering differs from that copy, and `--status` reads a row's age from it ([TEAM.md](TEAM.md#when-a-row-is-written)).
+
+The Run Record is not in the run folder. It is derived at close-out into `<run_dir>/records/<run-id>.json`, a folder beside the run folders, so deleting or pruning a run folder leaves it ([Run Events and the Run Record](#run-events-and-the-run-record)).
 
 Nothing in a run folder is committed. A brief or a log can quote issue text and command output the human has not chosen to publish.
 
@@ -39,6 +50,8 @@ Nothing in a run folder is committed. A brief or a log can quote issue text and 
 Started <date>. Plan approved <date>. Approved routine writes: <list, or none>. Decision authority: <relay, or autonomous>.
 
 QA readiness: <none needed; or for <base>, this run only, or saved to <config> (uncommitted); and each other base answered>.
+
+QA: <none proposed; approved for <rows>; declined in the Dispatch Plan for <rows>; or, in a run with plain `go`, not asked>.
 
 Heartbeat: <id, interval, made <time>; `foreground watch`, where the harness has no scheduler; none yet; deleted <time>; or none on tier 3>.
 
@@ -62,6 +75,8 @@ Shared Board labels: not held, <why>.
 
 The `QA readiness` line is there only when the run has a QA Delegation. It names the base branch the answers in `qa-readiness.json` hold for, so a QA brief for a pull request with another base gives no answers file ([SKILL.md](SKILL.md) step 4). In `qa-readiness-<base>.json`, a `/` in the branch name is written `-`.
 
+The `QA` line is there only when the run has a QA Delegation proposed by the config, and records the QA yes of a `go autonomous` run ([SKILL.md](SKILL.md) step 4): the rows approved, and the rows that were not, as `QA declined in the Dispatch Plan`. A declined row has no QA Delegation, and the close-out prints the same words beside it, so the board and the close-out both show that no QA ran by the human's choice. `--resume` and `--status` print it.
+
 The `Heartbeat` line is the check that re-arms itself while the run waits on a Delegation (SKILL.md step 6), so `--status` shows whether one is armed and `--resume` knows what to arm again.
 
 The `Default branch` line is the default branch's tip at the last check of it: written at SKILL.md step 8 the first time, once every verified branch has been test-merged into that tip, and after that only at each [default-branch check](SKILL.md#the-default-branch-check). It is the baseline for "the tip has moved since", which decides whether the check re-gates the merge result. Its `passed` list names each row that passed at that tip, with the head it passed at: step 8 names only a verified branch whose head already contains the tip, and each check names only the rows that passed it. A row it does not name at its current head (one taken off the list, verified since, or pushed to since it passed) is re-gated at its next check, even when the tip has not moved. Before step 8 it reads `none yet`.
@@ -74,16 +89,16 @@ The **Decision Requests** cell lists each open question by its heading, and in a
 
 A QA Delegation's **Branch** cell is the full head it is pinned to, and its **Pull request** cell is the pull request it tests. Its earlier rows stay on the board, `void` or `failed`, so each QA run on the issue is visible.
 
-The **Handle** is what `message` and `await` need to reach the Executor again: a session id, a process id with its output file, or a sub-agent's name ([HARNESSES.md](HARNESSES.md)). The board is rewritten whole on each change, never edited in part, so an interrupted write leaves the last whole board in place: write the new board beside the old one, then rename it over the old one.
+The **Handle** is what `message` and `await` need to reach the Executor again: a session id, a process id with its output file, or a sub-agent's name ([HARNESSES.md](HARNESSES.md)). The board is rewritten whole on each change, never edited in part, so an interrupted write leaves the last whole board in place: write the new board beside the old one, then rename it over the old one. Each time it is rewritten, `board.html` is written beside it ([The live board](#the-live-board)).
 
 ## States
 
 | State                    | Means                                                                                                                                                                                                                                                                                                                                                                              |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `planned`                | In the approved plan; not started.                                                                                                                                                                                                                                                                                                                                                 |
-| `parked`                 | Waits for another Delegation's branch to be merged, or landed on an integration branch (an overlap or a blocker), then starts from there.                                                                                                                                                                                                                                          |
+| `parked`                 | Waits for another Delegation's branch to be merged, or landed on an integration branch (an overlap or a blocker), then starts from there; or a started QA session waiting for its head, idle until the Chief of Staff messages it.                                                                                                                                                 |
 | `running`                | Spawned, and working.                                                                                                                                                                                                                                                                                                                                                              |
-| `waiting`                | Stopped on an open Decision Request; a row the default-branch check found `BEHIND`, or whose re-gate on the merge result failed, included.                                                                                                                                                                                                                                         |
+| `waiting`                | Stopped on an open Decision Request; at close-out, a row of an approved-QA run with held QA items still unanswered in `qa-held.md`, listing them in its Decision Requests cell; a row the default-branch check found `BEHIND`, or whose re-gate on the merge result failed, included.                                                                                              |
 | `reported`               | Has written a report; not verified yet.                                                                                                                                                                                                                                                                                                                                            |
 | `sent back`              | Its report did not hold, or its QA failed and the human chose to send it back; the Delegation has been told what was found.                                                                                                                                                                                                                                                        |
 | `verified`               | A building Delegation whose report held and whose branch merges cleanly (step 8), waiting on its QA.                                                                                                                                                                                                                                                                               |
@@ -127,6 +142,35 @@ The verdicts:
 - `overturned`: the human overturned it, and the option they chose is its answer. Every Ruling whose **Cites** line names it becomes `needs re-review`.
 - `needs re-review`: it cited a Ruling since overturned, and waits for the human again. It is not overturned with the one it cited.
 
+## The live board
+
+`board.html` is the live view of a run: a page the human opens from the link given at `go` and `go autonomous`, and leaves open. The Chief of Staff writes it each time it rewrites `board.md`, by running `node <skill>/records.mjs board <run-folder> --heartbeat <minutes|none>`, which prints the `file://` link. It writes the page beside the old one and renames it over, as the board is written, so a reader never sees half a page. It is a file, not a server, so it works in every harness, and it reloads itself about every 15 seconds.
+
+- **Columns.** Planned, Needs you, Running, Checking, Landed and Merged. A Delegation is a card in the column its state belongs to; with a wait on the human open on it, it is in Needs you instead. A wait on a teammate's ticket (`teammate-blocker`) waits on nobody in this session: it is never in Needs you, never counted in the banner, the tab title or the favicon, and raises no notification. It parks the card (`parked`, in Planned), which shows it as `Parked on #<n> (@<login>)` with its age, until the blocker merges. A parked Delegation that then opens a wait on the human is `waiting`, in Needs you, and is `parked` again once that wait closes. The card shows its exact board state, how long it has been in it, and a badge for each Ruling (`R1 unreviewed`). A wait of the run, with no Delegation (the plan's approval, a review label, the merge, close-out), is a card of its own in Needs you.
+- **What waits on the human.** A banner and the Needs-you column give each open wait its cause chip, its `how` (the chat, a card id, GitHub) and its age. A card that `board.md` puts in Needs you with no wait open (`stalled`, `crashed`) is listed in the banner too, with its state. The banner, the tab title, the favicon and the notifications count the same list, so they never disagree with the column. A Recent Run Events feed sits beside the board.
+- **The drawer.** A click on a card opens that Delegation's facts (including whether it started from a card), its states with durations, its waits, its Rulings, its Run Events and its Activity Log. The address `#open=d:<id>` opens it, and `#open=r:<id>` opens a Ruling.
+- **Rulings.** In an autonomous run only, a Rulings section counts those still unreviewed, and each Ruling opens in the drawer with its question, options, choice, reason, evidence, cites and verdict history. The board is read-only: a verdict is given in the Chief of Staff chat.
+- **Where its data comes from.** The Run Events of this run folder (the Chief of Staff's and each Delegation's), the State column of `board.md`, the Ruling Ledger and the Activity Logs, all from this folder. The page never reads a Sink or the tracker.
+- **Stale.** A run that is quiet is not a run that stopped. The page compares the last Run Event, a `heartbeat` event included, with the heartbeat interval, and says so when the last one is older than two intervals (one missed firing is allowed). The interval is the one on the `Heartbeat` line, 10 minutes by default ([HARNESSES.md](HARNESSES.md#waiting-an-event-and-a-heartbeat)). With no heartbeat armed, or once the run is closed, it says nothing. The page checks this against the clock of the browser, so a page left open still warns when the Chief of Staff has stopped writing it.
+- **Team Run and closed runs.** In a Team Run the board links to the Shared Board, on the spec's issue, and does not copy it: teammates' state has one source ([TEAM.md](TEAM.md#the-shared-board)). Once the run is closed, it links to the run's page in the dashboard (`<run_dir>/dashboard.html`), once `--dashboard` has built it.
+- **Never hosted.** The drawer shows the Activity Logs, which are private prose, so the page says it holds them and carries every credential of the environment redacted. It stays on the machine: a hosted board would be an upload, with its disclosure, and none exists. Do not share the file.
+
+### The optional server
+
+`board.html` moves only when the Chief of Staff writes it. Where a process can run, the human may start a server that updates the board to the second. Nothing needs it: the run never waits on it, no step of the skill starts it unasked, and the file board works without it.
+
+```bash
+node "<skill>/records.mjs" serve <run-folder> --heartbeat <minutes|none>   # prints http://127.0.0.1:<port>/
+```
+
+Run it from the repository's root. It takes a free port, or the one `--port <n>` names, and runs until it is stopped (Ctrl-C).
+
+- **Local only.** It binds to 127.0.0.1 only, answers `GET` and `HEAD` requests made to that address or to `localhost` and no others, and sends no CORS header, so a page of another site cannot read it. While it runs, any program or account on the machine can open it, and it serves the Activity Logs, with the credentials of the server's own environment and the usual token shapes redacted; a secret only another environment holds, in no such shape, is not. Never forward the port or put the server behind a proxy: the board is never hosted.
+- **What it pushes.** It watches the run folder's events files, the Chief of Staff's `events.jsonl` and each Delegation's, including one made after it started, and pushes each newly appended Run Event to the connected page, which reloads. So a Delegation's own steps show between the Chief of Staff's wake-ups, for every Delegation that writes its events into this run folder. The page also reloads about every 15 seconds, for what no event carries: the State column of `board.md`, the Ruling Ledger and the Activity Logs. Staleness is judged with the `--heartbeat` the server was started with.
+- **Notifications.** The page offers a button, "Notify me of new waits". Once the human clicks it and the browser allows it, a wait opened afterwards raises a browser notification.
+- **`/dashboard`.** The past-runs dashboard, built again on each request from the local records and the Sink's records an earlier `--dashboard` build cached. It reads no Sink and no tracker, so it can lag the Sink and tags no record "not uploaded"; `--dashboard` fetches what is new. It writes no file, and takes neither `--repo` nor `--local-logs`. A closed run's served board links here.
+- **When it stops.** The served page stops reloading, keeps what it last showed, and gives `board.html`'s `file://` address to copy: a browser does not let a served page open a file. `board.html` is unaffected, and goes on being written and reloading itself. The server writes it once at its start only when the run has none and its Run Events check. Started again on the same `--port`, it makes the open page reload.
+
 ## Activity Logs
 
 Each Activity Log is append-only Markdown, one entry per thing done, newest last: the time, what was done, and why. The Chief of Staff's log records each plan, spawn, relayed Decision Request and its answer, verification result and write made in the human's name. A Delegation's log records its phases, its stop points and the commands it ran. Neither is ever rewritten: when a log is wrong, a later entry says so.
@@ -136,11 +180,11 @@ Each Activity Log is append-only Markdown, one entry per thing done, newest last
 `--resume <run>` continues a run from its folder, after a usage limit, a closed laptop or a pause for merges.
 
 1. Read the config again (`check`, with the run's `answers.json` when there is one). A config that changed since the run started is said, and its new values apply from here. A changed `run_dir` does not move a run: check that the folder the run is in is still inside the effective `run_dir`, and still ignored (`git check-ignore -q <that folder>/board.md`), whether or not the run has an `answers.json`. If it is not, stop, say so, and ask the human to move the run folder into the new `run_dir` or to put the old value back, then resume.
-2. Read the board and both kinds of Activity Log. A board with a `Spec` line is a spec run: load [SPEC.md](SPEC.md). Its landing and its integration branch's name are the board's, not the config's: a run never changes how it lands part way through.
+2. Read the board and both kinds of Activity Log. `activity.md` is prose context and baseline only and never authorizes a new action or `events.jsonl` entry without verifying `decisions.md` (answered markers), `report.md`, and the git, pull request, and CI source below. A board with a `Spec` line is a spec run: load [SPEC.md](SPEC.md). Its landing and its integration branch's name are the board's, not the config's: a run never changes how it lands part way through.
 3. Check each Delegation not `merged` or `dropped` against the source, not the board: its branch and head, its pull request and whether it is merged, CI on its head, the review workflow's run on its head and any review comment newer than its verification (SKILL.md step 7), and whether its Executor still answers its handle. With an integration branch, check the branch's head too, and which tickets' heads it contains: a ticket has landed, whatever the board says, when its landed commit is in it, or, when the board records none (an interruption between the move and the board's update), when the commit its verified report names is in it and is not the commit the ticket was cut at (a ticket cut but never committed to is in it too, and has not landed). Judge by those commits, never by the ticket branch's current head, which may have moved on since. Check the integration branch's own pull request the same way: when it is merged, so is every ticket it landed. Check each QA Delegation that has a head pinned in its row and is not `failed` or `void` against its pull request: when the pull request's head is not that head, it is `void`, a `passed` one included, and its building row goes back to `reported`, for SKILL.md step 7 on the new head. A `planned` QA Delegation has no head yet: it waits for its building Delegation, as before. For one whose `qa-plan.md` exists, check that it names the pinned head as its **Head**, and look where the plan was delivered for a posted QA Report for that head, whatever its report says: a QA Delegation interrupted between posting and reporting has posted one its report does not name. A board written before an interruption can be out of date. In a Team Run, the run is then brought back in line with the Shared Board ([Resuming a Team Run](#resuming-a-team-run)), before step 4.
 4. Update the board to what was found, and log each change. Then run the [default-branch check](SKILL.md#the-default-branch-check) on each `ready to merge` row before listing any: the default branch may have moved while the run was paused.
 5. In an autonomous run, open with the Rulings still awaiting review: each `unreviewed` or `needs re-review` entry in the Ruling Ledger, grouped by Delegation as SKILL.md step 10 shows them, and with the questions still queued for the human. The human may answer them now, or later in the session.
-6. Start each `parked` Delegation whose wait is over, from the default branch as it now is, or, with an integration branch, from that branch's head; in a Team Run, a ticket picked up or restarted from a branch starts from that branch, with the default branch merged in, as [TEAM.md](TEAM.md#blocking-across-teammates) says. Arm the heartbeat again (SKILL.md step 6), unless the only thing left to wait for is the human's merges, or the run is on tier 3. A `reported` or `waiting` row with a wait on CI or a review still needs it. The board's id may name a task that is gone, or one that outlived the old session, so check it first with the harness's own list of scheduled tasks, and make a new one only when it is gone. Then re-arm each wait the old session held, such as a subscription on a Delegation or a capped wait on CI: a background command does not survive a resume. Record the new id on the board, and continue the loop from SKILL.md step 6.
+6. Start each `parked` Delegation whose wait is over (a parked QA session is not started: step 9 messages it its head), from the default branch as it now is, or, with an integration branch, from that branch's head; in a Team Run, a ticket picked up or restarted from a branch starts from that branch, with the default branch merged in, as [TEAM.md](TEAM.md#blocking-across-teammates) says. Arm the heartbeat again (SKILL.md step 6), unless the only thing left to wait for is the human's merges, or the run is on tier 3. A `reported` or `waiting` row with a wait on CI or a review still needs it. The board's id may name a task that is gone, or one that outlived the old session, so check it first with the harness's own list of scheduled tasks, and make a new one only when it is gone. Then re-arm each wait the old session held, such as a subscription on a Delegation or a capped wait on CI: a background command does not survive a resume. Record the new id on the board; on a foreground-watch harness, increment `watch.gen` and clean up any stale `watch.pid` before launching the watch so any orphaned watch exits and late output is dropped; and continue the loop from SKILL.md step 6.
 
 A Delegation whose Executor no longer answers, and whose work did not finish, is `crashed`: its branch is the handoff, and the human decides whether a new Delegation picks it up.
 
@@ -224,6 +268,180 @@ It writes nothing, as the rest of `--status`: no board, no row, no label, no fil
 When `spec-tickets` lists no ticket, it says that the spec has none the tracker file can read, so there is no Shared Board to show; on GitLab the spec lists its tickets as a task list in its description ([trackers/gitlab.md](trackers/gitlab.md#spec-tickets)).
 
 It writes nothing: no row, no label, no file. It never says whether a run is alive or dead, as above.
+
+## Run Events and the Run Record
+
+Every step of a run is written as a **Run Event**, as it happens, to an events file in the run folder: `events.jsonl` for the Chief of Staff and one `delegations/<id>/events.jsonl` for each Delegation. At close-out the Chief of Staff derives one **Run Record** from them. The Activity Log stays as it is: it is the readable prose, and the events are the structured account beside it. Why: [DESIGN.md](DESIGN.md#run-events-and-the-run-record).
+
+Both are written only with the records script, never by hand. It takes the time from the clock, so an event is never given a time and never back-dated, and it refuses a field outside its schema:
+
+```bash
+node "<skill>/records.mjs" event --file <run folder>/events.jsonl --kind <kind> --actor <human|chief-of-staff|delegation> [--<field> <value>]...
+node "<skill>/records.mjs" derive <run folder>
+```
+
+`--file` is an absolute path for a Delegation, because its working copy is not the Chief of Staff's. Fields are written with a hyphen (`--wait-id`), lists are comma-separated (`--covers dr1,dr2`). The table's Flags column names each kind's fields as `event` takes them, a flag in `[]` optional, and `event`'s usage line lists them too: a `write` is `--write-kind`, never a second `--kind`. A value is an enum, a number, a SHA or an id: never a sentence. A reason in words belongs in the Activity Log.
+
+Every event carries an `actor`: `human`, `chief-of-staff` or `delegation`. `gh` and `glab` show the same login for a write the Chief of Staff made in the human's name and one the human made, so the actor is the only record of which it was.
+
+| Kind                 | Written by                                                                                 | When                                                                                                                                                          | Flags                                                                                                                                                      |
+| -------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `run-opened`         | Chief of Staff                                                                             | Step 2: the repository, tracker, run kind, spec, `team`, `took_over`, tickets, harness, Support Level, Decision authority and landing                         | `[--repo]` `[--tracker]` `--run-kind` `[--spec]` `--team` `[--took-over]` `[--tickets]` `--harness` `--support-level` `--decision-authority` `[--landing]` |
+| `plan-approved`      | Chief of Staff, actor `human`                                                              | Step 4: the human's "go", with the Decision authority line as approved                                                                                        | `[--decision-authority]`                                                                                                                                   |
+| `delegation-started` | the Delegation                                                                             | Its first act: its `delegation`, issue, kind, Executor kind, model and start route, all given in its brief                                                    | `--delegation` `[--issue]` `--delegation-kind` `--executor` `--model` `--start-route`                                                                      |
+| `delegation-landed`  | the Delegation                                                                             | Each time it pushes work it reports as landed, with the head                                                                                                  | `--delegation` `[--head]`                                                                                                                                  |
+| `delegation-ended`   | the Delegation                                                                             | When its final report is written, with its outcome                                                                                                            | `--delegation` `--outcome`                                                                                                                                 |
+| `send-back`          | Chief of Staff                                                                             | Each time a report is sent back (step 7, step 9)                                                                                                              | `--delegation`                                                                                                                                             |
+| `decision-request`   | Chief of Staff                                                                             | When it queues a Decision Request, its own or a Delegation's: the next run-wide id `dr<n>`, and the Delegation when it asked. A Delegation writes none        | `[--delegation]` `--id`                                                                                                                                    |
+| `ruling-made`        | Chief of Staff                                                                             | With each Ruling: its `R<n>` and the Delegation it was sent to                                                                                                | `--delegation` `--ruling`                                                                                                                                  |
+| `ruling-verdict`     | Chief of Staff, actor `human`                                                              | When the human upholds or overturns it                                                                                                                        | `--ruling` `--verdict`                                                                                                                                     |
+| `wait-opened`        | Chief of Staff                                                                             | When something starts waiting on the human, or on a teammate: a `wait-id`, its step kind, its `cause`, and `how` the human answers (`chat`, `card`, `github`) | `--wait-id` `[--delegation]` `--step-kind` `--cause` `--how` `[--card]` `[--issue]` `[--blocker]` `[--blocker-login]`                                      |
+| `wait-closed`        | Chief of Staff, actor `human` (`chief-of-staff` when it unparks a `teammate-blocker` wait) | When the human's touch ends it, listing the Decision Requests it `covers`                                                                                     | `--wait-id` `[--covers]`                                                                                                                                   |
+| `human-step`         | Chief of Staff, actor `human`                                                              | A touch with no wait before it (a typed command, a close-out answer)                                                                                          | `[--delegation]` `--step-kind` `--cause` `--how` `[--card]` `[--issue]` `[--covers]`                                                                       |
+| `write`              | Chief of Staff, or the Delegation                                                          | Each write to the tracker, with its kind and whether it was made in the human's name (`as-human`)                                                             | `[--delegation]` `--write-kind` `--as-human`                                                                                                               |
+| `review`             | Chief of Staff                                                                             | Each review round                                                                                                                                             | `--pr` `--round` `[--head]` `--findings` `--fixed` `--answered`                                                                                            |
+| `ci`                 | Chief of Staff                                                                             | Each CI result on a head                                                                                                                                      | `--pr` `--head` `--result` `--failed-checks`                                                                                                               |
+| `qa-result`          | Chief of Staff                                                                             | Each QA Delegation's result                                                                                                                                   | `--delegation` `--target` `--route` `--result`                                                                                                             |
+| `pull-request`       | Chief of Staff                                                                             | When a pull request is opened                                                                                                                                 | `--pr`                                                                                                                                                     |
+| `run-closed`         | Chief of Staff                                                                             | At close-out, with the run's outcome and its pull requests                                                                                                    | `--outcome` `[--pull-requests]`                                                                                                                            |
+| `heartbeat`          | Chief of Staff                                                                             | At every heartbeat firing, first, with no fields. `derive` ignores it; the board counts it, so a quiet run is not stale                                       | none                                                                                                                                                       |
+
+**A human step is one touch** from the human: one answer, click or typed command, and it lists every Decision Request it covered, so an answer to three questions in one message is one step. A wait has a `wait-opened` and a `wait-closed` sharing one `wait-id`, and the close is the touch the Run Record counts; the time between them is the wait. A wait belongs to a Delegation, or to the run when it is the plan's approval, the review label, posting replies, the merge or the close-out. A card start the harness refused opens a wait with cause `harness-limit` and the card's id. A ticket parked on a teammate's ticket opens a `teammate-blocker` wait carrying the blocker ticket and the teammate's login, and unparking closes it, written with actor `chief-of-staff`: it is by design and is measured, but it is not a human step, since only a `human` actor counts as one. A `harness-limit` wait must name its `card`, and a `teammate-blocker` wait its blocker ticket and the teammate's login: derive refuses either with a field missing. A Ruling is `ruling-made` when it is sent and `ruling-verdict` when the human upholds or overturns it, and the record's `rulings` counts them (`made`, `upheld`, `overturned`). A wait with no `wait-closed` by close-out is not a step: derive reports it as still open, by id and step kind, and counts it in `run.open_waits`. A cause that is by design is never counted as avoidable.
+
+**Each human step carries a `cause`**, from this list, each either avoidable or by design:
+
+| Cause                | Counts as | Meaning                                                                 |
+| -------------------- | --------- | ----------------------------------------------------------------------- |
+| `harness-limit`      | avoidable | The harness could not start or do it without the human, such as a card. |
+| `permission-refusal` | avoidable | A permission rule stopped a write or a command.                         |
+| `tool-missing`       | avoidable | A tool or CLI the step needed was not there.                            |
+| `skill-bug`          | avoidable | The skill's own rules asked for a step they should not have.            |
+| `spec-gap`           | avoidable | The spec or issue left a question that only the human could answer.     |
+| `missing-config`     | avoidable | A config key or an approved routine write would have made it needless.  |
+| `human-choice`       | avoidable | The human chose to step in where the run did not need them.             |
+| `other`              | avoidable | None of the above.                                                      |
+| `by-design`          | by design | An expected step: the plan's approval, the merge, the close-out.        |
+| `teammate-blocker`   | by design | Waiting on a teammate's ticket in a Team Run.                           |
+
+The plan's approval and the close-out are always `by-design`, and derive refuses a step of either kind with another cause.
+
+**At close-out** the Chief of Staff writes `run-closed`, then derives the record:
+
+```bash
+node "<skill>/records.mjs" derive <run_dir>/<run>
+```
+
+It reads the Chief of Staff's events and each Delegation's, in time order, and writes `<run_dir>/records/<run-id>.json`. The record holds only counts, ids, SHAs, issue and pull request numbers, times, durations, enum values and outcomes: the repository (`host/owner/repo`), the operator, the run kind and spec, `team`, `took_over`, the harness and its Support Level, each Delegation's Executor kind, model and real start and end, each human step with its kind, cause and wait, the writes with their actors, reviews, CI, Rulings and QA. It never holds issue text, ticket titles, commit messages, command output, file contents or a reason in words.
+
+A **safe-field check** runs on every derive: a field outside the schema, or a value that is free text, is an error that names the field, and nothing is written. It never strips. A stream that does not add up is refused the same way: a wait closed that was never opened, a step covering a Decision Request nobody raised, an event for a Delegation that never started, no `run-closed`. Fix the events file with a new event, and derive again.
+
+`run.operator` is the login of the tracker CLI (`gh api user`, or `glab api user`), and only `ORCHESTRATE_OPERATOR` overrides it; with no login it is `null`. `run.repo` is `host/owner/repo` from the `origin` remote, or the only remote. Records start with the first run that writes events: there is no backfill.
+
+### Uploading the Run Record
+
+The record is local until the human uploads it. With a `records.sink` in the config ([CONFIG.md](CONFIG.md#records)), the close-out offers the upload once the record is derived, unless `records.upload` is `never`; and `--upload <run>` uploads a closed run's record at any later time. Load [SINKS.md](SINKS.md), then the file of the Sink's type under [sinks/](sinks/), before the first upload. Both go through the records script:
+
+```bash
+node "<skill>/records.mjs" upload <run>         # shows the disclosure, uploads nothing
+node "<skill>/records.mjs" upload <run> --yes   # shows it, then uploads
+```
+
+`<run>` is a run id, or the path of its run folder. Run the first form and print its output as the question. The human answers by choosing one of its three buttons:
+
+- **[Show the record]:** print the file the output names (`record: <path>`), then ask again.
+- **[Upload]:** run the `--yes` form, and say what it printed: `uploaded`, or `already uploaded`.
+- **[Not now]:** do nothing more. The record stays in `<run_dir>/records/`, and the human can run `--upload <run>` later.
+
+The disclosure is this, with the Sink, path, count of people with access and number of human steps filled in by the script:
+
+> **Upload this run's Run Record?** To `acme/run-records` (private GitHub repository, 4 people with access) at `records/github.com/acme/widgets/naim/2026-11-19-spec-344.json`. It holds counts, ids, times, outcomes and 23 human steps with their kind and cause: no issue text, no command output, no prose. It is kept indefinitely (git cannot expire it). [Show the record] [Upload] [Not now]
+
+The count of people with access is left out when the Sink cannot be read for it. The Sink's name in the parentheses is the script's: `private GitHub repository`, `private GitLab project` or `private S3 bucket` (an S3 bucket has no count of people, so none is shown, and its line says the bucket's own rule decides how long the record is kept). The words are the script's; never reword them.
+
+**The Sink's Support Level.** Each Sink's file states its Support Level ([SINKS.md](SINKS.md)). When the Sink's file states a Support Level below `verified` (`gitlab` and `s3` ship at `documented`; `github` is `verified`), the Dispatch Plan says so beside "upload the Run Record", and the close-out repeats it after the disclosure, so the human knows the Sink has not yet been proven by a run. The first run that uploads to it and reads the record back moves the level in that file, citing its Activity Log.
+
+**A routine write.** The Dispatch Plan may list "upload the Run Record" among the kinds of routine write, when the config sets a `records.sink`. Approved with the plan's "go", the close-out runs the `--yes` form without asking again; the script still prints the disclosure, and the close-out repeats it. `--upload <run>` is the human's own command: it asks as above.
+
+**What stops an upload**, each printed by the script and relayed whole, with nothing uploaded:
+
+- the Sink is not private, or its visibility cannot be read: there is no override;
+- the record has no login (`run.operator` is `null`): sign in with `gh` or set `ORCHESTRATE_OPERATOR`, then derive again;
+- different bytes are already at the path: nothing is overwritten, and the clash is the human's to settle;
+- the safe-field check fails on the record;
+- exit code `3`: the repository cannot be told (several remotes and none is `origin`). Ask which one, and pin it as `records.repository`.
+
+**The path** is `records/<host>/<owner>/<repo>/<login>/<run-id>.json`, every segment lowercased. `<host>/<owner>/<repo>` is `records.repository`, or the record's own repository, read from the `origin` remote (or the only remote); `<login>` is `run.operator`. A run with no `records` keys writes the local record and offers nothing.
+
+### Uploading the raw run folder
+
+The raw run folder holds the prose the Run Record leaves out: it **may quote private issue text, command output and file contents**. It is offered only when the config sets `records.raw.sink` ([CONFIG.md](CONFIG.md#raw)), an `s3` bucket and nothing else, and only after the Run Record's own line has been answered, at every close-out. Without `records.raw`, nothing is offered and the run behaves as before. Load [sinks/s3.md](sinks/s3.md) before the first one. It goes through the records script:
+
+```bash
+node "<skill>/records.mjs" upload-raw <run>          # shows the line, uploads nothing
+node "<skill>/records.mjs" upload-raw <run> --list   # also lists every file
+node "<skill>/records.mjs" upload-raw <run> --yes    # shows it, then uploads
+```
+
+Run the first form and print its output as the question. The script reads the bucket's lifecycle before it prints the line, and quotes the days of the rule it found. The line is this, with the file count, the size, the bucket, the path and the days filled in by the script:
+
+> **Also upload the raw run folder?** 37 files, 1.8 MB, to bucket `acme-run-records` at `raw/github.com/acme/widgets/naim/2026-11-19-spec-344/`. It **may quote private issue text, command output and file contents**. The bucket's own rule deletes it after about 30 days. [List the files] [Upload] [Not now]
+
+The human answers with one button:
+
+- **[List the files]:** run the `--list` form, print it, then ask again.
+- **[Upload]:** run the `--yes` form, and say what it printed.
+- **[Not now]:** do nothing more. The folder stays on this machine.
+
+**Never a routine write.** The Dispatch Plan cannot list it, and approving the plan at "go" does not answer it: the close-out asks, with this line, at every close-out, and a yes at one close-out is not a yes at the next. The words are the script's; never reword them.
+
+**What stops it**, each printed by the script and relayed whole, with nothing uploaded: no enabled lifecycle rule expires `raw/`, or the lifecycle cannot be read (the skill never writes the bucket's configuration, so it tells the human to set the rule); the bucket is not private; the Run Record has no login; a file that is not UTF-8 text; different bytes already at a path, which nothing overwrites. Raw folders are never shown in the dashboard.
+
+### The past-runs dashboard
+
+`--dashboard [--repo <host/owner/repo>] [--local-logs]` builds one self-contained page from the Run Records in `<run_dir>/records/` and from the config's `records.sink`, so a past run can be reviewed down to a Delegation and a human step, in one repository or in every repository the Sink holds. It runs the records script, and prints what the script prints, the `file://` link of each page it wrote. It never launches a browser, since harnesses differ, and the skill never hosts the page. A team may host `dashboard.html` itself (never `dashboard.local.html`), behind its own access control: it holds every record it was built from, every login included, so its readers should be the Sink's readers.
+
+```bash
+node "<skill>/records.mjs" dashboard                # <run_dir>/dashboard.html
+node "<skill>/records.mjs" dashboard --repo <host/owner/repo>   # opens on that repository
+node "<skill>/records.mjs" dashboard --local-logs   # also <run_dir>/dashboard.local.html
+```
+
+The page is built on this machine, and works offline: it holds no credential and makes no request. The Sink is read at build time, through the same Sink operations the upload uses, and the records are inlined. It shows when it was built and the command that rebuilds it, since it does not update itself. A record that is not JSON, fails the safe-field check, or repeats a run id is skipped, with the file named, and the rest is built. With no records it builds nothing and says so.
+
+- **Reading the Sink.** The build checks the Sink is private first (`visibility`), lists `records/` (`list`), and reads only the paths the cache does not hold (`read`). Records are cached forever, in `<run_dir>/records-cache/`, in a folder that mirrors the Sink's paths, since a path in a create-only Sink never changes; a cached record is checked again each build. The reader needs read access only ([sinks/github.md](sinks/github.md#access)). A Sink that cannot be read (a `404` or a `403`) is one warning, and the page is built from the local records. A Sink that has turned public is a warning too, but the read goes ahead.
+- **Which records.** `local` and the configured `records.sink`, nothing else. A record that is identical in both counts once. A record only in `local` is tagged "not uploaded" with its `--upload <run>` command, when the Sink was read. When the bytes differ, the Sink's copy is shown, with a warning.
+- **Namespaces** are parsed from the Sink's paths alone, as `records/<host>/<owner>/<repo>/<login>/<run-id>.json`, read from the end, so a GitLab subgroup's whole namespace stands in `<owner>`: no index file is read. A path that does not parse is skipped and listed. The Repository switcher offers _All repositories_ and every namespace found, and the page opens on the current repository (`records.repository`, else `origin`), or on `--repo`.
+- **All repositories** has the merge rate, human steps per run, the avoidable trend, the top avoidable cause, a chart comparing repositories over time, recent runs and the namespace tree. A **Repository** page has its human steps per run stacked by cause, and its runs.
+- **Runs:** every record, newest first, with its human steps and top cause.
+- **A Run** has tabs: Summary (what to improve next run, why a human was needed, the plan, the outcome), Timeline (a Human lane, a Chief of Staff lane with writes by `actor`, Reviews and CI, one lane per Delegation), Delegations, Human steps (filterable by cause, kind and actor), Reviews and CI, Log, and Record (JSON). A Delegation and each human step have a page of their own, and the Key page says what each cause, kind and mark means.
+- **Colour means `cause`, and nothing else.** Every chip names its cause and says avoidable or by design. States, such as an outcome or a CI result, are grey.
+- **The Log tab** gives the Run Events as text, derived from the record alone, and a report of the run, each to copy or download.
+- **Prose is never in `dashboard.html`.** With `--local-logs`, `dashboard.local.html` also inlines the prose `activity.md` of each run whose folder is still in `<run_dir>`, under the banner "contains private prose from this machine, don't share this file". A credential the environment holds, and the usual token shapes, are replaced in that prose. Tell the human the `.local` file is not for sharing.
+
+#### Teammates on the dashboard
+
+Teammates sharing a Sink see each other's runs, how each uses the skill and how long their runs take, side by side and without ranking. Everything comes from the Run Records, and the dashboard never reads the tracker.
+
+- **People.** The Repository page has a People table with a row for each login in that repository, and _All repositories_ has the same table grouped by `(host, login)` with a count of repositories. Each row has: runs by kind and the outcome mix; the median and the longest run length; the time waiting on the human (the sum of each wait, from its open and close Run Events); human steps per Delegation; the avoidable share with its top avoidable cause and a trend line; the mix of decision authority, of QA, of harness and of model; and the date of the last record. A date range of 30 days, 90 days or all covers the table and the Person page, and defaults to 90 days.
+- **Like with like.** Run counts and run lengths are shown per run kind (`tickets`, `spec`, `team`) and never mixed; only the per-Delegation figures compare across kinds. People are shown by login, sorted by login, with no ranking, score, total, "best" or "worst". No config key hides or totals people.
+- **Person.** A Person page per `(repository, login)` shows runs over time, run lengths, human steps by cause, the avoidable trend, and links to the person's Spec pages. A login on two hosts is two people: logins are never merged across hosts, and there is no alias map.
+- **Spec.** A Spec page per `(host/owner/repo, run.spec)` where `run.team` is true reads every login's Team Run over the spec on one clock: a lane per run, grouped under its login, with the harness and model of each; the tickets each teammate built; the time parked on a teammate's ticket (the `teammate-blocker` waits, and whose ticket); takeovers, where a run that took over another marks it "superseded by <run-id>"; and the spec's totals (first start to last close, human steps, the listed tickets that landed in merged runs, and apart from them those landed in `partly-merged` runs, since the record holds no per-ticket merge). It points at `--status --spec <n>` for live state and never reads the tracker.
+- **Who is not shown.** Every page that shows teammates (the People table on the Repository page and on _All repositories_, and each Spec page) names the Sink it read and says: "Only runs uploaded to `<sink>` are here. Teammates who haven't uploaded, upload elsewhere, or have runs still open aren't shown." There is no roster, and the page never guesses who is missing; a login's last-record date shows that someone has stopped uploading.
+- **Who can see it.** Whoever can read the Sink reads every record, with every login's name, so no page setting is privacy. Who uploads (each person's yes at close-out, or a routine write the Dispatch Plan approved) and who can read the Sink are the organization's controls.
+
+The page shell and its one stylesheet are in [`pages/`](pages/), shared by every page the skill builds.
+
+### Pruning old run folders
+
+Local pruning is off until the config sets `prune.after_days` ([CONFIG.md](CONFIG.md#prune)); setting it is the consent to delete. The close-out runs it after deriving the record:
+
+```bash
+node "<skill>/records.mjs" prune
+```
+
+It deletes a run folder only when the run is **closed out**: its Run Record is in `<run_dir>/records/<run-id>.json` and names that run, and the record's `closed_at` is more than `after_days` days ago. An open run has no record, so it stays, however old. A closed run newer than the setting stays. `<run_dir>/records/`, and every record in it, always stays, and so does anything in `<run_dir>` that is not a run folder. A bad config, or no `prune` key, deletes nothing.
+
+**The ask, once.** With no `prune` key, the close-out asks: "Prune closed-out run folders older than 90 days from now on? Run Records are never deleted." On a yes, write `prune.after_days: 90` into the config file the run read (create `orchestrate.config.yml` if there is none), and run `prune`. On a no, run `node "<skill>/records.mjs" prune --declined`, which writes `<run_dir>/prune-declined` and nothing else, and does not ask again. The key is written only on a yes.
 
 ## Run Summary
 

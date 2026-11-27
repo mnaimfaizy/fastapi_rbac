@@ -18,11 +18,15 @@ The skill body speaks of four verbs only. This file says what they mean, how a r
 The events `await` waits for are a report, a Decision Request, an end, or no sign of life. A harness's own signal for them is not enough on its own. It comes when a Delegation ends a turn, and a Delegation can end a turn before its report is final. It does not come at all for a Delegation stopped on a prompt, or for a wait on CI or a review that ends with nothing found. So every harness's `await` has two parts:
 
 - **A primary event:** the harness's own signal, as its file names it: a session ending a turn, a process ending, a sub-agent's end announced.
-- **A heartbeat:** a check that re-arms itself, every 10 minutes by default, whatever the turns between did. It catches what the event misses. SKILL.md step 6 says when it is armed and removed, and what each firing does.
+- **A heartbeat:** a check that re-arms itself, every 10 minutes by default, whatever the turns between did. It catches what the event misses. SKILL.md step 6 says when it is armed and removed, and what each firing does. The live board `board.html` takes this interval to say when the run is stale: no Run Event for two intervals ([RUN.md](RUN.md#the-live-board)).
+
+The board's optional server ([RUN.md](RUN.md#the-optional-server)) is no part of `await`, and no harness needs it. It runs until it is stopped, so the Chief of Staff never runs it in the foreground. Where a harness cannot keep a process running, the human starts it in a terminal of their own, or goes without: `board.html` needs no process.
 
 A wake-up, from either part, means "something may have changed", never "a report is final". On each wake-up the Chief of Staff checks every Delegation the run waits on, not only `running` ones: any that is `running`, `waiting`, `reported` or `sent back`, and a QA Delegation still in progress, since a `reported` row can still be waiting on CI or a review run. For each it checks its `report.md` and `decisions.md`, its session or process, its pull request's checks and the review run. It does not stop at the one the wake-up named. A report is final only when its **Final:** line says `yes` ([BRIEF.md](BRIEF.md#report)).
 
-Each harness file's `await` names its primary event and its heartbeat. On Claude Code (desktop and CLI) the heartbeat is a recurring scheduled task in the Chief of Staff's own session. On a harness whose file names no scheduler, the heartbeat is the **foreground watch**: the Chief of Staff does not end its turn while the run waits on a Delegation. Instead it runs a shell loop in the foreground that checks every 60 seconds. The loop returns as soon as any Delegation's `report.md` or `decisions.md` changes, or a pull request the run waits on changes state, or else at a cap of 10 to 15 minutes. The Chief of Staff acts on what changed, or on nothing, writes the board, and runs the watch again. The harness's own event, where it has one, is one more change the watch sees. How long a shell command or a turn may run on that harness is a **check before use** item until a run records it.
+Each harness file's `await` names its primary event and its heartbeat. On Claude Code (desktop and CLI) and Antigravity the heartbeat is a recurring scheduled task in the Chief of Staff's own session. On a harness whose file names no scheduler, the heartbeat is the **foreground watch**: the Chief of Staff does not end its turn while the run waits on a Delegation. Instead it runs a shell loop in the foreground that checks every 60 seconds. The loop returns as soon as any Delegation's `report.md` or `decisions.md` changes, or a pull request the run waits on changes state, or else at a cap of 10 to 15 minutes. The Chief of Staff acts on what changed, or on nothing, writes the board, and runs the watch again. The harness's own event, where it has one, is one more change the watch sees. How long a shell command or a turn may run on that harness is a **check before use** item until a run records it.
+
+On all six foreground-watch harnesses (`cursor`, `codex-cli`, `copilot-cli`, `gemini-cli`, `devin`, `opencode`), the foreground watch shell loop is **strictly read-only** (inspection and stdout only): it must never append to or write `activity.md`, `board.md`, or `events.jsonl`. Before launching each watch (and on `--resume`, before arming the watch again), the Chief of Staff increments a per-run monotonic generation id in `<run_dir>/<run>/watch.gen` (starting at `1`) and cleans up or stops any prior PID in `<run_dir>/<run>/watch.pid` (when used). Each watch captures its generation id at launch, emits it to stdout, and checks it against `watch.gen` on every iteration, so it exits immediately if superseded without writing any run-folder file. Any Chief of Staff turn that receives watch output whose generation id does not match current `watch.gen` drops it without acting or appending to `activity.md` or `events.jsonl`. At close-out or when the run parks, delete `watch.gen` and `watch.pid` alongside deleting the heartbeat.
 
 While the watch runs, the turn stays open, so the human has no prompt to answer at. A question for the human (every Decision Request in a relay run, or one queued in an autonomous run on a harness whose **Notify** is `none known`) is written whole in the Chief of Staff's session between two watches, and on the board. Then the watch runs again, and the other Delegations go on. To answer, the human stops its turn and answers there; the Chief of Staff acts on the answer and runs the watch again. The Dispatch Plan says so under **Harness limits**.
 
@@ -70,15 +74,15 @@ State the harness, its Support Level and its tier in the Activity Log and the Di
 
 ### Support Level
 
-How far `orchestrate` has been proven on a harness or a tracker. Each harness file, and each tracker file under [trackers/](trackers/), gives its level, and what it rests on.
+How far `orchestrate` has been proven on a harness, a tracker or a sink. Each harness file, each tracker file under [trackers/](trackers/), and each sink file under [sinks/](sinks/), gives its level, and what it rests on.
 
-| Level        | Means                                                                             |
-| ------------ | --------------------------------------------------------------------------------- |
-| `verified`   | A full run, from Dispatch Plan to close-out, passed on it.                        |
-| `tried`      | A run happened on it, and found gaps, named in the file.                          |
-| `documented` | Written from the harness's or tracker's documentation alone; no run has tried it. |
+| Level        | Means                                                                                                                                |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `verified`   | A full run, from Dispatch Plan to close-out, passed on it. For a sink: a run uploaded to it and read it back ([SINKS.md](SINKS.md)). |
+| `tried`      | A run happened on it, and found gaps, named in the file.                                                                             |
+| `documented` | Written from the harness's, tracker's or sink's documentation alone; no run has tried it.                                            |
 
-Below `verified`, the Dispatch Plan opens with the level and what it means for this run, and waits for the human's "go" even when the invocation carried `go`. A level moves up only when a run's Activity Log records the evidence, and the change to the harness or tracker file cites that run.
+Below `verified`, the Dispatch Plan opens with the level and what it means for this run, and waits for the human's "go" even when the invocation carried `go`. A level moves up only when a run's Activity Log records the evidence, and the change to the harness, tracker or sink file cites that run.
 
 ### Facts and check before use
 
@@ -97,7 +101,7 @@ Each fact in a harness file is dated, with the version it was read at and where 
 - `await`: the human says when the session has written its report. There is no heartbeat: the human is the event.
 - `report`: the report file.
 
-The Chief of Staff still never does a Delegation's work itself, here least of all: running a Delegation in its own session would mix the work it must verify with the session that verifies it.
+The general rule in [SKILL.md](SKILL.md#rules) ("The Chief of Staff never does a Delegation's work") holds here least of all, for the same reason: running a Delegation in its own session would mix the work it must verify with the session that verifies it.
 
 ## A headless run in a worktree
 
@@ -131,12 +135,14 @@ Codex Cloud, the Copilot cloud agent, Devin Cloud, Cursor Cloud Agents and Antig
 | analysis   | A sub-agent, or a Live Session if long | A sub-agent, or a headless run                  | A session the human starts |
 | QA         | A Live Session                         | A headless run; else a session the human starts | A session the human starts |
 
+On a harness whose file says so (Claude Code desktop), a QA Live Session is **parked**: started at the `go` turn, which the human's words authorize, on a QA brief without `<head>`, and messaged its head later, and again for a re-QA, so no card or click is needed. `executors.qa: claude-code-cli` moves QA to a headless run instead ([SKILL.md](SKILL.md) step 4 gives its costs).
+
 A harness file's **Executors** line wins over this table where they differ. The Dispatch Plan names the Executor for every Delegation, and the human's "go" approves it.
 
 A QA Delegation is never a sub-agent, on any harness: QA needs a working copy and a browser of its own, and outside an autonomous run, a sub-agent cannot take a user-invoked skill either. On every harness, the QA Delegation's session starts on its brief, never on a skill command, so the head is pinned before `qa-plan` runs. Then its QA skills start by one of two routes ([SKILL.md](SKILL.md) step 4):
 
-- **With `go`, and for a `url` target in any run:** typed. Each command is sent to the session as a message where the harness runs that as the user's invocation, or typed there by the human. Where that is still **check before use**, the Dispatch Plan says the human may be asked to type `/qa-plan <n> [--answers <working_dir>/qa-readiness.json]` (the `--answers` part only with an answers file for its base, [SKILL.md](SKILL.md) step 4), and later `/manual-qa <plan file>`, in that session.
-- **With `go autonomous`, for a `stack` target:** from the brief. The session reads each skill's `SKILL.md` from the paths its brief gives and follows it, so how this harness runs a slash command does not matter, and nobody types one.
+- **With `go`:** typed. Each command is sent to the session as a message where the harness runs that as the user's invocation, or typed there by the human. Where that is still **check before use**, the Dispatch Plan says the human may be asked to type `/qa-plan <n> [--answers <working_dir>/qa-readiness.json]` (the `--answers` part only with an answers file for its base, [SKILL.md](SKILL.md) step 4), and later `/manual-qa <plan file>`, in that session.
+- **With `go autonomous` and the QA yes, for a `stack` or a `url` target:** from the brief; a `url` target's hosts are typed in the Dispatch Plan and reach the session only through its brief. The session reads each skill's `SKILL.md` from the paths its brief gives and follows it, so how this harness runs a slash command does not matter, and nobody types one. Without the QA yes (the human declined QA in the Dispatch Plan), no QA runs on those rows.
 
 ## Notifying the human
 

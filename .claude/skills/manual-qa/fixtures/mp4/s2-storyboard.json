@@ -15,5 +15,6 @@
     "head": "4444444ddddddd5555555eeeeeee6666666fffff"
   },
   "context": { "accounts": ["member"], "sessions": [] },
+  "story": ["A new member signs up and sees the welcome page."],
   "variables": []
 }

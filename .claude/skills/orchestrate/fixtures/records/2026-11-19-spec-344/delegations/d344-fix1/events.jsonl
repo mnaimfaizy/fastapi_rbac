@@ -1,0 +1,4 @@
+{"at":"2026-11-19T05:06:23Z","kind":"delegation-started","actor":"delegation","delegation":"d344-fix1","delegation_kind":"fix","executor":"live-session","model":"default","start_route":"card"}
+{"at":"2026-11-19T05:23:04Z","kind":"delegation-landed","actor":"delegation","delegation":"d344-fix1"}
+{"at":"2026-11-19T06:05:01Z","kind":"delegation-landed","actor":"delegation","delegation":"d344-fix1"}
+{"at":"2026-11-19T06:08:30Z","kind":"delegation-ended","actor":"delegation","delegation":"d344-fix1","outcome":"landed"}
