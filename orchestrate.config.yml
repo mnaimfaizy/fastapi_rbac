@@ -32,9 +32,26 @@
 #
 # Run Records. Every run writes Run Events, a Run Record and a live
 # board.html into run_dir (gitignored by tmp/; board.html holds Activity Log
-# prose). `records` is unset, so Run Records stay on the machine and
-# close-out offers no upload; `/orchestrate --dashboard` lists past runs.
-# `prune` is unset, so the first close-out asks once about pruning at 90 days.
+# prose). `records.sink` is the private GitHub repository
+# mnaimfaizy/orchestrate-run-records (sinks/github.md): close-out shows a
+# disclosure and offers the upload, with "Not now"; nothing uploads without a
+# yes. The upload goes ahead only while that repository is private. Access
+# comes from the gh login of whoever runs the skill, never from this file:
+# the uploader needs Contents: write there (naimfaizy-bot must be a
+# collaborator with push access). Records land at
+# records/github.com/mnaimfaizy/fastapi_rbac/<login>/<run-id>.json and are
+# kept until someone deletes them by hand. `/orchestrate --dashboard` reads
+# them back. `prune` is unset, so the first close-out asks once about pruning
+# at 90 days.
+#
+# models. Mirrors the CI model routing (the CLAUDE_*_MODEL and
+# CLAUDE_*_EFFORT repository variables) as Cursor CLI model ids, where the
+# effort is part of the id (`agent models` lists them): analysis = Plan,
+# Opus 5.5 Medium; build = Implement, Sonnet 5.5 High; review = Review,
+# Sonnet 5.5 High. qa has no CI flow; it uses Sonnet 5.5 High like build and
+# review. Security Audit (Fabel 5.2 High) and Review Response (Sonnet 5.5
+# Medium) are CI-only flows with no orchestrate role, so they stay in the
+# repository variables. On another harness, change these to its model names.
 #
 # regate. `config.mjs regate <sha> --out <file>` runs the commands below.
 # CI on main is green, so there are no allowed_failures and regate stays a
@@ -106,3 +123,15 @@ team:
     ready_to_merge: "team: ready to merge" # Ready to Merge
     merged: "team: merged" # its pull request is merged
   recent_activity: 5 # milestones a Shared Board row keeps in its Recent activity list
+
+models:
+  analysis: claude-opus-5-5-medium # Plan: Opus 5.5 Medium
+  build: claude-sonnet-5-5-high # Implement: Sonnet 5.5 High
+  review: claude-sonnet-5-5-high # Review: Sonnet 5.5 High
+  qa: claude-sonnet-5-5-high # no CI flow; same as build and review
+
+records:
+  upload: offer # close-out offers the upload; nothing uploads without a yes
+  sink:
+    type: github
+    repo: mnaimfaizy/orchestrate-run-records # private; branch unset uses its default branch
