@@ -4,7 +4,7 @@ description: Drafts a pull request title, labels, merge base and body from the c
 model: inherit
 readonly: true
 ---
-<!-- Generated from .github/agents/pr-drafter.agent.md by scripts/development/sync_agents.py. Edit that file, then run it with --apply. -->
+<!-- Generated from .github/agents/pr-drafter.md by scripts/development/sync_agents.py. Edit that file, then run it with --apply. -->
 
 # PR Drafter
 

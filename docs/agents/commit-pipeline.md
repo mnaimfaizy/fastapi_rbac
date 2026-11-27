@@ -9,7 +9,7 @@ Adapted from the Agent-kit [commit-pipeline Pattern guide](https://github.com/mn
 | Part | File | Job |
 | --- | --- | --- |
 | Skill | [`.agents/skills/commit-change/SKILL.md`](../../.agents/skills/commit-change/SKILL.md) | Stages named paths, calls the drafter, runs the runner, repairs a failure. Load it whenever you commit. |
-| Drafter | [`.github/agents/commit-drafter.agent.md`](../../.github/agents/commit-drafter.agent.md) (canonical); [`.claude/agents/commit-drafter.md`](../../.claude/agents/commit-drafter.md) and [`.cursor/agents/commit-drafter.md`](../../.cursor/agents/commit-drafter.md) are generated from it with `scripts/development/sync_agents.py` | Read-only. Drafts one message from the staged diff and returns text. Harness wrappers only; the rules live here. |
+| Drafter | [`.github/agents/commit-drafter.md`](../../.github/agents/commit-drafter.md) (canonical); [`.claude/agents/commit-drafter.md`](../../.claude/agents/commit-drafter.md) and [`.cursor/agents/commit-drafter.md`](../../.cursor/agents/commit-drafter.md) are generated from it with `scripts/development/sync_agents.py` | Read-only. Drafts one message from the staged diff and returns text. Harness wrappers only; the rules live here. |
 | Runner | [`scripts/development/commit-runner.sh`](../../scripts/development/commit-runner.sh) | The only place `git commit` runs. Checks the index, runs every hook, ends a failure with a trailer. |
 
 ## Rules

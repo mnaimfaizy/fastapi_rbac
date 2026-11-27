@@ -10,7 +10,7 @@ hooks:
         - type: command
           command: "bash \"$CLAUDE_PROJECT_DIR/scripts/development/pr-drafter-guard.sh\""
 ---
-<!-- Generated from .github/agents/pr-drafter.agent.md by scripts/development/sync_agents.py. Edit that file, then run it with --apply. -->
+<!-- Generated from .github/agents/pr-drafter.md by scripts/development/sync_agents.py. Edit that file, then run it with --apply. -->
 
 # PR Drafter
 

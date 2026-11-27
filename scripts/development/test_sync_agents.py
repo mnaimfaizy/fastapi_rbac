@@ -136,6 +136,22 @@ class SyncAgents(unittest.TestCase):
         self.canon.write_text(CANON + "<!-- /harness -->\n")
         self.assertTrue(any("closing marker" in p for p in s.sync(self.root, apply=False)[0]))
 
+    def test_plain_md_is_canonical_and_not_offered_as_agent_md(self) -> None:
+        plain = self.root / s.CANON_DIR / "local.md"
+        plain.write_text(CANON.replace("name: demo", "name: local"))
+        problems, notes = s.sync(self.root, apply=True)
+        self.assertEqual(problems, [])
+        text = (self.root / ".claude/agents/local.md").read_text()
+        self.assertIn("Generated from .github/agents/local.md", text)
+        self.assertNotIn("local.agent.md", text)
+        self.assertTrue(any("by hand" in n for n in notes))
+        self.assertEqual(s.sync(self.root, apply=False)[0], [])
+
+    def test_two_files_for_one_stem_are_rejected(self) -> None:
+        (self.root / s.CANON_DIR / "demo.md").write_text(CANON)
+        problems, _ = s.sync(self.root, apply=False)
+        self.assertTrue(any("two canonical files for demo" in p for p in problems))
+
     def test_name_must_match_file_stem(self) -> None:
         self.canon.write_text(CANON.replace("name: demo", "name: other"))
         problems, _ = s.sync(self.root, apply=False)

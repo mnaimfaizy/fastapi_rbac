@@ -9,7 +9,7 @@ Adapted from the Agent-kit [pr-pipeline Pattern guide](https://github.com/mnaimf
 | Part | File | Job |
 | --- | --- | --- |
 | Skill | [`.agents/skills/create-pull-request/SKILL.md`](../../.agents/skills/create-pull-request/SKILL.md) | Checks the branch, calls the drafter, writes the body file, runs the runner, repairs a failure. Load it whenever you open or update a pull request. |
-| Drafter | [`.github/agents/pr-drafter.agent.md`](../../.github/agents/pr-drafter.agent.md) (canonical); [`.claude/agents/pr-drafter.md`](../../.claude/agents/pr-drafter.md) and [`.cursor/agents/pr-drafter.md`](../../.cursor/agents/pr-drafter.md) are generated from it with `scripts/development/sync_agents.py` | Read-only. Drafts the title, labels, merge base and body from the branch's commits, diff and linked issues. |
+| Drafter | [`.github/agents/pr-drafter.md`](../../.github/agents/pr-drafter.md) (canonical); [`.claude/agents/pr-drafter.md`](../../.claude/agents/pr-drafter.md) and [`.cursor/agents/pr-drafter.md`](../../.cursor/agents/pr-drafter.md) are generated from it with `scripts/development/sync_agents.py` | Read-only. Drafts the title, labels, merge base and body from the branch's commits, diff and linked issues. |
 | Runner | [`scripts/development/pr-runner.sh`](../../scripts/development/pr-runner.sh) | The only place an agent pushes a branch and creates or edits a pull request. Re-checks the draft first and ends a failure with a trailer. |
 | Label allowlist | [`pr-labels.txt`](pr-labels.txt) | The only labels the drafter may choose and the runner accepts. |
 

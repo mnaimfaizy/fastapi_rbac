@@ -4,7 +4,7 @@ description: Drafts a commit message from the staged diff. Read-only; it never s
 model: fast
 readonly: true
 ---
-<!-- Generated from .github/agents/commit-drafter.agent.md by scripts/development/sync_agents.py. Edit that file, then run it with --apply. -->
+<!-- Generated from .github/agents/commit-drafter.md by scripts/development/sync_agents.py. Edit that file, then run it with --apply. -->
 
 # Commit Drafter
 

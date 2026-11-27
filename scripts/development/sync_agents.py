@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Generate the Claude Code and Cursor sub-agent files from one canonical file each.
 
-Canonical file: `.github/agents/<name>.agent.md` (GitHub Copilot reads it as it is). Targets:
-`.claude/agents/<name>.md` and `.cursor/agents/<name>.md`.
+Canonical file: `.github/agents/<name>.agent.md`, which GitHub Copilot offers and reads as it
+is, or `.github/agents/<name>.md` for an agent Copilot must not offer (Claude and Cursor
+only). Targets: `.claude/agents/<name>.md` and `.cursor/agents/<name>.md`.
 
 Canonical file shape:
 
@@ -41,7 +42,7 @@ import sys
 from pathlib import Path
 
 CANON_DIR = ".github/agents"
-CANON_SUFFIX = ".agent.md"
+COPILOT_SUFFIX = ".agent.md"  # Copilot offers only this suffix
 TARGET_DIRS = {"claude": ".claude/agents", "cursor": ".cursor/agents"}
 HARNESSES = ("claude", "cursor", "copilot")
 SYNC = "scripts/development/sync_agents.py"
@@ -112,11 +113,29 @@ def filter_body(body: str, harness: str, label: str) -> str:
     return "\n".join(out).strip("\n") + "\n"
 
 
+def canon_stem(path: Path) -> str:
+    """The agent name: `name.agent.md` (Copilot) or `name.md` (Claude and Cursor only)."""
+    if path.name.endswith(COPILOT_SUFFIX):
+        return path.name[: -len(COPILOT_SUFFIX)]
+    if path.suffix == ".md":
+        return path.stem
+    raise SyncError(f"{path.name}: canonical files are .agent.md or .md")
+
+
+def canon_paths(canon_dir: Path) -> list[Path]:
+    if not canon_dir.is_dir():
+        return []
+    return sorted(
+        (path for path in canon_dir.iterdir() if path.is_file() and path.suffix == ".md"),
+        key=lambda path: path.name,
+    )
+
+
 def canon_parts(path: Path) -> tuple[list[tuple[str, list[str]]], str]:
     """Return the canonical name and description blocks, and the body. Validate them."""
     blocks, body = split_frontmatter(read(path))
     keys = {key: lines for key, lines in blocks}
-    stem = path.name[: -len(CANON_SUFFIX)]
+    stem = canon_stem(path)
     extra = [k for k in keys if k not in SHARED_KEYS + COPILOT_ONLY_KEYS]
     if extra:
         raise SyncError(f"{path.name}: unsupported frontmatter key {', '.join(extra)}")
@@ -131,15 +150,14 @@ def canon_parts(path: Path) -> tuple[list[tuple[str, list[str]]], str]:
     return [(k, keys[k]) for k in SHARED_KEYS], body
 
 
-def generated_line(stem: str) -> str:
+def generated_line(path: Path) -> str:
     return (
-        f"<!-- Generated from {CANON_DIR}/{stem}{CANON_SUFFIX} by {SYNC}. "
+        f"<!-- Generated from {CANON_DIR}/{path.name} by {SYNC}. "
         f"Edit that file, then run it with --apply. -->"
     )
 
 
 def render(path: Path, harness: str, current: str | None) -> str:
-    stem = path.name[: -len(CANON_SUFFIX)]
     shared, body = canon_parts(path)
     own: list[tuple[str, list[str]]] = []
     if current is not None:
@@ -148,7 +166,7 @@ def render(path: Path, harness: str, current: str | None) -> str:
     for _, block in shared + own:
         lines.extend(block)
     lines.append("---")
-    lines.append(generated_line(stem))
+    lines.append(generated_line(path))
     lines.append("")
     return "\n".join(lines) + "\n" + filter_body(body, harness, path.name)
 
@@ -183,12 +201,27 @@ def sync(root: Path, apply: bool) -> tuple[list[str], list[str]]:
     problems: list[str] = []
     notes: list[str] = []
     canon_dir = root / CANON_DIR
-    canon = sorted(canon_dir.glob(f"*{CANON_SUFFIX}")) if canon_dir.is_dir() else []
-    stems = {p.name[: -len(CANON_SUFFIX)] for p in canon}
+    canon = canon_paths(canon_dir)
+    stems: dict[str, Path] = {}
+    for path in canon:
+        try:
+            stem = canon_stem(path)
+        except SyncError as error:
+            problems.append(str(error))
+            continue
+        if stem in stems:
+            problems.append(
+                f"two canonical files for {stem}: {stems[stem].name} and {path.name}"
+            )
+            continue
+        stems[stem] = path
 
     for path in canon:
+        stem = canon_stem(path) if path.name.endswith(".md") else None
+        if stem is None or stems.get(stem) is not path:
+            continue
         for harness, directory in TARGET_DIRS.items():
-            target = root / directory / f"{path.name[: -len(CANON_SUFFIX)]}.md"
+            target = root / directory / f"{stem}.md"
             rel = target.relative_to(root).as_posix()
             current = read(target) if target.is_file() else None
             try:
@@ -219,7 +252,7 @@ def sync(root: Path, apply: bool) -> tuple[list[str], list[str]]:
             if extra.stem not in stems:
                 problems.append(
                     f"{extra.relative_to(root).as_posix()}: no canonical file "
-                    f"{CANON_DIR}/{extra.stem}{CANON_SUFFIX}"
+                    f"{CANON_DIR}/{extra.stem}.agent.md or {CANON_DIR}/{extra.stem}.md"
                 )
     return problems, notes
 
