@@ -52,9 +52,15 @@ export function page<T>(items: T[]) {
 /**
  * The app's own routes at `path`, signed in as `role`. Test files that use
  * it mock `auth.service`, `dashboard.service` and the group services.
+ * `extraPermissions` are given to the viewer on top of the role's own.
  */
-export function renderGroupsAt(path: string, role: ShellRole = 'admin') {
+export function renderGroupsAt(
+  path: string,
+  role: ShellRole = 'admin',
+  extraPermissions: string[] = []
+) {
   window.history.pushState({}, '', path);
+  const viewer = groupViewers[role];
   const store = configureStore({
     reducer: {
       auth: authReducer,
@@ -67,7 +73,10 @@ export function renderGroupsAt(path: string, role: ShellRole = 'admin') {
     },
     preloadedState: {
       auth: {
-        user: groupViewers[role],
+        user: {
+          ...viewer,
+          permissions: [...viewer.permissions, ...extraPermissions],
+        },
         accessToken: 'mock-access-token',
         refreshToken: 'mock-refresh-token',
         isAuthenticated: true,

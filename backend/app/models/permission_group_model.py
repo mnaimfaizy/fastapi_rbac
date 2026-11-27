@@ -1,6 +1,7 @@
 from typing import TYPE_CHECKING, List
 from uuid import UUID
 
+from pydantic import field_validator
 from sqlalchemy.orm import backref
 from sqlmodel import Field, Relationship, SQLModel, String
 
@@ -13,7 +14,16 @@ if TYPE_CHECKING:
 
 class PermissionGroupBase(SQLModel):
     name: str | None = Field(String(250), nullable=True, index=True)
+    description: str | None = Field(default=None, max_length=255)
     permission_group_id: UUID | None = None
+
+    @field_validator("description", mode="before")
+    @classmethod
+    def blank_description_is_none(cls, value: object) -> object:
+        """Trim the description; blank means the group has none."""
+        if isinstance(value, str):
+            return value.strip() or None
+        return value
 
 
 class PermissionGroup(BaseUUIDModel, PermissionGroupBase, table=True):

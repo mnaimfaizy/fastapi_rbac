@@ -22,7 +22,7 @@ function message(err: unknown, fallback: string) {
   return typeof err === 'string' && err ? err : fallback;
 }
 
-/** Create or edit a role group: name and parent group. */
+/** Create or edit a role group: name, parent group and description. */
 const RoleGroupFormContent = () => {
   const { groupId } = useParams<{ groupId: string }>();
   const navigate = useNavigate();
@@ -66,18 +66,19 @@ const RoleGroupFormContent = () => {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [roleGroups, groupId]);
 
-  const save = async ({ name, parentId }: GroupFormValues) => {
+  const save = async ({ name, parentId, description }: GroupFormValues) => {
+    // An empty field means no description, which also clears a saved one.
+    const roleGroupData = {
+      name,
+      parent_id: parentId,
+      description: description || null,
+    };
     try {
       if (groupId) {
-        await dispatch(
-          updateRoleGroup({
-            groupId,
-            roleGroupData: { name, parent_id: parentId },
-          })
-        ).unwrap();
+        await dispatch(updateRoleGroup({ groupId, roleGroupData })).unwrap();
         toast.success(`Role group ‘${name}’ saved`);
       } else {
-        await dispatch(createRoleGroup({ name, parent_id: parentId })).unwrap();
+        await dispatch(createRoleGroup(roleGroupData)).unwrap();
         toast.success(`Role group ‘${name}’ created`);
       }
     } catch (err) {
@@ -116,7 +117,11 @@ const RoleGroupFormContent = () => {
       parentOptions={parentOptions}
       initialValues={
         editing && current
-          ? { name: current.name, parentId: current.parent_id ?? null }
+          ? {
+              name: current.name,
+              parentId: current.parent_id ?? null,
+              description: current.description ?? '',
+            }
           : undefined
       }
       submitLabel={editing ? 'Save changes' : 'Create role group'}

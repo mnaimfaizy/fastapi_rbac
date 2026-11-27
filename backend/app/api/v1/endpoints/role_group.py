@@ -100,6 +100,7 @@ async def get_role_group_by_id(
         response_data = {
             "id": role_group.id,
             "name": role_group.name,
+            "description": role_group.description,
             "parent_id": role_group.parent_id,
             "created_at": role_group.created_at,
             "updated_at": role_group.updated_at,
@@ -135,6 +136,7 @@ async def get_role_group_by_id(
                 child_data = {
                     "id": child.id,
                     "name": child.name,
+                    "description": child.description,
                     "parent_id": child.parent_id,
                     "created_at": child.created_at,
                     "updated_at": child.updated_at,
@@ -172,6 +174,7 @@ async def get_role_group_by_id(
             response_data["parent"] = {
                 "id": parent.id,
                 "name": parent.name,
+                "description": parent.description,
                 "parent_id": parent.parent_id,
                 "created_at": parent.created_at,
                 "updated_at": parent.updated_at,

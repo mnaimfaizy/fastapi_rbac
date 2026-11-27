@@ -22,7 +22,7 @@ function message(err: unknown, fallback: string) {
   return typeof err === 'string' && err ? err : fallback;
 }
 
-/** Create or edit a permission group: name and parent group. */
+/** Create or edit a permission group: name, parent group and description. */
 export default function PermissionGroupFormContent() {
   const { groupId } = useParams<{ groupId: string }>();
   const navigate = useNavigate();
@@ -70,8 +70,13 @@ export default function PermissionGroupFormContent() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [permissionGroups, groupId]);
 
-  const save = async ({ name, parentId }: GroupFormValues) => {
-    const groupData = { name, permission_group_id: parentId };
+  const save = async ({ name, parentId, description }: GroupFormValues) => {
+    // An empty field means no description, which also clears a saved one.
+    const groupData = {
+      name,
+      permission_group_id: parentId,
+      description: description || null,
+    };
     try {
       if (groupId) {
         await dispatch(
@@ -121,6 +126,7 @@ export default function PermissionGroupFormContent() {
           ? {
               name: current.name,
               parentId: current.permission_group_id ?? null,
+              description: current.description ?? '',
             }
           : undefined
       }

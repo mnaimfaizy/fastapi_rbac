@@ -12,6 +12,7 @@ export interface UserBasic {
 export interface RoleGroup {
   id: string;
   name: string;
+  description?: string | null;
   created_at?: string;
   updated_at?: string;
   created_by_id?: string;
@@ -31,14 +32,14 @@ export interface RoleGroupWithRoles extends RoleGroup {
 export interface RoleGroupCreate {
   name: string;
   parent_id?: string | null; // Optional parent group ID
-  description?: string; // Optional description
+  description?: string | null; // null for none
 }
 
 // Interface for updating a role group
 export interface RoleGroupUpdate {
   name?: string;
   parent_id?: string | null; // Allow null for root groups
-  description?: string;
+  description?: string | null; // null clears it
 }
 
 // API response interfaces
