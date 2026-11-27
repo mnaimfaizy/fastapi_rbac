@@ -26,12 +26,13 @@
 //     nothing is written, each field is named (never its value), and that
 //     field's text is kept as `[withheld]` in the files it came from.
 //
-//   It renders HTML to PNG in the repository's own Playwright Chromium, with
-//   a fixed, neutral palette built in: the repository configures nothing, and
-//   Agent-kit takes no dependency on Playwright.
+//   It renders HTML to PNG in the repository's own Playwright Chromium (from
+//   `run.playwright` or `--playwright-dir`, else the root), with a fixed,
+//   neutral palette built in: the repository configures nothing, and Agent-kit
+//   takes no dependency on Playwright.
 //
 // CLI (run from the repository root)
-//   node storyboard.mjs render <s<n>-storyboard.json> [--out <file.png>]
+//   node storyboard.mjs render <s<n>-storyboard.json> [--out <file.png>] [--playwright-dir <dir>]
 //
 //   Exit 0: the Storyboard was written. Exit 1: refused (the privacy check, a
 //   problem in the files, a variable not given, a result that is not PASS or
@@ -44,7 +45,7 @@ import { readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { findPlaywright } from "./adapter.mjs";
+import { resolvePlaywright } from "./adapter.mjs";
 import { encodedForms } from "./http.mjs";
 import { BEFORE_STATES } from "./report.mjs";
 
@@ -53,6 +54,13 @@ import { BEFORE_STATES } from "./report.mjs";
  * still is this size, and every subject box is in it. Change the two together.
  */
 export const VIEWPORT = Object.freeze({ width: 1280, height: 720 });
+/**
+ * How a Session in the run context signs in (`context.sessions[].kind`):
+ * as a role the Run brief names, as a Scenario account, or signed out. The MP4
+ * opens a role's or a signed-out Session on its recording's start, and a
+ * Scenario account's, or one that does not say, on its first step (ADR 0020).
+ */
+export const SESSION_KINDS = Object.freeze(["role", "scenario account", "nobody"]);
 /** Space kept around a subject's outline inside its crop, in still pixels. */
 export const CROP_PADDING = 48;
 /** A crop is never narrower than this, in still pixels, so a small subject keeps its context. */
@@ -203,6 +211,7 @@ export function shownFields(records, meta) {
     if (typeof text === "string") fields.push({ field, text, from: { file, path } });
   };
   add("title", meta.title, "meta", ["title"]);
+  storyOf(meta).forEach((sentence, i) => add(`story[${i}]`, sentence, "meta", ["story", i]));
   for (const side of ["before", "after"])
     if (isObject(meta[side]))
       for (const key of ["expected", "observed", "note"])
@@ -231,6 +240,44 @@ export function shownFields(records, meta) {
     });
   return fields;
 }
+
+// ── Scenes ──────────────────────────────────────────────────────────────────
+
+/**
+ * The Scenes: After's steps in order, a new Scene at each Cut, where a step's
+ * Session is not the previous step's. A single-session scenario is one Scene.
+ * Exported so the MP4 splits its timeline at the same Cuts.
+ * @param {{session: string, index: number}[]} afterSteps
+ * @returns {{number: number, session: string, steps: number[]}[]}
+ */
+export function scenesOf(afterSteps) {
+  const scenes = [];
+  for (const step of afterSteps) {
+    const last = scenes.at(-1);
+    if (last && last.session === step.session) last.steps.push(step.index);
+    else scenes.push({ number: scenes.length + 1, session: step.session, steps: [step.index] });
+  }
+  return scenes;
+}
+
+/**
+ * The scenario's Story sentences, one per Scene in order, as the scenario file
+ * carries them (`[]` when it has none: a plan with no Story, or a file written
+ * before #385).
+ * @param {any} meta the scenario file
+ * @returns {string[]}
+ */
+export const storyOf = (meta) => (Array.isArray(meta?.story) ? meta.story : []);
+
+/**
+ * A Scene by its place and Session, `Scene 2 of 3, Session B`: the label over
+ * its Storyboard heading, and its Title card's text when there is no Story.
+ * Exported so the two say the same words.
+ * @param {{number: number, session: string}} scene
+ * @param {number} count how many Scenes the scenario has
+ */
+export const sceneName = (scene, count) =>
+  `Scene ${scene.number} of ${count}, Session ${scene.session}`;
 
 // ── Layout ──────────────────────────────────────────────────────────────────
 
@@ -363,11 +410,21 @@ export function layout(records, meta) {
         "with that index and Session",
     );
 
+  // Each Scene's sentence heads its steps; a Scene with none (no Story) has no heading.
+  const story = storyOf(meta);
+  const scenes = scenesOf(records.after).map((scene) => ({
+    ...scene,
+    sentence: story[scene.number - 1] ?? null,
+  }));
+  const sceneOf = new Map(
+    scenes.flatMap((scene) => scene.steps.map((i) => [`${scene.session}:${i}`, scene.number])),
+  );
   const rows = records.after.map((record) => {
     const paired = beforeBy.get(key(record));
     return {
       number: record.index,
       session: record.session,
+      scene: /** @type {number} */ (sceneOf.get(key(record))),
       proves: Boolean(proves) && key(record) === `${proves.session}:${proves.index}`,
       before: columns === 2 ? (paired ? cell(paired) : missingCell("no Before step")) : null,
       after: cell(record),
@@ -381,6 +438,7 @@ export function layout(records, meta) {
         rows.push({
           number: record.index,
           session: record.session,
+          scene: null,
           proves: false,
           before: cell(record),
           after: missingCell("no After step"),
@@ -401,6 +459,7 @@ export function layout(records, meta) {
       },
     },
     columns,
+    scenes,
     rows,
   };
 }
@@ -516,6 +575,9 @@ body{margin:0;width:${pageWidth}px;background:${p.page};color:${p.ink};font:15px
 .outline{position:absolute;outline:3px solid ${p.outline};outline-offset:0}
 .caption{margin-top:4px;width:${cellWidth}px;font-size:13px}
 .note{flex:1;padding-top:4px;color:${p.muted};font-size:13px}
+.scene{padding:14px 24px 10px;background:${p.panel};border-bottom:1px solid ${p.line};font-size:17px;font-weight:700}
+.scene small{display:block;margin-bottom:2px;font-size:12px;font-weight:600;color:${p.muted}}
+.title-card{display:flex;align-items:center;justify-content:center;padding:48px 96px;text-align:center;font-size:40px;line-height:1.3;font-weight:700}
 </style></head><body>
 ${body}
 </body></html>`;
@@ -535,8 +597,18 @@ export function storyboardHtml(laid, stillOf) {
     laid.columns === 2
       ? `<div class="heads"><span></span><span>Before</span><span>After</span></div>`
       : "";
+  const headed = new Set();
   const rows = laid.rows
     .map((row) => {
+      // A Scene's heading row, above its first step.
+      const scene = laid.scenes.find((s) => s.number === row.scene);
+      let heading = "";
+      if (scene?.sentence && !headed.has(scene.number)) {
+        headed.add(scene.number);
+        heading =
+          `<div class="scene"><small>${escapeHtml(sceneName(scene, laid.scenes.length))}</small>` +
+          `${escapeHtml(scene.sentence)}</div>`;
+      }
       const cells = [
         row.before
           ? frameHtml(row.before, width, row.before.still && stillOf("before", row.before.still))
@@ -549,6 +621,7 @@ export function storyboardHtml(laid, stillOf) {
       const note = row.beforeNote ? `<div class="note">${escapeHtml(row.beforeNote)}</div>` : "";
       const proves = row.proves ? `<div class="proves-label">Proves the result</div>` : "";
       return (
+        heading +
         `<div class="row${row.proves ? " proves" : ""}">` +
         `<div class="number">${row.number}<small>${escapeHtml(row.session)}</small>${proves}</div>` +
         `${cells}${note}</div>`
@@ -714,6 +787,11 @@ export function checkScenario(meta) {
     problems.push("commits is not {base, head}, each a commit sha in lower-case hex");
   if (m.context !== undefined) {
     const c = m.context;
+    const entry = (s) =>
+      isObject(s) &&
+      SESSION.test(s.session ?? "") &&
+      typeof s.account === "string" &&
+      (s.kind === undefined || SESSION_KINDS.includes(s.kind));
     if (
       !isObject(c) ||
       (c.accounts !== undefined &&
@@ -721,12 +799,14 @@ export function checkScenario(meta) {
       (c.sessions !== undefined &&
         !(
           Array.isArray(c.sessions) &&
-          c.sessions.every(
-            (s) => isObject(s) && SESSION.test(s.session ?? "") && typeof s.account === "string",
-          )
+          c.sessions.every(entry) &&
+          new Set(c.sessions.map((s) => s.session)).size === c.sessions.length
         ))
     )
-      problems.push('context is not {"accounts": [ids], "sessions": [{"session", "account"}]}');
+      problems.push(
+        'context is not {"accounts": [ids], "sessions": [{"session", "account", "kind"}]}, ' +
+          `kind one of ${SESSION_KINDS.join(", ")}`,
+      );
   }
   if (
     m.proves !== undefined &&
@@ -737,6 +817,15 @@ export function checkScenario(meta) {
     )
   )
     problems.push('proves is not {"session", "index"}');
+  // Optional, so an older scenario file still loads; without it, each card names its Scene.
+  if (
+    m.story !== undefined &&
+    !(
+      Array.isArray(m.story) &&
+      m.story.every((sentence) => typeof sentence === "string" && sentence.trim())
+    )
+  )
+    problems.push("story is not a list of sentences, one per Scene ([] for none)");
   // Required, so the check always knows which values the run used; an empty list says none.
   if (!(Array.isArray(m.variables) && m.variables.every((name) => ENV_NAME.test(name))))
     problems.push("variables is not a list of the QA_ variable names the run used ([] for none)");
@@ -780,6 +869,16 @@ export function loadScenario(metaPath) {
     typeof meta.before?.steps === "string" ? side(meta.before.steps, "before.steps") : null;
   files.after = after.file;
   files.before = before?.file ?? null;
+  // A sentence for every Scene After's steps make; more is a run that stopped before its last Scene.
+  const story = storyOf(meta);
+  const steps = Array.isArray(after.raw?.steps) ? after.raw.steps : [];
+  const scenes = scenesOf(steps).length;
+  if (story.length && !problems.length && scenes > story.length) {
+    problems.push(
+      `story has ${story.length} sentence${story.length === 1 ? "" : "s"}, and After's steps make ` +
+        `${scenes} Scenes: copy the plan's Story:, one sentence per Scene`,
+    );
+  }
   return {
     meta,
     records: {
@@ -823,7 +922,8 @@ export function withholdRefused(loaded, fields, refused) {
 
 // ── CLI ─────────────────────────────────────────────────────────────────────
 
-const USAGE = "usage: node storyboard.mjs render <s<n>-storyboard.json> [--out <file.png>]\n";
+const USAGE =
+  "usage: node storyboard.mjs render <s<n>-storyboard.json> [--out <file.png>] [--playwright-dir <dir>]\n";
 export const NO_CHROMIUM =
   "no Storyboard: no Playwright with Chromium in this repository; the row keeps its plain stills";
 
@@ -839,8 +939,15 @@ export async function main(argv, io = {}) {
   const [command, target, ...rest] = argv;
   if (command !== "render" || target === undefined || target.startsWith("--")) return usage;
   let out;
+  let playwrightDir;
   for (let i = 0; i < rest.length; i += 1) {
     if (rest[i] === "--out" && rest[i + 1] !== undefined && out === undefined) out = rest[++i];
+    else if (
+      rest[i] === "--playwright-dir" &&
+      rest[i + 1] !== undefined &&
+      playwrightDir === undefined
+    )
+      playwrightDir = rest[++i];
     else return usage;
   }
   if (out !== undefined && !out.endsWith(".png")) return usage;
@@ -890,7 +997,9 @@ export async function main(argv, io = {}) {
 
   let renderer = io.renderer;
   if (!renderer) {
-    const found = findPlaywright(io.cwd ?? process.cwd());
+    const resolved = resolvePlaywright(io.cwd ?? process.cwd(), playwrightDir);
+    if (resolved.error) return none(2, { reason: resolved.error });
+    const found = resolved.found;
     if (!found.chromium) {
       return none(2, { reason: NO_CHROMIUM });
     }

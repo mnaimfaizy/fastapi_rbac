@@ -155,6 +155,7 @@ test("each key's default, with an empty config", () => {
     read_first: null,
     routes: { commit: null, pull_request: null, merge: null },
     regate: null,
+    regate_allowed_failures: [],
     skills: { implement: null, triage: null, review: null },
     triage_labels: {
       from: "default",
@@ -169,6 +170,8 @@ test("each key's default, with an empty config", () => {
     ready_to_merge: { review: "settled", qa: "none", qa_labels: [], review_workflow: "detect" },
     spec: { landing: "ask", integration_branch: "orchestrate/spec-<n>" },
     tracker: "detect",
+    records: { repository: null, upload: "offer", sink: null, raw: { sink: null } },
+    prune: { after_days: null },
     team: {
       labels: {
         planned: "team: planned",
@@ -441,6 +444,62 @@ const YAML_PROBLEMS = [
     "a regate entry that is not a command",
     ["regate:", "  - { run: npm test }"],
     /^line 2: `regate\[0\]`: expected a command/,
+  ],
+  [
+    "regate as a mapping with an unknown key",
+    ["regate:", "  commands: [npm test]", "  skip: [x]"],
+    /^line 3: `regate\.skip`: unknown key \(CONFIG\.md documents: commands, allowed_failures\)/,
+  ],
+  [
+    "regate as a mapping with no commands",
+    ["regate:", "  allowed_failures: []"],
+    /^line 1: `regate\.commands`: expected a list of commands/,
+  ],
+  [
+    "a regate mapping whose commands are not a list",
+    ["regate:", "  commands: npm test"],
+    /^line 2: `regate\.commands`: expected a list of commands/,
+  ],
+  [
+    "allowed_failures that is not a list",
+    ["regate:", "  commands: [npm test]", "  allowed_failures: flaky"],
+    /^line 3: `regate\.allowed_failures`: expected a list of failing tests/,
+  ],
+  [
+    "an allowed failure with no reason",
+    ["regate:", "  commands: [npm test]", "  allowed_failures:", "    - { test: a test }"],
+    /^line 4: `regate\.allowed_failures\[0\]\.reason`: expected a non-empty string/,
+  ],
+  [
+    "an allowed failure with no test name",
+    ["regate:", "  commands: [npm test]", "  allowed_failures:", "    - { reason: fails on main }"],
+    /^line 4: `regate\.allowed_failures\[0\]\.test`: expected a non-empty string/,
+  ],
+  [
+    "an allowed failure that is a bare string",
+    ["regate:", "  commands: [npm test]", "  allowed_failures: [a test]"],
+    /^line 3: `regate\.allowed_failures\[0\]`: expected a mapping with `test` and `reason`/,
+  ],
+  [
+    "an allowed failure with an unknown key",
+    [
+      "regate:",
+      "  commands: [npm test]",
+      "  allowed_failures:",
+      "    - { test: a, reason: b, until: later }",
+    ],
+    /^line 4: `regate\.allowed_failures\[0\]\.until`: unknown key \(CONFIG\.md documents: test, reason\)/,
+  ],
+  [
+    "an allowed failure listed twice",
+    [
+      "regate:",
+      "  commands: [npm test]",
+      "  allowed_failures:",
+      "    - { test: a, reason: b }",
+      "    - { test: a, reason: c }",
+    ],
+    /^line 5: `regate\.allowed_failures\[1\]`: `a` is listed twice/,
   ],
   [
     "a regate command listed twice",
@@ -722,7 +781,7 @@ test("JSON: each problem is named with its line, like YAML's", () => {
     "}",
   ].join("\n");
   assert.deepEqual(json(text).problems, [
-    "line 3: `routs`: unknown key (CONFIG.md documents: run_dir, read_first, routes, regate, skills, triage_labels, models, harness, executors, limits, decisions, ready_to_merge, spec, tracker, team)",
+    "line 3: `routs`: unknown key (CONFIG.md documents: run_dir, read_first, routes, regate, skills, triage_labels, models, harness, executors, limits, decisions, ready_to_merge, spec, tracker, team, records, prune)",
     "line 10: `read_first[1]`: expected a relative path inside the repository",
     "line 6: `routes.push`: unknown key (CONFIG.md documents: commit, pull_request, merge)",
     "line 5: `routes.commit`: expected a non-empty string",
@@ -1062,6 +1121,63 @@ test("an answers file that is not an object says so, and a `__proto__` answer is
   assert.match(proto.problems[0], /^a\.json line 2: `__proto__`: unknown key/);
 });
 
+test("regate reads as a list, or as a mapping with commands and allowed failures, in both dialects", () => {
+  const asList = yaml("regate:", "  - npm test", "  - npx prettier --check .");
+  assert.deepEqual(asList.problems, []);
+  assert.deepEqual(effectiveConfig(asList.config).regate, ["npm test", "npx prettier --check ."]);
+  assert.deepEqual(effectiveConfig(asList.config).regate_allowed_failures, []);
+
+  const mapping = yaml(
+    "regate:",
+    "  commands:",
+    "    - npm test",
+    "  allowed_failures:",
+    '    - test: "checks the report, then tars it"',
+    "      reason: fails on main too, macOS sh",
+  );
+  assert.deepEqual(mapping.problems, []);
+  const effective = effectiveConfig(mapping.config);
+  assert.deepEqual(effective.regate, ["npm test"]);
+  assert.deepEqual(effective.regate_allowed_failures, [
+    { test: "checks the report, then tars it", reason: "fails on main too, macOS sh" },
+  ]);
+
+  const asJson = json(
+    JSON.stringify({
+      regate: {
+        commands: ["npm test"],
+        allowed_failures: [{ test: "checks the report, then tars it", reason: "macOS sh" }],
+      },
+    }),
+  );
+  assert.deepEqual(asJson.problems, []);
+  assert.deepEqual(effectiveConfig(asJson.config).regate, ["npm test"]);
+});
+
+test("an unset regate has no allowed failures, and a regate mapping still needs its commands asked for", () => {
+  assert.equal(effectiveConfig({}).regate, null);
+  assert.deepEqual(effectiveConfig({}).regate_allowed_failures, []);
+  const needs = readiness(
+    readConfig(
+      reader({
+        "orchestrate.config.yml": "read_first: []\nroutes: { commit: c, pull_request: p }\n",
+      }),
+    ),
+  ).needs;
+  assert.ok(needs.some((n) => n.startsWith("regate:")));
+});
+
+test("regate as a mapping with an empty command list is ready: CI is left to CI", () => {
+  const loaded = readConfig(
+    reader({
+      "orchestrate.config.yml":
+        "read_first: []\nroutes: { commit: c, pull_request: p }\nregate: { commands: [], allowed_failures: [] }\n",
+    }),
+  );
+  assert.deepEqual(loaded.problems, []);
+  assert.equal(readiness(loaded).ready, true);
+});
+
 // ── CLI ─────────────────────────────────────────────────────────────────────
 
 const run = (argv, files, exists = () => true) =>
@@ -1316,12 +1432,9 @@ test("every harness file is in HARNESSES.md's table, and every table row has a f
     assert.ok(HARNESSES_MD.includes(`(harnesses/${id}.md)`), `${id} links its file`);
 });
 
-test("each harness file names its Support Level, and only Claude Code desktop is verified", () => {
+test("each harness file names its Support Level, and Claude Code desktop and Antigravity are verified", () => {
   const verified = Object.entries(HARNESSES).filter(([, h]) => h.level === "verified");
-  assert.deepEqual(
-    verified.map(([id]) => id),
-    ["claude-code-desktop"],
-  );
+  assert.deepEqual(verified.map(([id]) => id).sort(), ["antigravity", "claude-code-desktop"]);
   assert.equal(HARNESSES.cursor.level, "tried");
   assert.equal(HARNESSES["claude-code-desktop"].headless, false);
   assert.equal(HARNESSES["claude-code-cli"].headless, true);
@@ -1675,8 +1788,17 @@ test("the `tracker` and `team` keys add nothing the readiness check asks for or 
   assert.deepEqual(team, base);
 });
 
+test("CONFIG.md's `regate` example reads with no problems, and names a failure with its reason", () => {
+  const { config, problems } = parseConfig("orchestrate.config.yml", configBlock("yaml", 2));
+  assert.deepEqual(problems, []);
+  const effective = effectiveConfig(config);
+  assert.deepEqual(effective.regate, ["uv run pytest", "npm test"]);
+  assert.equal(effective.regate_allowed_failures.length, 1);
+  assert.match(effective.regate_allowed_failures[0].reason, /macOS/);
+});
+
 test("CONFIG.md's `team` example reads with no problems, and is the defaults", () => {
-  const block = configBlock("yaml", 2);
+  const block = configBlock("yaml", 3);
   assert.match(block, /^team:/);
   const read = parseConfig("orchestrate.config.yml", block);
   assert.deepEqual(read.problems, []);
@@ -1744,4 +1866,471 @@ test("a self-hosted GitLab is not detected, and `check` reports the `tracker: gi
     remote_host: "git.acme.internal",
     detected: null,
   });
+});
+
+// ── Run Records: `records` ──────────────────────────────────────────────────
+
+test("a `records` section reads the same in YAML and JSON, with its defaults", () => {
+  const want = {
+    repository: "github.com/acme/widgets",
+    upload: "never",
+    sink: { type: "github", repo: "ghe.acme.dev/acme/run-records", branch: "main" },
+  };
+  const fromYaml = yaml(
+    "records:",
+    "  repository: github.com/acme/widgets",
+    "  upload: never",
+    "  sink:",
+    "    type: github",
+    "    repo: ghe.acme.dev/acme/run-records",
+    "    branch: main",
+  );
+  const fromJson = json(JSON.stringify({ records: want }));
+  assert.deepEqual([fromYaml.problems, fromJson.problems], [[], []]);
+  const wantRead = { ...want, raw: { sink: null } };
+  assert.deepEqual(effectiveConfig(fromYaml.config).records, wantRead);
+  assert.deepEqual(effectiveConfig(fromJson.config).records, wantRead);
+  // A sink with only its required keys: the offer is on, and the branch is the repository's default.
+  const bare = yaml("records:", "  sink:", "    type: github", "    repo: acme/run-records");
+  assert.deepEqual(bare.problems, []);
+  assert.deepEqual(effectiveConfig(bare.config).records, {
+    repository: null,
+    upload: "offer",
+    sink: { type: "github", repo: "acme/run-records", branch: null },
+    raw: { sink: null },
+  });
+  assert.deepEqual(effectiveConfig(yaml("records: {}").config).records, {
+    repository: null,
+    upload: "offer",
+    sink: null,
+    raw: { sink: null },
+  });
+});
+
+test("a `gitlab` sink reads in YAML and JSON, with both repo spellings", () => {
+  for (const repo of ["acme/run-records", "gitlab.acme.dev/acme/run-records"]) {
+    const fromYaml = yaml("records:", "  sink:", "    type: gitlab", `    repo: ${repo}`);
+    const fromJson = json(JSON.stringify({ records: { sink: { type: "gitlab", repo } } }));
+    assert.deepEqual([fromYaml.problems, fromJson.problems], [[], []], repo);
+    const want = { type: "gitlab", repo, branch: null };
+    assert.deepEqual(effectiveConfig(fromYaml.config).records.sink, want);
+    assert.deepEqual(effectiveConfig(fromJson.config).records.sink, want);
+  }
+});
+
+test("a GitLab project in a subgroup can be pinned and can be a `gitlab` sink (F2)", () => {
+  const pinned = yaml("records:", "  repository: gitlab.com/grp/sub/proj");
+  assert.deepEqual(pinned.problems, []);
+  assert.equal(effectiveConfig(pinned.config).records.repository, "gitlab.com/grp/sub/proj");
+  for (const repo of ["grp/sub/run-records", "gitlab.acme.dev/grp/sub/deeper/run-records"]) {
+    const read = yaml("records:", "  sink:", "    type: gitlab", `    repo: ${repo}`);
+    assert.deepEqual(read.problems, [], repo);
+    assert.equal(effectiveConfig(read.config).records.sink.repo, repo);
+  }
+  const problems = (...lines) => yaml("records:", ...lines).problems.join("\n");
+  for (const repo of ["run-records", "a//b", "a/../b", "a/ b"])
+    assert.match(
+      problems("  sink:", "    type: gitlab", `    repo: "${repo}"`),
+      /`records\.sink\.repo`: expected `group\/name` or `host\/group\/name`/,
+      repo,
+    );
+  // GitHub has no subgroups: a github sink is still `owner/name` or `host/owner/name`.
+  assert.match(
+    problems("  sink:", "    type: github", "    repo: a/b/c/d"),
+    /`records\.sink\.repo`: expected `owner\/name` or `host\/owner\/name`/,
+  );
+  assert.match(
+    problems("  repository: github.com/acme/sub/widgets"),
+    /`records\.repository`: expected `host\/owner\/repo`/,
+  );
+  assert.match(
+    problems("  repository: gitlab.com/proj"),
+    /`records\.repository`: expected `host\/owner\/repo`/,
+  );
+});
+
+test("a pinned repository's group may start with `_`, as records.mjs's REPO takes it, and not with a dot or hyphen", () => {
+  for (const repository of ["gitlab.com/_team/proj", "gitlab.com/_team/_sub/proj"])
+    assert.deepEqual(yaml("records:", `  repository: ${repository}`).problems, [], repository);
+  for (const repository of ["gitlab.com/.team/proj", "gitlab.com/-team/proj"])
+    assert.match(
+      yaml("records:", `  repository: ${repository}`).problems.join("\n"),
+      /`records\.repository`: expected `host\/owner\/repo`/,
+      repository,
+    );
+});
+
+const S3_SINK = {
+  type: "s3",
+  endpoint: "https://acme.r2.cloudflarestorage.com",
+  bucket: "acme-run-records",
+  region: "auto",
+};
+
+test("an `s3` sink reads in YAML and JSON, and reads back its three keys", () => {
+  const fromYaml = yaml(
+    "records:",
+    "  sink:",
+    "    type: s3",
+    `    endpoint: ${S3_SINK.endpoint}`,
+    `    bucket: ${S3_SINK.bucket}`,
+    "    region: auto",
+  );
+  const fromJson = json(JSON.stringify({ records: { sink: S3_SINK } }));
+  assert.deepEqual([fromYaml.problems, fromJson.problems], [[], []]);
+  const want = { ...S3_SINK };
+  assert.deepEqual(effectiveConfig(fromYaml.config).records.sink, want);
+  assert.deepEqual(effectiveConfig(fromJson.config).records.sink, want);
+});
+
+test("an `s3` sink names each missing key, and refuses a `repo`, a `branch` or a secret", () => {
+  const problems = (sink) => json(JSON.stringify({ records: { sink } })).problems.join("\n");
+  for (const key of ["endpoint", "bucket", "region"]) {
+    const { [key]: _gone, ...rest } = S3_SINK;
+    assert.match(problems(rest), new RegExp(`\`records\\.sink\\.${key}\`: missing`));
+  }
+  assert.match(
+    problems({ ...S3_SINK, repo: "a/b" }),
+    /`records\.sink\.repo`: not used by an `s3` sink/,
+  );
+  assert.match(
+    problems({ ...S3_SINK, branch: "main" }),
+    /`records\.sink\.branch`: not used by an `s3` sink/,
+  );
+  assert.match(
+    problems({ ...S3_SINK, endpoint: "acme.example.com" }),
+    /`records\.sink\.endpoint`: expected an https URL/,
+  );
+  assert.match(
+    problems({ ...S3_SINK, endpoint: "http://s3.example.com" }),
+    /`records\.sink\.endpoint`: expected an https URL/,
+  );
+  for (const endpoint of ["https://s3.example.com/foo", "https://s3.example.com/foo/"])
+    assert.match(
+      problems({ ...S3_SINK, endpoint }),
+      /`records\.sink\.endpoint`: expected an https URL with a host and nothing else/,
+      endpoint,
+    );
+  assert.deepEqual(
+    json(JSON.stringify({ records: { sink: { ...S3_SINK, endpoint: "https://s3.example.com/" } } }))
+      .problems,
+    [],
+  );
+  assert.deepEqual(
+    json(JSON.stringify({ records: { sink: { ...S3_SINK, endpoint: "http://localhost:9000" } } }))
+      .problems,
+    [],
+  );
+  assert.match(
+    problems({ ...S3_SINK, bucket: "Not A Bucket" }),
+    /`records\.sink\.bucket`: expected a bucket name/,
+  );
+  assert.match(
+    problems({ ...S3_SINK, region: "us east" }),
+    /`records\.sink\.region`: expected a region/,
+  );
+  // Endpoint keys on a git sink are problems too.
+  assert.match(
+    problems({ type: "github", repo: "a/b", bucket: "x" }),
+    /`records\.sink\.bucket`: only an `s3` sink uses this/,
+  );
+});
+
+test("a sink key written with no value gets one problem, not three (D10)", () => {
+  const named = (lines, key) =>
+    yaml("records:", "  sink:", ...lines.map((l) => `    ${l}`)).problems.filter((p) =>
+      p.includes(`\`records.sink.${key}\``),
+    );
+  const s3 = {
+    endpoint: `endpoint: ${S3_SINK.endpoint}`,
+    bucket: `bucket: ${S3_SINK.bucket}`,
+    region: "region: auto",
+  };
+  for (const key of ["endpoint", "bucket", "region"]) {
+    const lines = ["type: s3", ...Object.entries(s3).map(([k, l]) => (k === key ? `${k}:` : l))];
+    const found = named(lines, key);
+    assert.equal(found.length, 1, found.join("\n"));
+    assert.match(found[0], /no value: give one, or delete the key/);
+  }
+  for (const key of ["type", "repo"]) {
+    const lines = ["type: github", "repo: acme/run-records"].map((l) =>
+      l.startsWith(`${key}:`) ? `${key}:` : l,
+    );
+    const found = named(lines, key);
+    assert.equal(found.length, 1, found.join("\n"));
+    assert.match(found[0], /no value: give one, or delete the key/);
+  }
+});
+
+test("a secret-looking sink `type` is one problem, and its value is never printed back", () => {
+  const token = `ghp_${"a1B2".repeat(9)}`;
+  for (const key of ["sink", "raw"]) {
+    const sink = { type: token, repo: "acme/run-records" };
+    const records = key === "sink" ? { sink } : { raw: { sink } };
+    const found = json(JSON.stringify({ records })).problems.filter((p) => p.includes(".type`"));
+    assert.equal(found.length, 1, found.join("\n"));
+    assert.match(found[0], /looks like a secret/);
+    assert.ok(!found[0].includes(token));
+  }
+});
+
+test("a long mixed-case name in `repo`, `bucket` or `endpoint` is not read as a secret", () => {
+  for (const sink of [
+    { type: "github", repo: "AcmeCorp/OrchestrateRunRecords2026Private" },
+    { type: "gitlab", repo: "AcmeCorp/Platform/OrchestrateRunRecords2026Private" },
+    { type: "github", repo: "ghe.example.com/AcmeCorp/OrchestrateRunRecordsArchive2026Private" },
+    { ...S3_SINK, endpoint: "https://AcmeCorpStorage2026EuropeWestRegion01Primary.example.com" },
+  ])
+    assert.deepEqual(
+      json(JSON.stringify({ records: { sink } })).problems,
+      [],
+      JSON.stringify(sink),
+    );
+  // The shapes that are always credentials are still caught in these keys.
+  for (const sink of [
+    { type: "github", repo: "a/ghp_" + "a".repeat(36) },
+    { ...S3_SINK, bucket: "AKIAIOSFODNN7EXAMPLE" },
+  ])
+    assert.match(
+      json(JSON.stringify({ records: { sink } })).problems.join("\n"),
+      /looks like a secret/,
+      JSON.stringify(sink),
+    );
+});
+
+test("a secret-looking value anywhere in the sink is a problem, and the value is not echoed", () => {
+  const AKIA = "AKIAIOSFODNN7EXAMPLE";
+  const SECRET = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
+  const cases = [
+    { ...S3_SINK, region: AKIA },
+    { ...S3_SINK, endpoint: `https://${AKIA}:${SECRET}@acme.example.com` },
+    { ...S3_SINK, endpoint: `https://acme.example.com/?X-Amz-Signature=${"a".repeat(64)}` },
+    { ...S3_SINK, access_key_id: AKIA },
+    { ...S3_SINK, secret_access_key: SECRET },
+    { type: "github", repo: "a/b", branch: "ghp_" + "a".repeat(36) },
+    { type: "github", repo: "a/b", branch: SECRET },
+  ];
+  for (const sink of cases) {
+    const found = json(JSON.stringify({ records: { sink } })).problems.join("\n");
+    assert.match(
+      found,
+      /looks like a secret: credentials come only from ORCHESTRATE_S3_ACCESS_KEY_ID and ORCHESTRATE_S3_SECRET_ACCESS_KEY/,
+      JSON.stringify(sink),
+    );
+    assert.ok(!found.includes(AKIA) && !found.includes(SECRET) && !found.includes("ghp_"), found);
+  }
+  // The same in YAML, with its line.
+  assert.match(
+    yaml(
+      "records:",
+      "  sink:",
+      "    type: s3",
+      "    endpoint: https://a.example.com",
+      "    bucket: acme",
+      `    region: ${AKIA}`,
+    ).problems.join("\n"),
+    /line 6: `records\.sink\.region`: looks like a secret/,
+  );
+});
+
+test("`records` problems, each with its line, in YAML", () => {
+  const problems = (...lines) => yaml("records:", ...lines).problems.join("\n");
+  assert.match(problems("  colour: red"), /^line 2: `records\.colour`: unknown key/);
+  assert.match(
+    problems("  repository: widgets"),
+    /line 2: `records\.repository`: expected `host\/owner\/repo`/,
+  );
+  assert.match(
+    problems("  repository: github.com/../widgets"),
+    /`records\.repository`: expected `host\/owner\/repo`/,
+  );
+  assert.match(problems("  upload: always"), /`records\.upload`: expected one of: offer, never/);
+  assert.match(problems("  sink: s3"), /`records\.sink`: expected a mapping/);
+  assert.match(
+    problems("  sink:", "    type: azure", "    repo: a/b"),
+    /line 3: `records\.sink\.type`: unknown sink type `azure`; expected one of: github, gitlab, s3/,
+  );
+  assert.match(
+    problems("  sink:", "    type: gitea", "    repo: a/b"),
+    /`records\.sink\.type`: unknown sink type `gitea`/,
+  );
+  assert.match(problems("  sink:", "    repo: a/b"), /`records\.sink\.type`: missing/);
+  assert.match(problems("  sink:", "    type: github"), /`records\.sink\.repo`: missing/);
+  for (const repo of ["run-records", "a/b/c/d", "a//b", "a/ b", "a/../b"])
+    assert.match(
+      problems("  sink:", "    type: github", `    repo: "${repo}"`),
+      /`records\.sink\.repo`: expected `owner\/name` or `host\/owner\/name`/,
+      repo,
+    );
+  assert.match(
+    problems("  sink:", "    type: github", "    repo: a/b", "    branch: a..b"),
+    /`records\.sink\.branch`: expected a valid git branch name/,
+  );
+  assert.match(
+    problems("  sink:", "    type: github", "    repo: a/b", "    token: x"),
+    /`records\.sink\.token`: unknown key/,
+  );
+});
+
+test("`records` problems, in JSON, name their lines too", () => {
+  const text = [
+    "{",
+    '  "records": {',
+    '    "upload": "later",',
+    '    "sink": { "type": "azure", "repo": "a/b" }',
+    "  }",
+    "}",
+  ].join("\n");
+  assert.deepEqual(json(text).problems, [
+    "line 3: `records.upload`: expected one of: offer, never",
+    "line 4: `records.sink.type`: unknown sink type `azure`; expected one of: github, gitlab, s3",
+  ]);
+});
+
+test("`records` adds nothing the readiness check asks for or notes", () => {
+  const base = readiness(readConfig(reader({ "orchestrate.config.yml": READY_BASE.join("\n") })));
+  const records = readiness(
+    readConfig(
+      reader({
+        "orchestrate.config.yml": [
+          ...READY_BASE,
+          "records:",
+          "  sink:",
+          "    type: github",
+          "    repo: acme/run-records",
+        ].join("\n"),
+      }),
+    ),
+  );
+  assert.deepEqual(records, base);
+});
+
+test("CONFIG.md's `records` example reads with no problems", () => {
+  const block = CONFIG_MD.split("\n```yaml\n")
+    .slice(1)
+    .map((part) => part.split("\n```")[0])
+    .find((text) => text.startsWith("records:"));
+  const read = parseConfig("orchestrate.config.yml", block);
+  assert.deepEqual(read.problems, []);
+  assert.deepEqual(effectiveConfig(read.config).records, {
+    repository: "github.com/acme/widgets",
+    upload: "offer",
+    sink: { type: "github", repo: "acme/run-records", branch: "main" },
+    raw: { sink: null },
+  });
+});
+
+// ── Pruning: `prune` ────────────────────────────────────────────────────────
+
+test("`prune.after_days` reads the same in YAML and JSON, and unset means no pruning", () => {
+  const fromYaml = yaml("prune:", "  after_days: 90");
+  const fromJson = json('{"prune": {"after_days": 90}}');
+  assert.deepEqual([fromYaml.problems, fromJson.problems], [[], []]);
+  assert.deepEqual(effectiveConfig(fromYaml.config).prune, { after_days: 90 });
+  assert.deepEqual(effectiveConfig(fromJson.config).prune, { after_days: 90 });
+  assert.deepEqual(effectiveConfig(yaml("prune: {}").config).prune, { after_days: null });
+  assert.deepEqual(effectiveConfig({}).prune, { after_days: null });
+});
+
+test("`prune` problems, each with its line, in YAML", () => {
+  const problems = (...lines) => yaml("prune:", ...lines).problems.join("\n");
+  assert.match(problems("  keep: 3"), /^line 2: `prune\.keep`: unknown key/);
+  for (const bad of ["0", "-5", "1.5", "ninety", "true"])
+    assert.match(
+      problems(`  after_days: ${bad}`),
+      /line 2: `prune\.after_days`: expected a whole number of 1 or more/,
+    );
+  assert.match(yaml("prune: 90").problems.join("\n"), /`prune`: expected a mapping/);
+  assert.match(problems("  after_days:"), /`prune\.after_days`: .*no value|missing|empty/i);
+});
+
+test("`prune` problems, in JSON, name their lines too", () => {
+  const read = json('{\n  "prune": {\n    "after_days": 0\n  }\n}');
+  assert.deepEqual(read.problems, [
+    "line 3: `prune.after_days`: expected a whole number of 1 or more",
+  ]);
+  assert.deepEqual(json('{"prune": {"after_days": 1.5}}').problems.length, 1);
+  assert.deepEqual(json('{"prune": {"after_days": "30"}}').problems, []);
+});
+
+test("CONFIG.md's `prune` example reads with no problems", () => {
+  const block = CONFIG_MD.split("\n```yaml\n")
+    .slice(1)
+    .map((part) => part.split("\n```")[0])
+    .find((text) => text.startsWith("prune:"));
+  const read = parseConfig("orchestrate.config.yml", block);
+  assert.deepEqual(read.problems, []);
+  assert.deepEqual(effectiveConfig(read.config).prune, { after_days: 90 });
+});
+
+// ── Run Records: `records.raw` ──────────────────────────────────────────────
+
+const RAW_SINK = {
+  type: "s3",
+  endpoint: "https://acct.r2.cloudflarestorage.com",
+  bucket: "acme-run-records",
+  region: "auto",
+};
+
+test("`records.raw.sink` reads the same in YAML and JSON; unset means raw folders are never offered", () => {
+  const fromYaml = yaml(
+    "records:",
+    "  raw:",
+    "    sink:",
+    "      type: s3",
+    "      endpoint: https://acct.r2.cloudflarestorage.com",
+    "      bucket: acme-run-records",
+    "      region: auto",
+  );
+  const fromJson = json(JSON.stringify({ records: { raw: { sink: RAW_SINK } } }));
+  assert.deepEqual([fromYaml.problems, fromJson.problems], [[], []]);
+  assert.deepEqual(effectiveConfig(fromYaml.config).records.raw, { sink: RAW_SINK });
+  assert.deepEqual(effectiveConfig(fromJson.config).records.raw, { sink: RAW_SINK });
+  // Independent of the Run Record sink.
+  assert.equal(effectiveConfig(fromYaml.config).records.sink, null);
+  assert.deepEqual(effectiveConfig(yaml("records: {}").config).records.raw, { sink: null });
+  assert.deepEqual(effectiveConfig(yaml("run_dir: x").config).records.raw, { sink: null });
+});
+
+test("`records.raw.sink` problems: only `s3`, with its required fields, and no secret", () => {
+  const problems = (raw) => json(JSON.stringify({ records: { raw } })).problems.join("\n");
+  for (const type of ["github", "gitlab", "local", "azure"])
+    assert.match(
+      problems({ sink: { type, repo: "acme/runs" } }),
+      new RegExp(
+        `\`records\\.raw\\.sink\\.type\`: \`${type}\` cannot hold raw run folders: \`s3\` only`,
+      ),
+    );
+  assert.match(
+    problems({ sink: { endpoint: RAW_SINK.endpoint } }),
+    /`records\.raw\.sink\.type`: missing: `s3` only/,
+  );
+  for (const key of ["endpoint", "bucket", "region"]) {
+    const { [key]: _, ...rest } = RAW_SINK;
+    assert.match(
+      problems({ sink: rest }),
+      new RegExp(`\`records\\.raw\\.sink\\.${key}\`: missing`),
+    );
+  }
+  assert.match(
+    problems({ sink: { ...RAW_SINK, endpoint: "http://example.com" } }),
+    /`records\.raw\.sink\.endpoint`: expected an https URL/,
+  );
+  assert.match(
+    problems({ sink: { ...RAW_SINK, repo: "a/b" } }),
+    /`records\.raw\.sink\.repo`: not used by an `s3` sink/,
+  );
+  assert.match(
+    problems({ sink: { ...RAW_SINK, region: "AKIAIOSFODNN7EXAMPLE" } }),
+    /`records\.raw\.sink\.region`: looks like a secret/,
+  );
+  assert.match(problems({ sink: "s3" }), /`records\.raw\.sink`: expected a mapping/);
+  assert.match(problems("s3"), /`records\.raw`: expected a mapping/);
+  assert.match(problems({ bucket: "x" }), /`records\.raw\.bucket`: unknown key/);
+  assert.match(problems({ sink: null }), /`records\.raw\.sink`: no value/);
+});
+
+test("`records.raw` problems name their lines in YAML", () => {
+  const found = yaml("records:", "  raw:", "    sink:", "      type: github").problems.join("\n");
+  assert.match(found, /^line 4: `records\.raw\.sink\.type`: `github` cannot hold raw run folders/);
 });

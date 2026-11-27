@@ -13,7 +13,15 @@
  */
 
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -21,7 +29,17 @@ import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { WEB_NOTES, findPlaywright } from "./adapter.mjs";
-import { STEP_KEYS, checkSequence, main, runSequence } from "./web.mjs";
+import {
+  KEY_DELAY_MS,
+  POINTER_ID,
+  STEP_KEYS,
+  TYPING_BUDGET_MS,
+  checkSequence,
+  keyDelay,
+  loopbackNote,
+  main,
+  runSequence,
+} from "./web.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..", "..");
@@ -164,6 +182,72 @@ before(async () => {
             "<button>Send</button></form>",
         );
       if (url.pathname === "/away") return html(`<a href="http://localhost:${port}/who">Leave</a>`);
+      if (url.pathname === "/rate-limit-429") {
+        res.writeHead(429, { "content-type": "text/html", "retry-after": "30" });
+        return res.end(page("<p>Too many attempts: secret rate limit body</p>"));
+      }
+      if (url.pathname === "/rate-limit-503-retry") {
+        res.writeHead(503, { "content-type": "text/html", "retry-after": "45" });
+        return res.end(page("<p>Busy: service unavailable body</p>"));
+      }
+      if (url.pathname === "/rate-limit-503-plain") {
+        res.writeHead(503, { "content-type": "text/html" });
+        return res.end(page("<p>Plain 503 body</p>"));
+      }
+      if (url.pathname === "/rate-limit-fetch")
+        return html(
+          "<button onclick=\"fetch('/rate-limit-429?from=btn', { method: 'POST' })\">Trigger</button>",
+        );
+      if (url.pathname === "/keys")
+        // Counts each field's key and input events, and whether the email field was
+        // masked when its value arrived, for the typing tests.
+        return html(
+          '<label>Note <input id="note" value="old text"></label><label>Email <input id="email"></label>' +
+            '<p role="status" id="r"></p><script>' +
+            "const seen = { note: { keys: 0, inputs: 0 }, email: { keys: 0, inputs: 0, masked: [] } };" +
+            "const show = () => { document.getElementById('r').textContent =" +
+            "  `note ${seen.note.keys} keys ${seen.note.inputs} inputs [${document.getElementById('note').value}]; ` +" +
+            "  `email ${seen.email.keys} keys ${seen.email.inputs} inputs ${seen.email.masked.join(',')}`; };" +
+            "for (const id of ['note', 'email']) { const field = document.getElementById(id);" +
+            "  field.addEventListener('keydown', () => { seen[id].keys += 1; show(); });" +
+            "  field.addEventListener('input', () => { seen[id].inputs += 1;" +
+            "    if (id === 'email') seen.email.masked.push(getComputedStyle(field).webkitTextSecurity);" +
+            "    show(); }); }</script>",
+        );
+      if (url.pathname === "/odd")
+        // A form an Enter would submit, a textarea counting its keys, and a read-only field.
+        return html(
+          '<form id="f"><label>Story <textarea id="story"></textarea></label>' +
+            '<label>Fixed <input id="fixed" readonly value="kept"></label>' +
+            '<button>Send</button></form><p role="status" id="r"></p><script>' +
+            "let keys = 0, sent = 0; const story = document.getElementById('story');" +
+            "const show = () => { document.getElementById('r').textContent =" +
+            "  `story ${keys} keys, sent ${sent}, [${story.value.replace(/\\n/g, '|')}]`; };" +
+            "story.addEventListener('keydown', () => { keys += 1; show(); });" +
+            "story.addEventListener('input', show);" +
+            "document.getElementById('f').addEventListener('submit', (e) => { e.preventDefault(); sent += 1; show(); });" +
+            "</script>",
+        );
+      if (url.pathname === "/pointer")
+        // A button that says, when clicked, whether the pointer marker sits on it, and a
+        // line that says whether the marker is in the page now.
+        return html(
+          '<button id="aim" style="position: absolute; left: 900px; top: 500px">Aim</button>' +
+            '<p id="shot">no click</p><p id="drawn">pointer absent</p><script>' +
+            `const id = ${JSON.stringify(POINTER_ID)};` +
+            "const aim = document.getElementById('aim');" +
+            "aim.addEventListener('click', () => { const marker = document.getElementById(id);" +
+            "  let said = 'clicked with no pointer';" +
+            "  if (marker) { const m = marker.getBoundingClientRect(), b = aim.getBoundingClientRect();" +
+            "    const on = Math.abs(m.left + m.width / 2 - (b.left + b.width / 2)) <= 4 &&" +
+            "      Math.abs(m.top + m.height / 2 - (b.top + b.height / 2)) <= 4;" +
+            "    said = on ? 'clicked with the pointer on target' : 'clicked with the pointer elsewhere'; }" +
+            "  document.getElementById('shot').textContent = said; });" +
+            "const drawn = () => { document.getElementById('drawn').textContent =" +
+            "  document.getElementById(id) ? 'pointer shown' : 'pointer absent'; };" +
+            "new MutationObserver(drawn).observe(document.documentElement, { childList: true });" +
+            "</script>",
+        );
       html("<h1>Home</h1>");
     });
   });
@@ -890,6 +974,186 @@ test(
   },
 );
 
+// ── With --video, it looks like a person working ───────────────────────────
+
+const TYPED = "Ada Lovelace";
+const TYPING = [
+  { session: "A", goto: "/keys" },
+  { session: "A", fill: { label: "Note" }, value: TYPED },
+  { session: "A", fill: { label: "Email" }, value: "{{env:QA_A_EMAIL}}" },
+  { session: "A", step: "Both filled", subject: { role: "status" } },
+];
+/** What `/keys` saw: each field's key and input events, the note's value, and the email's mask. */
+const keysSeen = (text) => {
+  const found = /^note (\d+) keys (\d+) inputs \[(.*)\]; email (\d+) keys (\d+) inputs (.*)$/.exec(
+    text ?? "",
+  );
+  assert.ok(found, text);
+  const [, noteKeys, noteInputs, note, emailKeys, emailInputs, masked] = found;
+  return {
+    noteKeys: Number(noteKeys),
+    noteInputs: Number(noteInputs),
+    note,
+    emailKeys: Number(emailKeys),
+    emailInputs: Number(emailInputs),
+    masked,
+  };
+};
+
+test(
+  "with --video, a literal value is typed key by key, and a sign-in value arrives at once, masked",
+  { skip: NEEDS_CHROMIUM },
+  async () => {
+    const { code, steps, out, stdout } = await drive(TYPING, { video: true });
+    assert.equal(code, 0, stdout);
+    const [filled] = steps.steps;
+    const seen = keysSeen(filled.text);
+    assert.equal(seen.noteKeys, TYPED.length, "one key event per character");
+    assert.equal(seen.note, TYPED, "the typed value replaces the field's old text");
+    assert.equal(seen.emailKeys, 0, "a sign-in value is never typed key by key");
+    assert.equal(seen.emailInputs, 1, "it arrives in one go");
+    assert.equal(seen.masked, "disc", "and shows dots as it arrives");
+    assert.match(filled.withheld, /a field holds a sign-in value/);
+    assert.ok(!(allText(out) + stdout).includes(EMAIL));
+  },
+);
+
+test(
+  "without --video, a literal value is filled in one go, as before",
+  { skip: NEEDS_CHROMIUM },
+  async () => {
+    const { code, steps, stdout } = await drive(TYPING);
+    assert.equal(code, 0, stdout);
+    const seen = keysSeen(steps.steps[0].text);
+    assert.equal(seen.noteKeys, 0, "no key events");
+    assert.equal(seen.noteInputs, 1);
+    assert.equal(seen.note, TYPED);
+    assert.equal(seen.emailKeys, 0);
+    assert.equal(seen.emailInputs, 1);
+    assert.equal(seen.masked, "disc");
+  },
+);
+
+test(
+  "with --video, a value with a line break or off the keyboard is filled in one go",
+  { skip: NEEDS_CHROMIUM },
+  async () => {
+    for (const [value, shown] of [
+      ["line one\nline two", "line one|line two"],
+      ["café", "café"],
+    ]) {
+      const { code, steps, stdout } = await drive(
+        [
+          { session: "A", goto: "/odd" },
+          { session: "A", fill: { label: "Story" }, value },
+          { session: "A", step: "Filled", subject: { role: "status" } },
+        ],
+        { video: true },
+      );
+      assert.equal(code, 0, stdout);
+      assert.equal(steps.steps[0].text, `story 0 keys, sent 0, [${shown}]`, "no Enter, no keys");
+    }
+  },
+);
+
+test(
+  "with --video, a fill into a read-only field fails as it does without",
+  { skip: NEEDS_CHROMIUM },
+  async () => {
+    const actions = [
+      { session: "A", goto: "/odd" },
+      { session: "A", fill: { label: "Fixed" }, value: "changed" },
+    ];
+    for (const video of [false, true]) {
+      const { code, summary } = await drive(actions, { video });
+      assert.equal(code, 1, `video: ${video}`);
+      assert.equal(summary.error.action, 2);
+      assert.equal(summary.error.verb, "fill");
+    }
+  },
+);
+
+/** Runs a sequence in-process, noting at each still whether the pointer marker is in the page. */
+async function runNotingPointer(actions, video) {
+  const out = mkdtempSync(join(tmpdir(), "web-pointer-"));
+  const atStills = [];
+  const screenshot = async (pageHandle, path) => {
+    atStills.push(
+      await pageHandle.evaluate((id) => document.getElementById(id) !== null, POINTER_ID),
+    );
+    await pageHandle.screenshot({ path });
+  };
+  try {
+    const result = await runSequence(
+      { actions },
+      { base, env: ENV, out, video, playwright: PLAYWRIGHT.module, screenshot },
+    );
+    assert.equal(result.completed, true, JSON.stringify(result.error));
+    for (const step of result.steps) assert.ok(step.still, step.caption);
+    return { steps: result.steps, atStills };
+  } finally {
+    rmSync(out, { recursive: true, force: true });
+  }
+}
+
+test(
+  "with --video, a pointer moves to each click target, and no still shows it",
+  { skip: NEEDS_CHROMIUM },
+  async () => {
+    const { steps, atStills } = await runNotingPointer(
+      [
+        { session: "A", goto: "/pointer" },
+        { session: "A", step: "Before the click" },
+        { session: "A", click: { role: "button", name: "Aim" } },
+        { session: "A", step: "Clicked", subject: { text: "clicked with" } },
+        // The still above removed the marker; it is back for the video before this step.
+        { session: "A", step: "Restored", subject: { text: "pointer shown" } },
+        { session: "B", goto: "/pointer" },
+        { session: "B", click: { role: "button", name: "Aim" } },
+        { session: "B", step: "B clicked", subject: { text: "clicked with" } },
+      ],
+      true,
+    );
+    assert.deepEqual(
+      steps.map((s) => s.text),
+      [
+        null,
+        "clicked with the pointer on target",
+        "pointer shown",
+        "clicked with the pointer on target",
+      ],
+    );
+    assert.deepEqual(atStills, [false, false, false, false], "no still has the pointer");
+    // The crop is the page's own: the subject's box is the same as without --video.
+    const plain = await runNotingPointer(
+      [
+        { session: "A", goto: "/pointer" },
+        { session: "A", click: { role: "button", name: "Aim" } },
+        { session: "A", step: "Clicked", subject: { text: "clicked with" } },
+      ],
+      false,
+    );
+    assert.deepEqual(plain.steps[0].subject, steps[1].subject);
+  },
+);
+
+test("without --video, there is no pointer", { skip: NEEDS_CHROMIUM }, async () => {
+  const { steps, atStills } = await runNotingPointer(
+    [
+      { session: "A", goto: "/pointer" },
+      { session: "A", click: { role: "button", name: "Aim" } },
+      { session: "A", step: "Clicked", subject: { text: "clicked with" } },
+      { session: "A", step: "Never drawn", subject: { text: "pointer absent" } },
+    ],
+    false,
+  );
+  assert.deepEqual(
+    steps.map((s) => s.text),
+    ["clicked with no pointer", "pointer absent"],
+  );
+  assert.deepEqual(atStills, [false, false]);
+});
+
 test("the driver adds no Chromium switch, so Playwright's own `--disable-features` list stands", () => {
   const source = readFileSync(join(HERE, "web.mjs"), "utf8");
   assert.match(source, /chromium\.launch\(\{ headless: true \}\)/);
@@ -907,4 +1171,479 @@ test("ADAPTER.md documents the CLI, and words the readiness notes as readiness d
   for (const note of Object.values(WEB_NOTES)) assert.ok(flat.includes(note), note);
   assert.match(design, /## A driver for the web surface/);
   assert.match(skill.replace(/\s+/g, " "), /`web\.mjs`/);
+});
+
+test("ADAPTER.md says what --video adds: typing key by key and a pointer, never in a still", () => {
+  const flat = adapterDoc.replace(/\s+/g, " ");
+  assert.match(flat, /\*\*With `--video`, the run looks like a person working\.\*\*/);
+  assert.match(flat, /a literal value[^.]* is typed key by key/);
+  assert.ok(flat.includes(`about ${KEY_DELAY_MS} ms a key`));
+  assert.ok(flat.includes(`at most ${TYPING_BUDGET_MS / 1000} seconds`));
+  assert.match(flat, /A fill from a `\{\{env:QA_…\}\}` placeholder is never typed key by key/);
+  assert.match(flat, /moves to each `click` target before the click/);
+  assert.match(flat, /taken out of the page for every still/);
+  assert.match(flat, /Without `--video`, a fill is one fill and there is no pointer/);
+});
+
+test("a long literal types faster, so its pauses stay within the budget", () => {
+  assert.equal(keyDelay("Ada"), KEY_DELAY_MS);
+  assert.equal(keyDelay(""), KEY_DELAY_MS);
+  const long = "x".repeat(10_000);
+  assert.ok(keyDelay(long) * long.length <= TYPING_BUDGET_MS);
+});
+
+// ── `run.playwright` and loopback-spelling notes (#533) ──────────────────────
+
+/** A stub Playwright module that records its launches and fires route handlers and response events. */
+function stubPlaywrightModule(
+  requestsToFire = [],
+  pageUrl = "http://127.0.0.1:3000/",
+  responsesToFire = [],
+) {
+  const state = { launched: 0 };
+  const module = {
+    chromium: {
+      launch: async () => {
+        state.launched += 1;
+        return {
+          newContext: async () => {
+            let routeHandler;
+            const listeners = {};
+            const page = {
+              url: () => pageUrl,
+              on: (event, handler) => {
+                (listeners[event] ??= []).push(handler);
+              },
+              goto: async () => {
+                for (const reqUrl of requestsToFire) {
+                  let continued = false;
+                  await routeHandler?.({
+                    request: () => ({
+                      url: () => reqUrl,
+                      isNavigationRequest: () => false,
+                      frame: () => ({ page: () => page, parentFrame: () => null }),
+                    }),
+                    continue: () => {
+                      continued = true;
+                    },
+                    abort: () => {
+                      throw new Error(`unexpected abort for ${reqUrl}`);
+                    },
+                  });
+                  assert.equal(continued, true, `request ${reqUrl} must continue`);
+                }
+                for (const resp of responsesToFire) {
+                  for (const h of listeners.response ?? []) {
+                    h({
+                      status: () => resp.status,
+                      headers: () => resp.headers ?? {},
+                      request: () => ({
+                        method: () => resp.method ?? "GET",
+                        url: () => resp.url,
+                      }),
+                      text: async () => resp.body ?? "",
+                    });
+                  }
+                }
+              },
+              frames: () => [
+                {
+                  $$eval: async () => [],
+                  evaluate: async () => "",
+                },
+              ],
+              screenshot: async ({ path }) => writeFileSync(path, "png"),
+            };
+            return {
+              setDefaultTimeout: () => {},
+              setDefaultNavigationTimeout: () => {},
+              newPage: async () => page,
+              newCDPSession: async () => ({ on: () => {}, send: async () => {} }),
+              route: async (_pattern, handler) => {
+                routeHandler = handler;
+              },
+              on: () => {},
+              close: async () => {},
+            };
+          },
+          close: async () => {},
+        };
+      },
+    },
+  };
+  return { module, state };
+}
+
+test("web.mjs resolves Playwright from `run.playwright` (or `--playwright-dir`) while run from the repo root", async () => {
+  const repo = mkdtempSync(join(tmpdir(), "web-subdir-"));
+  try {
+    mkdirSync(join(repo, "react-frontend", "node_modules", "playwright"), { recursive: true });
+    writeFileSync(join(repo, "react-frontend", "package.json"), "{}");
+    const fakeBrowser = join(repo, "react-frontend", "chromium-bin");
+    writeFileSync(fakeBrowser, "");
+    const launchMarker = join(repo, "launched.txt");
+    writeFileSync(
+      join(repo, "react-frontend", "node_modules", "playwright", "index.js"),
+      [
+        `const fs = require("node:fs");`,
+        `module.exports = {`,
+        `  chromium: {`,
+        `    executablePath: () => ${JSON.stringify(fakeBrowser)},`,
+        `    launch: async () => {`,
+        `      fs.writeFileSync(${JSON.stringify(launchMarker)}, "ok");`,
+        `      const page = {`,
+        `        url: () => "http://127.0.0.1:3000/",`,
+        `        goto: async () => {},`,
+        `        frames: () => [{ $$eval: async () => [], evaluate: async () => "" }],`,
+        `        screenshot: async ({ path }) => fs.writeFileSync(path, "png"),`,
+        `      };`,
+        `      return {`,
+        `        newContext: async () => ({`,
+        `          setDefaultTimeout: () => {},`,
+        `          setDefaultNavigationTimeout: () => {},`,
+        `          newPage: async () => page,`,
+        `          newCDPSession: async () => ({ on: () => {}, send: async () => {} }),`,
+        `          route: async () => {},`,
+        `          on: () => {},`,
+        `          close: async () => {},`,
+        `        }),`,
+        `        close: async () => {},`,
+        `      };`,
+        `    },`,
+        `  },`,
+        `};`,
+      ].join("\n"),
+    );
+
+    const seqPath = join(repo, "tmp", "qa", "s1-web.json");
+    mkdirSync(dirname(seqPath), { recursive: true });
+    writeFileSync(
+      seqPath,
+      JSON.stringify({
+        actions: [
+          { session: "A", goto: "/" },
+          { session: "A", step: "Home" },
+        ],
+      }),
+    );
+    const outDir = join(repo, "tmp", "qa", "s1-web");
+
+    // Without `run.playwright`, running from `repo` does not load `react-frontend`.
+    const withoutConfig = await main(
+      ["run", seqPath, "--base", "http://127.0.0.1:3000", "--out", outDir],
+      { env: {}, cwd: repo },
+    );
+    assert.equal(withoutConfig.code, 2);
+    assert.equal(existsSync(launchMarker), false);
+
+    // With `--playwright-dir react-frontend`, it loads from `react-frontend` while keeping repo paths.
+    const withFlag = await main(
+      [
+        "run",
+        seqPath,
+        "--base",
+        "http://127.0.0.1:3000",
+        "--out",
+        outDir,
+        "--playwright-dir",
+        "react-frontend",
+      ],
+      { env: {}, cwd: repo },
+    );
+    assert.equal(withFlag.code, 0, withFlag.out);
+    assert.equal(existsSync(launchMarker), true);
+    assert.equal(existsSync(join(outDir, "steps.json")), true);
+
+    // With `run.playwright: react-frontend` in `qa.config.yml`, no flag is needed.
+    rmSync(launchMarker, { force: true });
+    writeFileSync(join(repo, "qa.config.yml"), "run:\n  playwright: react-frontend\n");
+    const withConfig = await main(
+      ["run", seqPath, "--base", "http://127.0.0.1:3000", "--out", outDir],
+      { env: {}, cwd: repo },
+    );
+    assert.equal(withConfig.code, 0, withConfig.out);
+    assert.equal(existsSync(launchMarker), true);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test("loopbackNote flags differently spelled loopback hosts and ignores matching or non-loopback ones", () => {
+  assert.equal(
+    loopbackNote("http://127.0.0.1:3000", "http://localhost:8000/api/me"),
+    "the page at 127.0.0.1:3000 called localhost:8000; a SameSite cookie set by one is not sent from the other",
+  );
+  assert.equal(
+    loopbackNote("http://[::1]:3000", "http://localhost:8000/api/me"),
+    "the page at [::1]:3000 called localhost:8000; a SameSite cookie set by one is not sent from the other",
+  );
+  assert.equal(loopbackNote("http://localhost:3000", "http://localhost:8000/api/me"), null);
+  assert.equal(loopbackNote("http://127.0.0.1:3000", "http://127.0.0.1:8000/api/me"), null);
+  assert.equal(loopbackNote("http://127.0.0.1:3000", "https://cdn.example.com/a.js"), null);
+  assert.equal(loopbackNote("https://qa.example.com", "http://localhost:8000/api"), null);
+});
+
+test("runSequence records one loopback note in steps.json without blocking, and none when spellings match", async () => {
+  const outMismatch = mkdtempSync(join(tmpdir(), "web-loopback-mismatch-"));
+  const outMatch = mkdtempSync(join(tmpdir(), "web-loopback-match-"));
+  try {
+    const seq = {
+      actions: [
+        { session: "A", goto: "/" },
+        { session: "A", step: "Home" },
+      ],
+    };
+    const mismatchStub = stubPlaywrightModule([
+      "http://localhost:8000/api/one",
+      "http://localhost:8000/api/two",
+    ]);
+    const mismatch = await runSequence(seq, {
+      base: "http://127.0.0.1:3000",
+      env: {},
+      out: outMismatch,
+      video: false,
+      playwright: mismatchStub.module,
+    });
+    assert.equal(mismatch.completed, true);
+    const savedMismatch = JSON.parse(readFileSync(join(outMismatch, "steps.json"), "utf8"));
+    assert.deepEqual(savedMismatch.notes, [
+      "the page at 127.0.0.1:3000 called localhost:8000; a SameSite cookie set by one is not sent from the other",
+    ]);
+
+    const matchStub = stubPlaywrightModule(
+      ["http://localhost:8000/api/one"],
+      "http://localhost:3000/",
+    );
+    const match = await runSequence(seq, {
+      base: "http://localhost:3000",
+      env: {},
+      out: outMatch,
+      video: false,
+      playwright: matchStub.module,
+    });
+    assert.equal(match.completed, true);
+    const savedMatch = JSON.parse(readFileSync(join(outMatch, "steps.json"), "utf8"));
+    assert.deepEqual(savedMatch.notes, []);
+    assert.deepEqual(savedMatch.rateLimits, []);
+  } finally {
+    rmSync(outMismatch, { recursive: true, force: true });
+    rmSync(outMatch, { recursive: true, force: true });
+  }
+});
+
+test(
+  "Chromium: a page at 127.0.0.1 calling localhost records one loopback note and the request goes through",
+  { skip: NEEDS_CHROMIUM },
+  async () => {
+    otherSeen.length = 0;
+    const { code, steps } = await drive([
+      { session: "A", goto: "/framed" },
+      { session: "A", wait: { role: "heading", name: "Framed" } },
+      { session: "A", step: "Loaded" },
+    ]);
+    assert.equal(code, 0);
+    assert.deepEqual(steps.notes, [
+      `the page at 127.0.0.1:${port} called localhost:${other.address().port}; a SameSite cookie set by one is not sent from the other`,
+    ]);
+    assert.deepEqual(otherSeen, ["/embedded"]);
+  },
+);
+
+// ── Rate-limit recording (#538) ────────────────────────────────────────────
+
+test("runSequence records 429 and 503-with-Retry-After in steps.json, never the body or other statuses (#538)", async () => {
+  const out = mkdtempSync(join(tmpdir(), "web-rate-limit-"));
+  try {
+    const seq = {
+      actions: [
+        { session: "A", goto: "/login" },
+        { session: "A", step: "After login" },
+      ],
+    };
+    const stub = stubPlaywrightModule([], "http://127.0.0.1:3000/", [
+      { status: 200, method: "GET", url: "http://127.0.0.1:3000/sign-in", body: "ok body" },
+      { status: 401, method: "POST", url: "http://127.0.0.1:3000/api/login", body: "bad auth" },
+      {
+        status: 503,
+        method: "GET",
+        url: "http://127.0.0.1:3000/health",
+        headers: {},
+        body: "plain 503",
+      },
+      {
+        status: 429,
+        method: "POST",
+        url: `http://127.0.0.1:3000/api/login?email=${encodeURIComponent(EMAIL)}`,
+        headers: { "retry-after": "30" },
+        body: "DO_NOT_RECORD_429_BODY",
+      },
+      {
+        status: 503,
+        method: "GET",
+        url: "http://127.0.0.1:3000/api/me",
+        headers: { "Retry-After": "120" },
+        body: "DO_NOT_RECORD_503_BODY",
+      },
+      {
+        status: 429,
+        method: "GET",
+        url: "http://127.0.0.1:3000/api/other",
+        headers: {},
+        body: "DO_NOT_RECORD_429_NO_HEADER",
+      },
+    ]);
+    const result = await runSequence(seq, {
+      base: "http://127.0.0.1:3000",
+      env: ENV,
+      out,
+      video: false,
+      playwright: stub.module,
+    });
+    assert.equal(result.completed, true);
+    const saved = JSON.parse(readFileSync(join(out, "steps.json"), "utf8"));
+    assert.deepEqual(saved.rateLimits, [
+      {
+        session: "A",
+        step: 1,
+        method: "POST",
+        host: "127.0.0.1:3000",
+        path: "/api/login?email=[redacted:QA_A_EMAIL]",
+        status: 429,
+        retryAfter: "30",
+      },
+      {
+        session: "A",
+        step: 1,
+        method: "GET",
+        host: "127.0.0.1:3000",
+        path: "/api/me",
+        status: 503,
+        retryAfter: "120",
+      },
+      {
+        session: "A",
+        step: 1,
+        method: "GET",
+        host: "127.0.0.1:3000",
+        path: "/api/other",
+        status: 429,
+        retryAfter: null,
+      },
+    ]);
+    const dumped = JSON.stringify(saved);
+    assert.ok(!dumped.includes("DO_NOT_RECORD"), "never records response body");
+    assert.ok(!dumped.includes(EMAIL), "redacts sign-in values in path");
+    assert.ok(!dumped.includes('"status":200') && !dumped.includes('"status":401'));
+  } finally {
+    rmSync(out, { recursive: true, force: true });
+  }
+});
+
+test(
+  "Chromium: web.mjs records 429 and 503 with Retry-After on document and request responses, and ignores plain 503 (#538)",
+  { skip: NEEDS_CHROMIUM },
+  async () => {
+    const { code, summary, steps, out, stdout } = await drive([
+      { session: "A", goto: "/rate-limit-429" },
+      { session: "A", goto: "/rate-limit-503-plain" },
+      { session: "B", goto: "/rate-limit-503-retry" },
+      { session: "B", goto: "/rate-limit-fetch" },
+      { session: "B", click: { role: "button", name: "Trigger" } },
+      { session: "B", step: "Done" },
+    ]);
+    assert.equal(code, 0, stdout);
+    assert.deepEqual(steps.rateLimits, [
+      {
+        session: "A",
+        step: 1,
+        method: "GET",
+        host: `127.0.0.1:${port}`,
+        path: "/rate-limit-429",
+        status: 429,
+        retryAfter: "30",
+      },
+      {
+        session: "B",
+        step: 3,
+        method: "GET",
+        host: `127.0.0.1:${port}`,
+        path: "/rate-limit-503-retry",
+        status: 503,
+        retryAfter: "45",
+      },
+      {
+        session: "B",
+        step: 5,
+        method: "POST",
+        host: `127.0.0.1:${port}`,
+        path: "/rate-limit-429?from=btn",
+        status: 429,
+        retryAfter: "30",
+      },
+    ]);
+    assert.deepEqual(summary.rateLimits, steps.rateLimits);
+    const written = allText(out) + stdout;
+    assert.ok(!written.includes("secret rate limit body"));
+    assert.ok(!written.includes("service unavailable body"));
+    assert.ok(!written.includes("Plain 503 body"));
+  },
+);
+
+test("runSequence keeps host on rateLimits so third-party 429s stay distinct from the app and its multi-port API", async () => {
+  const out = mkdtempSync(join(tmpdir(), "web-rate-limit-host-"));
+  try {
+    const seq = {
+      actions: [
+        { session: "A", goto: "/login" },
+        { session: "A", step: "After login" },
+      ],
+    };
+    const stub = stubPlaywrightModule([], "http://localhost:3000/", [
+      {
+        status: 429,
+        method: "GET",
+        url: "https://fonts.googleapis.com/css2?family=Inter",
+        headers: { "retry-after": "10" },
+        body: "third-party limit",
+      },
+      {
+        status: 429,
+        method: "POST",
+        url: "http://localhost:8000/api/login",
+        headers: { "retry-after": "30" },
+        body: "api limit",
+      },
+    ]);
+    const result = await runSequence(seq, {
+      base: "http://localhost:3000",
+      env: ENV,
+      out,
+      video: false,
+      playwright: stub.module,
+    });
+    assert.equal(result.completed, true);
+    const saved = JSON.parse(readFileSync(join(out, "steps.json"), "utf8"));
+    assert.deepEqual(saved.rateLimits, [
+      {
+        session: "A",
+        step: 1,
+        method: "GET",
+        host: "fonts.googleapis.com",
+        path: "/css2?family=Inter",
+        status: 429,
+        retryAfter: "10",
+      },
+      {
+        session: "A",
+        step: 1,
+        method: "POST",
+        host: "localhost:8000",
+        path: "/api/login",
+        status: 429,
+        retryAfter: "30",
+      },
+    ]);
+  } finally {
+    rmSync(out, { recursive: true, force: true });
+  }
 });

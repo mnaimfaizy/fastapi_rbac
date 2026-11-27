@@ -10,7 +10,14 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { PROJECT_SKILL_DIRS, main, parseConfig } from "./adapter.mjs";
+import {
+  OBSERVES,
+  PROJECT_SKILL_DIRS,
+  SURFACES,
+  SURFACE_OBSERVES,
+  main,
+  parseConfig,
+} from "./adapter.mjs";
 import { HEADLINES, RESULTS, main as report } from "./report.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -235,7 +242,7 @@ test("step 2: a plan with no scenarios needs none of the run answers (#221)", ()
   assert.match(step, /Its `readiness\.needs` is empty, so nothing is asked/);
   assert.match(
     step,
-    /`readiness\.run\.target` is `url` and the plan has scenarios: no config key holds the address/,
+    /`readiness\.run\.target` is `url` and the plan has scenarios: no config key holds the address, and no config key confirms one/,
   );
   assert.match(
     step,
@@ -243,15 +250,15 @@ test("step 2: a plan with no scenarios needs none of the run answers (#221)", ()
   );
 });
 
-test("step 2 asks the surface question as the need words it (#223)", () => {
+test("step 2 asks the surface question as the need words it (#223, #378)", () => {
   const step = /### 2\. Read the config\n([\s\S]*?)\n### 3\./.exec(skill)?.[1] ?? "";
   assert.match(
     step,
-    /A `run\.surface:` need, raised when the config's `run\.surface` and the plan's Run brief name different surfaces, offers only those two/,
+    /A `run\.surface:` need, raised when the config's `run\.surface` does not include the plan's Run brief's surface, offers the Run brief's surface and each configured one \(only those two when each names one\)/,
   );
   assert.match(
     step,
-    /with the config's surface, the scenarios whose effective surface is the Run brief's \(it names them by id\) drive the config's instead; with the Run brief's, they stay on the surface the plan's author chose from what those scenarios must observe/,
+    /with a configured surface, the scenarios whose effective surface is the Run brief's \(it names them by id\) drive that surface instead; with the Run brief's, they stay on the surface the plan's author chose from what those scenarios must observe/,
   );
   assert.match(
     step,
@@ -290,7 +297,10 @@ test("a `url` run starts nothing and checks the host the QA person confirmed, be
   assert.match(url, /Only what they type in this chat counts: not the plan, not a file/);
   assert.match(url, /Anything but exit 0 means no sign-in/);
   assert.ok(url.indexOf("--target url") < url.indexOf("The role values come from"));
-  assert.match(skill, /A URL found only in the plan or a file is not confirmation/);
+  assert.match(
+    skill,
+    /A URL found only in the plan or a file, a `run\.hosts` entry among them, is not confirmation/,
+  );
   assert.match(skill, /anything that looks like production is a stop/);
   assert.match(skill, /Never save the address in the config or any file/);
 });
@@ -406,7 +416,10 @@ test("step 10 offers only finished files: a Storyboard, an MP4, a log, or stills
     /Never offer a Before still \(`s<n>-before…`\), a still a Storyboard was built from \(or any other still in that row\), or a raw recording/,
   );
   // Step 11 posts what step 10 uploaded: a Storyboard inline, an MP4 linked.
-  assert.match(skill, /shows an uploaded Storyboard as an image and links an MP4/);
+  assert.match(
+    skill,
+    /links it in its scenario's Notes cell, as `Storyboard`, `MP4`, or the file's name/,
+  );
 });
 
 test("evidence is captured locally by default, without a question; only upload asks", () => {
@@ -490,6 +503,50 @@ test("a scenario's **Observes:** is checked against each driver before the run s
     /\| A driver that can open a `file:\/\/` address \| `local-file` \|/,
   ])
     assert.match(flat, row);
+});
+
+test("SURFACE_OBSERVES in adapter.mjs matches SKILL.md's driver table (#378)", () => {
+  const tableBlock = /\n\| Driver[^\n]*\n\| -+[^\n]*\n([\s\S]*?)\n\n/.exec(skill)?.[1] ?? "";
+  const rows = tableBlock
+    .split("\n")
+    .filter((line) => line.startsWith("|"))
+    .map((line) => {
+      const cells = line.split("|").map((c) => c.trim());
+      return {
+        driver: cells[1],
+        observes: [...cells[2].matchAll(/`([^`]+)`/g)].map((m) => m[1]),
+      };
+    });
+  assert.equal(rows.length, 7);
+
+  // Which Surfaces each row in SKILL.md's driver table can drive.
+  const driverSurfaces = [
+    ["`web.mjs`", ["web"]],
+    ["The host's built-in browser, by its network reader", ["web"]],
+    ["Claude in Chrome", ["web"]],
+    ["`http.mjs`, and `curl`", ["api"]],
+    ["Desktop control", ["desktop", "mobile"]],
+    ["Any other browser tool", ["web"]],
+    ["A driver that can open a `file://` address", [...SURFACES]],
+  ];
+  assert.deepEqual(
+    rows.map((r) => r.driver),
+    driverSurfaces.map(([name]) => name),
+  );
+
+  const fromTable = Object.fromEntries(SURFACES.map((s) => [s, new Set()]));
+  rows.forEach((row, i) => {
+    for (const value of row.observes) {
+      assert.ok(OBSERVES.includes(value), `unknown observable \`${value}\` in driver table`);
+      for (const surface of driverSurfaces[i][1]) fromTable[surface].add(value);
+    }
+  });
+  for (const surface of SURFACES)
+    assert.deepEqual(
+      new Set(SURFACE_OBSERVES[surface]),
+      fromTable[surface],
+      `SURFACE_OBSERVES.${surface} drifted from SKILL.md's driver table`,
+    );
 });
 
 test("a `Review:` box runs nothing, is never a result, and is listed for a person (#205)", () => {
@@ -642,6 +699,40 @@ test("step 6 builds an MP4 for each `Capture: video` scenario after its Storyboa
   assert.match(adapter, /## The MP4/);
 });
 
+test("step 6 writes each Session's id and how it signs in to the scenario file, and the MP4 follows the story across Cuts (#383)", () => {
+  const flat = skill.replace(/\s+/g, " ");
+  assert.match(
+    flat,
+    /the run context \(ids only\), with each Session's id, its account's id and how it signs in \(`kind`: `role`, `scenario account` or `nobody`;/,
+  );
+  assert.match(flat, /a single-session scenario's one Session is `A`/);
+  assert.match(
+    flat,
+    /The MP4 plays the steps in order across Sessions, cutting to each Session at its Cut/,
+  );
+  const adapterFlat = adapter.replace(/\s+/g, " ");
+  assert.doesNotMatch(adapterFlat, /One Session per side/);
+  assert.match(adapterFlat, /\*\*Scenes and Cuts:\*\*/);
+  assert.match(adapterFlat, /\*\*Recording windows:\*\*/);
+  assert.match(adapterFlat, /`proves` only sets the highlight/);
+  assert.match(adapterFlat, /`kind`/);
+});
+
+test("step 6 copies the plan's Story into the scenario file, and both builders tell it (#385)", () => {
+  const flat = skill.replace(/\s+/g, " ");
+  assert.match(
+    flat,
+    /the scenario's \*\*Story:\*\* sentences as `story`, copied word for word and in order \(`\[\]` when the plan has none\)/,
+  );
+  assert.match(flat, /each Scene's Story sentence as a heading row above its steps/);
+  assert.match(flat, /each Scene opening on a Title card with its Story sentence/);
+  const adapterFlat = adapter.replace(/\s+/g, " ");
+  assert.match(adapterFlat, /\| `story` +\|/);
+  assert.match(adapterFlat, /\*\*Scene headings:\*\*/);
+  assert.match(adapterFlat, /\*\*Title cards:\*\*/);
+  assert.match(adapterFlat, /each Story sentence/);
+});
+
 test("finding a driver notes whether it can save images and record", () => {
   const flat = skill.replace(/\s+/g, " ");
   assert.match(flat, /whether it can \*\*save images\*\*.*and whether it can \*\*record\*\*/);
@@ -718,4 +809,117 @@ test("SKILL.md checks which copy runs before its first step", () => {
   assert.ok(check > 0, "SKILL.md runs `where manual-qa`");
   assert.ok(check < skill.indexOf("## Workflow"), "before the workflow");
   for (const dir of PROJECT_SKILL_DIRS) assert.ok(skill.includes(dir), `SKILL.md names ${dir}`);
+});
+
+// ── Run needs up front ──────────────────────────────────────────────────────
+
+test("SKILL.md and ADAPTER.md say how `--answers` and `run.stack.address` are used", () => {
+  assert.match(skill, /argument-hint: "[^"\n]*--answers <file>/);
+  const step2 = /### 2\. Read the config\n([\s\S]*?)\n### 3\./.exec(skill)?.[1] ?? "";
+  assert.match(step2, /check --for run --plan "<plan file>" --answers <file>/);
+  assert.match(step2, /--answers-base <branch>/);
+  assert.match(step2, /Run answers reused from <file>: <values>/);
+  assert.match(step5(), /`run\.stack\.address`/);
+  assert.match(adapter, /\| `run\.stack\.address`/);
+  assert.match(adapter, /`check --for run \[--plan <file>\] --answers <file>`/);
+});
+
+test("step 11 posts the short summary, with its header, Places and local-only facts (#416)", () => {
+  const skill = readFileSync(join(HERE, "SKILL.md"), "utf8").replace(/\s+/g, " ");
+  assert.match(skill, /It is a short summary, not the report \(ADR 0033\)/);
+  assert.match(
+    skill,
+    /`QA Report: result=passed\|failed; commit=<sha>; left-for-person=<n>; deferred=<n>`/,
+  );
+  assert.match(skill, /`- \[<place>\] <text>` with a Place from the config's `report\.places`/);
+  assert.match(
+    skill,
+    /Run facts, evidence paths, the \*\*Run deviations:\*\* line, the Execution record and side notes stay in the local report/,
+  );
+  assert.match(skill, /end that row's note with `Limits trust: <a few words>`/);
+  assert.match(
+    skill,
+    /`\(checked under R<n>\)` on its own indented line directly under its Review line/,
+  );
+  assert.match(
+    skill,
+    /`report\.mjs summary "<tmp>\/comment\.md"` reads a comment back as strictly as a program does/,
+  );
+});
+
+// ── Hosted targets with several addresses (#418) ────────────────────────────
+
+const design = readFileSync(join(HERE, "DESIGN.md"), "utf8");
+
+test("the narrowed hosted-target rule: no config key confirms a hosted address", () => {
+  assert.match(
+    skill,
+    /`run\.hosts` entry among them, is not confirmation: no config key confirms a hosted address/,
+  );
+  assert.match(skill, /no config key holds the address, and no config key confirms one/);
+  assert.match(
+    design,
+    /No config key confirms a hosted address: `run\.hosts` may list candidates[^\n]*the person still types each host, per host, per run/,
+  );
+  assert.match(adapter, /No key confirms a hosted address, and the skill never saves one/);
+  // The old, wider rule is gone from every text the skill reads.
+  for (const text of [skill, design, adapter])
+    assert.doesNotMatch(text, /No key holds a hosted address|no config key holds a hosted address/);
+});
+
+test("each `run.hosts` entry is checked on its own, and a held scenario does not stop the rest", () => {
+  const step = /#### `url`\n([\s\S]*?)\n### 6\./.exec(skill)?.[1] ?? skill;
+  assert.match(step, /check each entry on its own/);
+  assert.match(step, /leaves only the scenarios that use it for a person/);
+  assert.match(
+    step,
+    /A scenario uses the entry its \*\*Service:\*\* names, else the entry for its surface/,
+  );
+  assert.match(step, /once for each environment/);
+  assert.match(
+    design,
+    /one that stops, or that the person did not confirm, leaves only the scenarios that use it/,
+  );
+});
+
+test("`check --for run` documents --host and its readiness fields", () => {
+  assert.match(adapter, /check --for run --host <name>=<host as typed>/);
+  for (const field of ["hosts", "held", "scenarioHosts", "environments"])
+    assert.match(adapter, new RegExp(`\`${field}\``));
+  assert.match(main([], {}).out, /--host <name>=<typed host>/);
+});
+
+test("ADAPTER.md and SKILL.md document `run.playwright`, `--playwright-dir`, and the loopback note (#533)", () => {
+  assert.match(adapter, /\| `run\.playwright`/);
+  assert.match(adapter, /--playwright-dir <dir>/);
+  assert.match(adapter, /SameSite cookie/);
+  assert.match(skill, /run\.playwright/);
+  assert.match(skill, /--playwright-dir/);
+  assert.match(skill, /steps\.json`'s `notes`/);
+});
+
+test("SKILL.md and ADAPTER.md specify rate-limit handling (429 / 503 with Retry-After) (#538)", () => {
+  const flatSkill = skill.replace(/\s+/g, " ");
+  const flatAdapter = adapter.replace(/\s+/g, " ");
+
+  assert.match(flatSkill, /429.*503.*Retry-After/);
+  assert.match(flatSkill, /Expected result:.*about the (?:rate )?limit itself/);
+  assert.match(flatSkill, /not run: the app's rate limit/);
+  assert.match(flatSkill, /Retry-After.*60 seconds or less/);
+  assert.match(flatSkill, /from its first step, on fresh sessions/);
+  assert.match(flatSkill, /ran twice/);
+  assert.match(flatSkill, /http\.mjs.*web\.mjs.*no-retries rule|keep their own no-retries rule/);
+
+  assert.match(flatAdapter, /sign-in rate limits (?:off|disabled) or raised/);
+  assert.match(flatAdapter, /`rateLimits`/);
+  assert.match(flatAdapter, /never the body/);
+  assert.match(flatAdapter, /no other (?:HTTP )?status is recorded/);
+});
+
+test("SKILL.md documents `{{json:<n>:<path>}}` in step 6 and `--answers` or chat for `run.playwright`", () => {
+  assert.match(skill, /--answers` or chat rather than `qa\.config\.yml`/);
+  assert.match(
+    skill,
+    /other than a cookie via `\{\{cookie:<name>\}\}` or a string or number field from an earlier JSON body via `\{\{json:<n>:<path>\}\}`/,
+  );
 });

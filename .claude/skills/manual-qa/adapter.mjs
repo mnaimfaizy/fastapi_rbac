@@ -52,9 +52,16 @@
 //   and exits 1 on any problem, 2 on bad usage; `host` exits 0 when the run may
 //   sign in, 1 on a stop, 3 when the QA person must confirm the host in chat.
 
-import { existsSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, posix, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** Lookup order: the first file present is the config (ADAPTER.md). */
@@ -64,7 +71,13 @@ export const CONFIG_FILES = /** @type {const} */ ([
   "qa.config.json",
 ]);
 
-export const TOP_KEYS = /** @type {const} */ (["working_dir", "plan", "hazards", "run"]);
+export const TOP_KEYS = /** @type {const} */ (["working_dir", "plan", "hazards", "run", "report"]);
+export const REPORT_KEYS = /** @type {const} */ (["places", "holds"]);
+/** The Places a repository starts with: `local` holds a merge, the others are deferred (ADR 0033). */
+export const DEFAULT_PLACES = Object.freeze(["local", "staging", "production"]);
+export const DEFAULT_HOLDS = Object.freeze(["local"]);
+/** A Place's name: one lowercase word, so `[<place>]` reads back. */
+export const PLACE_NAME = /^[a-z0-9][a-z0-9-]*$/;
 export const PLAN_KEYS = /** @type {const} */ (["base_ref", "suites", "publish", "tracker"]);
 export const SUITE_KEYS = /** @type {const} */ ([
   "name",
@@ -85,11 +98,17 @@ export const RUN_KEYS = /** @type {const} */ ([
   "target",
   "surface",
   "stack",
+  "hosts",
   "accounts",
+  "playwright",
   "version_endpoint",
   "evidence",
 ]);
+/** What each `run.hosts` entry may hold: the candidate's name, address and optional surface. */
+export const HOST_KEYS = /** @type {const} */ (["name", "url", "surface"]);
 export const STACK_KEYS = /** @type {const} */ (["up", "migrate", "seed", "down"]);
+/** What `run.stack` may hold: the four commands, and the optional local address. */
+export const STACK_CONFIG_KEYS = /** @type {const} */ ([...STACK_KEYS, "address"]);
 export const ACCOUNT_KEYS = /** @type {const} */ (["print", "restore", "roles"]);
 export const ROLE_KEYS = /** @type {const} */ (["id", "purpose"]);
 export const EVIDENCE_KEYS = /** @type {const} */ (["upload"]);
@@ -448,6 +467,63 @@ function sharedProblems(sink, config) {
   const workingDir = config.working_dir;
   if (present(workingDir) && !isRepoPath(workingDir))
     sink.add("working_dir", "expected a relative path inside the repository");
+  reportProblems(sink, config.report);
+}
+
+/** `report:`, the Places a posted QA Report tags its Left for a person items with (ADR 0033). */
+function reportProblems(sink, report) {
+  if (!present(report)) return;
+  if (!isMapping(report)) return sink.add("report", "expected a mapping");
+  unknownKeys(sink, report, "report", REPORT_KEYS);
+  const { places, holds } = report;
+  const off = places === "none";
+  let named = DEFAULT_PLACES;
+  if (present(places) && !off) {
+    if (!Array.isArray(places) || !places.length)
+      sink.add("report.places", "expected a list of Places, or `none` to turn them off");
+    else {
+      named = [];
+      places.forEach((place, n) => {
+        const path = `report.places[${n}]`;
+        if (typeof place !== "string" || !PLACE_NAME.test(place))
+          sink.add(path, "expected a lowercase word, such as `local`");
+        else if (named.includes(place)) sink.add(path, `\`${place}\` is listed twice`);
+        else named.push(place);
+      });
+    }
+  }
+  if (off) {
+    if (present(holds))
+      sink.add("report.holds", "Places are off, so none holds a merge: remove it");
+    return;
+  }
+  if (!present(holds)) {
+    if (present(places))
+      sink.add("report.holds", "name the Places that hold a merge, as a list of the Places above");
+    return;
+  }
+  if (!Array.isArray(holds)) return sink.add("report.holds", "expected a list of Places");
+  if (!holds.length) sink.add("report.holds", "name at least one Place that holds a merge");
+  holds.forEach((place, n) => {
+    if (!named.includes(place))
+      sink.add(`report.holds[${n}]`, `\`${place}\` is not in \`report.places\``);
+  });
+}
+
+/**
+ * The Places a posted QA Report may tag an item with: each `{name, holds}`, in
+ * order, or `null` when the config turns Places off (items untagged, all held).
+ * Read a config with no problems; a key with a problem is not defaulted.
+ *
+ * @param {Record<string, any>} config
+ * @returns {{name: string, holds: boolean}[] | null}
+ */
+export function effectivePlaces(config) {
+  const report = isMapping(config?.report) ? config.report : {};
+  if (report.places === "none") return null;
+  const names = Array.isArray(report.places) ? report.places : DEFAULT_PLACES;
+  const holds = Array.isArray(report.holds) ? report.holds : DEFAULT_HOLDS;
+  return names.map((name) => ({ name, holds: holds.includes(name) }));
 }
 
 function planProblems(sink, plan) {
@@ -543,9 +619,11 @@ const UPLOAD = /^(?:none|gh-release:[A-Za-z0-9][A-Za-z0-9._/-]*)$/;
  *
  * @param {Record<string, unknown>} config
  * @param {Map<string, number>} [lines]
+ * @param {{read?: (path: string) => string | null | undefined}} [options]
  * @returns {string[]}
  */
-export function runProblems(config, lines) {
+export function runProblems(config, lines, options = {}) {
+  const { read } = options;
   const sink = problemSink(lines);
   sharedProblems(sink, config);
   const run = config.run;
@@ -557,17 +635,95 @@ export function runProblems(config, lines) {
   unknownKeys(sink, run, "run", RUN_KEYS);
   if (present(run.target) && !TARGETS.includes(run.target))
     sink.add("run.target", `expected one of: ${TARGETS.join(", ")}`);
-  if (present(run.surface) && !SURFACES.includes(run.surface))
-    sink.add("run.surface", `expected one of: ${SURFACES.join(", ")}`);
+  if (present(run.surface)) {
+    if (typeof run.surface === "string") {
+      if (!SURFACES.includes(run.surface))
+        sink.add("run.surface", `expected one of: ${SURFACES.join(", ")}`);
+    } else if (Array.isArray(run.surface)) {
+      if (!run.surface.length)
+        sink.add("run.surface", `expected a non-empty list of: ${SURFACES.join(", ")}`);
+      else {
+        const seen = new Set();
+        for (const item of run.surface) {
+          if (typeof item !== "string" || !SURFACES.includes(item)) {
+            sink.add(
+              "run.surface",
+              typeof item === "string"
+                ? `\`${item}\`: expected one of: ${SURFACES.join(", ")}`
+                : `expected one of: ${SURFACES.join(", ")}`,
+            );
+            break;
+          }
+          if (seen.has(item)) {
+            sink.add("run.surface", `\`${item}\` is listed twice`);
+            break;
+          }
+          seen.add(item);
+        }
+      }
+    } else {
+      sink.add(
+        "run.surface",
+        `expected one of: ${SURFACES.join(", ")}, or a non-empty list of them`,
+      );
+    }
+  }
 
   if (present(run.stack)) {
     if (!isMapping(run.stack))
-      sink.add("run.stack", "expected a mapping of `up`, `migrate`, `seed`, `down`");
+      sink.add("run.stack", "expected a mapping of `up`, `migrate`, `seed`, `down`, `address`");
     else {
-      unknownKeys(sink, run.stack, "run.stack", STACK_KEYS);
+      unknownKeys(sink, run.stack, "run.stack", STACK_CONFIG_KEYS);
       for (const key of STACK_KEYS)
         if (present(run.stack[key]) && !nonEmpty(run.stack[key]))
           sink.add(`run.stack.${key}`, "expected a command");
+      // The address a stack whose `up` prints none serves on. `host` must call it
+      // `local`: a `stack` run signs in nowhere else, so a config never holds another.
+      if (
+        present(run.stack.address) &&
+        !(nonEmpty(run.stack.address) && isLocalAddress(run.stack.address))
+      )
+        sink.add(
+          "run.stack.address",
+          "expected a local address, one `adapter.mjs host` calls `local`, such as `http://localhost:3000`",
+        );
+    }
+  }
+
+  if (present(run.hosts)) {
+    if (!Array.isArray(run.hosts))
+      sink.add("run.hosts", "expected a list of `{ name, url, surface }` candidates");
+    else {
+      const names = new Set();
+      /** @type {Map<string, string>} each surface, by the entry that holds it */
+      const surfaces = new Map();
+      run.hosts.forEach((entry, n) => {
+        const path = `run.hosts[${n}]`;
+        if (!isMapping(entry))
+          return sink.add(path, "expected a mapping of `name`, `url`, `surface`");
+        unknownKeys(sink, entry, path, HOST_KEYS);
+        if (typeof entry.name !== "string" || !SERVICE_NAME.test(entry.name))
+          sink.add(`${path}.name`, "required: letters, digits, `_` and `-` only");
+        else if (names.has(entry.name))
+          sink.add(`${path}.name`, `duplicate name \`${entry.name}\``);
+        else names.add(entry.name);
+        const address =
+          nonEmpty(entry.url) && /^https?:\/\//i.test(entry.url) ? addressUrl(entry.url) : null;
+        if (!address)
+          sink.add(`${path}.url`, "required: a web address, such as `https://qa.example.com`");
+        else if (address.username || address.password)
+          sink.add(`${path}.url`, "required: a web address with no sign-in values in it");
+        if (present(entry.surface)) {
+          if (!SURFACES.includes(entry.surface))
+            sink.add(`${path}.surface`, `expected one of: ${SURFACES.join(", ")}`);
+          else if (surfaces.has(entry.surface))
+            sink.add(
+              `${path}.surface`,
+              `\`${entry.surface}\` already has an entry (\`${surfaces.get(entry.surface)}\`): a surface has at most one`,
+            );
+          else surfaces.set(entry.surface, String(entry.name));
+        }
+      });
     }
   }
 
@@ -608,6 +764,16 @@ export function runProblems(config, lines) {
     }
   }
 
+  if (present(run.playwright)) {
+    if (!isRepoPath(run.playwright))
+      sink.add("run.playwright", "expected a relative folder inside the repository");
+    else if (read && read(posix.join(run.playwright.replace(/\\/g, "/"), "package.json")) === null)
+      sink.add(
+        "run.playwright",
+        `no \`package.json\` in \`${run.playwright}\`: expected the folder whose \`node_modules\` holds Playwright`,
+      );
+  }
+
   if (
     present(run.version_endpoint) &&
     !(nonEmpty(run.version_endpoint) && ENDPOINT_PATH.test(run.version_endpoint))
@@ -636,12 +802,13 @@ export function runProblems(config, lines) {
  *
  * @param {string} path
  * @param {string} text
+ * @param {{read?: (path: string) => string | null | undefined}} [options]
  * @returns {{config: Record<string, unknown>, problems: string[], runProblems: string[]}}
  *   `problems` are what `qa-plan` stops on (`configProblems`), `runProblems`
  *   what `manual-qa` stops on (`runProblems`). A YAML syntax problem, or a
  *   file that does not parse, is in both.
  */
-export function parseConfig(path, text) {
+export function parseConfig(path, text, options = {}) {
   if (path.endsWith(".json")) {
     let parsed;
     try {
@@ -654,13 +821,17 @@ export function parseConfig(path, text) {
       const problem = "the config must be a JSON object";
       return { config: {}, problems: [problem], runProblems: [problem] };
     }
-    return { config: parsed, problems: configProblems(parsed), runProblems: runProblems(parsed) };
+    return {
+      config: parsed,
+      problems: configProblems(parsed),
+      runProblems: runProblems(parsed, undefined, options),
+    };
   }
   const { value, problems, lines } = parseYamlSubset(text);
   return {
     config: value,
     problems: [...problems, ...configProblems(value, lines)],
-    runProblems: [...problems, ...runProblems(value, lines)],
+    runProblems: [...problems, ...runProblems(value, lines, options)],
   };
 }
 
@@ -677,7 +848,7 @@ export function readQaConfig(read) {
   for (const path of CONFIG_FILES) {
     const text = read(path);
     if (text === null || text === undefined) continue;
-    return { path, ...parseConfig(path, text) };
+    return { path, ...parseConfig(path, text, { read }) };
   }
   return { path: null, config: {}, problems: [], runProblems: [] };
 }
@@ -700,6 +871,7 @@ export function effectiveConfig(config) {
     },
     hazards: Array.isArray(config.hazards) ? config.hazards : [],
     run: present(config.run) ? config.run : null,
+    places: effectivePlaces(config),
   };
 }
 
@@ -789,32 +961,56 @@ const STACK_NEEDS = {
 const listed = (items) =>
   items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 
+/** `a`, `a or b`, `a, b or c`. */
+const orListed = (items) =>
+  items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} or ${items.at(-1)}`;
+
+/** Normalize `run.surface` (string or list of strings) to a list of surface names. */
+const configuredSurfaces = (value) =>
+  typeof value === "string" ? [value] : Array.isArray(value) ? value : [];
+
 /**
- * The readiness need when the config's `run.surface` differs from the Run
- * brief's (#223): the two surfaces in dispute, the scenarios each answer moves
+ * The readiness need when the config's `run.surface` does not include the Run
+ * brief's (#223, #378): the surfaces in dispute, the scenarios each answer moves
  * (those whose effective surface is the Run brief's, as step 4 applies it), and
  * those that keep their own **Surface:** whatever the answer.
  *
- * @param {string} configured the config's surface
+ * @param {string | string[]} configured the config's surface or surfaces
  * @param {string} briefed the Run brief's surface
  * @param {{id: string, surface: string | null}[]} scenarios
  */
 function surfaceQuestion(configured, briefed, scenarios) {
+  const list = configuredSurfaces(configured);
   const moving = scenarios.filter((s) => s.surface === briefed).map((s) => s.id);
   const keeping = scenarios.filter((s) => s.surface !== briefed);
   const one = moving.length === 1;
-  const moves = moving.length
-    ? `With \`${configured}\`, ${listed(moving)} ${one ? "drives" : "drive"} \`${configured}\`; ` +
-      `with \`${briefed}\`, ${one ? "it drives" : "they drive"} \`${briefed}\`, the surface the ` +
-      `plan's author chose from what ${one ? "that scenario" : "those scenarios"} must observe.`
-    : "No scenario drives the Run brief's surface, so neither answer moves one.";
   const keeps = keeping.length
     ? `${listed(keeping.map((s) => `${s.id} (\`${s.surface}\`)`))} ` +
       `${keeping.length === 1 ? "keeps its" : "keep their"} own **Surface:** whatever the answer.`
     : "No scenario keeps its own **Surface:** whatever the answer.";
+  if (list.length === 1) {
+    const only = list[0];
+    const moves = moving.length
+      ? `With \`${only}\`, ${listed(moving)} ${one ? "drives" : "drive"} \`${only}\`; ` +
+        `with \`${briefed}\`, ${one ? "it drives" : "they drive"} \`${briefed}\`, the surface the ` +
+        `plan's author chose from what ${one ? "that scenario" : "those scenarios"} must observe.`
+      : "No scenario drives the Run brief's surface, so neither answer moves one.";
+    return (
+      `run.surface: the config says \`${only}\` but the plan's Run brief says \`${briefed}\`; ` +
+      `say which this run uses, \`${only}\` or \`${briefed}\`. ${moves} ${keeps}`
+    );
+  }
+  const choices = orListed([briefed, ...list].map((s) => `\`${s}\``));
+  const allowed = listed(list.map((s) => `\`${s}\``));
+  const orAllowed = orListed(list.map((s) => `\`${s}\``));
+  const moves = moving.length
+    ? `With ${orAllowed}, ${listed(moving)} ${one ? "drives" : "drive"} that surface; ` +
+      `with \`${briefed}\`, ${one ? "it drives" : "they drive"} \`${briefed}\`, the surface the ` +
+      `plan's author chose from what ${one ? "that scenario" : "those scenarios"} must observe.`
+    : "No scenario drives the Run brief's surface, so no answer moves one.";
   return (
-    `run.surface: the config says \`${configured}\` but the plan's Run brief says \`${briefed}\`; ` +
-    `say which this run uses, \`${configured}\` or \`${briefed}\`. ${moves} ${keeps}`
+    `run.surface: the config allows ${allowed} but the plan's Run brief says \`${briefed}\`; ` +
+    `say which this run uses, ${choices}. ${moves} ${keeps}`
   );
 }
 
@@ -870,6 +1066,98 @@ export function findPlaywright(dir) {
 }
 
 /**
+ * First-level folders under `repo` that hold a `package.json` and Playwright with
+ * Chromium, in sorted order. Searches one folder level only, never deeper (#533).
+ * @param {string} repo
+ * @returns {string[]}
+ */
+export function findPlaywrightSubdirs(repo) {
+  const root = resolve(repo);
+  let entries;
+  try {
+    entries = readdirSync(root, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const dirs = [];
+  for (const entry of entries) {
+    if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+    const dir = join(root, entry.name);
+    const isDir =
+      entry.isDirectory() ||
+      (entry.isSymbolicLink() &&
+        (() => {
+          try {
+            return statSync(dir).isDirectory();
+          } catch {
+            return false;
+          }
+        })());
+    if (!isDir || !existsSync(join(dir, "package.json"))) continue;
+    if (findPlaywright(dir).chromium) dirs.push(entry.name);
+  }
+  return dirs.sort();
+}
+
+/**
+ * The readiness note when the repository root has no Playwright with Chromium,
+ * `run.playwright` is unset, and one or more first-level folders have it (#533).
+ * @param {string[]} dirs
+ */
+export function hintedNoChromiumNote(dirs) {
+  if (dirs.length === 1)
+    return (
+      `\`web\`: no Playwright with Chromium at the repository root; \`${dirs[0]}\` has it: ` +
+      `set \`run.playwright: ${dirs[0]}\``
+    );
+  const names = listed(dirs.map((dir) => `\`${dir}\``));
+  const settings = orListed(dirs.map((dir) => `\`run.playwright: ${dir}\``));
+  return `\`web\`: no Playwright with Chromium at the repository root; ${names} have it: set ${settings}`;
+}
+
+/**
+ * Resolves Playwright for a `web` driver (`web.mjs`, `storyboard.mjs`, `mp4.mjs`)
+ * from `overrideDir` (`--playwright-dir`), else `run.playwright` in the repository's
+ * QA config, else the repository root.
+ * @param {string} repo
+ * @param {string | undefined} [overrideDir]
+ * @returns {{dir: string | null, from: string | null, found: {package: string | null, module: any, chromium: boolean}, error: string | null}}
+ */
+export function resolvePlaywright(repo, overrideDir) {
+  const root = resolve(repo);
+  let from = null;
+  let label = "`run.playwright`";
+  if (overrideDir !== undefined) {
+    from = overrideDir;
+    label = "`--playwright-dir`";
+  } else {
+    const loaded = readQaConfig(repoReader(root));
+    const configured = loaded.config?.run?.playwright;
+    if (present(configured)) from = configured;
+  }
+  if (from !== null) {
+    if (!isRepoPath(from))
+      return {
+        dir: null,
+        from: null,
+        found: { package: null, module: null, chromium: false },
+        error: `${label}: expected a relative folder inside the repository`,
+      };
+    const normalized = from.replace(/\\/g, "/");
+    const dir = resolve(root, normalized);
+    if (!existsSync(join(dir, "package.json")))
+      return {
+        dir: null,
+        from: null,
+        found: { package: null, module: null, chromium: false },
+        error: `${label}: no \`package.json\` in \`${from}\``,
+      };
+    return { dir, from: normalized, found: findPlaywright(dir), error: null };
+  }
+  return { dir: root, from: null, found: findPlaywright(root), error: null };
+}
+
+/**
  * Whether a program is a file in one of `PATH`'s folders (with a `PATHEXT`
  * extension on Windows). Nothing is run.
  * @param {string} name
@@ -891,11 +1179,26 @@ export function onPath(name, env = process.env, platform = process.platform) {
   );
 }
 
-/** What `check --for run` detects for the `web` notes, from the repository root. */
-const detectWebTools = (repo) => () => ({
-  chromium: findPlaywright(repo).chromium,
-  ffmpeg: onPath("ffmpeg") && onPath("ffprobe"),
-});
+/** What `check --for run` detects for the `web` notes, from `run.playwright` or the repository root. */
+const detectWebTools =
+  (repo, config = {}) =>
+  () => {
+    const subdir = config?.run?.playwright;
+    const ffmpeg = onPath("ffmpeg") && onPath("ffprobe");
+    if (present(subdir) && isRepoPath(subdir)) {
+      return {
+        chromium: findPlaywright(join(resolve(repo), subdir.replace(/\\/g, "/"))).chromium,
+        playwrightDirs: [],
+        ffmpeg,
+      };
+    }
+    const chromium = findPlaywright(repo).chromium;
+    return {
+      chromium,
+      playwrightDirs: chromium ? [] : findPlaywrightSubdirs(repo),
+      ffmpeg,
+    };
+  };
 
 /**
  * What `manual-qa` still needs before it runs a plan, from the config and,
@@ -909,12 +1212,14 @@ const detectWebTools = (repo) => () => ({
  *   scenarios needs nothing, and is told only `gh` can check its build
  * @param {(() => {chromium: boolean, ffmpeg: boolean}) | null} [tools] detects the `web`
  *   driver's tools, called only when a scenario drives `web`; without it, no tool notes
- * @returns {{ready: boolean, needs: string[], notes: string[], run: {target: string | null, surface: string | null, roles: string[]}}}
+ * @param {Record<string, string>} [typed] each `run.hosts` entry's host, as the QA person typed it, by name
+ * @returns {{ready: boolean, needs: string[], notes: string[], run: {target: string | null, surface: string | null, roles: string[]}, hosts?: HostState[], held?: {id: string, why: string}[], scenarioHosts?: {id: string, entry: string, host: string | null}[], environments?: {host: string, entries: string[], question: string}[]}}
  */
 export function runReadiness(
   { path, config, runProblems: problems = [] },
   plan = null,
   tools = null,
+  typed = {},
 ) {
   const brief = plan?.brief ?? null;
   const run = isMapping(config.run) ? config.run : {};
@@ -924,9 +1229,17 @@ export function runReadiness(
         isMapping(role) && typeof role.id === "string" ? [role.id] : [],
       )
     : [];
+  const configured = configuredSurfaces(run.surface);
+  const defaultSurface =
+    configured.length === 1
+      ? configured[0]
+      : brief?.surface && configured.includes(brief.surface)
+        ? brief.surface
+        : (configured[0] ?? brief?.surface ?? null);
   const effective = {
     target: run.target ?? brief?.target ?? null,
-    surface: run.surface ?? brief?.surface ?? null,
+    surface: defaultSurface,
+    ...(configured.length > 1 ? { surfaces: configured } : {}),
     roles: declared,
   };
   if (problems.length)
@@ -950,23 +1263,23 @@ export function runReadiness(
     return { ready: true, needs, notes, run: effective };
   }
 
-  for (const [key, choices, what] of [
-    [
-      "target",
-      TARGETS,
-      "`stack` (a local QA Stack this run starts) or `url` (a hosted test environment)",
-    ],
-    ["surface", SURFACES, "what the scenarios drive: `web`, `desktop`, `mobile` or `api`"],
-  ]) {
-    if (!effective[key]) needs.push(`run.${key}: ${what}`);
-    else if (present(run[key]) && brief?.[key] && run[key] !== brief[key])
-      needs.push(
-        key === "surface"
-          ? surfaceQuestion(run.surface, brief.surface, plan?.scenarios ?? [])
-          : `run.${key}: the config says \`${run[key]}\` but the plan's Run brief says \`${brief[key]}\`; ` +
-              `say which this run uses (${choices.join(" or ")})`,
-      );
-  }
+  if (!effective.target)
+    needs.push(
+      "run.target: `stack` (a local QA Stack this run starts) or `url` (a hosted test environment)",
+    );
+  else if (present(run.target) && brief?.target && run.target !== brief.target)
+    needs.push(
+      `run.target: the config says \`${run.target}\` but the plan's Run brief says \`${brief.target}\`; ` +
+        `say which this run uses (${TARGETS.join(" or ")})`,
+    );
+
+  const surfaceConflict = Boolean(
+    brief?.surface && configured.length && !configured.includes(brief.surface),
+  );
+  if (!effective.surface)
+    needs.push("run.surface: what the scenarios drive: `web`, `desktop`, `mobile` or `api`");
+  else if (surfaceConflict)
+    needs.push(surfaceQuestion(configured, brief.surface, plan?.scenarios ?? []));
 
   if (!declared.length)
     needs.push("run.accounts.roles: each role a scenario signs in as, by `id` and `purpose`");
@@ -993,15 +1306,45 @@ export function runReadiness(
     if (!present(run.accounts?.print))
       needs.push("run.accounts.print: the command that prints each role's sign-in values");
   }
-  if (target === "url")
+  /** @type {Pick<ReturnType<typeof runReadiness>, "hosts" | "held" | "scenarioHosts" | "environments">} */
+  let hostsOut = {};
+  if (target === "url") {
+    const resolved = resolveHosts(run.hosts, plan?.scenarios ?? [], typed);
+    hostsOut = {
+      hosts: resolved.hosts,
+      held: resolved.held,
+      scenarioHosts: resolved.scenarioHosts,
+      environments: resolved.environments,
+    };
     notes.push(
-      "target `url`: no config key holds the address; ask the QA person for it in chat and check it " +
-        "with `host --target url`, since a URL in the plan or a file is not confirmation",
-      present(run.accounts?.print)
-        ? "target `url`: role values come from `run.accounts.print` only if the environment's owner ran " +
-            "the same seeder there; otherwise the QA person types them into chat"
-        : "target `url`: the QA person types each role's test values into chat",
+      resolved.hosts.length
+        ? "target `url`: `run.hosts` lists candidates, and no config key confirms a hosted address: " +
+            "the QA person types each host, per host, per run, and `host --target url --confirmed <typed>` " +
+            "checks each before any sign-in there"
+        : "target `url`: no config key confirms a hosted address; ask the QA person to type it in chat " +
+            "and check it with `host --target url --confirmed <typed>`, since a URL in the plan or a file is " +
+            "not confirmation",
     );
+    for (const host of resolved.hosts)
+      if (!host.confirmed)
+        notes.push(
+          `host \`${host.name}\` (${host.url}) is a candidate, never a confirmation: ask the QA person to type its host` +
+            (host.verdict === "stop" ? ` (${host.why})` : ""),
+        );
+    for (const environment of resolved.environments)
+      notes.push(
+        `${environment.question} Role values come from \`run.accounts.print\` only if so; ` +
+          "otherwise the QA person types them into chat",
+      );
+    if (!resolved.environments.length)
+      notes.push(
+        present(run.accounts?.print)
+          ? "target `url`: role values come from `run.accounts.print` only if the environment's owner ran " +
+              "the same seeder there; otherwise the QA person types them into chat"
+          : "target `url`: the QA person types each role's test values into chat",
+      );
+  } else if (Array.isArray(run.hosts) && run.hosts.length)
+    notes.push("`run.hosts` is read only for target `url`; this run's target is not");
   if (!present(run.accounts?.restore))
     notes.push(
       "no `run.accounts.restore`: a scenario that needs a role's account restored is left for a person",
@@ -1012,21 +1355,27 @@ export function runReadiness(
     );
   // The `web` driver's tools are optional: each note says what the run loses without one.
   // With a plan, the scenarios' surfaces, and the config's when the surface question
-  // could move scenarios onto it; with none, the effective surface.
+  // could move scenarios onto it; with none, the configured list (or effective surface).
   const surfaces = plan?.scenarios?.length
     ? [
         ...plan.scenarios.map((scenario) => scenario.surface),
-        ...(brief?.surface && run.surface !== brief.surface ? [run.surface] : []),
+        ...(surfaceConflict ? configured : []),
       ]
-    : [effective.surface];
+    : configured.length
+      ? configured
+      : [effective.surface];
   if (tools && surfaces.includes("web")) {
     const found = tools();
     notes.push(
-      found.chromium ? WEB_NOTES.chromium : WEB_NOTES.noChromium,
+      found.chromium
+        ? WEB_NOTES.chromium
+        : found.playwrightDirs?.length
+          ? hintedNoChromiumNote(found.playwrightDirs)
+          : WEB_NOTES.noChromium,
       found.ffmpeg ? WEB_NOTES.ffmpeg : WEB_NOTES.noFfmpeg,
     );
   }
-  return { ready: needs.length === 0, needs, notes, run: effective };
+  return { ready: needs.length === 0, needs, notes, run: effective, ...hostsOut };
 }
 
 // ── Hazard packs ────────────────────────────────────────────────────────────
@@ -1251,6 +1600,14 @@ export const CREATES = "Creates";
  */
 export const SCENARIO_SURFACE = "Surface";
 /**
+ * The optional field (format=2) naming the service a scenario tests on a hosted (`url`)
+ * target, in place of its surface's entry: right after **Surface:** (or where it would
+ * sit), before **Observes:**.
+ */
+export const SCENARIO_SERVICE = "Service";
+/** A service's name, as `run.hosts` and **Service:** spell it. */
+export const SERVICE_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
+/**
  * The optional field (format=2) naming what a scenario's result observes, for `manual-qa`
  * to check each driver against: right after the scenario's **Surface:**, or after its
  * sign-in field (and **Creates:**) when it has none, before **Steps:**.
@@ -1266,6 +1623,13 @@ export const OBSERVES = /** @type {const} */ ([
   "screen",
   "local-file",
 ]);
+/** What each Surface's drivers can observe, from `qa-plan` and `manual-qa` SKILL.md (#378). */
+export const SURFACE_OBSERVES = /** @type {const} */ ({
+  api: ["headers", "cookies", "httponly-cookies", "status", "body", "local-file"],
+  web: ["body", "screen", "local-file"],
+  desktop: ["screen", "local-file"],
+  mobile: ["screen", "local-file"],
+});
 /**
  * The optional field (format=3) saying what evidence a run keeps for a scenario: right
  * after its **Observes:**, or wherever **Observes:** would sit when it has none, before
@@ -1281,15 +1645,66 @@ export const CAPTURES = /** @type {const} */ (["screenshot", "video", "transcrip
  */
 export const SCENARIO_EXPECTED_BEFORE = "Expected before";
 /**
- * The plan formats this copy reads. A format=1 plan carries no per-scenario field; a
- * format=2 plan no **Capture:** or **Expected before:**.
+ * The field (format=4) telling a scenario's story: a numbered list with one sentence per
+ * Scene, in order, right after its **Capture:**, or wherever **Capture:** would sit when it
+ * has none, before **Steps:**. A `Capture: video` scenario in a format=4 plan carries one.
  */
-export const FORMATS = /** @type {const} */ ([1, 2, 3]);
+export const SCENARIO_STORY = "Story";
+
+/**
+ * A Story sentence as plain text, since a Title card and a Storyboard heading show it as
+ * written: paired inline Markdown is stripped (`**x**`, `__x__`, `*x*`, `_x_` and `` `x` ``
+ * to `x`, `[text](url)` to `text`). A code span's content is kept as written, and an
+ * underscore inside a word (`member_id`) and a lone `*` are kept.
+ */
+function plainStory(sentence) {
+  return sentence
+    .split(/(`[^`]+`)/)
+    .map((part, i) =>
+      i % 2
+        ? part.slice(1, -1)
+        : part
+            .replace(/\[([^\]]+)\]\((?:[^()\s]|\([^()\s]*\))*\)/g, "$1")
+            .replace(/\*\*(?=\S)(.+?)(?<=\S)\*\*/g, "$1")
+            .replace(/(?<![\p{L}\p{N}_])__(?=\S)(.+?)(?<=\S)__(?![\p{L}\p{N}_])/gu, "$1")
+            .replace(/\*(?=\S)([^*]+?)(?<=\S)\*/g, "$1")
+            .replace(/(?<![\p{L}\p{N}_])_(?=\S)([^_]+?)(?<=\S)_(?![\p{L}\p{N}_])/gu, "$1"),
+    )
+    .join("");
+}
+
+/**
+ * The plan formats this copy reads. A format=1 plan carries no per-scenario field; a
+ * format=2 plan no **Capture:** or **Expected before:**; a format=3 plan no **Story:**.
+ */
+export const FORMATS = /** @type {const} */ ([1, 2, 3, 4]);
 /** The format the composer writes. */
 export const FORMAT = FORMATS.at(-1);
 const RULE_OUT = "If this fails, first rule out";
 /** A Sign-off box for a promise only reading can check: `- [ ] Review: <what to read, and what it must say>`, a space after the colon. */
 const REVIEW_BOX = /^\s*[-*]\s+\[(?<tick>[ xX])\]\s+Review:(?<text>(?:\s.*)?)$/;
+/** A Place leading a `Review:` box's text: `[<place>] <text>`. */
+const REVIEW_PLACE = /^\[([^\]\s]*)\](?:\s|$)/;
+/**
+ * What is wrong with a `Review:` box's Place, given the configured Places
+ * (`effectivePlaces`; `undefined` checks none, `null` is Places turned off).
+ */
+function placeProblem(place, text, places) {
+  if (places === undefined) return null;
+  // Off, only a Place-shaped tag is a Place: `[the docs](x) say …` and `[WIP] …` are text.
+  if (places === null)
+    return place === null || !PLACE_NAME.test(place)
+      ? null
+      : "Places are off: write the box with no Place, `Review: <text>`";
+  const names = places.map((p) => p.name);
+  // A box with no Place is read as the first Place that holds a merge: a plan made before Places still runs.
+  if (place === null) return null;
+  if (text === `[${place}]`)
+    return "a `Review:` box with nothing after its Place: say what to read, and what it must say";
+  if (!names.includes(place))
+    return `the box's Place \`${place}\` is not configured (${names.join(", ")}): pick one of them, or add it to \`report.places\``;
+  return null;
+}
 /** A box that looks meant as a `Review:` box but is not written as one: `review:`, `**Review:**`, `Review :`, `Review:docs`. */
 const NEAR_REVIEW_BOX = /^\s*[-*]\s+\[[ xX]\]\s+[*_]*review[*_]*\s*[*_]*:/i;
 /** A role id, and a Scenario account id: letters, digits, `_` and `-`. */
@@ -1478,7 +1893,8 @@ export function credentialProblems(lines) {
  * (format=2) lists, as `observes` (`[]` with none), what its run keeps as `capture`
  * (format=3: its **Capture:**, else `transcript` on `api` and `screenshot` elsewhere),
  * with `captureGiven` saying whether the plan wrote it, and its **Expected before:**
- * (format=3) as `expectedBefore` (`null` with none). Each `Review:` box in the
+ * (format=3) as `expectedBefore` (`null` with none), and the sentences of its **Story:**
+ * (format=4), one per Scene, as `story` (`[]` with none). Each `Review:` box in the
  * Sign-off checklist is in `reviews`, as `{text, ticked}`: never a scenario's box,
  * and a plan whose Scenarios says `None.` reads when it has one.
  * `manual-qa` runs nothing from a plan with a problem.
@@ -1486,7 +1902,7 @@ export function credentialProblems(lines) {
  * @param {string} text
  * @returns {{plan: Record<string, any>, problems: string[]}}
  */
-export function validatePlan(text) {
+export function validatePlan(text, { places } = {}) {
   const problems = [];
   const lines = String(text).replace(/^﻿/, "").split(/\r?\n/);
   const at = (n, message) => problems.push(`line ${n + 1}: ${message}`);
@@ -1643,28 +2059,37 @@ export function validatePlan(text) {
     }
   };
   /**
-   * In a multi-session scenario, each top-level numbered step in lines `from`–`to` starts
-   * `In session X,` or `In X,`, naming one of `names` (ANATOMY.md, "Sessions").
+   * The top-level numbered items in lines `from`–`to`, each with its line, number and
+   * text. An item is top-level when it starts left of the first item's text; a list nested
+   * under one starts at or past it (CommonMark lets siblings shift up to 3 spaces).
    */
-  const stepSessions = (from, to, names, id) => {
+  const topItems = (from, to) => {
     const numbered = [];
     for (let n = from; n < to; n += 1) {
-      const step = !fenced[n] && /^(\s*)(\d+)\.\s+(.*)$/.exec(lines[n]);
-      if (step)
+      const item = !fenced[n] && /^(\s*)(\d+)\.\s+(.*)$/.exec(lines[n]);
+      if (item)
         numbered.push({
           n,
-          indent: step[1].length,
-          column: lines[n].length - step[3].length,
-          number: step[2],
-          text: step[3],
+          indent: item[1].length,
+          column: lines[n].length - item[3].length,
+          number: item[2],
+          text: item[3],
         });
     }
-    // A step is top-level when it starts left of the first step's text; a list nested
-    // under a step starts at or past it (CommonMark lets siblings shift up to 3 spaces).
     const column = numbered[0]?.column ?? 0;
-    for (const step of numbered) {
-      if (step.indent >= column) continue;
+    return numbered.filter((item) => item.indent < column);
+  };
+  /**
+   * In a multi-session scenario, each top-level numbered step in lines `from`–`to` starts
+   * `In session X,` or `In X,`, naming one of `names` (ANATOMY.md, "Sessions"). Returns
+   * each step's session name in order, `null` for a step that names none.
+   */
+  const stepSessions = (from, to, names, id) => {
+    /** @type {(string | null)[]} */
+    const order = [];
+    for (const step of topItems(from, to)) {
       const session = /^In (?:session )?[`*_]*([A-Za-z])[`*_]*,/.exec(step.text)?.[1];
+      order.push(session ?? null);
       if (session === undefined)
         at(
           step.n,
@@ -1676,6 +2101,7 @@ export function validatePlan(text) {
           `${id}: step ${step.number} is in session ${session}, which **${SESSIONS}:** does not declare`,
         );
     }
+    return order;
   };
 
   /**
@@ -1870,7 +2296,12 @@ export function validatePlan(text) {
       const { tick, text } = /** @type {Record<string, string>} */ (box.groups);
       if (text.trim() === "")
         at(n, "a `Review:` box with nothing after it: say what to read, and what it must say");
-      else plan.reviews.push({ text: text.trim(), ticked: tick !== " " });
+      else {
+        const place = REVIEW_PLACE.exec(text.trim())?.[1] ?? null;
+        plan.reviews.push({ text: text.trim(), ticked: tick !== " ", place });
+        const why = placeProblem(place, text.trim(), places);
+        if (why) at(n, why);
+      }
     }
   }
 
@@ -1954,6 +2385,38 @@ export function validatePlan(text) {
         else surface = word;
         if (surface !== word) surfaceKnown = false;
       }
+      // The service it tests (#418): after its Surface, else after its sign-in field.
+      /** @type {string | null} */
+      let service = null;
+      const services = found.filter((entry) => entry.label === SCENARIO_SERVICE);
+      for (const extra of services.slice(1))
+        at(extra.n, `${id}: a second **${SCENARIO_SERVICE}:**: a scenario has at most one`);
+      const ownService = services[0];
+      if (ownService) {
+        const k = found.indexOf(ownService);
+        const misplaced =
+          found.slice(k + 1).some((entry) => [...before, SCENARIO_SURFACE].includes(entry.label)) ||
+          found.slice(0, k).some((entry) => after.includes(entry.label));
+        const what = `${id}: **${SCENARIO_SERVICE}:**`;
+        const word = plainWord(ownService.inline);
+        if (plan.format === 1)
+          at(
+            ownService.n,
+            `${what} is a format=2 field: mark the plan \`format=2\`, or leave it out`,
+          );
+        else if (misplaced)
+          at(
+            ownService.n,
+            `${what} is out of position: it goes right after the scenario's **${SCENARIO_SURFACE}:**, or after **${SCENARIO_LABELS[1]}:** or **${SESSIONS}:** (and **${CREATES}:**, when present) when it has none, before **Steps:**`,
+          );
+        else if (ownService.text === "") at(ownService.n, `${what} is empty`);
+        else if (!SERVICE_NAME.test(word))
+          at(
+            ownService.n,
+            `${what} expected a service name: letters, digits, \`_\` and \`-\`, first on its line`,
+          );
+        else service = word;
+      }
       // What the scenario observes (#204): after its Surface, else after its sign-in field.
       /** @type {string[]} */
       const observes = [];
@@ -1964,8 +2427,11 @@ export function validatePlan(text) {
       if (listed) {
         const k = found.indexOf(listed);
         const misplaced =
-          found.slice(k + 1).some((entry) => [...before, SCENARIO_SURFACE].includes(entry.label)) ||
-          found.slice(0, k).some((entry) => after.includes(entry.label));
+          found
+            .slice(k + 1)
+            .some((entry) =>
+              [...before, SCENARIO_SURFACE, SCENARIO_SERVICE].includes(entry.label),
+            ) || found.slice(0, k).some((entry) => after.includes(entry.label));
         const what = `${id}: **${SCENARIO_OBSERVES}:**`;
         if (plan.format === 1)
           at(listed.n, `${what} is a format=2 field: mark the plan \`format=2\`, or leave it out`);
@@ -1977,17 +2443,34 @@ export function validatePlan(text) {
         else if (listed.text === "") at(listed.n, `${what} is empty`);
         else if (!idList(listed.inline).length)
           at(listed.n, `${what} expected one or more of: ${OBSERVES.join(", ")}`);
-        else
+        else {
+          let badValue = false;
           for (const value of idList(listed.inline)) {
             const stuck = stuckMark(value, (candidate) => OBSERVES.includes(candidate));
             if (value === "")
               at(listed.n, `${what} has an empty value: a comma with nothing after it`);
-            else if (stuck) at(listed.n, `${what} read ${stuck}`);
-            else if (!OBSERVES.includes(value))
+            else if (stuck) {
+              at(listed.n, `${what} read ${stuck}`);
+              badValue = true;
+            } else if (!OBSERVES.includes(value)) {
               at(listed.n, `${what} \`${value}\`: expected one of: ${OBSERVES.join(", ")}`);
-            else if (observes.includes(value)) at(listed.n, `${what} \`${value}\` is named twice`);
+              badValue = true;
+            } else if (observes.includes(value))
+              at(listed.n, `${what} \`${value}\` is named twice`);
             else observes.push(value);
           }
+          if (
+            !badValue &&
+            observes.length &&
+            !SURFACES.some((candidate) =>
+              observes.every((value) => SURFACE_OBSERVES[candidate].includes(value)),
+            )
+          )
+            at(
+              listed.n,
+              `${what} ${observes.map((v) => `\`${v}\``).join(", ")}: no single Surface's drivers can observe all of them; split it into one scenario per Surface`,
+            );
+        }
       }
       // What a run keeps (#233): after Observes, or wherever Observes would sit.
       const defaultCapture = surface === "api" ? "transcript" : "screenshot";
@@ -2002,7 +2485,9 @@ export function validatePlan(text) {
           found
             .slice(k + 1)
             .some((entry) =>
-              [...before, SCENARIO_SURFACE, SCENARIO_OBSERVES].includes(entry.label),
+              [...before, SCENARIO_SURFACE, SCENARIO_SERVICE, SCENARIO_OBSERVES].includes(
+                entry.label,
+              ),
             ) || found.slice(0, k).some((entry) => after.includes(entry.label));
         const what = `${id}: **${SCENARIO_CAPTURE}:**`;
         const word = plainWord(ownCapture.inline);
@@ -2037,6 +2522,66 @@ export function validatePlan(text) {
           );
         else capture = word;
       }
+      // The story, one sentence per Scene (#382): right after Capture, or where it would sit.
+      /** @type {string[]} */
+      let story = [];
+      /** The **Story:** line, when its list read; its count is checked against the Scenes below. */
+      let storyLine = null;
+      const stories = found.filter((entry) => entry.label === SCENARIO_STORY);
+      for (const extra of stories.slice(1))
+        at(extra.n, `${id}: a second **${SCENARIO_STORY}:**: a scenario has at most one`);
+      const ownStory = stories[0];
+      if (ownStory) {
+        const k = found.indexOf(ownStory);
+        const misplaced =
+          found
+            .slice(k + 1)
+            .some((entry) =>
+              [
+                ...before,
+                SCENARIO_SURFACE,
+                SCENARIO_SERVICE,
+                SCENARIO_OBSERVES,
+                SCENARIO_CAPTURE,
+              ].includes(entry.label),
+            ) || found.slice(0, k).some((entry) => after.includes(entry.label));
+        const what = `${id}: **${SCENARIO_STORY}:**`;
+        const end = found[k + 1]?.n ?? heads[i + 1]?.n ?? to;
+        const items = topItems(ownStory.n + 1, end);
+        if (plan.format < 4)
+          at(
+            ownStory.n,
+            `${what} is a format=4 field: mark the plan \`format=4\`, or leave it out`,
+          );
+        else if (misplaced)
+          at(
+            ownStory.n,
+            `${what} is out of position: it goes right after the scenario's **${SCENARIO_CAPTURE}:**, or wherever **${SCENARIO_CAPTURE}:** would sit when it has none, before **Steps:**`,
+          );
+        else if (ownStory.inline !== "" || !items.length)
+          at(ownStory.n, `${what} expected a numbered list, one sentence per Scene, in order`);
+        else {
+          // A sentence runs on over its wrapped lines, up to a blank line or a nested list.
+          story = items.map((item) => {
+            const parts = [item.text.trim()];
+            for (let n = item.n + 1; n < end; n += 1) {
+              if (fenced[n] || lines[n].trim() === "" || /^\s*(?:[-*+]|\d+[.)])\s/.test(lines[n]))
+                break;
+              parts.push(lines[n].trim());
+            }
+            return plainStory(parts.join(" ").trim());
+          });
+          const empty = story.findIndex((sentence) => sentence === "");
+          if (empty !== -1) {
+            at(items[empty].n, `${what} sentence ${items[empty].number} is empty`);
+            story = [];
+          } else storyLine = ownStory.n;
+        }
+      } else if (plan.format >= 4 && capture === "video" && ownCapture)
+        at(
+          ownCapture.n,
+          `${id}: **${SCENARIO_CAPTURE}:** \`video\` needs a **${SCENARIO_STORY}:**, one sentence per Scene, in order, so each Scene of the video opens on its Title card`,
+        );
       // What the merge-base shows (#233): right after Expected result. Its text is the
       // scenario's, so it is read in full, as Expected result is.
       /** @type {string | null} */
@@ -2074,6 +2619,8 @@ export function validatePlan(text) {
       const who = signs ? plainWord(signs.inline) : null;
       /** @type {{name: string | null, id: string}[]} */
       const sessions = [];
+      /** The Scenes the steps make: one for a single-session scenario; `null` when unknown. */
+      let scenes = steps && steps.text !== "" ? 1 : null;
       if (named && named.text === "") at(named.n, `${id}: **${SESSIONS}:** is empty`);
       else if (named) {
         const listed = sessionList(named.inline);
@@ -2102,14 +2649,25 @@ export function validatePlan(text) {
             named.n,
             `${id}: **${SESSIONS}:** names one session: a scenario with one session uses **Signs in as:**`,
           );
-        if (steps && steps.text !== "")
-          stepSessions(
+        scenes = null;
+        if (steps && steps.text !== "") {
+          const order = stepSessions(
             steps.n + 1,
             found[position("Steps") + 1]?.n ?? heads[i + 1]?.n ?? to,
             new Set(listed.map((session) => session.name)),
             id,
           );
+          // A Cut is a step whose Session is not the previous step's; each starts a Scene.
+          // A step that names no session is reported above, and leaves the count unknown.
+          if (order.length && !order.includes(null))
+            scenes = order.filter((name, k) => k === 0 || name !== order[k - 1]).length;
+        }
       } else if (who) sessions.push({ name: null, id: who });
+      if (storyLine !== null && scenes !== null && story.length !== scenes)
+        at(
+          storyLine,
+          `${id}: **${SCENARIO_STORY}:** has ${story.length} sentence${story.length === 1 ? "" : "s"}, and its steps make ${scenes} Scene${scenes === 1 ? "" : "s"}: write one sentence per Scene, in order`,
+        );
       const creates = position(CREATES) === -1 ? null : get(CREATES);
       const made = creates ? idList(creates.inline) : [];
       if (creates && !made.length)
@@ -2121,10 +2679,12 @@ export function validatePlan(text) {
         sessions,
         creates: [...new Set(made.filter((made) => made !== ""))],
         surface,
+        service,
         observes,
         capture,
         captureGiven: Boolean(ownCapture),
         expectedBefore,
+        story,
       });
       accountLines.push({ signs: (named ?? signs)?.n, creates: creates?.n, made });
     });
@@ -2313,6 +2873,87 @@ export function hostVerdict(address, { target = "stack", confirmed } = {}) {
   return { verdict: "hosted", host, why: `a hosted test host (\`${label}\`), confirmed in chat` };
 }
 
+/** Whether `host` calls `address` `local`: the only address a `stack` run signs in to. */
+export function isLocalAddress(address) {
+  return hostVerdict(address, { target: "stack" }).verdict === "local";
+}
+
+/**
+ * @typedef {{name: string, url: string, surface: string | null, verdict: "local" | "hosted" | "confirm" | "stop", host: string | null, why: string, confirmed: boolean}} HostState
+ */
+
+/**
+ * A `url` target's entries, each checked by the host rule, and which entry each scenario
+ * uses. A `run.hosts` entry is a candidate: it is `confirmed` only when its verdict is
+ * `local`, or `hosted` because the QA person typed its host (`typed`, by entry name). A
+ * scenario uses the entry its **Service:** names, else the entry for its surface; one
+ * whose entry is missing, refused (`stop`) or not confirmed is `held` for a person with
+ * the reason, and the others go on. Every environment (host) is asked about its seeder
+ * once.
+ *
+ * @param {unknown} entries `run.hosts`, as the config holds it (an invalid one reads as none)
+ * @param {{id: string, surface: string | null, service?: string | null}[]} scenarios
+ * @param {Record<string, string>} [typed]
+ * @returns {{hosts: HostState[], held: {id: string, why: string}[], scenarioHosts: {id: string, entry: string, host: string | null}[], environments: {host: string, entries: string[], question: string}[]}}
+ */
+export function resolveHosts(entries, scenarios, typed = {}) {
+  const hosts = (Array.isArray(entries) ? entries : []).flatMap((entry) => {
+    if (!isMapping(entry) || typeof entry.name !== "string" || typeof entry.url !== "string")
+      return [];
+    const result = hostVerdict(entry.url, { target: "url", confirmed: typed[entry.name] });
+    return [
+      {
+        name: entry.name,
+        url: entry.url,
+        surface: typeof entry.surface === "string" ? entry.surface : null,
+        verdict: result.verdict,
+        host: result.host,
+        why: result.why,
+        confirmed: result.verdict === "local" || result.verdict === "hosted",
+      },
+    ];
+  });
+  /** @type {{id: string, why: string}[]} */
+  const held = [];
+  /** @type {{id: string, entry: string, host: string | null}[]} */
+  const scenarioHosts = [];
+  for (const scenario of scenarios) {
+    const entry = scenario.service
+      ? hosts.find((candidate) => candidate.name === scenario.service)
+      : scenario.surface
+        ? hosts.find((candidate) => candidate.surface === scenario.surface)
+        : undefined;
+    if (!entry) {
+      // One URL for every surface (no list) serves a scenario with no **Service:**.
+      if (!scenario.service && !hosts.length) continue;
+      held.push({
+        id: scenario.id,
+        why: scenario.service
+          ? `no service \`${scenario.service}\` in the run's hosts: no host is added mid-run`
+          : `no entry for the \`${scenario.surface}\` surface in the run's hosts: no host is added mid-run`,
+      });
+    } else if (entry.verdict === "stop")
+      held.push({ id: scenario.id, why: `the host of \`${entry.name}\` is refused: ${entry.why}` });
+    else if (!entry.confirmed)
+      held.push({
+        id: scenario.id,
+        why: `the host of \`${entry.name}\` is not confirmed: the QA person has not typed it`,
+      });
+    else scenarioHosts.push({ id: scenario.id, entry: entry.name, host: entry.host });
+  }
+  /** @type {Map<string, string[]>} */
+  const byHost = new Map();
+  for (const entry of hosts)
+    if (entry.verdict !== "stop" && entry.host)
+      byHost.set(entry.host, [...(byHost.get(entry.host) ?? []), entry.name]);
+  const environments = [...byHost].map(([host, names]) => ({
+    host,
+    entries: names,
+    question: `At \`${host}\`, did the environment's owner run this repo's seeder there?`,
+  }));
+  return { hosts, held, scenarioHosts, environments };
+}
+
 // ── Writing ─────────────────────────────────────────────────────────────────
 
 const PLAIN_SAFE = /^[A-Za-z0-9_./@~+-][A-Za-z0-9_./@~+=-]*$/;
@@ -2471,15 +3112,16 @@ export function answersPlaceProblem(repo, workingDir, answersPath) {
  *
  * @param {string} file the answers file, as given
  * @param {Record<string, any>} answers
+ * @param {string} [what] whose answers: `Readiness` (`qa-plan`) or `Run` (`manual-qa`)
  */
-export function reusedAnswersLine(file, answers) {
+export function reusedAnswersLine(file, answers, what = "Readiness") {
   const values = [];
   for (const [key, value] of Object.entries(answers))
     if (MERGED_ONE_LEVEL_DOWN.includes(key) && isMapping(value))
       for (const [sub, inner] of Object.entries(value))
         values.push(`${key}.${sub}=${JSON.stringify(inner)}`);
     else values.push(`${key}=${JSON.stringify(value)}`);
-  return `Readiness answers reused from ${file}: ${values.join("; ") || "none"}`;
+  return `${what} answers reused from ${file}: ${values.join("; ") || "none"}`;
 }
 
 /**
@@ -2490,9 +3132,10 @@ export function reusedAnswersLine(file, answers) {
  *
  * @param {{path: string | null, config: Record<string, any>, problems: string[], runProblems?: string[]}} loaded
  * @param {Record<string, any>} answers
+ * @param {{read?: (path: string) => string | null | undefined}} [options]
  * @returns {{path: string, body: string}}
  */
-export function renderConfigUpdate(loaded, answers) {
+export function renderConfigUpdate(loaded, answers, options = {}) {
   if (!isMapping(answers)) throw new Error("the answers must be a JSON object");
   // Only the sections the answers write can refuse them: `run:` answers are
   // checked as `manual-qa` reads the file, anything else as `qa-plan` does.
@@ -2507,7 +3150,10 @@ export function renderConfigUpdate(loaded, answers) {
   if (before.length)
     throw new Error(`${loaded.path} has problems; fix them first:\n- ${before.join("\n- ")}`);
   const check = (config) =>
-    unique([forPlan ? configProblems(config) : [], forRun ? runProblems(config) : []]);
+    unique([
+      forPlan ? configProblems(config) : [],
+      forRun ? runProblems(config, undefined, options) : [],
+    ]);
   const merged = mergeAnswers(loaded.config, answers);
   const path = loaded.path ?? CONFIG_FILES[0];
   if (path.endsWith(".json")) {
@@ -2644,6 +3290,55 @@ function whichCopyCommand(argv, io) {
   return { code: 0, out: `${JSON.stringify(result, null, 2)}\n` };
 }
 
+/**
+ * The hosts the QA person typed, from each `--host <name>=<host>`, as [name, host]
+ * pairs. A string is the usage problem.
+ *
+ * @param {string[]} argv
+ * @returns {[string, string][] | string}
+ */
+function typedHostArgs(argv) {
+  /** @type {[string, string][]} */
+  const pairs = [];
+  for (const [n, arg] of argv.entries()) {
+    if (arg !== "--host" || argv[n + 1] === undefined) continue;
+    const text = argv[n + 1];
+    const at = text.indexOf("=");
+    if (at < 1 || at === text.length - 1)
+      return `--host expects <name>=<host the QA person typed>, not \`${text}\``;
+    pairs.push([text.slice(0, at), text.slice(at + 1)]);
+  }
+  return pairs;
+}
+
+/** The names of `config`'s `run.hosts` entries. */
+function hostNames(config) {
+  return new Set(
+    (Array.isArray(config.run?.hosts) ? config.run.hosts : []).flatMap((entry) =>
+      isMapping(entry) && typeof entry.name === "string" ? [entry.name] : [],
+    ),
+  );
+}
+
+/**
+ * The typed hosts by `run.hosts` entry name, each name checked against `config`
+ * (with any answers already merged). A string is the usage problem.
+ *
+ * @param {[string, string][]} pairs from `typedHostArgs`
+ * @param {Record<string, any>} config
+ * @returns {Record<string, string> | string}
+ */
+function typedHosts(pairs, config) {
+  /** @type {Record<string, string>} */
+  const typed = {};
+  const named = hostNames(config);
+  for (const [name, host] of pairs) {
+    if (!named.has(name)) return `no \`run.hosts\` entry named \`${name}\` for --host to confirm`;
+    typed[name] = host;
+  }
+  return typed;
+}
+
 function option(argv, name) {
   const values = [];
   argv.forEach((arg, n) => {
@@ -2715,6 +3410,117 @@ function checkPlanAnswers(argv, repo, loaded) {
   };
 }
 
+/** A base branch as `origin/main` and `main` both name it. */
+const baseName = (ref) => ref.replace(/^refs\/heads\//, "").replace(/^origin\//, "");
+
+/**
+ * `check --for run --answers <file>`: the run readiness with the run needs
+ * given up front merged over the config, by `check --for plan --answers`'s
+ * rules: the file is the JSON object `render` takes, read only from inside the
+ * merged `working_dir`, and nothing is written. The file holds for the base
+ * branch it was given for: with `--answers-base` and `--base` that differ, it
+ * is not used, and the readiness is that of the config alone.
+ *
+ * @param {string[]} argv
+ * @param {string} repo
+ * @param {{path: string | null, config: Record<string, any>, runProblems: string[]}} loaded
+ * @param {{plan: {plan: any, problems: string[]} | null, tools?: () => {chromium: boolean, ffmpeg: boolean}, typedPairs: [string, string][], read?: (path: string) => string | null | undefined}} given
+ * @returns {{code: number, out: string} | null} null on bad usage
+ */
+function checkRunAnswers(
+  argv,
+  repo,
+  loaded,
+  { plan: planned, tools: ioTools, typedPairs, read: readFile },
+) {
+  const file = option(argv, "--answers")[0];
+  if (file === undefined || file.startsWith("--")) return null;
+  const [answersBase] = option(argv, "--answers-base");
+  const [base] = option(argv, "--base");
+  for (const flag of ["--answers-base", "--base"])
+    if (argv.includes(flag) && (option(argv, flag)[0] ?? "--").startsWith("--")) return null;
+  const json = (value) => `${JSON.stringify(value, null, 2)}\n`;
+  const planProblems = planned ? { planProblems: planned.problems } : {};
+  // Before the answers are merged, a name the config lacks is left out, not refused.
+  const lenient = (config) =>
+    Object.fromEntries(typedPairs.filter(([name]) => hostNames(config).has(name)));
+  const readiness = (config, problems, typed = lenient(config)) =>
+    runReadiness(
+      { path: loaded.path, config, runProblems: problems },
+      planned?.problems.length ? null : planned?.plan,
+      ioTools ?? detectWebTools(repo, config),
+      typed,
+    );
+  const planFailed = (planned?.problems.length ?? 0) > 0;
+  if (loaded.runProblems.length)
+    return {
+      code: 1,
+      out: json({
+        path: loaded.path,
+        problems: loaded.runProblems,
+        ...planProblems,
+        effective: null,
+        readiness: readiness(loaded.config, loaded.runProblems),
+      }),
+    };
+  if (answersBase !== undefined && base !== undefined && baseName(answersBase) !== baseName(base)) {
+    const effective = effectiveConfig(loaded.config);
+    return {
+      code: planFailed ? 1 : 0,
+      out: json({
+        path: loaded.path,
+        problems: [],
+        ...planProblems,
+        effective: { working_dir: effective.working_dir, run: effective.run },
+        readiness: readiness(loaded.config, []),
+        answers: {
+          file,
+          used: false,
+          why: `the answers were given for \`${answersBase}\`, and this pull request's base is \`${base}\``,
+        },
+      }),
+    };
+  }
+  let read;
+  try {
+    read = readAnswersFile(repo, file);
+  } catch (error) {
+    if (error instanceof AnswersError) return { code: 2, out: `check: ${error.message}\n` };
+    throw error;
+  }
+  const merged = mergeAnswers(loaded.config, read.answers);
+  const typed = typedHosts(typedPairs, merged);
+  if (typeof typed === "string") return { code: 2, out: `check: ${typed}\n` };
+  const problems = runProblems(merged, undefined, { read: readFile }).map(
+    (p) => `the answers: ${p}`,
+  );
+  if (problems.length)
+    return {
+      code: 1,
+      out: json({
+        path: loaded.path,
+        problems,
+        ...planProblems,
+        effective: null,
+        readiness: readiness(merged, problems, typed),
+      }),
+    };
+  const effective = effectiveConfig(merged);
+  const misplaced = answersPlaceProblem(repo, effective.working_dir, read.path);
+  if (misplaced) return { code: 2, out: `check: ${misplaced}\n` };
+  return {
+    code: planFailed ? 1 : 0,
+    out: json({
+      path: loaded.path,
+      problems: [],
+      ...planProblems,
+      effective: { working_dir: effective.working_dir, run: effective.run },
+      readiness: readiness(merged, [], typed),
+      answers: { file, used: true, reused: reusedAnswersLine(file, read.answers, "Run") },
+    }),
+  };
+}
+
 /**
  * @param {string[]} argv the arguments after the script
  * @param {{read?: (path: string) => string | null, stdin?: () => string,
@@ -2728,10 +3534,17 @@ export function main(argv, io = {}) {
   const stdin = io.stdin ?? readStdin;
   const json = (value) => `${JSON.stringify(value, null, 2)}\n`;
   const loaded = readQaConfig(read);
+  const typedPairs = typedHostArgs(argv);
+  if (typeof typedPairs === "string") return { code: 2, out: `check: ${typedPairs}\n` };
+  // With `--answers`, the names are checked against the config the answers are merged
+  // into (`checkRunAnswers`): the answers may be what carries `run.hosts`.
+  const withAnswers = argv.includes("--answers");
+  const typed = withAnswers ? {} : typedHosts(typedPairs, loaded.config);
+  if (typeof typed === "string") return { code: 2, out: `check: ${typed}\n` };
   const usage = {
     code: 2,
     out:
-      "usage: node adapter.mjs check --for plan [--answers <file.json>] | check --for run [--plan <file>] | " +
+      "usage: node adapter.mjs check --for plan [--answers <file.json>] | check --for run [--plan <file>] [--host <name>=<typed host>]… [--answers <file.json> [--answers-base <branch> --base <branch>]] | " +
       "plan [<file>] < plan.md | host <url> [--target stack|url] [--confirmed <host>] | " +
       "hazards < changed-paths | " +
       "delivery [--label <name>]… | render [--write [--drop-comments]] < answers.json | " +
@@ -2752,7 +3565,8 @@ export function main(argv, io = {}) {
   const readPlan = (path) => {
     const text = path === undefined ? stdin() : readFile(path);
     if (text === null) return { plan: null, problems: [`${path}: no such file`] };
-    return validatePlan(text);
+    // Each `Review:` box's Place is checked against the configured ones (ADR 0033).
+    return validatePlan(text, { places: effectivePlaces(loaded.config) });
   };
 
   if (command === "where") return whichCopyCommand(argv, io) ?? usage;
@@ -2776,7 +3590,7 @@ export function main(argv, io = {}) {
 
   if (command === "render") {
     try {
-      const { path, body } = renderConfigUpdate(loaded, JSON.parse(stdin()));
+      const { path, body } = renderConfigUpdate(loaded, JSON.parse(stdin()), { read });
       if (!argv.includes("--write")) return { code: 0, out: body };
       // Rewriting a commented YAML config drops its comments. The person
       // consented to the body, which has none, so `--write` refuses unless
@@ -2802,10 +3616,20 @@ export function main(argv, io = {}) {
     if (section === "run") {
       const planPath = option(argv, "--plan")[0];
       const planned = planPath === undefined ? null : readPlan(planPath);
+      if (argv.includes("--answers"))
+        return (
+          checkRunAnswers(argv, repo, loaded, {
+            plan: planned,
+            tools: io.tools,
+            typedPairs,
+            read,
+          }) ?? usage
+        );
       const readiness = runReadiness(
         loaded,
         planned?.problems.length ? null : planned?.plan,
-        io.tools ?? detectWebTools(repo),
+        io.tools ?? detectWebTools(repo, loaded.config),
+        typed,
       );
       const failed = loaded.runProblems.length > 0 || (planned?.problems.length ?? 0) > 0;
       return {

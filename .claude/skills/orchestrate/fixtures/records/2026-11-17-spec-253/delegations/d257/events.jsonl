@@ -1,0 +1,3 @@
+{"at":"2026-11-17T08:30:00Z","kind":"delegation-started","actor":"delegation","delegation":"d257","issue":257,"delegation_kind":"building","executor":"live-session","model":"default","start_route":"direct"}
+{"at":"2026-11-17T23:05:00Z","kind":"delegation-landed","actor":"delegation","delegation":"d257","head":"7c74a7f"}
+{"at":"2026-11-18T02:12:00Z","kind":"delegation-ended","actor":"delegation","delegation":"d257","outcome":"landed"}

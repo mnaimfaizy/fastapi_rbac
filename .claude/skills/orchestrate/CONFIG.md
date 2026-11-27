@@ -57,7 +57,7 @@ Tabs, anchors, aliases, multi-line scalars, flow collections that span lines, a 
 | `run_dir`        | `tmp/orchestrate`   | Where run folders are kept, relative to the repository root. Keep it gitignored: nothing in it is committed. When it is not, the skill offers to add it to the root `.gitignore`, and writes nothing there without a yes. |
 | `read_first`     | none: asked         | The documents every Delegation reads before it plans: agent instructions, contributing guide, glossary. Each must be in the repository. `[]` for none.                                                                    |
 | `routes`         | see below           | How a Delegation commits and opens its pull request, and how the human merges.                                                                                                                                            |
-| `regate`         | none: asked         | The commands that re-check a finished branch, run from the repository root of a worktree at the branch's head. `[]` leaves it to CI.                                                                                      |
+| `regate`         | none: asked         | The commands that re-check a finished branch, run from the repository root of a worktree at the branch's head. `[]` leaves it to CI. A list of commands, or a mapping with `allowed_failures`: see below.                 |
 | `skills`         | none                | Companion skills a brief names. See below.                                                                                                                                                                                |
 | `triage_labels`  | each role's name    | The repository's own mapping of the five triage roles to its labels. See below.                                                                                                                                           |
 | `models`         | the harness default | The model for each kind of work. See below.                                                                                                                                                                               |
@@ -69,6 +69,8 @@ Tabs, anchors, aliases, multi-line scalars, flow collections that span lines, a 
 | `spec`           | see below           | How a spec run (`--spec <n>`) lands its work. A run on a set of issues reads none of it.                                                                                                                                  |
 | `tracker`        | `detect`            | The issue tracker a Team Run (`--spec <n> --team`) reads its tickets from. See below.                                                                                                                                     |
 | `team`           | see below           | A Team Run's state labels, and how much a Shared Board row keeps. Only a Team Run reads it.                                                                                                                               |
+| `records`        | local only          | Where Run Records are kept off the machine, and whether close-out offers the upload. See below.                                                                                                                           |
+| `prune`          | no pruning          | Whether old, closed-out run folders are deleted from this machine. See below.                                                                                                                                             |
 
 A value in any route, command or skill name is free text: the brief carries it as written, so a route can be a command, a skill to use, or a sentence of convention.
 
@@ -101,6 +103,35 @@ triage_labels:
 ```
 
 The roles are `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human` and `wontfix`. A role the mapping leaves out keeps its own name as its label. Two roles with one label, or a key that is not one of the five, is a problem. Unset, each role's label is its name.
+
+### `regate`
+
+A list of commands, or a mapping when some tests are known to fail:
+
+| Key                | Meaning                                                                                                                                                              |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `commands`         | The commands, as the list above. Required in the mapping form.                                                                                                       |
+| `allowed_failures` | Optional. Tests that fail on the default branch too, each `test` (its name as the runner prints it) with the `reason` it may fail. A name listed twice is a problem. |
+
+```yaml
+regate:
+  commands:
+    - uv run pytest
+    - npm test
+  allowed_failures:
+    - test: test_the_launcher_reads_the_key
+      reason: fails on main under macOS bash 3.2, tracked in #123
+```
+
+`node "<skill>/config.mjs" regate <sha> --out <file>` runs the commands and compares what failed to this list ([SKILL.md](SKILL.md#7-verify-each-report)). A failure that is not listed fails the re-gate, and is named. An entry only excuses named test failures: a command that exits with anything but 1 (pytest's 2 to 5 are not test failures), that prints a failure no test name accounts for (a coverage threshold, `--cov-fail-under`), or that counts more failures than it names, fails the re-gate even when every named test is listed. Give each command one test runner, since `cmd1; cmd2` hides a failure of `cmd2` behind the exit and names of `cmd1`; chain with `&&`. An entry is for a test that fails on the default branch as well: it stops a known failure from being read by eye each time, and a fix removes its entry. `check` prints the commands as `regate` and the list as `regate_allowed_failures`, `[]` when there is none.
+
+#### The commands
+
+Both run from the repository root, or with `--repo <dir>`, and print what they did.
+
+`node "<skill>/config.mjs" regate <sha> --out <file>` runs the `commands` in order, from a detached worktree at `<sha>`, made beside `<file>` and removed after, even when a command fails. `<file>` must be inside `run_dir`. The commands are the repository's own config, never the commit's. It writes each command's exit code and output to `<file>` as JSON. A failing command's tests are read from its output: Node's `failing tests:` summary and `ℹ fail <n>`, and pytest's `FAILED <id>` lines and its count. A name is matched whole, against the test's own name or its whole pytest id. It exits 1 when any failure is not on the list, naming it, which includes a command that fails with no test named and one that counts more failures than it names. Exit 2 is bad usage.
+
+`node "<skill>/config.mjs" land <branch> --cut <sha> --onto <integration> --fence <glob>...` is [SPEC.md](SPEC.md#on-an-integration-branch) item 5's landing. `<branch>` is a branch or a commit. It refuses unless the commit descends from `--cut`, every path changed since `--cut` matches a `--fence` glob (quote them, so the shell does not expand them; where `<integration>` is an ancestor of the commit, the paths checked are the ones the move changes on `<integration>`, so a path an earlier ticket landed counts if this branch's merge changed it back, and one it left identical does not), no worktree has `<integration>` checked out, and `<integration>` is an ancestor of the commit. Only then does it run `git update-ref refs/heads/<integration> <new> <old>`. It never merges, rebases or pushes. A refusal prints JSON with `landed: false`, a `refusal` code (`unknown-ref`, `not-descended`, `outside-fence`, `checked-out`, `not-fast-forward` or `moved`) and its `cause`, and exits 1.
 
 ### `models`
 
@@ -199,6 +230,69 @@ team:
 ```
 
 A `labels` mapping that leaves a state out, names a key that is not one of the six, or gives one label to two states (compared without case, as the tracker compares them) is a problem.
+
+### `records`
+
+Read by the close-out ([SKILL.md](SKILL.md#10-close-out)), by `--upload <run>` ([RUN.md](RUN.md#uploading-the-run-record)), and by `--dashboard` ([RUN.md](RUN.md#the-past-runs-dashboard)). A run with no `records` key keeps its Run Record on the machine and offers nothing.
+
+| Key          | Default                             | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ------------ | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `repository` | `host/owner/repo` from the remote   | This repository's name in a Sink's paths, for a renamed or mirrored repository: `host/owner/repo`, three plain segments, or `host/<group>/…/<project>` for a GitLab project in a subgroup (`gitlab.com/grp/sub/widgets`); a `github.com` name has exactly three. Unset, it is read from the `origin` remote (or the only remote; with several and none named `origin`, the run asks). Records are never moved between namespaces. |
+| `upload`     | `offer`                             | `offer`: once a Sink is set, the close-out offers to upload the Run Record. `never`: it does not offer; `--upload <run>` still works.                                                                                                                                                                                                                                                                                             |
+| `raw`        | none: raw folders are never offered | `sink`: the one place raw run folders may go, a mapping of the keys below with `type: s3` only. Unset, raw folders are never offered. See [`raw`](#raw) below.                                                                                                                                                                                                                                                                    |
+| `sink`       | none: local only                    | The one private place Run Records are uploaded to, a mapping of the keys below. Unset, Run Records stay in `<run_dir>/records/`.                                                                                                                                                                                                                                                                                                  |
+
+`sink`'s keys:
+
+| Key        | Default                  | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ---------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `type`     | none: required           | The Sink's kind. `github`: a private GitHub repository, written with `gh api` Contents calls ([sinks/github.md](sinks/github.md)). `gitlab`: a private GitLab project, written with `glab api` Repository Files calls ([sinks/gitlab.md](sinks/gitlab.md)). `s3`: any S3-compatible bucket, signed with SigV4 ([sinks/s3.md](sinks/s3.md)). `github` is `verified`; `gitlab` and `s3` are at Support Level `documented` until a run has uploaded to them and read the record back. Any other value is a problem.           |
+| `repo`     | none: required           | The Sink repository or project: `owner/name`, or `host/owner/name` for GitHub Enterprise or a self-hosted GitLab. Without a host it is on `github.com`, or on `gitlab.com` for a `gitlab` Sink. A `gitlab` project may sit in subgroups (`group/sub/name`, or `host/group/sub/name`): its first segment is read as the host only when it has a dot, so a group whose name has a dot is written with its host in front (`gitlab.com/my.group/sub/name`). Required for `github` and `gitlab`, and a problem on an `s3` Sink. |
+| `branch`   | the repository's default | The branch the records are written to. Not used by an `s3` Sink.                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `endpoint` | none: required for `s3`  | An `s3` Sink's store: its https URL, such as `https://<account>.r2.cloudflarestorage.com`, with no path, query or password (`http` only for `localhost`). A problem on a `github` or `gitlab` Sink.                                                                                                                                                                                                                                                                                                                        |
+| `bucket`   | none: required for `s3`  | An `s3` Sink's bucket name.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `region`   | none: required for `s3`  | An `s3` Sink's region, such as `us-east-1`; `auto` for R2.                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+
+```yaml
+records:
+  repository: github.com/acme/widgets # default: host/owner/repo from the git remote
+  upload: offer # offer | never; default offer once a sink is set
+  sink: # unset: local only
+    type: github # github | gitlab | s3
+    repo: acme/run-records # owner/name or host/owner/name
+    branch: main # default: that repo's default branch
+```
+
+#### `raw`
+
+```yaml
+records:
+  raw: # unset: raw folders are never offered
+    sink:
+      type: s3 # s3 only
+      endpoint: https://<account>.r2.cloudflarestorage.com
+      bucket: acme-run-records
+      region: auto
+```
+
+`raw.sink` takes the keys of an `s3` Sink (`type`, `endpoint`, `bucket`, `region`) and nothing else, and its `type` can only be `s3`: any other type is a problem, with the line. Why `s3` only: a raw run folder may quote private issue text, command output and file contents, so it goes only where the bucket's own lifecycle rule deletes it, and only a bucket can do that (a git Sink cannot expire a file). It is independent of `records.sink`: a repository may set either, both, or neither, and it may be the same bucket. The same credentials are read, from the environment only, and a secret-looking value is a problem. Before uploading, the skill reads the bucket's lifecycle ([sinks/s3.md](sinks/s3.md#lifecycle)) and uploads nothing unless an enabled rule expires `raw/`; it never writes bucket configuration. The close-out asks for its own yes at every close-out, and the Dispatch Plan cannot list it as a routine write ([RUN.md](RUN.md#uploading-the-raw-run-folder)). Raw paths are `raw/<host>/<owner>/<repo>/<login>/<run-id>/<path>`, one object per file, every namespace segment lowercased.
+
+A record's path in the Sink is `records/<host>/<owner>/<repo>/<login>/<run-id>.json`, every segment lowercased, so one Sink serves many repositories and two never collide. The login is the tracker login, overridable only by the `ORCHESTRATE_OPERATOR` environment variable, and with none, nothing uploads. The config holds no credential: `gh` or `glab` signs in as the person who runs it, and an `s3` Sink reads its credentials only from the environment variables `ORCHESTRATE_S3_ACCESS_KEY_ID` and `ORCHESTRATE_S3_SECRET_ACCESS_KEY`, so a value in the config that looks like a secret is a problem. There is no local overlay, so a person opts out by answering "Not now" at close-out.
+
+### `prune`
+
+Read by the close-out ([SKILL.md](SKILL.md#10-close-out)) and by `node records.mjs prune`. A run with no `prune` key deletes nothing.
+
+| Key          | Default          | Meaning                                                                                                                                                                     |
+| ------------ | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `after_days` | none: no pruning | A whole number of 1 or more. Closed-out run folders whose Run Record closed more than this many days ago are deleted from `<run_dir>`. Setting it is the consent to delete. |
+
+```yaml
+prune:
+  after_days: 90 # unset: no pruning; setting it is the consent
+```
+
+Only a **closed-out** run folder is deleted: one with a Run Record beside it in `<run_dir>/records/`, whose `closed_at` is older than `after_days`. An open run (no Run Record yet), a closed run newer than the setting, and `<run_dir>/records/` with every record in it are never touched. With no `prune` key, the close-out asks once whether to prune at 90 days, and writes `prune.after_days: 90` into the config only on a yes. A "no" is remembered in `<run_dir>/prune-declined` on this machine, and is not asked again.
 
 ## Readiness check
 

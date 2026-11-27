@@ -1,0 +1,416 @@
+{
+  "schema": "run-record/1",
+  "run": {
+    "id": "2026-11-19-spec-344",
+    "repo": "github.com/mnaimfaizy/agent-kit",
+    "operator": "naim",
+    "kind": "spec",
+    "spec": 344,
+    "team": false,
+    "took_over": [],
+    "tickets": [348, 349, 350, 351, 352, 353],
+    "harness": "claude-code-desktop",
+    "support_level": "verified",
+    "decision_authority": "autonomous",
+    "landing": "integration-branch",
+    "started_at": "2026-11-19T01:44:00Z",
+    "plan_approved_at": "2026-11-19T03:08:30Z",
+    "closed_at": "2026-11-19T06:27:30Z",
+    "duration_seconds": 17010,
+    "outcome": "merged",
+    "pull_requests": [387],
+    "open_waits": 0
+  },
+  "delegations": [
+    {
+      "id": "d348",
+      "issue": 348,
+      "kind": "building",
+      "executor": "live-session",
+      "model": "default",
+      "start_route": "direct",
+      "started_at": "2026-11-19T03:09:50Z",
+      "landed_at": "2026-11-19T03:14:29Z",
+      "ended_at": "2026-11-19T03:15:10Z",
+      "duration_seconds": 320,
+      "outcome": "landed",
+      "send_backs": 0,
+      "decision_requests": 0,
+      "rulings": 0
+    },
+    {
+      "id": "d349",
+      "issue": 349,
+      "kind": "building",
+      "executor": "live-session",
+      "model": "default",
+      "start_route": "direct",
+      "started_at": "2026-11-19T03:19:40Z",
+      "landed_at": "2026-11-19T03:26:08Z",
+      "ended_at": "2026-11-19T03:26:40Z",
+      "duration_seconds": 420,
+      "outcome": "landed",
+      "send_backs": 0,
+      "decision_requests": 0,
+      "rulings": 0
+    },
+    {
+      "id": "d350",
+      "issue": 350,
+      "kind": "building",
+      "executor": "live-session",
+      "model": "default",
+      "start_route": "card",
+      "started_at": "2026-11-19T03:33:20Z",
+      "landed_at": "2026-11-19T03:41:48Z",
+      "ended_at": "2026-11-19T03:42:10Z",
+      "duration_seconds": 530,
+      "outcome": "landed",
+      "send_backs": 0,
+      "decision_requests": 0,
+      "rulings": 0
+    },
+    {
+      "id": "d351",
+      "issue": 351,
+      "kind": "building",
+      "executor": "live-session",
+      "model": "default",
+      "start_route": "card",
+      "started_at": "2026-11-19T03:49:30Z",
+      "landed_at": "2026-11-19T03:57:07Z",
+      "ended_at": "2026-11-19T03:57:30Z",
+      "duration_seconds": 480,
+      "outcome": "landed",
+      "send_backs": 0,
+      "decision_requests": 0,
+      "rulings": 0
+    },
+    {
+      "id": "d352",
+      "issue": 352,
+      "kind": "building",
+      "executor": "live-session",
+      "model": "default",
+      "start_route": "card",
+      "started_at": "2026-11-19T04:04:20Z",
+      "landed_at": "2026-11-19T04:07:38Z",
+      "ended_at": "2026-11-19T04:08:00Z",
+      "duration_seconds": 220,
+      "outcome": "landed",
+      "send_backs": 0,
+      "decision_requests": 0,
+      "rulings": 0
+    },
+    {
+      "id": "d353",
+      "issue": 353,
+      "kind": "building",
+      "executor": "live-session",
+      "model": "default",
+      "start_route": "card",
+      "started_at": "2026-11-19T04:23:50Z",
+      "landed_at": "2026-11-19T04:28:59Z",
+      "ended_at": "2026-11-19T04:29:20Z",
+      "duration_seconds": 330,
+      "outcome": "landed",
+      "send_backs": 0,
+      "decision_requests": 0,
+      "rulings": 0
+    },
+    {
+      "id": "d344-fix1",
+      "issue": null,
+      "kind": "fix",
+      "executor": "live-session",
+      "model": "default",
+      "start_route": "card",
+      "started_at": "2026-11-19T05:06:23Z",
+      "landed_at": "2026-11-19T05:23:04Z",
+      "ended_at": "2026-11-19T06:08:30Z",
+      "duration_seconds": 3727,
+      "outcome": "landed",
+      "send_backs": 1,
+      "decision_requests": 0,
+      "rulings": 0
+    }
+  ],
+  "human_steps": [
+    {
+      "at": "2026-11-19T03:08:00Z",
+      "opened_at": "2026-11-19T03:02:00Z",
+      "delegation": null,
+      "kind": "plan-approval",
+      "cause": "by-design",
+      "avoidable": false,
+      "actor": "human",
+      "wait_id": "w1",
+      "waited_seconds": 360,
+      "how": "chat",
+      "covers": ["dr1"]
+    },
+    {
+      "at": "2026-11-19T03:33:10Z",
+      "opened_at": "2026-11-19T03:26:30Z",
+      "delegation": "d350",
+      "kind": "card-start",
+      "cause": "harness-limit",
+      "avoidable": true,
+      "actor": "human",
+      "wait_id": "w2",
+      "waited_seconds": 400,
+      "how": "card",
+      "card": "task_184e1773",
+      "covers": []
+    },
+    {
+      "at": "2026-11-19T03:49:20Z",
+      "opened_at": "2026-11-19T03:42:30Z",
+      "delegation": "d351",
+      "kind": "card-start",
+      "cause": "harness-limit",
+      "avoidable": true,
+      "actor": "human",
+      "wait_id": "w3",
+      "waited_seconds": 410,
+      "how": "card",
+      "card": "task_ee8dfe89",
+      "covers": []
+    },
+    {
+      "at": "2026-11-19T04:04:10Z",
+      "opened_at": "2026-11-19T03:57:50Z",
+      "delegation": "d352",
+      "kind": "card-start",
+      "cause": "harness-limit",
+      "avoidable": true,
+      "actor": "human",
+      "wait_id": "w4",
+      "waited_seconds": 380,
+      "how": "card",
+      "card": "task_2766ee4a",
+      "covers": []
+    },
+    {
+      "at": "2026-11-19T04:23:40Z",
+      "opened_at": "2026-11-19T04:08:20Z",
+      "delegation": "d353",
+      "kind": "card-start",
+      "cause": "harness-limit",
+      "avoidable": true,
+      "actor": "human",
+      "wait_id": "w5",
+      "waited_seconds": 920,
+      "how": "card",
+      "card": "task_e0243937",
+      "covers": []
+    },
+    {
+      "at": "2026-11-19T04:43:08Z",
+      "opened_at": "2026-11-19T04:41:30Z",
+      "delegation": null,
+      "kind": "decision-request",
+      "cause": "missing-config",
+      "avoidable": true,
+      "actor": "human",
+      "wait_id": "w6",
+      "waited_seconds": 98,
+      "how": "chat",
+      "covers": ["dr2"]
+    },
+    {
+      "at": "2026-11-19T05:04:50Z",
+      "opened_at": "2026-11-19T04:46:40Z",
+      "delegation": null,
+      "kind": "decision-request",
+      "cause": "spec-gap",
+      "avoidable": true,
+      "actor": "human",
+      "wait_id": "w7",
+      "waited_seconds": 1090,
+      "how": "chat",
+      "covers": ["dr3", "dr4", "dr5"]
+    },
+    {
+      "at": "2026-11-19T05:06:10Z",
+      "opened_at": "2026-11-19T05:04:55Z",
+      "delegation": "d344-fix1",
+      "kind": "card-start",
+      "cause": "harness-limit",
+      "avoidable": true,
+      "actor": "human",
+      "wait_id": "w8",
+      "waited_seconds": 75,
+      "how": "card",
+      "card": "task_3e11ec7d",
+      "covers": []
+    },
+    {
+      "at": "2026-11-19T05:58:22Z",
+      "opened_at": "2026-11-19T05:23:30Z",
+      "delegation": "d344-fix1",
+      "kind": "post-replies",
+      "cause": "permission-refusal",
+      "avoidable": true,
+      "actor": "human",
+      "wait_id": "w9",
+      "waited_seconds": 2092,
+      "how": "chat",
+      "covers": ["dr6"]
+    },
+    {
+      "at": "2026-11-19T06:12:27Z",
+      "opened_at": "2026-11-19T06:08:40Z",
+      "delegation": "d344-fix1",
+      "kind": "post-replies",
+      "cause": "permission-refusal",
+      "avoidable": true,
+      "actor": "human",
+      "wait_id": "w10",
+      "waited_seconds": 227,
+      "how": "chat",
+      "covers": ["dr7"]
+    },
+    {
+      "at": "2026-11-19T06:26:19Z",
+      "opened_at": "2026-11-19T06:14:00Z",
+      "delegation": null,
+      "kind": "merge",
+      "cause": "by-design",
+      "avoidable": false,
+      "actor": "human",
+      "wait_id": "w11",
+      "waited_seconds": 739,
+      "how": "github",
+      "covers": []
+    },
+    {
+      "at": "2026-11-19T06:27:21Z",
+      "opened_at": null,
+      "delegation": null,
+      "kind": "close-out",
+      "cause": "by-design",
+      "avoidable": false,
+      "actor": "human",
+      "wait_id": null,
+      "waited_seconds": null,
+      "how": "chat",
+      "covers": []
+    },
+    {
+      "at": "2026-11-19T06:27:25Z",
+      "opened_at": null,
+      "delegation": null,
+      "kind": "close-out",
+      "cause": "by-design",
+      "avoidable": false,
+      "actor": "human",
+      "wait_id": null,
+      "waited_seconds": null,
+      "how": "chat",
+      "covers": []
+    }
+  ],
+  "writes": [
+    {
+      "at": "2026-11-19T04:43:08Z",
+      "kind": "add-label",
+      "actor": "chief-of-staff",
+      "as_human": true,
+      "delegation": null
+    },
+    {
+      "at": "2026-11-19T05:58:22Z",
+      "kind": "post-replies",
+      "actor": "chief-of-staff",
+      "as_human": true,
+      "delegation": "d344-fix1"
+    },
+    {
+      "at": "2026-11-19T05:58:44Z",
+      "kind": "add-label",
+      "actor": "chief-of-staff",
+      "as_human": true,
+      "delegation": null
+    },
+    {
+      "at": "2026-11-19T06:12:27Z",
+      "kind": "post-replies",
+      "actor": "chief-of-staff",
+      "as_human": true,
+      "delegation": "d344-fix1"
+    },
+    {
+      "at": "2026-11-19T06:12:31Z",
+      "kind": "add-label",
+      "actor": "chief-of-staff",
+      "as_human": true,
+      "delegation": null
+    }
+  ],
+  "reviews": [
+    {
+      "pr": 387,
+      "round": 1,
+      "head": "75aa766",
+      "findings": 7,
+      "fixed": 7,
+      "answered": 0
+    },
+    {
+      "pr": 387,
+      "round": 2,
+      "head": "b3609bb",
+      "findings": 1,
+      "fixed": 1,
+      "answered": 0
+    },
+    {
+      "pr": 387,
+      "round": 3,
+      "head": "b779e0c",
+      "findings": 0,
+      "fixed": 0,
+      "answered": 0
+    }
+  ],
+  "ci": [
+    {
+      "pr": 387,
+      "head": "75aa766",
+      "result": "pass",
+      "failed_checks": 0
+    },
+    {
+      "pr": 387,
+      "head": "b3609bb",
+      "result": "pass",
+      "failed_checks": 0
+    },
+    {
+      "pr": 387,
+      "head": "b779e0c",
+      "result": "pass",
+      "failed_checks": 0
+    }
+  ],
+  "rulings": {
+    "made": 0,
+    "upheld": 0,
+    "overturned": 0
+  },
+  "qa": [],
+  "summary": {
+    "human_steps": 13,
+    "avoidable": 9,
+    "by_design": 4,
+    "by_cause": {
+      "by-design": 4,
+      "harness-limit": 5,
+      "missing-config": 1,
+      "spec-gap": 1,
+      "permission-refusal": 2
+    },
+    "human_wait_seconds": 6791
+  }
+}
