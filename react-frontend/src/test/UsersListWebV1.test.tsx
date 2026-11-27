@@ -321,7 +321,13 @@ describe('UsersList (Web v1)', () => {
 
     it('reads the status filter from the URL', async () => {
       window.history.pushState({}, '', '/dashboard/users?status=locked');
-      mockUserService.getUsers.mockResolvedValue(pageOf(listUsers));
+      mockUserService.getUsers.mockImplementation(async (_p, _l, _s, status) =>
+        pageOf(
+          status === 'locked'
+            ? listUsers.filter((user) => user.email === 'marcus@example.com')
+            : listUsers
+        )
+      );
       renderWithProviders(<UsersList />, { preloadedState: viewer(ADMIN) });
 
       await screen.findByText('marcus@example.com');
@@ -376,7 +382,7 @@ describe('UsersList (Web v1)', () => {
       ).not.toBeInTheDocument();
     });
 
-    it('does not list a lock whose window has passed under Locked', async () => {
+    it('shows the Locked rows the server returned, including an expired lock', async () => {
       window.history.pushState({}, '', '/dashboard/users?status=Locked');
       const expired = makeUser({
         id: 'u-expired',
@@ -395,12 +401,12 @@ describe('UsersList (Web v1)', () => {
         locked_until: null,
       });
       mockUserService.getUsers.mockResolvedValue(
-        pageOf([...listUsers, expired, windowless])
+        pageOf([listUsers[1], expired, windowless])
       );
       renderWithProviders(<UsersList />, { preloadedState: viewer(ADMIN) });
 
-      await screen.findByText('marcus@example.com');
-      expect(names()).toEqual(['Marcus Webb']);
+      await screen.findByText('elena@example.com');
+      expect(names()).toEqual(['Marcus Webb', 'Elena Past', 'Wes Open']);
     });
 
     it('offers Clear filters when the status has no users, and shows everyone after', async () => {
