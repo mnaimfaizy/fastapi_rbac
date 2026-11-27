@@ -6,7 +6,9 @@ Canonical file: `.github/agents/<name>.agent.md` (GitHub Copilot reads it as it 
 
 Canonical file shape:
 
-* Frontmatter with `name` (equal to the file stem) and `description`.
+* Frontmatter with `name` (equal to the file stem) and `description`, plus an optional `tools`
+  list for GitHub Copilot (for example `tools: [read, search]`). `tools` is never copied to the
+  Claude or Cursor files. Any other key is an error.
 * A body shared by every harness. Text for some harnesses only goes between marker lines:
 
       <!-- harness:claude -->
@@ -48,6 +50,7 @@ OPEN = re.compile(r"^<!-- harness:([^>]*?) -->$")
 CLOSE = "<!-- /harness -->"
 KEY = re.compile(r"^([A-Za-z_][\w-]*):")
 SHARED_KEYS = ("name", "description")
+COPILOT_ONLY_KEYS = ("tools",)
 
 
 class SyncError(Exception):
@@ -114,6 +117,9 @@ def canon_parts(path: Path) -> tuple[list[tuple[str, list[str]]], str]:
     blocks, body = split_frontmatter(read(path))
     keys = {key: lines for key, lines in blocks}
     stem = path.name[: -len(CANON_SUFFIX)]
+    extra = [k for k in keys if k not in SHARED_KEYS + COPILOT_ONLY_KEYS]
+    if extra:
+        raise SyncError(f"{path.name}: unsupported frontmatter key {', '.join(extra)}")
     missing = [k for k in SHARED_KEYS if k not in keys]
     if missing:
         raise SyncError(f"{path.name}: frontmatter lacks {', '.join(missing)}")

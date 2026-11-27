@@ -1,6 +1,7 @@
 ---
 name: pr-drafter
 description: Drafts a pull request title, labels, merge base and body from the current branch. Read-only; it never pushes, creates or edits. Used by the create-pull-request skill.
+tools: [read, search]
 ---
 
 # PR Drafter

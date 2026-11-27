@@ -1,6 +1,7 @@
 ---
 name: release-notes
 description: Drafts the release-notes markdown section for a release from the version, previous tag and commit list. Used by the release skill.
+tools: [read, search]
 ---
 
 # Release Notes Agent

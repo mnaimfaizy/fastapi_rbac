@@ -75,6 +75,18 @@ class SyncAgents(unittest.TestCase):
         self.assertNotIn("Claude text.", cursor)
         self.assertEqual(s.sync(self.root, apply=False)[0], [])
 
+    def test_canonical_tools_is_not_copied(self) -> None:
+        self.canon.write_text(CANON.replace("---\n\n# Demo", "tools: [read, search]\n---\n\n# Demo", 1))
+        s.sync(self.root, apply=True)
+        for harness in ("claude", "cursor"):
+            self.assertNotIn("tools", self.target(harness).read_text())
+        self.assertEqual(s.sync(self.root, apply=False)[0], [])
+
+    def test_other_canonical_key_is_rejected(self) -> None:
+        self.canon.write_text(CANON.replace("---\n\n# Demo", "model: x\n---\n\n# Demo", 1))
+        problems, _ = s.sync(self.root, apply=False)
+        self.assertTrue(any("unsupported frontmatter key" in p for p in problems))
+
     def test_harness_keys_are_kept(self) -> None:
         self.write("claude", CLAUDE_OWN + "\nstale\n")
         s.sync(self.root, apply=True)

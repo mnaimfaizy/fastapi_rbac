@@ -31,7 +31,7 @@ pre-commit runs it on every commit (hook `skills-link`), the `destroyed-symlinks
 `python scripts/development/sync_agents.py --apply` rewrites the generated files; `--check` (pre-commit hook `agents-sync`, and a CI step) exits 1 on any drift, a missing target, or a target with no canonical file.
 
 - The body is shared. Text for some harnesses only sits between `<!-- harness:claude -->` (or `cursor`, `copilot`, or a comma list) and `<!-- /harness -->`.
-- `name` and `description` come from the canonical file. Every other frontmatter key in a target (Claude `tools`, `model`, `hooks`; Cursor `model`, `readonly`) is kept as it is, because model pins and tool grants differ by harness.
+- `name` and `description` come from the canonical file. Every other frontmatter key in a target (Claude `tools`, `model`, `hooks`; Cursor `model`, `readonly`) is kept as it is, because model pins and tool grants differ by harness. The canonical file may also carry a `tools` list (`read`, `search`) for GitHub Copilot; sync does not copy it, and any other canonical key is an error.
 - A target that does not exist is created with `name` and `description` only. Add the harness keys by hand.
 
 ## Research and sources

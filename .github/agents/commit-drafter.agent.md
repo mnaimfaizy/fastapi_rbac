@@ -1,6 +1,7 @@
 ---
 name: commit-drafter
 description: Drafts a commit message from the staged diff. Read-only; it never stages, commits or edits. Used by the commit-change skill.
+tools: [read, search]
 ---
 
 # Commit Drafter
