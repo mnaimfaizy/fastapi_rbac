@@ -61,6 +61,7 @@ async def get_permission_group_by_id(
         response_data = {
             "id": permission_group.id,
             "name": permission_group.name,
+            "description": permission_group.description,
             "permission_group_id": permission_group.permission_group_id,
             "created_at": getattr(permission_group, "created_at", None),
             "updated_at": getattr(permission_group, "updated_at", None),
@@ -96,6 +97,7 @@ async def get_permission_group_by_id(
                 {
                     "id": group.id,
                     "name": group.name,
+                    "description": group.description,
                     "permission_group_id": group.permission_group_id,
                     "created_at": getattr(group, "created_at", None),
                     "updated_at": getattr(group, "updated_at", None),

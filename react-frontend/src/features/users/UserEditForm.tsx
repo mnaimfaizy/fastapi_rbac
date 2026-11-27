@@ -1,651 +1,517 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useForm } from 'react-hook-form';
+import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
+import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import userService from '../../services/user.service';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
+import { AlertTriangle, CircleAlert } from 'lucide-react';
+import { toast } from 'sonner';
 import { AppDispatch, RootState } from '../../store';
 import { fetchAllRoles } from '../../store/slices/roleSlice';
-import { updateUser, createUser } from '../../store/slices/userSlice';
-import { toast } from 'sonner';
-
-import { PasswordRequirements } from '@/components/auth/PasswordRequirements';
-import { optionalPasswordPolicySchema } from '@/lib/passwordPolicySchema';
-
-// Import ShadCN UI Components
+import {
+  clearUserErrors,
+  createUser,
+  updateUser,
+} from '../../store/slices/userSlice';
+import type { User } from '@/models/user';
+import { usePermissions } from '@/hooks/usePermissions';
+import { passwordPolicySchema } from '@/lib/passwordPolicySchema';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { PasswordChecklist } from '@/features/auth/components/PasswordChecklist';
+import { PasswordField } from '@/features/auth/components/PasswordField';
+import { cn } from '@/lib/utils';
+import { FormSwitch } from './FormSwitch';
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertTriangle, CheckCircle } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+  grantableRoles,
+  permissionCodes,
+  permissionCount,
+  roleIdsToSave,
+} from './user-form-model';
 
-// Define props interface
-interface UserEditFormProps {
-  userId?: string;
-  onSuccess?: () => void;
-}
+const identity = {
+  first_name: z.string().trim().min(1, 'Enter a first name'),
+  last_name: z.string().trim().min(1, 'Enter a last name'),
+  email: z.string().trim().email('Enter a valid email address'),
+  contact_phone: z.string().trim(),
+  role_ids: z.array(z.string()),
+  is_superuser: z.boolean(),
+  is_active: z.boolean(),
+};
 
-// Define validation schema with Zod
-const userEditSchema = z.object({
-  first_name: z.string().min(1, 'First name is required'),
-  last_name: z.string().min(1, 'Last name is required'),
-  email: z.string().email('Please enter a valid email address'),
-  is_active: z.boolean().optional(),
-  is_superuser: z.boolean().optional(),
-  contact_phone: z.string().optional(), // Changed from nullable to optional
-  password: optionalPasswordPolicySchema,
-  role_id: z.array(z.string()).optional(), // Add role_id field
+const editSchema = z.object({
+  ...identity,
+  password: z.string(),
+  confirm_password: z.string(),
 });
 
-type UserEditFormData = z.infer<typeof userEditSchema>;
+const createSchema = z
+  .object({
+    ...identity,
+    password: passwordPolicySchema,
+    confirm_password: z.string().min(1, 'Confirm the password'),
+  })
+  .refine((data) => data.password === data.confirm_password, {
+    message: 'The passwords don’t match',
+    path: ['confirm_password'],
+  });
 
-// Define form field names type
-type FormFields = keyof UserEditFormData;
+type FormValues = z.infer<typeof editSchema>;
 
-// Define error types
-interface ValidationError {
-  loc: string[];
-  msg: string;
-  type: string;
+export const ROLES_HELPER = 'You can assign roles whose permissions you hold.';
+
+/** One titled group of the form: title and description left, fields right. */
+function FormSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: ReactNode;
+}) {
+  const id = useId();
+  return (
+    <section
+      aria-labelledby={id}
+      className="bg-card grid gap-5 rounded-xl border p-5 sm:p-6 md:grid-cols-[260px_minmax(0,1fr)] md:gap-8"
+    >
+      <div>
+        <h2 id={id} className="text-base font-semibold">
+          {title}
+        </h2>
+        <p className="text-foreground-secondary mt-1 text-[13px]">
+          {description}
+        </p>
+      </div>
+      <div className="flex min-w-0 flex-col gap-4">{children}</div>
+    </section>
+  );
 }
 
-interface ApiError {
-  field?: string;
-  message: string;
+function TextField({
+  id,
+  label,
+  optional,
+  error,
+  ...props
+}: {
+  id: string;
+  label: string;
+  optional?: boolean;
+  error?: string;
+} & React.ComponentProps<'input'>) {
+  const errorId = `${id}-error`;
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <Label htmlFor={id}>
+        {label}
+        {optional ? ' ' : null}
+        {optional ? (
+          <span className="text-foreground-secondary font-normal">
+            (optional)
+          </span>
+        ) : null}
+      </Label>
+      <Input
+        id={id}
+        className="h-10"
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? errorId : undefined}
+        {...props}
+      />
+      {error ? (
+        <p id={errorId} className="text-danger-text text-sm">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
 }
 
-interface ApiResponse {
-  detail?: ValidationError[] | string;
-  errors?: ApiError[];
-  message?: string;
-}
-
-interface UserWithRoles {
-  first_name: string;
-  last_name: string;
-  email: string;
-  is_active: boolean;
-  is_superuser: boolean;
-  contact_phone: string | null;
-  roles?: { id: string }[];
+export interface UserEditFormProps {
+  /** The user to edit; leave out to create one. */
+  user?: User;
 }
 
 /**
- * User Edit Form Component
- * Allows editing existing user or creating a new user
+ * Create and edit user, from the `users-create`, `users-create-manager` and
+ * `users-edit` artboards: Identity, Password (create only), Access and
+ * Status, with a sticky Cancel / Save footer.
  */
-const UserEditForm = ({ userId, onSuccess }: UserEditFormProps) => {
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+const UserEditForm = ({ user }: UserEditFormProps) => {
+  const editing = user !== undefined;
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
-  const [popoverOpen, setPopoverOpen] = useState(false);
-
-  // Get all roles from Redux store
+  const { hasPermission } = usePermissions();
+  const viewer = useSelector((state: RootState) => state.auth.user);
   const {
     allRoles,
     loading: rolesLoading,
     error: rolesError,
   } = useSelector((state: RootState) => state.role);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [catalogRequested, setCatalogRequested] = useState(false);
 
-  // Initialize React Hook Form with Zod validation
-  const form = useForm<UserEditFormData>({
-    resolver: zodResolver(userEditSchema),
+  const isSuperuser = viewer?.is_superuser === true;
+  const canReadRoles = hasPermission('role.read');
+  // The API never lets a non-superuser change their own roles.
+  const ownRoles = editing && !isSuperuser && viewer?.id === user.id;
+  // The API refuses to let anyone, a superuser included, disable themselves.
+  const ownAccount = editing && viewer?.id === user.id;
+
+  useEffect(() => {
+    if (canReadRoles) {
+      dispatch(fetchAllRoles());
+      setCatalogRequested(true);
+    }
+  }, [dispatch, canReadRoles]);
+
+  const catalogReady =
+    canReadRoles && catalogRequested && !rolesLoading && !rolesError;
+  const viewerCodes = useMemo(
+    () => permissionCodes(viewer?.permissions),
+    [viewer?.permissions]
+  );
+  const grantable = useMemo(
+    () => grantableRoles(allRoles, viewerCodes, isSuperuser),
+    [allRoles, viewerCodes, isSuperuser]
+  );
+  const grantableIds = useMemo(
+    () => new Set(grantable.map((role) => role.id)),
+    [grantable]
+  );
+  const heldIds = useMemo(
+    () => (user?.roles ?? []).map((role) => role.id),
+    [user?.roles]
+  );
+  const showRoles = catalogReady && !ownRoles;
+
+  const form = useForm<FormValues>({
+    resolver: zodResolver(editing ? editSchema : createSchema) as never,
     defaultValues: {
-      first_name: '',
-      last_name: '',
-      email: '',
-      is_active: true,
-      is_superuser: false,
-      contact_phone: '', // Change to empty string instead of null
+      first_name: user?.first_name ?? '',
+      last_name: user?.last_name ?? '',
+      email: user?.email ?? '',
+      contact_phone: user?.contact_phone ?? '',
       password: '',
-      role_id: [], // Initialize role_id as empty array
+      confirm_password: '',
+      role_ids: heldIds,
+      is_superuser: user?.is_superuser ?? false,
+      is_active: user?.is_active ?? true,
     },
   });
+  const {
+    register,
+    control,
+    handleSubmit,
+    watch,
+    formState: { errors, isDirty, isSubmitting },
+  } = form;
 
-  // Watch role_id value with useEffect to avoid hook dependency issues
-  const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
+  const leave = () =>
+    navigate(editing ? `/dashboard/users/${user.id}` : '/dashboard/users');
 
-  useEffect(() => {
-    // Subscribe to role_id field changes
-    const subscription = form.watch((value, { name }) => {
-      if (name === 'role_id') {
-        const roleIds = value.role_id as string[] | undefined;
-        setSelectedRoleIds(
-          roleIds?.filter((id): id is string => id !== undefined) || []
-        );
-      }
-    });
-
-    // Set initial value
-    const initialRoles = form.getValues('role_id');
-    setSelectedRoleIds(
-      initialRoles?.filter((id): id is string => id !== undefined) || []
-    );
-
-    return () => {
-      if (subscription && typeof subscription.unsubscribe === 'function') {
-        subscription.unsubscribe();
-      }
+  const onSubmit = async (values: FormValues) => {
+    setSaveError(null);
+    const common = {
+      first_name: values.first_name.trim(),
+      last_name: values.last_name.trim(),
+      email: values.email.trim(),
+      contact_phone: values.contact_phone.trim() || null,
+      // On your own account the switch isn't offered; leave the flag alone.
+      ...(ownAccount ? {} : { is_active: values.is_active }),
+      // Only a superuser may set the flag; anyone else leaves it out.
+      ...(isSuperuser ? { is_superuser: values.is_superuser } : {}),
     };
-  }, [form]);
-
-  // Filter allRoles to get the selected roles objects
-  const selectedRoles = useMemo(
-    () => allRoles.filter((role) => selectedRoleIds.includes(role.id)),
-    [allRoles, selectedRoleIds]
-  );
-
-  // Filter available roles to exclude already selected roles
-  const availableRoles = useMemo(
-    () => allRoles.filter((role) => !selectedRoleIds.includes(role.id)),
-    [allRoles, selectedRoleIds]
-  );
-
-  // Fetch all roles when the component mounts
-  useEffect(() => {
-    dispatch(fetchAllRoles());
-  }, [dispatch]);
-
-  // Load user data if editing an existing user
-  useEffect(() => {
-    const fetchUser = async () => {
-      if (!userId) return;
-
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const userData = (await userService.getUserById(
-          userId
-        )) as UserWithRoles;
-        form.reset({
-          first_name: userData.first_name,
-          last_name: userData.last_name,
-          email: userData.email,
-          is_active: userData.is_active,
-          is_superuser: userData.is_superuser,
-          contact_phone: userData.contact_phone || '', // Convert null to empty string
-          password: '', // Don't pre-fill the password field
-          role_id: userData.roles?.map((role) => role.id) || [], // Pre-fill role IDs
-        });
-      } catch (error: unknown) {
-        const errorMessage =
-          error instanceof Error ? error.message : 'Failed to load user data';
-        setError(errorMessage);
-        toast.error(errorMessage);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchUser();
-  }, [userId, form]);
-
-  const onSubmit = async (data: UserEditFormData) => {
-    if (isLoading) return;
-
-    setIsLoading(true);
-    setError(null);
-    setSuccess(false);
-
+    // Without the roles catalog the field isn't shown, so an edit leaves
+    // the user's roles alone rather than sending an empty list.
+    const roleIds = showRoles
+      ? roleIdsToSave(values.role_ids, heldIds, grantableIds)
+      : undefined;
     try {
-      // Prepare the role IDs for the backend
-      const payload = {
-        ...data,
-        role_id: data.role_id || [], // Ensure role_id is always an array
-      };
-
-      // Remove empty password from data if provided
-      if (payload.password === '') {
-        delete payload.password;
-      }
-
-      if (userId) {
-        // Update existing user using Redux action
-        const resultAction = await dispatch(
-          updateUser({ userId, userData: payload })
-        );
-
-        if (updateUser.fulfilled.match(resultAction)) {
-          setSuccess(true);
-          toast.success('User updated successfully');
-          // Navigate after a short delay to show the success message
-          setTimeout(() => {
-            if (onSuccess) {
-              onSuccess();
-            } else {
-              navigate('/dashboard/users');
-            }
-          }, 1500);
-        } else if (updateUser.rejected.match(resultAction)) {
-          handleApiError(resultAction.payload);
-        }
+      if (editing) {
+        await dispatch(
+          updateUser({
+            userId: user.id,
+            userData: {
+              ...common,
+              ...(roleIds !== undefined ? { role_id: roleIds } : {}),
+            },
+          })
+        ).unwrap();
+        toast.success('User updated');
+        navigate(`/dashboard/users/${user.id}`);
       } else {
-        // Create new user
-        if (!payload.password) {
-          form.setError('password', {
-            message: 'Password is required for new users',
-          });
-          toast.error('Password is required for new users');
-          setIsLoading(false);
-          return;
-        }
-
-        const resultAction = await dispatch(createUser(payload));
-        if (createUser.fulfilled.match(resultAction)) {
-          setSuccess(true);
-          toast.success('User created successfully');
-          // Navigate after a short delay to show the success message
-          setTimeout(() => {
-            if (onSuccess) {
-              onSuccess();
-            } else {
-              navigate('/dashboard/users');
-            }
-          }, 1500);
-        } else if (createUser.rejected.match(resultAction)) {
-          handleApiError(resultAction.payload);
-        }
+        const created = await dispatch(
+          createUser({
+            ...common,
+            password: values.password,
+            role_id: roleIds ?? [],
+          })
+        ).unwrap();
+        toast.success('User created');
+        navigate(
+          created?.id ? `/dashboard/users/${created.id}` : '/dashboard/users'
+        );
       }
-
-      // Call onSuccess callback if the update was successful
-      if (userId && onSuccess && success) {
-        onSuccess();
-      }
-    } catch (error: unknown) {
-      handleApiError(error);
-    } finally {
-      setIsLoading(false);
+    } catch (failure: unknown) {
+      const message =
+        typeof failure === 'string' && failure
+          ? failure
+          : editing
+            ? 'Couldn’t save the changes. Try again.'
+            : 'Couldn’t create the user. Try again.';
+      setSaveError(message);
+      toast.error(message);
+      // The banner and toast report it; the list's error is for load failures.
+      dispatch(clearUserErrors());
     }
   };
 
-  const handleApiError = (error: unknown) => {
-    let errorMessage = 'An unexpected error occurred';
-
-    if (typeof error === 'string') {
-      errorMessage = error;
-    } else if (
-      error &&
-      typeof error === 'object' &&
-      'response' in error &&
-      error.response
-    ) {
-      const responseData = error.response as { data?: ApiResponse };
-
-      if (responseData.data?.detail) {
-        if (Array.isArray(responseData.data.detail)) {
-          // Handle multiple validation errors - set form errors directly
-          responseData.data.detail.forEach((err: ValidationError) => {
-            const field = err.loc[err.loc.length - 1];
-            // Only set error if the field exists in our form
-            if (Object.keys(userEditSchema.shape).includes(field)) {
-              form.setError(field as FormFields, { message: err.msg });
-            }
-          });
-          errorMessage = 'Please fix the validation errors';
-        } else {
-          errorMessage = responseData.data.detail;
-        }
-      }
-      // Handle custom error format
-      else if (responseData.data?.errors) {
-        responseData.data.errors.forEach((err: ApiError) => {
-          if (
-            err.field &&
-            Object.keys(userEditSchema.shape).includes(err.field)
-          ) {
-            form.setError(err.field as FormFields, { message: err.message });
-          }
-        });
-        errorMessage = responseData.data.message || 'Failed to save user';
-      }
-      // Handle generic error messages
-      else if (responseData.data?.message) {
-        errorMessage = responseData.data.message;
-      }
-    }
-
-    setError(errorMessage);
-    toast.error(errorMessage);
-
-    // Scroll to the error message
-    const errorAlert = document.querySelector('[role="alert"]');
-    if (errorAlert) {
-      errorAlert.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  };
-
-  // --- Role Selection UI ---
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{userId ? 'Edit User' : 'Create User'}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {error && (
-          <Alert variant="destructive" className="mb-6" role="alert">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
+    <form
+      noValidate
+      onSubmit={handleSubmit(onSubmit)}
+      className="flex flex-col gap-5"
+      aria-label={editing ? 'Edit user' : 'Add user'}
+    >
+      {saveError ? (
+        <div
+          role="alert"
+          className="border-destructive bg-destructive/10 text-destructive flex items-start gap-2 rounded-md border p-3 text-sm"
+        >
+          <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          {saveError}
+        </div>
+      ) : null}
 
-        {success && (
-          <Alert variant="default" className="mb-6">
-            <CheckCircle className="h-4 w-4" />
-            <AlertDescription>User updated successfully</AlertDescription>
-          </Alert>
-        )}
+      <FormSection
+        title="Identity"
+        description="Name and contact details. The email is also the sign-in."
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TextField
+            id="user-first-name"
+            label="First name"
+            autoComplete="off"
+            error={errors.first_name?.message}
+            {...register('first_name')}
+          />
+          <TextField
+            id="user-last-name"
+            label="Last name"
+            autoComplete="off"
+            error={errors.last_name?.message}
+            {...register('last_name')}
+          />
+          <TextField
+            id="user-email"
+            label="Email"
+            type="email"
+            autoComplete="off"
+            error={errors.email?.message}
+            {...register('email')}
+          />
+          <TextField
+            id="user-phone"
+            label="Phone"
+            optional
+            type="tel"
+            placeholder="+61 400 000 000"
+            autoComplete="off"
+            error={errors.contact_phone?.message}
+            {...register('contact_phone')}
+          />
+        </div>
+      </FormSection>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <FormField
-              control={form.control}
-              name="first_name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>First Name</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      placeholder="First Name"
-                      disabled={isLoading}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+      {editing ? null : (
+        <FormSection
+          title="Password"
+          description="Share the temporary password through a separate channel. They’ll choose a new one at first sign-in."
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <PasswordField
+              id="user-password"
+              label="Temporary password"
+              autoComplete="new-password"
+              error={errors.password?.message}
+              {...register('password')}
             />
-
-            <FormField
-              control={form.control}
-              name="last_name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Last Name</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      placeholder="Last Name"
-                      disabled={isLoading}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+            <PasswordField
+              id="user-confirm-password"
+              label="Confirm password"
+              autoComplete="new-password"
+              error={errors.confirm_password?.message}
+              {...register('confirm_password')}
             />
+          </div>
+          <PasswordChecklist value={watch('password') ?? ''} />
+        </FormSection>
+      )}
 
-            <FormField
-              control={form.control}
-              name="email"
+      {showRoles || ownRoles || isSuperuser ? (
+        <FormSection
+          title="Access"
+          description="Roles decide what this person can see and change."
+        >
+          {ownRoles ? (
+            <p className="text-foreground-secondary text-sm">
+              You can’t change your own roles. Ask another administrator.
+            </p>
+          ) : null}
+          {showRoles ? (
+            <Controller
+              control={control}
+              name="role_ids"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email Address</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      placeholder="Email Address"
-                      disabled={isLoading}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>
-                    Password {userId && '(leave blank to keep current)'}
-                  </FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      type="password"
-                      placeholder={
-                        userId
-                          ? 'Leave blank to keep current password'
-                          : 'Password'
-                      }
-                      disabled={isLoading}
-                    />
-                  </FormControl>
-                  {/*
-                    On a new user the password is required, so the rules are
-                    shown from the start. On an existing user the field is
-                    normally left blank to keep the current password, so a
-                    standing nine-item checklist would be noise — it appears
-                    once there is something to check.
-                  */}
-                  {(!userId || (field.value ?? '') !== '') && (
-                    <PasswordRequirements value={field.value ?? ''} />
+                <fieldset className="flex flex-col gap-2">
+                  <legend className="text-foreground text-sm font-medium">
+                    Roles
+                  </legend>
+                  <p className="text-foreground-secondary -mt-1 text-[13px]">
+                    {ROLES_HELPER}
+                  </p>
+                  {grantable.length === 0 ? (
+                    <p className="text-foreground-secondary text-sm">
+                      There are no roles you can assign.
+                    </p>
+                  ) : (
+                    grantable.map((role) => {
+                      const checked = field.value.includes(role.id);
+                      const id = `user-role-${role.id}`;
+                      return (
+                        <div
+                          key={role.id}
+                          className={cn(
+                            'flex items-start gap-3 rounded-lg border px-3.5 py-3',
+                            checked && 'border-primary'
+                          )}
+                        >
+                          <Checkbox
+                            id={id}
+                            checked={checked}
+                            aria-describedby={`${id}-detail`}
+                            onCheckedChange={(next) =>
+                              field.onChange(
+                                next === true
+                                  ? [...field.value, role.id]
+                                  : field.value.filter(
+                                      (value) => value !== role.id
+                                    )
+                              )
+                            }
+                            className="mt-0.5"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-baseline justify-between gap-3">
+                              <Label htmlFor={id}>{role.name}</Label>
+                              <span className="text-foreground-secondary shrink-0 text-xs">
+                                {permissionCount(role)}
+                              </span>
+                            </div>
+                            <p
+                              id={`${id}-detail`}
+                              className="text-foreground-secondary mt-0.5 text-[13px]"
+                            >
+                              {role.description}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })
                   )}
-                  <FormMessage />
-                </FormItem>
+                </fieldset>
               )}
             />
-
-            <FormField
-              control={form.control}
-              name="contact_phone"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Contact Phone (optional)</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      placeholder="Contact Phone"
-                      disabled={isLoading}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="flex space-x-6">
-              <FormField
-                control={form.control}
-                name="is_active"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                        disabled={isLoading}
-                      />
-                    </FormControl>
-                    <FormLabel className="font-normal">Active User</FormLabel>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
+          ) : null}
+          {isSuperuser ? (
+            <div className={cn(showRoles && 'border-t pt-4')}>
+              <Controller
+                control={control}
                 name="is_superuser"
                 render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                        disabled={isLoading}
+                  <FormSwitch
+                    label="Superuser"
+                    description="Bypasses every permission check."
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  >
+                    <p className="bg-status-warning text-status-warning-foreground mt-2 flex gap-2 rounded-lg px-3 py-2.5 text-[13px]">
+                      <AlertTriangle
+                        className="mt-0.5 size-4 shrink-0"
+                        aria-hidden="true"
                       />
-                    </FormControl>
-                    <FormLabel className="font-normal">Superuser</FormLabel>
-                  </FormItem>
+                      Superusers can change anything, including other
+                      superusers. Give this only to people who maintain the
+                      system.
+                    </p>
+                  </FormSwitch>
                 )}
               />
             </div>
+          ) : null}
+        </FormSection>
+      ) : null}
 
-            {/* Role Selection */}
-            <div className="mt-6 border-t pt-6">
-              <FormField
-                control={form.control}
-                name="role_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Assign Roles</FormLabel>
-                    {rolesLoading && <p>Loading roles...</p>}
-                    {rolesError && (
-                      <p className="text-sm text-destructive">
-                        Error loading roles: {rolesError}
-                      </p>
-                    )}
-                    {!rolesLoading && !rolesError && (
-                      <>
-                        <Popover
-                          open={popoverOpen}
-                          onOpenChange={setPopoverOpen}
-                        >
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button
-                                variant="outline"
-                                role="combobox"
-                                aria-expanded={popoverOpen}
-                                className="w-full justify-between"
-                                disabled={isLoading}
-                              >
-                                <span className="truncate">
-                                  {selectedRoles.length > 0
-                                    ? selectedRoles
-                                        .map((role) => role.name)
-                                        .join(', ')
-                                    : 'Select roles...'}
-                                </span>
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  viewBox="0 0 20 20"
-                                  fill="currentColor"
-                                  className="ml-2 h-5 w-5 shrink-0 opacity-50"
-                                >
-                                  <path
-                                    fillRule="evenodd"
-                                    d="M10 3a.75.75 0 01.55.24l3.25 3.5a.75.75 0 11-1.1 1.02L10 4.852 7.3 7.76a.75.75 0 01-1.1-1.02l3.25-3.5A.75.75 0 0110 3zm-3.76 9.24a.75.75 0 011.06 0L10 14.148l2.7-2.908a.75.75 0 111.06 1.06l-3.25 3.5a.75.75 0 01-1.06 0l-3.25-3.5a.75.75 0 010-1.06z"
-                                    clipRule="evenodd"
-                                  />
-                                </svg>
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                            <Command>
-                              <CommandInput placeholder="Search roles..." />
-                              <CommandList>
-                                <CommandEmpty>No roles found.</CommandEmpty>
-                                <CommandGroup>
-                                  {availableRoles.map((role) => (
-                                    <CommandItem
-                                      key={role.id}
-                                      value={role.name}
-                                      onSelect={() => {
-                                        const currentValues = field.value || [];
-                                        field.onChange([
-                                          ...currentValues,
-                                          role.id,
-                                        ]);
-                                        setPopoverOpen(false); // Close popover after selection
-                                      }}
-                                    >
-                                      <Checkbox
-                                        checked={false}
-                                        onCheckedChange={() => {
-                                          const currentValues =
-                                            field.value || [];
-                                          field.onChange([
-                                            ...currentValues,
-                                            role.id,
-                                          ]);
-                                          setPopoverOpen(false); // Close popover after selection
-                                        }}
-                                        className="mr-2"
-                                      />
-                                      {role.name}
-                                    </CommandItem>
-                                  ))}
-                                </CommandGroup>
-                              </CommandList>
-                            </Command>
-                          </PopoverContent>
-                        </Popover>
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          {selectedRoles.map((role) => (
-                            <Badge
-                              key={role.id}
-                              variant="secondary"
-                              className="cursor-pointer"
-                              onClick={() => {
-                                const currentValues = field.value || [];
-                                field.onChange(
-                                  currentValues.filter((id) => id !== role.id)
-                                );
-                              }}
-                            >
-                              {role.name} ×
-                            </Badge>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                    <FormMessage />
-                  </FormItem>
-                )}
+      <FormSection
+        title="Status"
+        description="Inactive users can’t sign in. Their data stays."
+      >
+        {ownAccount ? (
+          <p className="text-foreground-secondary text-sm">
+            You can’t disable your own account.
+          </p>
+        ) : (
+          <Controller
+            control={control}
+            name="is_active"
+            render={({ field }) => (
+              <FormSwitch
+                label="Active"
+                description="This person can sign in."
+                checked={field.value}
+                onCheckedChange={field.onChange}
               />
-            </div>
+            )}
+          />
+        )}
+      </FormSection>
 
-            <div className="flex justify-between">
-              <Button
-                type="button"
-                onClick={() => navigate(-1)}
-                variant="outline"
-                disabled={isLoading}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isLoading}>
-                {isLoading
-                  ? userId
-                    ? 'Updating...'
-                    : 'Creating...'
-                  : userId
-                    ? 'Update User'
-                    : 'Create User'}
-              </Button>
-            </div>
-          </form>
-        </Form>
-      </CardContent>
-    </Card>
+      <div className="bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky bottom-0 z-10 -mx-1 flex items-center justify-between gap-3 border-t px-1 py-4 backdrop-blur">
+        <div className="text-foreground-secondary text-sm" aria-live="polite">
+          {editing && isDirty ? (
+            <span className="inline-flex items-center gap-2">
+              <span
+                aria-hidden="true"
+                className="bg-primary size-1.5 rounded-full"
+              />
+              Unsaved changes
+            </span>
+          ) : null}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={leave}
+            disabled={isSubmitting}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            disabled={isSubmitting}
+            aria-busy={isSubmitting || undefined}
+          >
+            {editing ? 'Save changes' : 'Create user'}
+          </Button>
+        </div>
+      </div>
+    </form>
   );
 };
 
