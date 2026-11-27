@@ -2,20 +2,20 @@
 
 Engineering skills are installed at user level (`~/.agents/skills`) rather than vendored into this repository. Update them with `npx skills update -g`.
 
-Project skills live in `.agents/skills/`, which Cursor and Copilot read natively. `.claude/skills` is a tracked relative symlink to `../.agents/skills`, because Claude Code reads only `.claude/skills/`. Never replace it with a copy; `python scripts/development/check_skills_link.py` fails when it is not that link. On Windows, set `core.symlinks` first (see [`docs/development/DEVELOPER_SETUP.md`](docs/development/DEVELOPER_SETUP.md#windows-repo-skills-not-loading)). Sub-agents have one canonical file each, `.github/agents/<name>.agent.md`; `.claude/agents/` and `.cursor/agents/` are generated from them with `python scripts/development/sync_agents.py --apply` (`--check` in CI). Edit the canonical file, never the generated ones. Layout and the research behind it: [`docs/agents/skills-and-agents.md`](docs/agents/skills-and-agents.md).
+Project skills live in `.agents/skills/`, which Cursor and Copilot read natively. `.claude/skills` is a tracked relative symlink to `../.agents/skills`, because Claude Code reads only `.claude/skills/`. Never replace it with a copy; `python scripts/development/check_skills_link.py` fails when it is not that link. On Windows, set `core.symlinks` first (see [`docs/development/DEVELOPER_SETUP.md`](docs/development/DEVELOPER_SETUP.md#windows-repo-skills-not-loading)). Sub-agents have one canonical file each. Copilot offers `.github/agents/<name>.agent.md`. `commit-drafter` and `pr-drafter` are `.github/agents/<name>.md`, which Copilot does not offer, because their prompts run git and `gh`. `.claude/agents/` and `.cursor/agents/` are generated from the canonical file with `python scripts/development/sync_agents.py --apply` (`--check` in CI). Edit the canonical file, never the generated ones. Layout and the research behind it: [`docs/agents/skills-and-agents.md`](docs/agents/skills-and-agents.md).
 
 Project-owned agent assets that do live here:
 
 - `.agents/skills/release`: Release PR workflow (see Release below)
 - `.github/agents/release-notes.agent.md`: release-notes sub-agent (canonical; the Claude and Cursor copies are generated)
-- `.agents/skills/commit-change`, `.github/agents/commit-drafter.agent.md`: the commit pipeline (see Commit pipeline below)
-- `.agents/skills/create-pull-request`, `.github/agents/pr-drafter.agent.md`: the pull request pipeline (see Pull request pipeline below)
-- `.agents/skills/{resolve-issue,architect,manager,implementor,troubleshooting}`: the former Copilot instructions and prompts (`architect`, `manager`, `implementor` and `troubleshooting` run only when invoked by name)
+- `.agents/skills/commit-change`, `.github/agents/commit-drafter.md`: the commit pipeline (see Commit pipeline below). Claude and Cursor only; Copilot does not offer this agent
+- `.agents/skills/create-pull-request`, `.github/agents/pr-drafter.md`: the pull request pipeline (see Pull request pipeline below). Claude and Cursor only; Copilot does not offer this agent
+- Every folder under `.agents/skills/`. Some of those skills run only when invoked by name
 - `docs/agents/`: repo-side configuration the installed skills read
 
 Kit-owned files are copied from one pinned [Agent-kit](docs/agents/agent-kit.md) tag. They are an exception to "no vendoring". Never edit them by hand; re-copy them from a new tag instead:
 
-- `.agents/skills/{code-review,security-audit,security-finding-triage,security-response,explainer,instruction-drift-audit,qa-plan,manual-qa,plain-prose,orchestrate,address-pr-review}` (in this repo, the kit's `code-review` replaces the user-level one)
+- Every folder under `.agents/skills/` that Agent-kit owns. The names are the table in [Agent-kit integration](docs/agents/agent-kit.md). In this repo, the kit's `code-review` replaces the user-level one
 - `.github/{agent-runtime,agent-pipeline,security-audit,agent-review-response}`
 
 ## Agent skills

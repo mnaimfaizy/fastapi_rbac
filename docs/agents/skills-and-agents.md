@@ -6,9 +6,10 @@ How this repository lays out agent skills and sub-agents, and why. Decided in [#
 
 | Path | What it is | Edit it? |
 | --- | --- | --- |
-| `.agents/skills/<name>/` | Every project skill: the 11 Agent-kit skills, `release`, `commit-change`, `create-pull-request`, `resolve-issue`, `architect`, `manager`, `implementor`, `troubleshooting` | Yes, except the 11 kit skills (see [Agent-kit integration](agent-kit.md)) |
+| `.agents/skills/<name>/` | Every folder under `.agents/skills/`. The Agent-kit names are the table in [Agent-kit integration](agent-kit.md) | Yes, except the Agent-kit skills in that table |
 | `.claude/skills` | A tracked relative symlink (git mode `120000`) to `../.agents/skills` | No. Never replace it with a copy |
-| `.github/agents/<name>.agent.md` | The canonical sub-agent file. Copilot reads it as it is | Yes |
+| `.github/agents/<name>.agent.md` | Canonical sub-agent file that Copilot offers and reads as it is | Yes |
+| `.github/agents/<name>.md` | Canonical file for a Claude and Cursor agent. Copilot does not offer a file without the `.agent.md` suffix. `commit-drafter` and `pr-drafter` use this: their prompts run git and `gh`, which Copilot's `read` and `search` tools cannot | Yes |
 | `.claude/agents/<name>.md`, `.cursor/agents/<name>.md` | Sub-agent files generated from the canonical file | No. Edit the canonical file, then run the sync |
 | `.github/copilot-instructions.md` | Copilot's repository instructions | Yes |
 
@@ -31,7 +32,8 @@ pre-commit runs it on every commit (hook `skills-link`), the `destroyed-symlinks
 `python scripts/development/sync_agents.py --apply` rewrites the generated files; `--check` (pre-commit hook `agents-sync`, and a CI step) exits 1 on any drift, a missing target, or a target with no canonical file.
 
 - The body is shared. Text for some harnesses only sits between `<!-- harness:claude -->` (or `cursor`, `copilot`, or a comma list) and `<!-- /harness -->`.
-- `name` and `description` come from the canonical file. Every other frontmatter key in a target (Claude `tools`, `model`, `hooks`; Cursor `model`, `readonly`) is kept as it is, because model pins and tool grants differ by harness. The canonical file may also carry a `tools` list (`read`, `search`) for GitHub Copilot; sync does not copy it, and any other canonical key is an error.
+- A canonical file is `<name>.agent.md` when Copilot should offer it, or `<name>.md` when it is Claude and Cursor only. `commit-drafter` and `pr-drafter` are `<name>.md`.
+- `name` and `description` come from the canonical file. Every other frontmatter key in a target (Claude `tools`, `model`, `hooks`; Cursor `model`, `readonly`) is kept as it is, because model pins and tool grants differ by harness. A `<name>.agent.md` file may also carry a `tools` list (`read`, `search`) for GitHub Copilot; sync does not copy it, and any other canonical key is an error.
 - A target that does not exist is created with `name` and `description` only. Add the harness keys by hand.
 
 ## Research and sources
