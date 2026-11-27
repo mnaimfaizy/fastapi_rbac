@@ -43,6 +43,13 @@ const EXCEPTION_FOR: Record<StatusFilter, UserException> = {
   Disabled: 'disabled',
 };
 
+/** What `GET /users/list?status=` takes for each status filter. */
+export function statusQuery(
+  status: StatusFilter | null
+): UserException | undefined {
+  return status ? EXCEPTION_FOR[status] : undefined;
+}
+
 /** `?status=locked` and `?status=Locked` both work; anything else is "All". */
 export function parseStatusFilter(
   value: string | null | undefined
@@ -74,8 +81,11 @@ export function filterUsers(users: User[], filters: UserListFilters): User[] {
     ) {
       return false;
     }
+    // Locked is whatever the server returned for `?status=locked`. A second
+    // check against the browser clock would drop a row the server still counts.
     if (
       filters.status &&
+      filters.status !== 'Locked' &&
       !userExceptions(user).includes(EXCEPTION_FOR[filters.status])
     ) {
       return false;

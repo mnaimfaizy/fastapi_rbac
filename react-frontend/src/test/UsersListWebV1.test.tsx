@@ -50,7 +50,8 @@ const listUsers: User[] = [
     email: 'marcus@example.com',
     roles: [managerRole],
     is_locked: true,
-    locked_until: '2026-11-24T14:05:00Z',
+    // Open lock, as the dashboard counts it: the window has not passed.
+    locked_until: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
   }),
   makeUser({
     id: 'u-hannah',
@@ -320,7 +321,13 @@ describe('UsersList (Web v1)', () => {
 
     it('reads the status filter from the URL', async () => {
       window.history.pushState({}, '', '/dashboard/users?status=locked');
-      mockUserService.getUsers.mockResolvedValue(pageOf(listUsers));
+      mockUserService.getUsers.mockImplementation(async (_p, _l, _s, status) =>
+        pageOf(
+          status === 'locked'
+            ? listUsers.filter((user) => user.email === 'marcus@example.com')
+            : listUsers
+        )
+      );
       renderWithProviders(<UsersList />, { preloadedState: viewer(ADMIN) });
 
       await screen.findByText('marcus@example.com');
@@ -330,6 +337,98 @@ describe('UsersList (Web v1)', () => {
       ).toHaveTextContent('Status:Locked');
 
       await pickFilter('Filter by status', 'All');
+      expect(names()).toHaveLength(listUsers.length);
+      expect(window.location.search).toBe('');
+    });
+
+    it('asks the API for the status in the URL, and drops it when cleared', async () => {
+      window.history.pushState({}, '', '/dashboard/users?status=Locked');
+      mockUserService.getUsers.mockResolvedValue(pageOf(listUsers));
+      renderWithProviders(<UsersList />, { preloadedState: viewer(ADMIN) });
+
+      await screen.findByText('marcus@example.com');
+      expect(mockUserService.getUsers).toHaveBeenLastCalledWith(
+        1,
+        100,
+        undefined,
+        'locked'
+      );
+
+      await pickFilter('Filter by status', 'All');
+      await waitFor(() =>
+        expect(mockUserService.getUsers).toHaveBeenLastCalledWith(
+          1,
+          100,
+          undefined,
+          undefined
+        )
+      );
+    });
+
+    it('shows the loading state, not old rows, while a status change loads', async () => {
+      mockUserService.getUsers.mockResolvedValueOnce(pageOf(listUsers));
+      renderWithProviders(<UsersList />, { preloadedState: viewer(ADMIN) });
+      await screen.findByText('marcus@example.com');
+
+      mockUserService.getUsers.mockReturnValueOnce(new Promise(() => {}));
+      await pickFilter('Filter by status', 'Locked');
+
+      expect(
+        await screen.findByRole('status', { name: 'Loading users' })
+      ).toBeInTheDocument();
+      expect(screen.queryByText('marcus@example.com')).not.toBeInTheDocument();
+      expect(
+        screen.queryByText('No users match these filters')
+      ).not.toBeInTheDocument();
+    });
+
+    it('shows the Locked rows the server returned, including an expired lock', async () => {
+      window.history.pushState({}, '', '/dashboard/users?status=Locked');
+      const expired = makeUser({
+        id: 'u-expired',
+        first_name: 'Elena',
+        last_name: 'Past',
+        email: 'elena@example.com',
+        is_locked: true,
+        locked_until: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      });
+      const windowless = makeUser({
+        id: 'u-windowless',
+        first_name: 'Wes',
+        last_name: 'Open',
+        email: 'wes@example.com',
+        is_locked: true,
+        locked_until: null,
+      });
+      mockUserService.getUsers.mockResolvedValue(
+        pageOf([listUsers[1], expired, windowless])
+      );
+      renderWithProviders(<UsersList />, { preloadedState: viewer(ADMIN) });
+
+      await screen.findByText('elena@example.com');
+      expect(names()).toEqual(['Marcus Webb', 'Elena Past', 'Wes Open']);
+    });
+
+    it('offers Clear filters when the status has no users, and shows everyone after', async () => {
+      window.history.pushState({}, '', '/dashboard/users?status=Locked');
+      // The API answers a status with no users by an empty page.
+      mockUserService.getUsers.mockImplementation(async (_p, _l, _s, status) =>
+        pageOf(status ? [] : listUsers)
+      );
+      renderWithProviders(<UsersList />, { preloadedState: viewer(ADMIN) });
+
+      expect(
+        await screen.findByRole('heading', {
+          name: 'No users match these filters',
+        })
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('heading', { name: 'No users yet' })
+      ).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Clear filters' }));
+
+      await screen.findByText('ada@example.com');
       expect(names()).toHaveLength(listUsers.length);
       expect(window.location.search).toBe('');
     });

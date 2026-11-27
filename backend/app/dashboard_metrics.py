@@ -74,18 +74,19 @@ async def count_active_users(db: AsyncSession) -> int:
     )
 
 
+def locked_now_clauses() -> tuple[Any, ...]:
+    """WHERE clauses for accounts sign-in would still refuse: locked, and the window has not passed."""
+    return (
+        cast(User.is_locked, Boolean).is_(True),
+        col(User.locked_until).is_not(None),
+        col(User.locked_until) > _naive_utc_now(),
+    )
+
+
 async def count_locked_users(db: AsyncSession) -> int:
-    """Accounts sign-in would still refuse: locked, and the window has not passed."""
-    now = _naive_utc_now()
     return await _count(
         db,
-        select(func.count())
-        .select_from(User)
-        .where(
-            cast(User.is_locked, Boolean).is_(True),
-            col(User.locked_until).is_not(None),
-            col(User.locked_until) > now,
-        ),
+        select(func.count()).select_from(User).where(*locked_now_clauses()),
     )
 
 

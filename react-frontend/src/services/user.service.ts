@@ -33,13 +33,17 @@ class UserService {
   async getUsers(
     page: number = 1,
     limit: number = 10,
-    search?: string
+    search?: string,
+    status?: 'locked' | 'pending' | 'disabled'
   ): Promise<PaginatedItems<User>> {
     const params = new URLSearchParams();
     params.append('page', page.toString());
     params.append('size', limit.toString());
     if (search) {
       params.append('search', search);
+    }
+    if (status) {
+      params.append('status', status);
     }
 
     const response = await api.get<ApiResponse<PaginatedItems<User>>>(

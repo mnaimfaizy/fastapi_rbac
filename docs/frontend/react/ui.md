@@ -83,10 +83,10 @@ The users list (`src/features/users/UsersList.tsx`, from the "05 · Users · Lis
 - **Row menu.** `RowActionsMenu` gets only the actions the viewer can use, and destructive ones are confirmed with `ConfirmDialog`. The API deletes only a user who holds no role, so for a role holder the delete dialog says the roles must be removed first and offers Edit user; Delete is offered for a role holder only to a viewer with `user.update` and `role.read` (who can remove the roles on the edit page), and never on the viewer's own row. Detail follows the same rule; see "User detail and forms".
 - **Status.** The status column shows `StatusBadge` for exceptions only, so a healthy row has an empty cell.
 - **Empty and no-match states.** Both use `EmptyState`: "No users match ‘xyz’" with Clear search, and a create action on an empty list only for viewers who can create.
-- **Status filter in the URL.** The users list reads and writes `?status=`, so other pages can link to a filtered list. The accepted values are `STATUS_FILTERS` in `src/features/users/users-list-model.ts`, matched in any case by `parseStatusFilter`; any other value shows everyone.
+- **Status filter in the URL.** The users list reads and writes `?status=`, so other pages can link to a filtered list. The accepted values are `STATUS_FILTERS` in `src/features/users/users-list-model.ts`, matched in any case by `parseStatusFilter`; any other value shows everyone. The list sends the chosen status to `GET /users/list` as `status`, so changing it fetches again.
 - **Mobile.** Below the `md` breakpoint the list renders as stacked rows instead of the table.
 
-`GET /users/list` takes only `page` and `size`, so the users list loads one page of `USERS_FETCH_LIMIT` users (`src/features/users/UsersList.tsx`, the API's largest page size) and searches, filters and pages it in the browser. When the API reports more, the page says search covers the loaded users only. Sorting is not offered: the Web v1 artboards have none, and the list keeps the API's order.
+`GET /users/list` takes `page`, `size` and an optional `status` (`locked`, `pending` or `disabled`), so the users list loads one page of `USERS_FETCH_LIMIT` users (`src/features/users/UsersList.tsx`, the API's largest page size) of the chosen status, sending the status from the URL, and searches, filters by role and pages it in the browser. When the API reports more, the page says search covers the loaded users only. Sorting is not offered: the Web v1 artboards have none, and the list keeps the API's order.
 
 ## User detail and forms
 
