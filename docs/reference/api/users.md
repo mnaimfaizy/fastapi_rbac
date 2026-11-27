@@ -74,6 +74,13 @@ Retrieve a paginated list of users (same as above, but always paginated, admin/m
 Authorization: Bearer <access_token>
 ```
 
+**Query Parameters:**
+
+- `status` (optional): `locked`, `pending` or `disabled`. Any other value returns 422.
+  - `locked`: `is_locked` is true, `locked_until` is set and `locked_until` is still in the future. This is the dashboard's Locked accounts rule.
+  - `pending`: the user is not verified.
+  - `disabled`: the user is not active.
+
 **Response:**
 _Same as above._
 
