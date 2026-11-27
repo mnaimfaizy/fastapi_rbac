@@ -1,0 +1,705 @@
+/*
+ * The one stylesheet of the orchestrate pages: the past-runs dashboard now,
+ * the live board later. Colour means `cause` and nothing else: each cause has
+ * one `.c-<cause>` class that sets `--cause`, and every chip, swatch and
+ * timeline mark takes its colour from that variable. States are grey.
+ */
+:root {
+  --bg: #f6f6f3;
+  --panel: #fff;
+  --ink: #1b1c1e;
+  --muted: #646770;
+  --line: #e1e1dc;
+  --soft: #f0f0ec;
+  --hover: #eceef7;
+  --accent: #3b5bdb;
+  --grey: #8a9099;
+  --warn-bg: #fff0e6;
+  --warn-ink: #b4410a;
+  --banner-bg: #fff3bf;
+  --banner-ink: #5c4400;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131416;
+    --panel: #1c1d20;
+    --ink: #e8e8e5;
+    --muted: #9b9da4;
+    --line: #2d2f33;
+    --soft: #25272b;
+    --hover: #262a38;
+    --accent: #7b93ff;
+    --warn-bg: #3a2414;
+    --warn-ink: #ffa66b;
+    --banner-bg: #3a3110;
+    --banner-ink: #ffd84d;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #131416;
+  --panel: #1c1d20;
+  --ink: #e8e8e5;
+  --muted: #9b9da4;
+  --line: #2d2f33;
+  --soft: #25272b;
+  --hover: #262a38;
+  --accent: #7b93ff;
+  --warn-bg: #3a2414;
+  --warn-ink: #ffa66b;
+  --banner-bg: #3a3110;
+  --banner-ink: #ffd84d;
+}
+
+/* Causes: the only colours on the page. */
+.c-by-design {
+  --cause: #5c7cfa;
+}
+.c-teammate-blocker {
+  --cause: #7048e8;
+}
+.c-human-choice {
+  --cause: #1c7ed6;
+}
+.c-harness-limit {
+  --cause: #f76707;
+}
+.c-permission-refusal {
+  --cause: #e03131;
+}
+.c-missing-config {
+  --cause: #e8b100;
+}
+.c-spec-gap {
+  --cause: #0ca678;
+}
+.c-skill-bug {
+  --cause: #ae3ec9;
+}
+.c-tool-missing {
+  --cause: #15aabf;
+}
+.c-other {
+  --cause: #d6336c;
+}
+
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font:
+    14px/1.5 system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+}
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+h1 {
+  font-size: 22px;
+  margin: 0 0 2px;
+}
+h2 {
+  font-size: 16px;
+  margin: 0 0 8px;
+}
+h3 {
+  font-size: 12px;
+  margin: 0 0 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+code,
+pre,
+.mono {
+  font-family: var(--mono);
+}
+code {
+  font-size: 12px;
+  background: var(--soft);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.banner {
+  background: var(--banner-bg);
+  color: var(--banner-ink);
+  padding: 8px 16px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--line);
+}
+.top {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.top .brand {
+  font-weight: 700;
+  color: var(--ink);
+}
+.top .grow {
+  flex: 1;
+}
+.top .built {
+  font-size: 12px;
+  color: var(--muted);
+}
+/* On a wide screen the long rebuild text wraps in its own box, so the theme button stays on the row. */
+@media (min-width: 900px) {
+  .top .built {
+    max-width: min(48rem, 60%);
+    text-align: right;
+  }
+}
+.top button {
+  font: inherit;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  border-radius: 6px;
+  padding: 3px 9px;
+  cursor: pointer;
+}
+.main {
+  padding: 18px 22px 60px;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+.page {
+  display: none;
+}
+.page.on {
+  display: block;
+}
+.js-off .page {
+  display: block;
+  margin-bottom: 40px;
+}
+.crumbs {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.muted {
+  color: var(--muted);
+}
+.small {
+  font-size: 12px;
+}
+.nowrap {
+  white-space: nowrap;
+}
+.warn {
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin: 6px 0;
+}
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.kpi {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.kpi b {
+  display: block;
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.kpi span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.sentence {
+  font-size: 15px;
+  margin: 4px 0 10px;
+}
+.callout {
+  border-left: 4px solid var(--accent);
+  background: var(--soft);
+  padding: 8px 12px;
+  border-radius: 0 8px 8px 0;
+  margin: 8px 0;
+}
+.dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  font-size: 13px;
+  margin: 0;
+}
+.dl dt {
+  color: var(--muted);
+}
+.dl dd {
+  margin: 0;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+th,
+td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  vertical-align: top;
+}
+th {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 12px;
+  white-space: nowrap;
+}
+td.num,
+th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.scroll {
+  overflow-x: auto;
+}
+.filters {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 10px;
+}
+select {
+  font: inherit;
+  font-size: 13px;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+}
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--line);
+  margin: 14px 0;
+  flex-wrap: wrap;
+}
+.tab {
+  padding: 7px 12px;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.tab.on {
+  color: var(--ink);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.tab:hover {
+  text-decoration: none;
+  color: var(--ink);
+}
+.tab .n {
+  font-size: 11px;
+  background: var(--soft);
+  border-radius: 99px;
+  padding: 0 6px;
+  margin-left: 4px;
+}
+
+/* Chips: a cause chip is coloured by its cause and always says avoidable or by design. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  padding: 1px 8px 1px 6px;
+  border-radius: 99px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  white-space: nowrap;
+}
+.sw {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  display: inline-block;
+  flex: none;
+  background: var(--cause);
+}
+.tag {
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--soft);
+  color: var(--muted);
+}
+.tag.avoid {
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+}
+/* States are grey, whatever they say. */
+.state {
+  display: inline-block;
+  font-size: 12px;
+  padding: 1px 8px;
+  border-radius: 99px;
+  border: 1px solid var(--line);
+  background: var(--soft);
+  color: var(--grey);
+  white-space: nowrap;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 5px 0;
+}
+.bar .lbl {
+  width: 170px;
+  flex: none;
+}
+.bar .val {
+  font: 12px var(--mono);
+  width: 36px;
+  text-align: right;
+}
+.track {
+  flex: 1;
+  height: 12px;
+  background: var(--soft);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.fill {
+  height: 100%;
+  background: var(--cause);
+}
+
+pre.log {
+  background: #0f1115;
+  color: #d6d9df;
+  font: 12px/1.55 var(--mono);
+  padding: 14px;
+  border-radius: 8px;
+  overflow: auto;
+  max-height: 70vh;
+  white-space: pre;
+  margin: 0;
+}
+pre.prose {
+  white-space: pre-wrap;
+}
+.btn {
+  font: inherit;
+  font-size: 12px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  border-radius: 6px;
+  padding: 3px 10px;
+  cursor: pointer;
+  margin-right: 6px;
+}
+.tools {
+  margin: 8px 0;
+}
+
+/* The timeline: marks take the colour of their cause; everything else is grey. */
+svg.timeline {
+  width: 100%;
+  height: auto;
+}
+svg.timeline text {
+  fill: var(--ink);
+  font-size: 11px;
+}
+svg.timeline .lane-bg {
+  fill: var(--soft);
+}
+svg.timeline .axis {
+  stroke: var(--line);
+}
+svg.timeline .mark {
+  stroke: var(--panel);
+  stroke-width: 1;
+}
+svg.timeline .human-step {
+  fill: var(--cause);
+}
+svg.timeline .wait {
+  fill: var(--cause);
+  opacity: 0.3;
+}
+svg.timeline .write {
+  fill: var(--grey);
+}
+svg.timeline .write.actor-chief-of-staff {
+  fill: var(--muted);
+}
+svg.timeline .write.actor-delegation {
+  fill: none;
+  stroke: var(--grey);
+  stroke-width: 1.5;
+}
+svg.timeline .delegation {
+  fill: var(--grey);
+  opacity: 0.55;
+}
+svg.timeline .landed {
+  fill: var(--ink);
+}
+svg.timeline .review,
+svg.timeline .ci {
+  fill: var(--grey);
+}
+svg.timeline a:hover .mark {
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* The repository pages. Charts that are not about a cause are grey: colour is the cause and nothing else. */
+.switcher {
+  font-size: 13px;
+}
+.bar.neutral .fill {
+  background: var(--grey);
+}
+.state.not-uploaded {
+  margin-right: 4px;
+}
+svg.chart {
+  width: 100%;
+  height: auto;
+  max-height: 340px;
+}
+svg.chart text {
+  fill: var(--muted);
+  font:
+    11px system-ui,
+    sans-serif;
+}
+svg.chart .axis {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+svg.chart .seg {
+  fill: var(--cause);
+}
+svg.chart a:hover .seg {
+  opacity: 0.75;
+}
+svg.chart .line {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.6;
+}
+svg.chart .dot {
+  fill: var(--ink);
+}
+ul.tree,
+ul.tree ul {
+  list-style: none;
+  margin: 0;
+  padding-left: 18px;
+}
+ul.tree {
+  padding-left: 0;
+}
+
+/* People, Person pages and Spec pages: figures side by side, in grey. A trend is not a cause. */
+.range {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  margin: 4px 0 10px;
+}
+[hidden] {
+  display: none !important;
+}
+svg.spark {
+  width: 84px;
+  height: 22px;
+}
+svg.spark .line {
+  fill: none;
+  stroke: var(--grey);
+  stroke-width: 1.4;
+}
+svg.spark .dot {
+  fill: var(--grey);
+}
+table[data-table="people"] td > div {
+  white-space: nowrap;
+}
+
+/* The live run board: a Kanban of Delegations, a Needs-you banner, a feed and a drawer. Colour still means cause. */
+.board-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .board-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.kanban {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(150px, 1fr));
+  gap: 10px;
+  overflow-x: auto;
+}
+.col {
+  background: var(--soft);
+  border-radius: 8px;
+  padding: 8px;
+  min-height: 120px;
+}
+.col h2 {
+  font-size: 13px;
+  margin: 0 0 8px;
+}
+.col h2 .n,
+.panel h2 .n {
+  color: var(--muted);
+  font-weight: 400;
+}
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.card .card-head {
+  color: var(--ink);
+  text-decoration: none;
+  display: block;
+  margin-bottom: 4px;
+}
+.card .wait,
+.card .badges {
+  margin-top: 6px;
+}
+.card.run-wait {
+  border-style: dashed;
+}
+.banner[hidden] {
+  display: none;
+}
+.needs {
+  border: 1px solid var(--warn-ink);
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+}
+.needs.none {
+  border-color: var(--line);
+  background: var(--panel);
+  color: var(--muted);
+}
+.needs ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: var(--ink);
+}
+.stale-warning {
+  margin-bottom: 12px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+.events {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+}
+.events li {
+  padding: 3px 0;
+  border-bottom: 1px solid var(--line);
+}
+.state.ruling {
+  text-decoration: none;
+}
+.drawer {
+  display: none;
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(560px, 100vw);
+  overflow-y: auto;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  box-shadow: -6px 0 24px rgba(0, 0, 0, 0.18);
+  padding: 16px 20px 40px;
+  z-index: 10;
+}
+.drawer.on {
+  display: block;
+}
+.drawer .close {
+  position: absolute;
+  top: 8px;
+  right: 14px;
+  font-size: 22px;
+  text-decoration: none;
+  color: var(--muted);
+}
+.drawer h3 {
+  font-size: 13px;
+  margin: 16px 0 6px;
+}
+.log {
+  font-family: var(--mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  background: var(--soft);
+  padding: 8px;
+  border-radius: 6px;
+  max-height: 360px;
+  overflow: auto;
+}

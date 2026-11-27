@@ -20,7 +20,7 @@ Agent-kit calls the list of GitHub logins allowed to trigger a run its "Allowlis
 
 ## Pinned tag
 
-Current pin: **`v1.0.0-beta.9`** (commit `fb9321333cb20caa5a6e1aeb564c9d72a3e151c5`).
+Current pin: **`v1.0.0-beta.11`** (commit `0e9debfa18e16e28a4409bf578606beb66f3d723`).
 
 Agent-kit uses a split contract: the reusable workflows are referenced remotely (`uses: …@<tag>`), and the files below are copied in **from the same tag**. Never mix tags.
 
@@ -31,9 +31,9 @@ These files are copied from the pinned tag and committed. They are an explicit e
 | Path | Used by |
 | --- | --- |
 | `.claude/skills/code-review/` | review flow; also replaces the user-level `code-review` skill inside this repo, so local reviews match CI |
-| `.claude/skills/security-audit/` | audit flow |
+| `.claude/skills/security-audit/` | audit flow (`full` and `pr` modes). A third mode, `deep` (`DEEP.md`, from v1.0.0-beta.10), runs through the `agent-kit deep-scan` launcher in a sandbox; not adopted here (no Scan recipe, no `deep-scan` Caller) |
 | `.claude/skills/security-finding-triage/` | triaging an audit advisory by hand |
-| `.claude/skills/security-response/` | responding to a confirmed finding by hand |
+| `.claude/skills/security-response/` | responding to a confirmed finding by hand, as a Security Response Run: a private local board in `tmp/security-response/<date>/` (gitignored by `tmp/`). Only its `close` writes `.security/findings-ledger.md`; `security-finding-triage` proposes a ledger row and never edits the ledger (v1.0.0-beta.10) |
 | `.claude/skills/explainer/` | optional: writing an Explainer Page by hand; no flow uses it |
 | `.claude/skills/instruction-drift-audit/` | optional: comparing repo-owned instructions to upstream docs by hand; no flow uses it |
 | `.claude/skills/qa-plan/` | by hand (`/qa-plan` on an open pull request): writes a QA Plan of the manual checks CI does not prove. Reads `qa.config.yml` |
@@ -257,7 +257,25 @@ Things to know here:
 
 - This repository is public, so rows and state labels are readable by anyone. Briefs, reports, Decision Requests and the Ruling Ledger stay in your run folder.
 - A Chief of Staff never assigns or reassigns a ticket, and never merges. The assignee and the merge are yours.
-- The tracker file writes state labels with `gh issue edit`. This repository's classic Projects field makes `gh pr edit` fail, and `gh issue view --json projectCards` fails the same way, so `gh issue edit` may too. If it does, the run writes the label with `gh api`, as the comment in `orchestrate.config.yml` says.
+- From v1.0.0-beta.11 the tracker file writes state labels, bodies and assignees through `gh api` REST endpoints, not `gh issue edit` ([agent-kit#389](https://github.com/mnaimfaizy/agent-kit/issues/389)), so this repository's classic Projects field no longer breaks a write. `scripts/development/pr-runner.sh` already edited pull requests through `gh api`.
+
+## Orchestrate: what v1.0.0-beta.11 adds
+
+- **Run Records and boards.** Every run writes Run Events, a Run Record (`tmp/orchestrate/records/`) and a live `board.html` into `run_dir`. `/orchestrate --dashboard` shows past runs. `run_dir` is `tmp/orchestrate`, gitignored by `tmp/`; `board.html` holds Activity Log prose, so it must stay gitignored. The `records` Sink is the private GitHub repository `mnaimfaizy/orchestrate-run-records`: close-out offers the upload after a disclosure, nothing uploads without a yes, and the upload needs the runner's `gh` login to have push access there (no token goes in the config). `prune` is unset, so the first close-out asks once whether to prune closed run folders at 90 days.
+- **Autonomous QA.** In a `go autonomous` run, approving QA in the Dispatch Plan means QA asks nothing mid-run: facts only you know are asked once in the plan, and the rest goes to a "QA held for you" list. The Chief of Staff never runs QA scenarios itself. Scoped QA Delegations (`d<issue>-qa<k>`) merge into one QA Report per head. `ready_to_merge.qa: report` stays.
+- **Integration review and landing.** A spec run reviews its whole integration branch before the pull request. `node .claude/skills/orchestrate/config.mjs regate <sha> --out <file>` re-gates a head with the `regate` commands, and `config.mjs land` lands work. `regate.allowed_failures` lists tests that also fail on `main`; there are none today (CI on `main` is green), so `regate` stays a plain list.
+- **Models.** `models` in `orchestrate.config.yml` mirrors the CI routing as Cursor CLI ids: analysis `claude-opus-5-5-medium` (Plan), build and review `claude-sonnet-5-5-high` (Implement, Review), and qa `claude-sonnet-5-5-high`. Security Audit and Review Response have no orchestrate role and stay in the repository variables.
+- **Foreground watch** (Cursor's heartbeat) is strictly read-only and fenced by a `watch.gen` generation id, and `--resume` verifies `decisions.md`, `report.md`, git, the tracker and CI instead of trusting `activity.md` lines.
+
+## QA: what v1.0.0-beta.11 adds
+
+- **QA Plans are `format=4`.** `qa-plan` and `manual-qa` must come from the same tag; an older `manual-qa` refuses a `format=4` plan, and this `manual-qa` refuses an older plan's mixed-Surface scenario. Re-plan any QA Plan written before this upgrade.
+- **API and web in one run.** `run.surface: [api, web]` in `qa.config.yml`. Each scenario still drives one Surface; a promise that needs both is planned as two scenarios.
+- **Mutating API calls.** `http.mjs` copies JSON fields between requests with `{{json:<n>:<path>}}`, so a scenario can read `data.csrf_token` from `GET /api/v1/auth/csrf-token` and send it as `X-CSRF-Token`.
+- **Playwright from `react-frontend/`.** `run.playwright: react-frontend` lets `web.mjs`, `storyboard.mjs` and `mp4.mjs` find Playwright without changing directory.
+- **Rate limits.** A `429` (or `503` with `Retry-After`) retries the scenario once from its first step when the wait is 60 seconds or less, and otherwise leaves it for a person. Sign-in is limited to 5/minute here.
+- **Short posted report.** The posted QA Report is a strict header plus a short summary. Items left for a person are tagged with a Place from `report.places` (`local`, `production` here); only `local` holds a merge.
+- **Multi-session videos in Scenes.** A scenario's **Story:** gives one sentence per Scene; the MP4 cuts between Sessions with a Title card per Scene and shows each role's sign-in.
 
 ## Upgrading
 
@@ -267,7 +285,7 @@ Use the `@mnaimfaizy/agent-kit` CLI, at the same version as the new tag. It need
 2. From a clean branch, run `upgrade`. It replaces every Kit-owned path (delete, then copy), rewrites all four `uses:` pins, prints the `examples/` diff, and runs the `doctor --ci` checks. It commits nothing:
 
    ```bash
-   TAG=v1.0.0-beta.9   # the new tag; the CLI version is the tag without the leading v
+   TAG=v1.0.0-beta.11   # the new tag; the CLI version is the tag without the leading v
    npx "@mnaimfaizy/agent-kit@${TAG#v}" upgrade --tag "$TAG"   # add --yes when there is no terminal
    ```
 

@@ -158,7 +158,8 @@ test("each scenario carries its fields, in order, numbered from S1", () => {
     "A failure means:",
     "If this fails, first rule out:",
   ];
-  const positions = labels.map((label) => scenarios.indexOf(`**${label}**`));
+  // Each field's own bullet, not a mention of it in another's prose.
+  const positions = labels.map((label) => scenarios.indexOf(`\n- **${label}**`));
   for (const [n, at] of positions.entries())
     assert.ok(at !== -1, `Scenarios lacks **${labels[n]}**`);
   assert.deepEqual(
@@ -196,16 +197,17 @@ test("the execution record is empty after compose", () => {
 });
 
 test("the marker line names the format, the subject and the pull request", () => {
-  assert.match(anatomy, /<!-- qa-plan format=3 subject=#\d+ pr=#\d+ -->/);
-  assert.doesNotMatch(anatomy, /<!-- qa-plan format=[12] subject=/);
+  assert.match(anatomy, /<!-- qa-plan format=4 subject=#\d+ pr=#\d+ -->/);
+  assert.doesNotMatch(anatomy, /<!-- qa-plan format=[123] subject=/);
 });
 
 test("ANATOMY.md says which formats a copy reads, and which fields each format carries", () => {
   const shape = section("Shape");
-  assert.match(shape, /The composer writes `format=3`/);
-  assert.match(shape, /reads `format=1`, `format=2` and `format=3`/);
+  assert.match(shape, /The composer writes `format=4`/);
+  assert.match(shape, /reads `format=1`, `format=2`, `format=3` and `format=4`/);
   assert.match(shape, /A `format=1` plan carries no per-scenario field/);
   assert.match(shape, /A `format=2` plan carries no \*\*Capture:\*\* or \*\*Expected before:\*\*/);
+  assert.match(shape, /A `format=3` plan carries no \*\*Story:\*\*: it is `format=4` or later/);
   assert.match(shape, /naming the field and the format it needs/);
   assert.match(shape, /refuses any other `format`/);
 });
@@ -230,13 +232,13 @@ test("a scenario may carry its own Surface, after its sign-in fields and before 
 test("SKILL.md writes plans in this format and delivers by the same marker", () => {
   assert.match(skill, /\[ANATOMY\.md\]\(ANATOMY\.md\)/);
   assert.match(skill, /`_Not run yet\._`/);
-  assert.match(skill, /the marker on line 1 with `format=3`/);
+  assert.match(skill, /the marker on line 1 with `format=4`/);
   // A revision still finds the plan it replaces when that plan was written in an older format.
   assert.match(
     skill,
-    /`<!-- qa-plan format=1 subject=#<n> `, `<!-- qa-plan format=2 subject=#<n> ` or `<!-- qa-plan format=3 subject=#<n> `/,
+    /`<!-- qa-plan format=1 subject=#<n> `, `<!-- qa-plan format=2 subject=#<n> `, `<!-- qa-plan format=3 subject=#<n> ` or `<!-- qa-plan format=4 subject=#<n> `/,
   );
-  assert.match(skill, /the same marker with `format=1` or `format=2`/);
+  assert.match(skill, /the same marker with `format=1`, `format=2` or `format=3`/);
 });
 
 test("SKILL.md step 6 picks each scenario's surface from what its expected result observes", () => {
@@ -253,6 +255,7 @@ test("SKILL.md step 6 picks each scenario's surface from what its expected resul
   assert.match(flat, /The app itself is seen on `desktop` or `mobile`/);
   assert.match(flat, /The Run brief's \*\*Surface:\*\* is the one most scenarios use/);
   assert.match(flat, /`run\.surface` in the config is only the starting default/);
+  assert.match(flat, /When `run\.surface` lists several Surfaces/);
   assert.match(flat, /\[ANATOMY\.md\]\(ANATOMY\.md#scenarios\)/);
 });
 
@@ -272,6 +275,10 @@ test("SKILL.md step 6 writes **Observes:** when not every driver of the surface 
     flat,
     /`local-file` on a surface whose driver can open a `file:\/\/` address, as `manual-qa`'s step 4 table gives it/,
   );
+  assert.match(
+    flat,
+    /one scenario per Surface, each with its own setup so neither depends on the other's state/,
+  );
 });
 
 test("SKILL.md composes a multi-session scenario when a promise needs two people at once", () => {
@@ -281,6 +288,123 @@ test("SKILL.md composes a multi-session scenario when a promise needs two people
   );
   assert.match(skill, /\[ANATOMY\.md\]\(ANATOMY\.md#sessions\)/);
   assert.match(skill, /Never fold the second person into a step's prose/);
+});
+
+/** The text of ANATOMY.md's `#### Scenes and Cuts`, the last part of its Scenarios section. */
+function scenesAndCuts() {
+  const scenarios = section("Scenarios");
+  const from = scenarios.indexOf("\n#### Scenes and Cuts\n");
+  assert.notEqual(from, -1, "ANATOMY.md has no `#### Scenes and Cuts`");
+  return scenarios.slice(from + 1);
+}
+
+test("ANATOMY.md defines Scenes and Cuts, and the shot list at each Cut", () => {
+  const text = scenesAndCuts().replace(/\s+/g, " ");
+  assert.match(text, /A run of consecutive steps in one Session is a \*\*Scene\*\*/);
+  assert.match(text, /A step whose Session is not the previous step's is a \*\*Cut\*\*/);
+  assert.match(text, /A single-session scenario is one Scene/);
+  assert.match(
+    text,
+    /\*\*At each Cut, show the new Session's on-screen result before the story moves on\.\*\*/,
+  );
+  assert.match(text, /A Scene ends on what its person sees, never on a click/);
+  assert.match(text, /no check reads it/);
+});
+
+test("ANATOMY.md says a Scenario account's Scene opens already signed in", () => {
+  const text = scenesAndCuts().replace(/\s+/g, " ");
+  assert.match(
+    text,
+    /A Scene that opens a Session signed in as a \[Scenario account\]\(#scenario-accounts\)\*\* has a sentence that says the person is already signed in/,
+  );
+  assert.match(text, /its sign-in is never on camera/);
+});
+
+test("ANATOMY.md gives an api-shaped promise with a screen a sibling web video scenario", () => {
+  const text = scenesAndCuts().replace(/\s+/g, " ");
+  assert.match(text, /\*\*An `api`-shaped promise whose product has a screen gets a sibling\.\*\*/);
+  assert.match(
+    text,
+    /add a sibling `Surface: web`, `Capture: video` multi-session scenario that tells the story on screen/,
+  );
+  assert.match(text, /The sibling earns its Residue place only by what the screen shows/);
+});
+
+test("ANATOMY.md's worked example is the four-beat story, in three Scenes with a Story each", () => {
+  const text = scenesAndCuts();
+  assert.match(
+    text.replace(/\s+/g, " "),
+    /four beats: the user is signed in, the admin's confirming screen, the user reloads, and the user lands on the sign-in page/,
+  );
+  const example = /```markdown\n([\s\S]*?)```/.exec(text)?.[1];
+  assert.ok(example, "Scenes and Cuts has no example");
+  assert.match(example, /^### S3: An admin's password reset ends the user's session$/m);
+  assert.match(example, /^- \*\*Sessions:\*\* A = `user`, B = `admin`$/m);
+  assert.match(example, /^- \*\*Capture:\*\* `video`$/m);
+  const block = (label) => {
+    const from = example.indexOf(`- **${label}:**\n`);
+    assert.notEqual(from, -1, `the example has no **${label}:** list`);
+    const body = example.slice(from).split("\n").slice(1);
+    const end = body.findIndex((line) => !line.startsWith("  "));
+    return body.slice(0, end).map((line) => line.trim());
+  };
+  assert.deepEqual(block("Story"), [
+    "1. The user signs in and opens their profile.",
+    "2. The admin signs in, sets a new password for the user, and sees it saved.",
+    "3. The user reloads their profile and lands on the sign-in page.",
+  ]);
+  assert.deepEqual(block("Steps"), [
+    "1. In session A, open **Profile**.",
+    "2. In session B, open **Users**, pick the user, click **Set password**, and see **Password updated**.",
+    "3. In session A, reload **Profile**.",
+    "4. In session A, see the page it lands on.",
+  ]);
+  // The Scenes the steps make, one Story sentence each.
+  const order = block("Steps").map((step) => /In session ([A-Z]),/.exec(step)[1]);
+  assert.equal(
+    order.filter((name, k) => k === 0 || name !== order[k - 1]).length,
+    block("Story").length,
+  );
+  assert.match(
+    example,
+    /^- \*\*Expected result:\*\* session A shows \*\*Sign in to continue\*\*; session B shows \*\*Password updated\*\*\.$/m,
+  );
+});
+
+test("SKILL.md plans a multi-session story in Scenes, with the shot list at each Cut", () => {
+  const flat = skill.replace(/\s+/g, " ");
+  assert.match(
+    flat,
+    /at each Cut, show the new Session's on-screen result before the story moves on \(\[ANATOMY\.md\]\(ANATOMY\.md#scenes-and-cuts\)\)/,
+  );
+  assert.match(flat, /A Scene ends on what its person sees, not on a click/);
+  assert.match(
+    flat,
+    /four beats: the user signed in, the admin's confirming screen, the user's reload, and the user landing on the sign-in page/,
+  );
+  assert.match(flat, /ANATOMY\.md's S3 is the worked example/);
+});
+
+test("SKILL.md gives a video scenario a Story, one sentence per Scene", () => {
+  const flat = skill.replace(/\s+/g, " ");
+  assert.match(
+    flat,
+    /Give a `Capture: video` scenario a \*\*Story:\*\*, right after its \*\*Capture:\*\*: one sentence per Scene, in order, in the product's own words and under the same public-text rules as \*\*Expected result:\*\*/,
+  );
+  assert.match(flat, /A single-session scenario is one Scene, so one sentence/);
+  assert.match(
+    flat,
+    /When a Scene opens a Session signed in as a Scenario account, its sentence says the person is already signed in/,
+  );
+});
+
+test("SKILL.md gives an api-shaped promise with a screen a sibling web video scenario", () => {
+  const flat = skill.replace(/\s+/g, " ");
+  assert.match(
+    flat,
+    /add a sibling `Surface: web`, `Capture: video` multi-session scenario that tells the story on screen/,
+  );
+  assert.match(flat, /The sibling earns its Residue place only by what the screen shows/);
 });
 
 test("Setup and Steps carry product actions only, and say what to do with a command-only promise (#199)", () => {
@@ -434,6 +558,16 @@ test("a promise only reading can check is a `Review:` box, never a scenario (#20
   assert.match(draft, /name each `Review:` box to the person/);
 });
 
+test("a `Review:` box names the Place where a person checks it, from the configured list (#416)", () => {
+  const signOff = section("Sign-off checklist").replace(/\s+/g, " ");
+  assert.match(signOff, /`- \[ \] Review: \[<place>\] <what to read, and what it must say>`/);
+  assert.match(signOff, /`- \[ \] Review: \[local\] docs\/x\.html says the token lasts 30 days`/);
+  assert.match(signOff, /`report\.places`/);
+  assert.match(signOff, /With Places turned off, the box carries no Place/);
+  const compose = skill.split(/^### /m).find((part) => part.startsWith("6. ")) ?? "";
+  assert.match(compose.replace(/\s+/g, " "), /`Review: \[<place>\] <text>`.*configured Places/);
+});
+
 test("a scenario may say what its run captures, after Observes and before Steps (format=3)", () => {
   const scenarios = section("Scenarios");
   const labels = [...scenarios.matchAll(/^- \*\*([^*]+):\*\*/gm)].map((m) => m[1]);
@@ -451,6 +585,40 @@ test("a scenario may say what its run captures, after Observes and before Steps 
   assert.match(capture, /once at most/);
   assert.match(capture, /`format=3` or later/);
   assert.match(section("Shape"), /\*\*Capture:\*\* and \*\*Signs in as:\*\*/);
+});
+
+test("a scenario tells its story, one sentence per Scene, right after Capture and before Steps (format=4)", () => {
+  const scenarios = section("Scenarios");
+  const labels = [...scenarios.matchAll(/^- \*\*([^*]+):\*\*/gm)].map((m) => m[1]);
+  assert.equal(labels[labels.indexOf("Capture") + 1], "Story", labels.join(" · "));
+  assert.ok(labels.indexOf("Story") < labels.indexOf("Steps"), labels.join(" · "));
+  const story = scenarios.split("\n").find((line) => line.startsWith("- **Story:**"));
+  assert.match(
+    story,
+    /a numbered list with one sentence per \[Scene\]\(#scenes-and-cuts\), in order/,
+  );
+  assert.match(story, /under the same public-text rules as \*\*Expected result:\*\*/);
+  assert.match(story, /read as plain text: the plan reader strips paired inline Markdown/);
+  assert.match(story, /A single-session scenario is one Scene/);
+  assert.match(
+    story,
+    /each step whose `In session <name>,` differs from the previous step's is a Cut and starts a new Scene/,
+  );
+  assert.match(
+    story,
+    /A Scene that opens a Session signed in as a \[Scenario account\]\(#scenario-accounts\) says the person is already signed in/,
+  );
+  assert.match(story, /wherever \*\*Capture:\*\* would sit when it has none/);
+  assert.match(story, /once at most/);
+  assert.match(
+    story,
+    /refuses a Story whose sentence count differs from the Scenes its steps make, naming the scenario and both counts, and a `Capture: video` scenario without one/,
+  );
+  assert.match(story, /`format=4` or later/);
+  assert.match(
+    story,
+    /a `format=3` or older plan's `Capture: video` scenario carries no Story, and still reads/,
+  );
 });
 
 test("a fix scenario carries Expected before, right after Expected result (format=3)", () => {

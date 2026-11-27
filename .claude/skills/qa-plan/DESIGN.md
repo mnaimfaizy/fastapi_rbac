@@ -20,7 +20,15 @@ These are word for word the definitions in Agent-kit's root glossary, where a co
 
 **Session**: One signed-in identity in a QA Plan's scenario, with cookies and storage no other session shares; a scenario has one or more.
 
-**Surface**: What a scenario drives (`web`, `desktop`, `mobile` or `api`). The Run brief gives the plan's default; a scenario may override it.
+**Cut**: A step in a multi-session scenario whose Session is not the previous step's; the story moves to that Session there, and it shows that Session's own on-screen result before it moves on.
+
+**Scene**: A run of consecutive steps in one Session, from the scenario's first step or a Cut up to the next Cut; a single-session scenario is one Scene.
+
+**Title card**: The full-frame board, one centred sentence from the plan, that opens each Scene in a scenario's MP4 and heads its steps in the Storyboard.
+
+**Story**: A QA Plan scenario's field giving one sentence per Scene, in order and in the product's own words; each sentence opens its Scene on a Title card in the MP4 and heads that Scene's steps in the Storyboard.
+
+**Surface**: What a scenario drives (`web`, `desktop`, `mobile` or `api`). Each scenario drives exactly one. The Run brief gives the plan's default; a scenario may override it. A run may drive several, one per scenario, and a promise that needs two is planned as two scenarios.
 
 **Driver**: The tool a run uses to drive a Surface. It can observe some things and not others.
 
@@ -34,7 +42,13 @@ These are word for word the definitions in Agent-kit's root glossary, where a co
 
 **Storyboard**: The QA Artifact for a scenario with a screen: a band naming the scenario, the result, each side's expected and observed text and the commits, above numbered steps with Before beside After.
 
-**QA Report**: The self-contained Markdown file `manual-qa` writes for one run of one QA Plan: the build it checked, one row per scenario with one of five results (PASS, FAIL: regression, FAIL: pre-existing, Not proven, or left for a person), and the evidence.
+**QA Report**: The self-contained Markdown file `manual-qa` writes for one run of one QA Plan: the build it checked, one row per scenario with one of five results (PASS, FAIL: regression, FAIL: pre-existing, Not proven, or left for a person), and the evidence. The pull request gets a short summary of it, with a strict header; the full file stays local.
+
+**Place**: Where a person checks an item left for a person: `local`, `staging` and `production` by default, or the names a repository configures. A Place that holds a merge counts as left for a person in the posted summary; any other is deferred and never holds.
+
+## A Review box names its Place
+
+A `Review:` box is something only a person can check, but not always before the merge: a staging mail or a production page waits on a deploy. So each box names a Place (`Review: [local] …`), drawn from the config's `report.places`, and the posted QA Report counts the ones in a Place that holds a merge as left for a person and the rest as deferred (ADR 0033). The plan check refuses a Place that is not in the list, so a typo cannot hide an item from the count; with Places turned off, a box carries none.
 
 ## Two skills, one format
 

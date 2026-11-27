@@ -34,13 +34,31 @@
 //       applied, answers merged in), the harness and tracker reports, and
 //       readiness: what the run still needs to ask for, and notes to say.
 //       Prints JSON; exits 1 on any problem, 2 on bad usage.
+//   node config.mjs regate <sha> --out <file> [--repo <dir>]
+//       runs the config's `regate` commands in a detached worktree at <sha>
+//       (made beside <file>, which must be inside the run folder, and removed
+//       after), writes each command's result to <file>, and exits 1 when any
+//       failure is not on `regate.allowed_failures`, naming it.
+//   node config.mjs land <branch> --cut <sha> --onto <integration>
+//       --fence <glob>... [--repo <dir>]
+//       the checks before a ticket lands on a spec's integration branch, then
+//       `git update-ref refs/heads/<integration> <new> <old>`. Never merges,
+//       rebases or pushes. Prints JSON; exits 1 naming the cause of a refusal.
 //   node config.mjs where orchestrate [--repo <dir>]
 //       whether this copy of the skill is the repository's own, or the
 //       repository has its own copy to load instead (`whichCopy`). Prints
 //       JSON; exits 0, 2 on bad usage.
 
-import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -195,6 +213,19 @@ export function harnessCandidates(env = process.env) {
   return HARNESS_ENV.filter((rule) => rule.when(env)).map((rule) => rule.harness);
 }
 
+/** The `refusal` codes `land` prints (CONFIG.md names each one). */
+export const LAND_REFUSALS = /** @type {const} */ ([
+  "unknown-ref",
+  "not-descended",
+  "outside-fence",
+  "checked-out",
+  "not-fast-forward",
+  "moved",
+]);
+
+/** `regate` as a mapping: the commands, and the tests that fail on the default branch too. */
+export const REGATE_KEYS = /** @type {const} */ (["commands", "allowed_failures"]);
+export const ALLOWED_FAILURE_KEYS = /** @type {const} */ (["test", "reason"]);
 export const SPEC_KEYS = /** @type {const} */ (["landing", "integration_branch"]);
 export const LANDINGS = /** @type {const} */ (["ask", "integration-branch", "per-ticket"]);
 
@@ -203,6 +234,28 @@ export const TRACKERS = /** @type {const} */ (["detect", "github", "gitlab"]);
 /** The hosts detection knows. Any other host, a self-hosted GitLab included, needs the pin. */
 export const TRACKER_HOSTS = Object.freeze({ "github.com": "github", "gitlab.com": "gitlab" });
 export const TEAM_KEYS = /** @type {const} */ (["labels", "recent_activity"]);
+/** `records`' keys (CONFIG.md): the Run Record sink and whether close-out offers an upload. */
+export const RECORDS_KEYS = /** @type {const} */ (["repository", "upload", "sink", "raw"]);
+/** `records.raw`'s keys: the one sink raw run folders go to, which can only be a bucket. */
+export const RAW_KEYS = /** @type {const} */ (["sink"]);
+export const RAW_SINK_TYPES = /** @type {const} */ (["s3"]);
+const RAW_SINK_ONLY = "`s3` only";
+export const RECORDS_UPLOADS = /** @type {const} */ (["offer", "never"]);
+/** The Run Record sink types this reader knows. */
+export const SINK_TYPES = /** @type {const} */ (["github", "gitlab", "s3"]);
+export const SINK_KEYS = /** @type {const} */ ([
+  "type",
+  "repo",
+  "branch",
+  "endpoint",
+  "bucket",
+  "region",
+]);
+/** The keys only an `s3` sink uses, and the keys only a git sink uses. */
+const S3_SINK_KEYS = ["endpoint", "bucket", "region"];
+const GIT_SINK_KEYS = ["repo", "branch"];
+/** `prune`'s keys (CONFIG.md): local pruning of closed-out run folders, off until `after_days` is set. */
+export const PRUNE_KEYS = /** @type {const} */ (["after_days"]);
 /** A Team Run's six coarse states, each mirrored by one state label on a ticket. */
 export const TEAM_STATES = /** @type {const} */ ([
   "planned",
@@ -249,6 +302,7 @@ export const DEFAULTS = Object.freeze({
   integration_branch: "orchestrate/spec-<n>",
   tracker: "detect",
   recent_activity: 5,
+  upload: "offer",
   team_labels: Object.freeze(
     Object.fromEntries(TEAM_STATES.map((state) => [state, `team: ${state.replaceAll("_", " ")}`])),
   ),
@@ -693,9 +747,163 @@ function branchPatternProblem(v) {
   return bad ? "expected a valid git branch name once `<n>` is filled in" : null;
 }
 
+/**
+ * `host/owner/repo`, three plain segments, or `host/<group>/…/<project>` for a GitLab project in a subgroup.
+ * An owner or group starts with a letter, a digit or `_`, as `records.mjs`'s REPO has it.
+ */
+const REPOSITORY = /^[A-Za-z0-9][A-Za-z0-9.-]*(?:\/\w[\w.-]*){1,20}\/[\w.-]+$/;
+/** A sink repository: `owner/name`, or `host/owner/name` for another host. */
+const SINK_REPO = /^(?:[A-Za-z0-9][A-Za-z0-9.-]*\/)?[\w.-]+\/[\w.-]+$/;
+/** A `gitlab` sink project may sit in subgroups: `group/sub/name`, with an optional `host/` in front. */
+const GITLAB_SINK_REPO = /^[\w.-]+(?:\/[\w.-]+){1,21}$/;
+
+/**
+ * A value shaped like a credential: an AWS access key id or secret, a token,
+ * a private key, a password in a URL, or a presigned signature. The check is on
+ * shape, never on the key's name, and the value is never echoed. A name
+ * (`repo`, `bucket`, `endpoint`) skips the last check, a long mixed-case run,
+ * which an ordinary repository or host name can match.
+ */
+function looksLikeSecret(value, { name = false } = {}) {
+  if (typeof value !== "string") return false;
+  if (/\b(?:AKIA|ASIA|AGPA|AIDA|AROA)[A-Z0-9]{16}\b/.test(value)) return true;
+  if (
+    /(?:gh[pousr]_|github_pat_)[A-Za-z0-9_]{20,}|glpat-[\w-]{20,}|xox[abprs]-|sk-[A-Za-z0-9]{20,}/.test(
+      value,
+    )
+  )
+    return true;
+  if (/-----BEGIN [A-Z ]*PRIVATE KEY/.test(value)) return true;
+  if (/:\/\/[^/\s@]*@/.test(value)) return true;
+  if (/X-Amz-(?:Signature|Credential|Security-Token)=/i.test(value)) return true;
+  if (name) return false;
+  return (value.match(/[A-Za-z0-9/+=]{40,}/g) ?? []).some(
+    (run) => /[a-z]/.test(run) && /[A-Z]/.test(run) && /\d/.test(run),
+  );
+}
+
+/** The sink keys that hold a name, not a value that could be a credential. */
+const NAME_KEYS = ["repo", "bucket", "endpoint"];
+
+/** A bucket name: 3 to 63 lowercase letters, digits, dots and hyphens, as S3 and its compatibles accept. */
+const BUCKET = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
+/** A region: `us-east-1`, `eu-central-1`, R2's `auto`. */
+const REGION = /^[a-z][a-z0-9-]{1,30}$/;
+
+/** An endpoint: an https URL with a host, no credentials, no query and no path (`http` only on this machine). */
+function validEndpoint(value) {
+  if (typeof value !== "string") return false;
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  const local = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+  return (
+    (url.protocol === "https:" || (url.protocol === "http:" && local)) &&
+    url.username === "" &&
+    url.password === "" &&
+    url.search === "" &&
+    url.hash === "" &&
+    url.pathname === "/"
+  );
+}
+
+/** A repository name matching `pattern`, with no `.` or `..` segment. */
+const plainRepo = (pattern, v) =>
+  typeof v === "string" && pattern.test(v) && v.split("/").every((part) => !/^\.+$/.test(part));
+
+/** A branch name `git check-ref-format --branch` accepts, as far as the reader can tell without git. */
+function validBranch(v) {
+  if (!nonEmpty(v)) return false;
+  return !(
+    /[\x00-\x20\x7f~^:?*[\\]/.test(v) ||
+    v.startsWith("-") ||
+    v.includes("..") ||
+    v.includes("@{") ||
+    v === "@" ||
+    v.endsWith(".") ||
+    v.split("/").some((part) => part === "" || part.startsWith(".") || part.endsWith(".lock"))
+  );
+}
+
 const isCount = (v) =>
   (typeof v === "number" && Number.isSafeInteger(v) && v >= 1) ||
   (typeof v === "string" && /^[1-9]\d{0,8}$/.test(v));
+
+/**
+ * Check one sink mapping at `base` (`records.sink` or `records.raw.sink`).
+ * `types` are the types allowed there and `expected` is how a problem names them:
+ * the raw-folder sink is `s3` only, so a `github` one is a problem even though
+ * it is a sink type.
+ */
+function checkSink(sink, s, base, types, expected) {
+  if (!isMapping(s)) return sink.add(base, "expected a mapping");
+  unknownKeys(sink, s, base, SINK_KEYS);
+  const secret = new Set(
+    Object.entries(s)
+      .filter(([k, v]) => looksLikeSecret(v, { name: NAME_KEYS.includes(k) }))
+      .map(([k]) => k),
+  );
+  if (!Object.hasOwn(s, "type"))
+    sink.add(
+      `${base}.type`,
+      `missing: ${types === RAW_SINK_TYPES ? RAW_SINK_ONLY : `one of ${expected}`}`,
+    );
+  // A secret-looking type is reported below as a secret, and never printed back.
+  else if (given(sink, s, "type", `${base}.type`) && !secret.has("type") && !types.includes(s.type))
+    sink.add(
+      `${base}.type`,
+      types === RAW_SINK_TYPES
+        ? `\`${s.type}\` cannot hold raw run folders: ${RAW_SINK_ONLY}, because only a bucket can expire them`
+        : `unknown sink type \`${s.type}\`; expected one of: ${expected}`,
+    );
+  for (const key of secret)
+    sink.add(
+      `${base}.${key}`,
+      "looks like a secret: credentials come only from ORCHESTRATE_S3_ACCESS_KEY_ID and ORCHESTRATE_S3_SECRET_ACCESS_KEY, never from the config. Remove it",
+    );
+  const here = (key) => given(sink, s, key, `${base}.${key}`) && !secret.has(key);
+  if (s.type === "s3") {
+    for (const key of GIT_SINK_KEYS)
+      if (here(key)) sink.add(`${base}.${key}`, "not used by an `s3` sink: delete it");
+    // A key with no value is reported once, by `here` below; only an absent key is missing.
+    for (const key of S3_SINK_KEYS)
+      if (!Object.hasOwn(s, key))
+        sink.add(
+          `${base}.${key}`,
+          `missing: ${{ endpoint: "the store's https URL, such as `https://<account>.r2.cloudflarestorage.com`", bucket: "the bucket's name", region: "the bucket's region, such as `us-east-1` (`auto` for R2)" }[key]}`,
+        );
+    if (here("endpoint") && !validEndpoint(s.endpoint))
+      sink.add(
+        `${base}.endpoint`,
+        "expected an https URL with a host and nothing else: no password, path or query (http only for localhost)",
+      );
+    if (here("bucket") && !(typeof s.bucket === "string" && BUCKET.test(s.bucket)))
+      sink.add(
+        `${base}.bucket`,
+        "expected a bucket name: 3 to 63 lowercase letters, digits, dots or hyphens",
+      );
+    if (here("region") && !(typeof s.region === "string" && REGION.test(s.region)))
+      sink.add(`${base}.region`, "expected a region, such as `us-east-1` or `auto`");
+    return;
+  }
+  if (types === RAW_SINK_TYPES) return;
+  for (const key of S3_SINK_KEYS)
+    if (here(key)) sink.add(`${base}.${key}`, "only an `s3` sink uses this: delete it");
+  if (!Object.hasOwn(s, "repo"))
+    sink.add(`${base}.repo`, "missing: the private repository, `owner/name` or `host/owner/name`");
+  else if (here("repo") && !plainRepo(s.type === "gitlab" ? GITLAB_SINK_REPO : SINK_REPO, s.repo))
+    sink.add(
+      `${base}.repo`,
+      s.type === "gitlab"
+        ? "expected `group/name` or `host/group/name`, with any subgroups between"
+        : "expected `owner/name` or `host/owner/name`",
+    );
+  if (here("branch") && !validBranch(s.branch))
+    sink.add(`${base}.branch`, "expected a valid git branch name");
+}
 
 /**
  * The checker for each top-level key, in CONFIG.md's order. A mode that needs
@@ -721,7 +929,30 @@ export const SECTIONS = {
     stringMapping(sink, value, "routes", ROUTE_KEYS);
   },
   regate(sink, value) {
-    distinctList(sink, value, "regate", nonEmpty, "a command", "commands");
+    // A list of commands, or a mapping of `commands` and `allowed_failures`.
+    if (!isMapping(value))
+      return distinctList(sink, value, "regate", nonEmpty, "a command", "commands");
+    unknownKeys(sink, value, "regate", REGATE_KEYS);
+    if (!Object.hasOwn(value, "commands"))
+      sink.add("regate.commands", "expected a list of commands");
+    else if (given(sink, value, "commands", "regate.commands"))
+      distinctList(sink, value.commands, "regate.commands", nonEmpty, "a command", "commands");
+    if (!given(sink, value, "allowed_failures", "regate.allowed_failures")) return;
+    const list = value.allowed_failures;
+    const path = "regate.allowed_failures";
+    if (!Array.isArray(list)) return sink.add(path, "expected a list of failing tests");
+    const seen = new Set();
+    list.forEach((item, n) => {
+      const at = `${path}[${n}]`;
+      if (!isMapping(item)) return sink.add(at, "expected a mapping with `test` and `reason`");
+      unknownKeys(sink, item, at, ALLOWED_FAILURE_KEYS);
+      for (const key of ALLOWED_FAILURE_KEYS)
+        if (!nonEmpty(item[key])) sink.add(`${at}.${key}`, "expected a non-empty string");
+      if (nonEmpty(item.test)) {
+        if (seen.has(item.test)) sink.add(at, `\`${item.test}\` is listed twice`);
+        seen.add(item.test);
+      }
+    });
   },
   skills(sink, value) {
     stringMapping(sink, value, "skills", SKILL_KEYS);
@@ -887,6 +1118,34 @@ export const SECTIONS = {
         sink.add(path, `\`${labels[state]}\` is also the label for \`${names.get(name)}\``);
       else names.set(name, state);
     }
+  },
+  records(sink, value) {
+    if (!isMapping(value)) return sink.add("records", "expected a mapping");
+    unknownKeys(sink, value, "records", RECORDS_KEYS);
+    if (
+      given(sink, value, "repository", "records.repository") &&
+      (!plainRepo(REPOSITORY, value.repository) ||
+        (/^github\.com\//i.test(value.repository) && value.repository.split("/").length !== 3))
+    )
+      sink.add(
+        "records.repository",
+        "expected `host/owner/repo`, such as `github.com/acme/widgets`, or `host/group/sub/project` for a GitLab subgroup",
+      );
+    if (given(sink, value, "upload", "records.upload") && !RECORDS_UPLOADS.includes(value.upload))
+      sink.add("records.upload", `expected one of: ${RECORDS_UPLOADS.join(", ")}`);
+    if (given(sink, value, "sink", "records.sink"))
+      checkSink(sink, value.sink, "records.sink", SINK_TYPES, SINK_TYPES.join(", "));
+    if (!given(sink, value, "raw", "records.raw")) return;
+    if (!isMapping(value.raw)) return sink.add("records.raw", "expected a mapping");
+    unknownKeys(sink, value.raw, "records.raw", RAW_KEYS);
+    if (given(sink, value.raw, "sink", "records.raw.sink"))
+      checkSink(sink, value.raw.sink, "records.raw.sink", RAW_SINK_TYPES, RAW_SINK_ONLY);
+  },
+  prune(sink, value) {
+    if (!isMapping(value)) return sink.add("prune", "expected a mapping");
+    unknownKeys(sink, value, "prune", PRUNE_KEYS);
+    if (given(sink, value, "after_days", "prune.after_days") && !isCount(value.after_days))
+      sink.add("prune.after_days", "expected a whole number of 1 or more");
   },
 };
 
@@ -1085,11 +1344,15 @@ export function effectiveConfig(config) {
   const ready = section("ready_to_merge");
   const spec = section("spec");
   const team = section("team");
+  const records = section("records");
+  const prune = section("prune");
+  const sinkValue = isMapping(records.sink) ? records.sink : null;
   return {
     run_dir: config.run_dir ?? DEFAULTS.run_dir,
     read_first: Array.isArray(config.read_first) ? config.read_first : null,
     routes: pick(routes, ROUTE_KEYS),
-    regate: Array.isArray(config.regate) ? config.regate : null,
+    regate: regateCommands(config.regate),
+    regate_allowed_failures: regateAllowed(config.regate),
     skills: pick(section("skills"), SKILL_KEYS),
     triage_labels: triageLabels(config.triage_labels),
     models: pick(section("models"), MODEL_KEYS),
@@ -1111,6 +1374,38 @@ export function effectiveConfig(config) {
       integration_branch: spec.integration_branch ?? DEFAULTS.integration_branch,
     },
     tracker: config.tracker ?? DEFAULTS.tracker,
+    records: {
+      repository: records.repository ?? null,
+      upload: records.upload ?? DEFAULTS.upload,
+      sink: sinkValue
+        ? sinkValue.type === "s3"
+          ? {
+              type: "s3",
+              endpoint: sinkValue.endpoint ?? null,
+              bucket: sinkValue.bucket ?? null,
+              region: sinkValue.region ?? null,
+            }
+          : {
+              type: sinkValue.type ?? null,
+              repo: sinkValue.repo ?? null,
+              branch: sinkValue.branch ?? null,
+            }
+        : null,
+      raw: {
+        sink:
+          isMapping(records.raw) && isMapping(records.raw.sink) && records.raw.sink.type === "s3"
+            ? {
+                type: "s3",
+                endpoint: records.raw.sink.endpoint ?? null,
+                bucket: records.raw.sink.bucket ?? null,
+                region: records.raw.sink.region ?? null,
+              }
+            : null,
+      },
+    },
+    prune: {
+      after_days: prune.after_days === undefined ? null : Number(prune.after_days),
+    },
     team: {
       // Trimmed, as the tracker trims a label name, so a run names and compares it as `check` did.
       labels: isMapping(team.labels)
@@ -1212,6 +1507,20 @@ export function readiness({ path, config, problems, qaConfig = null }) {
   return { ready: needs.length === 0, needs, notes };
 }
 
+/** The re-gate commands, whether `regate` is a list or a mapping; null when unset. */
+function regateCommands(value) {
+  const list = isMapping(value) ? value.commands : value;
+  return Array.isArray(list) ? list : null;
+}
+
+/** The tests the re-gate may see fail, each `{ test, reason }`; none when `regate` is a list. */
+function regateAllowed(value) {
+  const list = isMapping(value) ? value.allowed_failures : null;
+  return Array.isArray(list)
+    ? list.filter(isMapping).map(({ test, reason }) => ({ test, reason }))
+    : [];
+}
+
 const SKILL_NOTES = {
   implement: "a building brief names no skill to implement with",
   triage: "an issue that is not ready for an agent is analysed with no named skill",
@@ -1308,6 +1617,303 @@ function whichCopyCommand(argv, io) {
   return { code: 0, out: `${JSON.stringify(result, null, 2)}\n` };
 }
 
+// ── Re-gate and landing ─────────────────────────────────────────────────────
+//
+// What the Chief of Staff typed by hand for every landing (SPEC.md, "On an
+// integration branch", item 5): the re-gate in a detached worktree, the
+// comparison of its failures to the known ones, and the checks before the
+// integration branch moves. Both commands shell out to git in the repository
+// they are run from, and touch nothing but the refs and worktrees named below.
+
+const git = (repo, args, options = {}) =>
+  execFileSync("git", ["-C", repo, ...args], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    ...options,
+  });
+
+/** The commit `rev` names, or null. */
+function commitOf(repo, rev) {
+  try {
+    return git(repo, ["rev-parse", "--verify", "--quiet", `${rev}^{commit}`]).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+const isAncestor = (repo, ancestor, descendant) => {
+  try {
+    git(repo, ["merge-base", "--is-ancestor", ancestor, descendant]);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Options for a gate command: `single` ones take one value each, `many` ones
+ * take every value up to the next `--` option. The positionals come first.
+ * Null on any other argument, a repeated single option, or a missing value.
+ */
+function gateArgs(rest, positionals, single, many = []) {
+  const positional = [];
+  let n = 0;
+  while (n < positionals && rest[n] !== undefined && !rest[n].startsWith("--"))
+    positional.push(rest[n++]);
+  if (positional.length !== positionals) return null;
+  const options = {};
+  for (const name of many) options[name] = [];
+  while (n < rest.length) {
+    const name = rest[n++];
+    if (many.includes(name)) {
+      const start = n;
+      while (n < rest.length && !rest[n].startsWith("--")) options[name].push(rest[n++]);
+      if (n === start) return null;
+    } else if (single.includes(name)) {
+      if (rest[n] === undefined || rest[n].startsWith("--") || Object.hasOwn(options, name))
+        return null;
+      options[name] = rest[n++];
+    } else return null;
+  }
+  return { positional, options };
+}
+
+// ANSI colour codes would hide a name from the patterns below.
+const plain = (text) => text.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "");
+
+/**
+ * The tests a command's output says failed, and how many it says it counted:
+ * `{ failed: [{ name, id }], reported }`, `reported` null when it says none.
+ * Reads Node's test runner (the `failing tests:` summary, which lists leaf
+ * tests only, and `ℹ fail <n>`) and pytest (`FAILED <id>` and `ERROR <id>`
+ * lines, and its `<n> failed` and `<n> errors` count).
+ */
+export function failedTests(output) {
+  const lines = plain(output).split(/\r?\n/);
+  const failed = [];
+  let reported = null;
+  const count = (n) => (reported = (reported ?? 0) + Number(n));
+  const summary = lines.findIndex((line) => /^✖ failing tests:\s*$/.test(line));
+  if (summary >= 0)
+    for (const line of lines.slice(summary + 1)) {
+      const m = /^✖ (.+?) \(\d+(?:\.\d+)?ms\)\s*$/.exec(line);
+      if (m) failed.push({ name: m[1], id: m[1] });
+    }
+  for (const line of lines) {
+    const node = /^ℹ fail (\d+)\s*$/.exec(line);
+    if (node) count(node[1]);
+    const py = /^(?:FAILED|ERROR) (\S+?)(?: - .*)?$/.exec(line);
+    if (py) failed.push({ name: py[1].split("::").pop(), id: py[1] });
+    if (/^=*\s*(?:\d+ \w+, )*\d+ \w+.* in [\d.]+s/.test(line))
+      for (const m of line.matchAll(/(\d+) (?:failed|errors?)\b/g)) count(m[1]);
+  }
+  return { failed, reported };
+}
+
+/** A failure line no test name accounts for, such as pytest-cov's `FAIL Required test coverage`. */
+const OTHER_FAILURE =
+  /^FAIL(?!ED)\b|Required test coverage|coverage .*(?:not reached|below|too low)/im;
+
+/** What one finished command makes of the allowed list: which failures are allowed, and which are not. */
+function judge(command, code, output, allowedTests) {
+  if (code === 0) return { allowed: [], unallowed: [] };
+  const { failed, reported } = failedTests(output);
+  // A list excuses named test failures only. A test runner exits 1 when tests failed; any other
+  // code (pytest's 2 to 5) or a failure line the tests do not name is a failure the list cannot excuse.
+  const other = [];
+  if (code !== 1) other.push(`\`${command}\` exited ${code}, not 1: not a test failure`);
+  else if (OTHER_FAILURE.test(plain(output)))
+    other.push(
+      `\`${command}\` printed a failure that is not a named test (such as a coverage threshold)`,
+    );
+  const found = [...new Map(failed.map((f) => [f.id, f])).values()];
+  const listed = (f) => allowedTests.has(f.name) || allowedTests.has(f.id);
+  const allowed = found.filter(listed).map((f) => f.id);
+  const unallowed = found.filter((f) => !listed(f)).map((f) => f.id);
+  if (!found.length) unallowed.push(`\`${command}\` exited ${code}, and named no failing test`);
+  else if (reported === null)
+    unallowed.push(`\`${command}\` named failing tests but printed no count of them`);
+  else if (reported > found.length)
+    unallowed.push(
+      `\`${command}\`: ${reported} failed, but only ${found.length} named in its output`,
+    );
+  return { allowed, unallowed: [...unallowed, ...other] };
+}
+
+/**
+ * `regate <sha> --out <file>`: null on bad arguments. The commands come from
+ * this repository's own config, never from the commit under test, so a ticket
+ * cannot change what checks it.
+ */
+function regateCommand(rest, io) {
+  const parsed = gateArgs(rest, 1, ["--out", "--repo"]);
+  if (!parsed || parsed.options["--out"] === undefined) return null;
+  const refuse = (message) => ({ code: 2, out: `${message}\n` });
+  const repo = resolve(io.cwd ?? process.cwd(), parsed.options["--repo"] ?? ".");
+  const loaded = readConfig(io.read ?? repoReader(repo), {
+    answers: null,
+    exists: io.exists ?? ((path) => existsSync(join(repo, path))),
+  });
+  if (loaded.problems.length)
+    return refuse(`the config has problems; run \`check\`:\n${loaded.problems.join("\n")}`);
+  const effective = effectiveConfig(loaded.config);
+  if (effective.regate === null) return refuse("the config sets no `regate`: nothing to run");
+  const out = resolve(repo, parsed.options["--out"]);
+  const runDir = resolve(repo, effective.run_dir);
+  if (!inside(runDir, out))
+    return refuse(`\`--out\` must be inside the run folder \`${effective.run_dir}\``);
+  const sha = commitOf(repo, parsed.positional[0]);
+  if (sha === null) return refuse(`\`${parsed.positional[0]}\` is not a commit in this repository`);
+
+  const allowedTests = new Set(effective.regate_allowed_failures.map((a) => a.test));
+  const reasons = new Map(effective.regate_allowed_failures.map((a) => [a.test, a.reason]));
+  const results = [];
+  mkdirSync(dirname(out), { recursive: true });
+  const worktree = join(dirname(out), `regate-${sha.slice(0, 12)}-${process.pid}`);
+  try {
+    git(repo, ["worktree", "add", "--detach", "--quiet", worktree, sha]);
+  } catch (error) {
+    return refuse(`cannot make the worktree: ${String(error.stderr ?? error).trim()}`);
+  }
+  try {
+    for (const command of effective.regate) {
+      const done = spawnSync(command, {
+        cwd: worktree,
+        shell: true,
+        encoding: "utf8",
+        maxBuffer: 1 << 28,
+      });
+      const output = `${done.stdout ?? ""}${done.stderr ?? ""}${done.error ? `\n${done.error}` : ""}`;
+      const code = done.status ?? 1;
+      results.push({ command, code, ...judge(command, code, output, allowedTests), output });
+    }
+  } finally {
+    try {
+      git(repo, ["worktree", "remove", "--force", worktree]);
+    } catch {
+      rmSync(worktree, { recursive: true, force: true });
+      git(repo, ["worktree", "prune"]);
+    }
+  }
+  const ok = results.every((r) => r.unallowed.length === 0);
+  writeFileSync(out, `${JSON.stringify({ sha, ok, results }, null, 2)}\n`);
+
+  const lines = [`re-gate at ${sha}`];
+  if (!results.length)
+    lines.push("no re-gate commands: a finished branch is checked by its CI alone");
+  for (const r of results) {
+    if (r.unallowed.length)
+      lines.push(`FAILED \`${r.command}\`:`, ...r.unallowed.map((u) => `  ${u}`));
+    else if (r.allowed.length)
+      lines.push(
+        `allowed \`${r.command}\`:`,
+        ...r.allowed.map((name) => `  ${name} (${reasons.get(name) ?? "on the allowed list"})`),
+      );
+    else lines.push(`ok \`${r.command}\``);
+  }
+  lines.push(`${ok ? "re-gate passed" : "re-gate FAILED"}; results in ${relative(repo, out)}`);
+  return { code: ok ? 0 : 1, out: `${lines.join("\n")}\n` };
+}
+
+/** A glob as a regular expression: `**` crosses folders, `*` and `?` stay in one; a trailing `/` is the whole folder. */
+export function globToRegExp(glob) {
+  const pattern = glob.endsWith("/") ? `${glob}**` : glob;
+  let source = "";
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i];
+    if (c === "*" && pattern[i + 1] === "*") {
+      const slash = pattern[i + 2] === "/";
+      source += slash ? "(?:.*/)?" : ".*";
+      i += slash ? 2 : 1;
+    } else if (c === "*") source += "[^/]*";
+    else if (c === "?") source += "[^/]";
+    else source += c.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+  }
+  return new RegExp(`^${source}$`);
+}
+
+/**
+ * `land <branch> --cut <sha> --onto <integration> --fence <glob>...`: null on
+ * bad arguments. Moves `refs/heads/<integration>` and nothing else.
+ */
+function landCommand(rest, io) {
+  const parsed = gateArgs(rest, 1, ["--cut", "--onto", "--repo"], ["--fence"]);
+  if (!parsed) return null;
+  const { options } = parsed;
+  if (
+    options["--cut"] === undefined ||
+    options["--onto"] === undefined ||
+    !options["--fence"].length
+  )
+    return null;
+  const repo = resolve(io.cwd ?? process.cwd(), options["--repo"] ?? ".");
+  const [branch] = parsed.positional;
+  const onto = options["--onto"];
+  const refusal = (reason, cause, extra = {}) => {
+    if (!LAND_REFUSALS.includes(reason)) throw new Error(`unknown refusal code ${reason}`);
+    return {
+      code: 1,
+      out: `${JSON.stringify({ landed: false, branch, onto, refusal: reason, cause, ...extra }, null, 2)}\n`,
+    };
+  };
+
+  const head = commitOf(repo, branch);
+  if (head === null) return refusal("unknown-ref", `\`${branch}\` is not a branch or commit`);
+  const cut = commitOf(repo, options["--cut"]);
+  if (cut === null)
+    return refusal("unknown-ref", `the cut \`${options["--cut"]}\` is not a commit`);
+  const old = commitOf(repo, `refs/heads/${onto}`);
+  if (old === null)
+    return refusal("unknown-ref", `the integration branch \`${onto}\` is not a local branch`);
+
+  if (!isAncestor(repo, cut, head))
+    return refusal("not-descended", `\`${branch}\` (${head}) does not descend from the cut ${cut}`);
+
+  const changed = (from) =>
+    git(repo, ["diff", "--name-only", "--no-renames", "-z", from, head])
+      .split("\0")
+      .filter(Boolean);
+  // With the integration branch an ancestor, the move changes exactly diff(old, head): that is
+  // what the fence must hold, whatever the merge resolved. Otherwise the move is refused below.
+  const paths = isAncestor(repo, old, head) ? changed(old) : changed(cut);
+  const fence = options["--fence"].map(globToRegExp);
+  const outside = paths.filter((path) => !fence.some((re) => re.test(path))).sort();
+  if (outside.length)
+    return refusal(
+      "outside-fence",
+      `${outside.length} changed path${outside.length === 1 ? " is" : "s are"} outside the fence: ${outside.join(", ")}`,
+      { paths: outside },
+    );
+
+  const holder = git(repo, ["worktree", "list", "--porcelain"])
+    .split(/\r?\n\r?\n/)
+    .find((block) => block.split(/\r?\n/).includes(`branch refs/heads/${onto}`));
+  if (holder)
+    return refusal(
+      "checked-out",
+      `\`${onto}\` is checked out in ${/^worktree (.+)$/m.exec(holder)?.[1]}: moving it would leave that working copy showing the landed work as changes undone`,
+    );
+
+  if (!isAncestor(repo, old, head))
+    return refusal(
+      "not-fast-forward",
+      `\`${onto}\` (${old}) is not an ancestor of \`${branch}\` (${head}): it moved after the branch was cut; merge it into the branch first`,
+    );
+
+  try {
+    git(repo, ["update-ref", `refs/heads/${onto}`, head, old]);
+  } catch (error) {
+    return refusal(
+      "moved",
+      `\`update-ref\` refused: \`${onto}\` is no longer at ${old} (${String(error.stderr ?? error).trim()})`,
+    );
+  }
+  return {
+    code: 0,
+    out: `${JSON.stringify({ landed: true, branch, onto, old, new: head }, null, 2)}\n`,
+  };
+}
+
 // ── CLI ─────────────────────────────────────────────────────────────────────
 
 /** A repository file's text, or null when it is not there; any other failure throws. */
@@ -1328,7 +1934,9 @@ const inside = (dir, path) => {
 };
 
 const USAGE =
-  "usage: node config.mjs check [--answers <file.json>] [--repo <dir>] | where <skill> [--repo <dir>]\n";
+  "usage: node config.mjs check [--answers <file.json>] [--repo <dir>] | where <skill> [--repo <dir>]\n" +
+  "       node config.mjs regate <sha> --out <file> [--repo <dir>]\n" +
+  "       node config.mjs land <branch> --cut <sha> --onto <integration> --fence <glob>... [--repo <dir>]\n";
 
 /**
  * @param {string[]} argv the arguments after the script
@@ -1339,6 +1947,8 @@ export function main(argv, io = {}) {
   const usage = { code: 2, out: USAGE };
   const [command, ...rest] = argv;
   if (command === "where") return whichCopyCommand(argv, io) ?? usage;
+  if (command === "regate") return regateCommand(rest, io) ?? usage;
+  if (command === "land") return landCommand(rest, io) ?? usage;
   if (command !== "check") return usage;
   const options = {};
   for (let n = 0; n < rest.length; n += 2) {

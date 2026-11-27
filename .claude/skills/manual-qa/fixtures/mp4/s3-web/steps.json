@@ -1,0 +1,39 @@
+{
+  "steps": [
+    {
+      "session": "A",
+      "index": 1,
+      "caption": "The member's dashboard",
+      "still": "step-01-a.png",
+      "subject": null,
+      "text": null,
+      "atMs": 2200,
+      "withheld": null
+    },
+    {
+      "session": "B",
+      "index": 2,
+      "caption": "The admin's sessions page, the member's session ended",
+      "still": "step-02-b.png",
+      "subject": null,
+      "text": null,
+      "atMs": 4400,
+      "withheld": null
+    },
+    {
+      "session": "A",
+      "index": 3,
+      "caption": "The member's page after a reload",
+      "still": "step-03-a.png",
+      "subject": null,
+      "text": null,
+      "atMs": 6000,
+      "withheld": null
+    }
+  ],
+  "sessions": {
+    "A": { "startedAtMs": 200, "video": "video-a.webm" },
+    "B": { "startedAtMs": 400, "video": "video-b.webm" }
+  },
+  "error": null
+}

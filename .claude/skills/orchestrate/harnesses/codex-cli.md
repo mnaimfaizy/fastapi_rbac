@@ -16,7 +16,7 @@
 - `await`: the process's end. The heartbeat is the foreground watch ([HARNESSES.md](../HARNESSES.md#waiting-an-event-and-a-heartbeat)): while the run waits on a Delegation, the Chief of Staff does not end its turn, and the process's end is one more change the watch sees.
 - `report`: the report file, which `--add-dir` makes writable.
 - Analysis: a sub-agent (`spawn_agent`); `send_input` reaches it running or ended, and its end is announced. It shares the Chief of Staff's checkout.
-- A QA Delegation: a headless run, with `$qa-plan <n> [--answers <working_dir>/qa-readiness.json]` and later `$manual-qa <plan file>` sent by `resume`, and a browser through an MCP server. Else a session the human starts: a Codex desktop-app chat in that worktree, which has a browser. With `go`, that is the typed route; with `go autonomous`, on a `stack` target, the same session follows its brief instead, reading each QA skill's `SKILL.md` from the paths the brief gives, so no command is sent or typed. A `url` target stays on the typed route.
+- A QA Delegation: a headless run, with `$qa-plan <n> [--answers <working_dir>/qa-readiness.json]` and later `$manual-qa <plan file>` sent by `resume`, and a browser through an MCP server. Else a session the human starts: a Codex desktop-app chat in that worktree, which has a browser. With `go`, that is the typed route; with `go autonomous`, on a `stack` or a `url` target, the same session follows its brief instead, reading each QA skill's `SKILL.md` from the paths the brief gives, so no command is sent or typed. A `url` target runs from the brief too, with its hosts typed in the Dispatch Plan and relayed through the brief.
 
 ## Limits
 
@@ -28,6 +28,7 @@
 
 ## Check before use
 
+- Whether a QA session accepts a host relayed through its brief: that it checks it again with `adapter.mjs host` before any sign-in, and holds its scenarios (never asks) when it refuses it. A harness whose session does not holds every scenario of a `url` target. Record what was found.
 - How long a foreground shell command, and a turn, may run, since the foreground watch depends on both. A shell tool's own time limit could cut the watch short (not yet confirmed).
 - Whether `$qa-plan` in a resumed prompt counts as the user's own invocation.
 - Whether `--approve-for-me`, or an allow rule, approves a `git push`.

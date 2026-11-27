@@ -16,7 +16,7 @@
 - `await`: the background shell's end, which a Chief of Staff in OpenCode is told of; elsewhere, the process's end. The heartbeat is the foreground watch ([HARNESSES.md](../HARNESSES.md#waiting-an-event-and-a-heartbeat)): while the run waits on a Delegation, the Chief of Staff does not end its turn, and the announced end is one more change the watch sees. Whether it wakes an idle Chief of Staff is not relied on.
 - `report`: the absolute path; OpenCode allows writes outside the worktree by default.
 - Analysis: the `subagent` tool with `explore` or a read-only custom agent; it takes messages running or ended, and tells the parent each time it goes idle. It shares the Chief of Staff's checkout.
-- A QA Delegation: a headless run as for building, then a message that names the skill ("Load the `qa-plan` skill and run it for #<n> [--answers <working_dir>/qa-readiness.json]"), and later `manual-qa <plan file>`. Else a session the human opens (`opencode --session <id>`, or the desktop app), where the human types the two commands. With `go`, that is the typed route; with `go autonomous`, on a `stack` target, the same session follows its brief instead, reading each QA skill's `SKILL.md` from the paths the brief gives, so no command is sent or typed. A `url` target stays on the typed route.
+- A QA Delegation: a headless run as for building, then a message that names the skill ("Load the `qa-plan` skill and run it for #<n> [--answers <working_dir>/qa-readiness.json]"), and later `manual-qa <plan file>`. Else a session the human opens (`opencode --session <id>`, or the desktop app), where the human types the two commands. With `go`, that is the typed route; with `go autonomous`, on a `stack` or a `url` target, the same session follows its brief instead, reading each QA skill's `SKILL.md` from the paths the brief gives, so no command is sent or typed. A `url` target runs from the brief too, with its hosts typed in the Dispatch Plan and relayed through the brief.
 
 ## Limits
 
@@ -26,6 +26,7 @@
 
 ## Check before use
 
+- Whether a QA session accepts a host relayed through its brief: that it checks it again with `adapter.mjs host` before any sign-in, and holds its scenarios (never asks) when it refuses it. A harness whose session does not holds every scenario of a `url` target. Record what was found.
 - How long a foreground shell command, and a turn, may run, since the foreground watch depends on both. A shell tool's own time limit could cut the watch short (not yet confirmed).
 - Whether the human can type into a session while `run` drives it. If they can, OpenCode is a tier 1 harness for building.
 - Whether a `--session` message to a session still working steers it or fails.

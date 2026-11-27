@@ -1,0 +1,2 @@
+{"at":"2026-11-17T21:14:00Z","kind":"delegation-started","actor":"delegation","delegation":"d258-qa","issue":258,"delegation_kind":"qa","executor":"live-session","model":"default","start_route":"card"}
+{"at":"2026-11-17T21:28:00Z","kind":"delegation-ended","actor":"delegation","delegation":"d258-qa","outcome":"qa-pass"}

@@ -44,6 +44,8 @@ before(async () => {
         path: req.url,
         cookie: req.headers.cookie ?? null,
         csrf: req.headers["x-csrf-token"] ?? null,
+        pin: req.headers["x-pin"] ?? null,
+        otp: req.headers["x-otp"] ?? null,
         body,
       });
       const url = new URL(req.url, "http://x");
@@ -86,6 +88,10 @@ before(async () => {
       if (url.pathname === "/ids") {
         res.writeHead(200, { "content-type": "application/json" });
         return res.end('{"id":9007199254740993,"ratio":1.0,"dup":1,"dup":2}');
+      }
+      if (url.pathname === "/snowflake") {
+        res.writeHead(200, { "content-type": "application/json" });
+        return res.end('{"id":1234567890123456789,"ratio":1.0,"exp":1e3}');
       }
       if (url.pathname === "/self") {
         res.writeHead(200, { "content-type": "text/plain" });
@@ -177,6 +183,56 @@ before(async () => {
       if (url.pathname === "/boom") {
         res.writeHead(500, { "content-type": "text/plain" });
         return res.end("server error");
+      }
+      if (url.pathname === "/api/v1/auth/csrf-token") {
+        res.writeHead(200, {
+          "content-type": "application/json",
+          "set-cookie": ["fastapi-csrf-token=SIGNED.sig; Path=/; HttpOnly"],
+        });
+        return res.end(JSON.stringify({ data: { csrf_token: "UNSIGNED" } }));
+      }
+      if (url.pathname === "/api/v1/protected") {
+        res.writeHead(200, {
+          "content-type": "application/json",
+          "x-echo-csrf": req.headers["x-csrf-token"] ?? "",
+        });
+        return res.end(
+          JSON.stringify({
+            ok: true,
+            echoed: req.headers["x-csrf-token"] ?? null,
+            cookie: req.headers.cookie ?? null,
+          }),
+        );
+      }
+      if (url.pathname === "/resources") {
+        res.writeHead(200, { "content-type": "application/json" });
+        return res.end(
+          JSON.stringify({
+            data: {
+              id: 42,
+              obj: { nested: "x" },
+              flag: true,
+              empty: null,
+              jwt: ["eyJhbGciOiJIUzI1NiJ9", "eyJzdWIiOiIxIn0", "c2lnbmF0dXJl"].join("."),
+            },
+            auth: { code: "s3cr3t-anc3stor" },
+            items: [{ id: "itm_99" }],
+          }),
+        );
+      }
+      if (url.pathname === "/short-secret") {
+        res.writeHead(200, { "content-type": "application/json" });
+        return res.end(
+          JSON.stringify({ data: { pin: "200", otp: "1" }, note: "count 200 and step 1" }),
+        );
+      }
+      if (url.pathname.startsWith("/verify")) {
+        res.writeHead(200, { "content-type": "application/json" });
+        return res.end(JSON.stringify({ verified: true }));
+      }
+      if (url.pathname.startsWith("/users/")) {
+        res.writeHead(200, { "content-type": "application/json" });
+        return res.end(JSON.stringify({ user: url.pathname.slice("/users/".length) }));
       }
       res.writeHead(404);
       res.end();
@@ -839,6 +895,318 @@ test("ADAPTER.md's example sequence takes each cookie from a Session that holds 
 test("ADAPTER.md documents the sequence format and the redaction rule", () => {
   assert.match(adapterDoc, /## The api driver/);
   assert.match(adapterDoc, /\{\{env:QA_/);
+  assert.match(adapterDoc, /\{\{json:<n>:<path>\}\}/);
   assert.match(adapterDoc, /\[redacted:cookie <name>\]/);
   assert.match(adapterDoc, /\[redacted:<VARIABLE>\]/);
+  assert.match(adapterDoc, /\[redacted:request <n> <path>\]/);
+  assert.match(adapterDoc, /by `\{\{json:<n>:<path>\}\}` reference only/);
+});
+
+// ── {{json:<n>:<path>}} references ──────────────────────────────────────────
+
+test("{{json:<n>:<path>}} fills a CSRF header from an earlier JSON body and redacts it by body rules", async () => {
+  const start = seen.length;
+  const result = await run({
+    requests: [
+      { session: "A", method: "GET", path: "/api/v1/auth/csrf-token" },
+      {
+        session: "A",
+        method: "POST",
+        path: "/api/v1/protected",
+        headers: { "X-CSRF-Token": "{{json:1:data.csrf_token}}" },
+        capture: ["X-Echo-Csrf"],
+      },
+    ],
+  });
+  assert.equal(result.code, 0, result.stdout + result.stderr);
+  const [, protectedReq] = seen.slice(start);
+  assert.equal(protectedReq.csrf, "UNSIGNED");
+  assert.match(protectedReq.cookie, /fastapi-csrf-token=SIGNED\.sig/);
+  assert.doesNotMatch(result.log, /UNSIGNED/);
+  assert.doesNotMatch(result.log, /SIGNED\.sig/);
+  assert.doesNotMatch(result.stdout, /UNSIGNED/);
+  assert.match(result.log, /X-CSRF-Token from request 1, session A/);
+  assert.match(result.log, /\[redacted:request 1 data\.csrf_token\]/);
+  assert.match(result.log, /set-cookie: fastapi-csrf-token=\[redacted:cookie fastapi-csrf-token\]/);
+});
+
+test("{{json:<n>:<path>}} refuses non-earlier request numbers and malformed paths at check time", async () => {
+  const invalid = [
+    [{ method: "GET", path: "/users/{{json:1:data.id}}" }],
+    [
+      { method: "GET", path: "/resources" },
+      { method: "GET", path: "/users/{{json:3:id}}" },
+    ],
+    [
+      { method: "GET", path: "/resources" },
+      { method: "GET", path: "/users/{{json:2:id}}" },
+    ],
+    [
+      { method: "GET", path: "/resources" },
+      { method: "GET", path: "/users/{{json:0:id}}" },
+    ],
+    [
+      { method: "GET", path: "/resources" },
+      { method: "GET", path: "/users/{{json:1:}}" },
+    ],
+    [
+      { method: "GET", path: "/resources" },
+      { method: "GET", path: "/users/{{json:1:.id}}" },
+    ],
+    [
+      { method: "GET", path: "/resources" },
+      { method: "GET", path: "/users/{{json:1:id.}}" },
+    ],
+    [
+      { method: "GET", path: "/resources" },
+      { method: "GET", path: "/users/{{json:1:a..b}}" },
+    ],
+    [
+      { method: "GET", path: "/resources" },
+      { method: "GET", path: "/users/{{json:1:items[0].id}}" },
+    ],
+    [
+      { method: "GET", path: "/resources" },
+      { method: "GET", path: "/users/{{json:1:a b}}" },
+    ],
+    [
+      { method: "GET", path: "/resources" },
+      { method: "GET", path: "/users/{{json:1}}" },
+    ],
+  ];
+  for (const requests of invalid) {
+    const problems = checkSequence({ requests }, ENV);
+    assert.ok(problems.length > 0, `expected refusal for ${JSON.stringify(requests)}`);
+  }
+
+  const start = seen.length;
+  const refused = await run({
+    requests: [
+      { method: "GET", path: "/resources" },
+      { method: "GET", path: "/users/{{json:3:id}}" },
+    ],
+  });
+  assert.equal(refused.code, 1);
+  assert.equal(seen.length, start, "no request is sent when checkSequence refuses");
+  assert.equal(refused.log, null);
+
+  // Accepted in path, secret headers, json, form and raw body.
+  const okProblems = checkSequence(
+    {
+      requests: [
+        { method: "GET", path: "/resources" },
+        {
+          method: "POST",
+          path: "/users/{{json:1:data.id}}?token={{json:1:data.csrf_token}}",
+          headers: {
+            "X-CSRF-Token": "{{json:1:data.csrf_token}}",
+            Authorization: "Bearer {{json:1:data.jwt}}",
+          },
+          json: { token: "{{json:1:data.csrf_token}}" },
+        },
+        {
+          method: "POST",
+          path: "/echo",
+          form: { token: "{{json:1:items.0.id}}" },
+        },
+        {
+          method: "POST",
+          path: "/echo",
+          body: "token={{json:1:items.0.id}}",
+        },
+      ],
+    },
+    ENV,
+  );
+  assert.deepEqual(okProblems, []);
+});
+
+test("{{json:<n>:<path>}} stops before sending when the referenced field is missing, non-JSON, or not a string/number", async () => {
+  // Missing field
+  let start = seen.length;
+  let result = await run({
+    requests: [
+      { method: "GET", path: "/resources" },
+      { method: "GET", path: "/users/{{json:1:data.missing}}" },
+      { method: "GET", path: "/me" },
+    ],
+  });
+  assert.equal(result.code, 1);
+  assert.equal(JSON.parse(result.stdout).completed, false);
+  assert.equal(seen.length, start + 1, "request 2 and 3 are not sent");
+  assert.match(result.log, /request 2 not sent: request 1's body has no data\.missing/);
+
+  // Array prototype / non-digit property on an array must not resolve
+  start = seen.length;
+  result = await run({
+    requests: [
+      { method: "GET", path: "/resources" },
+      { method: "GET", path: "/users/{{json:1:items.length}}" },
+    ],
+  });
+  assert.equal(result.code, 1);
+  assert.equal(seen.length, start + 1);
+  assert.match(result.log, /request 2 not sent: request 1's body has no items\.length/);
+
+  // Non-JSON response body
+  start = seen.length;
+  result = await run({
+    requests: [
+      { method: "GET", path: "/text" },
+      { method: "GET", path: "/users/{{json:1:data.id}}" },
+    ],
+  });
+  assert.equal(result.code, 1);
+  assert.equal(JSON.parse(result.stdout).completed, false);
+  assert.equal(seen.length, start + 1);
+  assert.match(result.log, /request 2 not sent: request 1's response was not JSON/);
+
+  // Object, array, boolean, and null values are refused at run time
+  for (const field of ["data.obj", "items", "data.flag", "data.empty"]) {
+    start = seen.length;
+    result = await run({
+      requests: [
+        { method: "GET", path: "/resources" },
+        { method: "GET", path: `/users/{{json:1:${field}}}` },
+      ],
+    });
+    assert.equal(result.code, 1, field);
+    assert.equal(JSON.parse(result.stdout).completed, false, field);
+    assert.equal(seen.length, start + 1, field);
+    assert.match(
+      result.log,
+      new RegExp(
+        `request 2 not sent: request 1's ${field.replace(/\./g, "\\.")} is not a string or number`,
+      ),
+    );
+  }
+});
+
+test("{{json:<n>:<path>}} shares values across Sessions without altering either Session's cookie jar", async () => {
+  const start = seen.length;
+  const result = await run({
+    requests: [
+      signIn("A"),
+      { session: "A", method: "GET", path: "/api/v1/auth/csrf-token" },
+      {
+        session: "B",
+        method: "POST",
+        path: "/api/v1/protected",
+        headers: { "X-CSRF-Token": "{{json:2:data.csrf_token}}" },
+      },
+      { session: "A", method: "GET", path: "/me" },
+      { session: "B", method: "GET", path: "/me" },
+    ],
+  });
+  assert.equal(result.code, 0, result.stdout + result.stderr);
+  const [, , postB, meA, meB] = seen.slice(start);
+  assert.equal(postB.csrf, "UNSIGNED");
+  assert.equal(postB.cookie, null, "Session B sends no Session A cookies");
+  assert.match(meA.cookie, /(?:^|; )sid=s3ss10n-value-\d+-abcdef/);
+  assert.match(meA.cookie, /fastapi-csrf-token=SIGNED\.sig/);
+  assert.equal(meB.cookie, null, "Session B's cookie jar stays empty");
+  assert.match(
+    result.log,
+    /X-CSRF-Token from request 2, session A: \[redacted:request 2 data\.csrf_token\]/,
+  );
+});
+
+test("a non-secret id copied into a path stays readable, while token-shaped or secret-ancestor values redact", async () => {
+  const start = seen.length;
+  const result = await run({
+    requests: [
+      { session: "A", method: "GET", path: "/resources" },
+      { session: "A", method: "GET", path: "/users/{{json:1:data.id}}" },
+      { session: "A", method: "GET", path: "/users/{{json:1:items.0.id}}" },
+      {
+        session: "A",
+        method: "POST",
+        path: "/echo",
+        json: { note: "{{json:1:data.jwt}}", extra: "{{json:1:auth.code}}" },
+      },
+    ],
+  });
+  assert.equal(result.code, 0, result.stdout + result.stderr);
+  const [, userReq, itemReq, echoReq] = seen.slice(start);
+  assert.equal(userReq.path, "/users/42");
+  assert.equal(itemReq.path, "/users/itm_99");
+  assert.equal(JSON.parse(echoReq.body).extra, "s3cr3t-anc3stor");
+  assert.match(result.log, /^## 2\. A GET \/users\/42$/m);
+  assert.match(result.log, /^## 3\. A GET \/users\/itm_99$/m);
+  assert.match(result.log, /path from request 1, session A: 42/);
+  assert.match(result.log, /path from request 1, session A: itm_99/);
+  assert.doesNotMatch(result.log, /eyJhbGciOiJIUzI1NiJ9|s3cr3t-anc3stor/);
+  assert.match(result.log, /\[redacted:request 1 data\.jwt\]/);
+  assert.match(result.log, /\[redacted:request 1 auth\.code\]/);
+});
+
+test("short secret-named JSON values neither corrupt unrelated log text nor leak in the using request", async () => {
+  const start = seen.length;
+  const result = await run({
+    requests: [
+      { session: "A", method: "GET", path: "/short-secret" },
+      {
+        session: "A",
+        method: "POST",
+        path: "/verify/{{json:1:data.pin}}",
+        headers: { "X-Pin": "{{json:1:data.pin}}", "X-Otp": "{{json:1:data.otp}}" },
+        json: { pin: "{{json:1:data.pin}}", otp: "{{json:1:data.otp}}" },
+      },
+      {
+        session: "A",
+        method: "GET",
+        path: "/verify?code={{json:1:data.otp}}",
+      },
+    ],
+  });
+  assert.equal(result.code, 0, result.stdout + result.stderr);
+  const [, verifyReq, queryReq] = seen.slice(start);
+  assert.equal(verifyReq.path, "/verify/200");
+  assert.equal(verifyReq.pin, "200");
+  assert.equal(verifyReq.otp, "1");
+  assert.deepEqual(JSON.parse(verifyReq.body), { pin: "200", otp: "1" });
+  assert.equal(queryReq.path, "/verify?code=1");
+
+  // Unrelated numbers in the log stay intact.
+  assert.match(result.log, /^## 1\. A GET \/short-secret$/m);
+  assert.equal(result.log.match(/^status: 200$/gm)?.length, 3);
+  assert.match(result.log, /"note": "count 200 and step 1"/);
+  assert.match(result.log, /"pin": "\[redacted\]"/);
+  assert.match(result.log, /"otp": "\[redacted\]"/);
+
+  // The short secrets are masked in the using requests' paths, fill lines, and stdout summary.
+  assert.match(result.log, /^## 2\. A POST \/verify\/\[redacted:request 1 data\.pin\]$/m);
+  assert.match(result.log, /^## 3\. A GET \/verify\?code=\[redacted:request 1 data\.otp\]$/m);
+  assert.match(result.log, /path from request 1, session A: \[redacted:request 1 data\.pin\]/);
+  assert.match(result.log, /X-Pin from request 1, session A: \[redacted:request 1 data\.pin\]/);
+  assert.match(result.log, /X-Otp from request 1, session A: \[redacted:request 1 data\.otp\]/);
+  assert.match(result.log, /json\.pin from request 1, session A: \[redacted:request 1 data\.pin\]/);
+  assert.match(result.log, /json\.otp from request 1, session A: \[redacted:request 1 data\.otp\]/);
+  assert.match(result.log, /path from request 1, session A: \[redacted:request 1 data\.otp\]/);
+
+  const out = JSON.parse(result.stdout);
+  assert.equal(out.requests[1].path, "/verify/[redacted:request 1 data.pin]");
+  assert.equal(out.requests[2].path, "/verify?code=[redacted:request 1 data.otp]");
+});
+
+test("{{json:<n>:<path>}} preserves exact raw number text for 64-bit snowflake integers, 1.0, 1e3, and duplicate keys", async () => {
+  const start = seen.length;
+  const result = await run({
+    requests: [
+      { session: "A", method: "GET", path: "/snowflake" },
+      {
+        session: "A",
+        method: "GET",
+        path: "/users/{{json:1:id}}?ratio={{json:1:ratio}}&exp={{json:1:exp}}",
+      },
+      { session: "A", method: "GET", path: "/ids" },
+      { session: "A", method: "GET", path: "/users/{{json:3:id}}?dup={{json:3:dup}}" },
+    ],
+  });
+  assert.equal(result.code, 0, result.stdout + result.stderr);
+  const [, snowflakeReq, , idsReq] = seen.slice(start);
+  assert.equal(snowflakeReq.path, "/users/1234567890123456789?ratio=1.0&exp=1e3");
+  assert.equal(idsReq.path, "/users/9007199254740993?dup=2");
+  assert.match(result.log, /path from request 1, session A: 1234567890123456789/);
+  assert.match(result.log, /path from request 3, session A: 9007199254740993/);
 });
