@@ -21,7 +21,7 @@ This project is a user-management microservice: FastAPI backend + React/TypeScri
 | Commit messages (mandatory SSOT) | [`docs/agents/commit-messages.md`](../docs/agents/commit-messages.md) |
 | Branch names (mandatory SSOT) | [`docs/agents/branch-names.md`](../docs/agents/branch-names.md) |
 | Release notes agent (canonical) | [`docs/agents/release-notes-agent.md`](../docs/agents/release-notes-agent.md) |
-| Release skill (Release PR) | [`.claude/skills/release/SKILL.md`](../.claude/skills/release/SKILL.md) |
+| Release skill (Release PR) | [`.agents/skills/release/SKILL.md`](../.agents/skills/release/SKILL.md) |
 
 When the `graphify` MCP server is connected, use it for "what directly calls or imports X" questions and confirm against the file. Do not use it for FastAPI `Depends(...)` wiring or client-to-route links; see the knowledge graph guide above.
 

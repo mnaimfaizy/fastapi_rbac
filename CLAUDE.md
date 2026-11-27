@@ -7,7 +7,7 @@
 ## Claude Code specifics
 
 - User-level engineering skills live in `~/.agents/skills` and reach Claude Code through `~/.claude/skills`. Update them with `npx skills update -g`.
-- Project skills are under `.claude/skills/` and project sub-agents under `.claude/agents/`. Claude Code reads them from those paths only; `AGENTS.md` lists which are project-owned and which are Agent-kit files.
+- Project skills live in `.agents/skills/`. Claude Code reads only `.claude/skills/`, which is a tracked symlink to `../.agents/skills`, so it loads them through the link. Project sub-agents are in `.claude/agents/`, generated from `.github/agents/*.agent.md` (edit those, then run `python scripts/development/sync_agents.py --apply`). `AGENTS.md` lists which are project-owned and which are Agent-kit files.
 - The `commit-drafter` sub-agent (`.claude/agents/commit-drafter.md`) has a read-only tool grant enforced by a `PreToolUse` hook. See `docs/agents/commit-pipeline.md`.
 - The `pr-drafter` sub-agent (`.claude/agents/pr-drafter.md`) is read-only the same way, through `scripts/development/pr-drafter-guard.sh`. See `docs/agents/pr-pipeline.md`.
-- The `release` skill is user-invoked from Claude Code as `.claude/skills/release`.
+- The `release` skill is user-invoked from Claude Code as `.agents/skills/release` (a `/release` command through the link).

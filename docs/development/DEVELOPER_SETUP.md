@@ -94,6 +94,8 @@ This configuration:
    cd fastapi_rbac
    ```
 
+   On Windows, turn on Developer Mode and set `git config --global core.symlinks true` **before** you clone, or the repo's skills will not load in Claude Code (see [Windows: repo skills not loading](#windows-repo-skills-not-loading)).
+
 2. **Install VS Code extensions**:
 
    - Open VS Code
@@ -111,6 +113,36 @@ Follow the backend setup instructions in the main README.md to set up your Pytho
 ### Frontend Setup
 
 Follow the frontend setup in [Frontend — React setup](../frontend/react/setup.md) (Node.js environment, env files, and `npm run dev`).
+
+## Windows: repo skills not loading
+
+Project skills live in `.agents/skills/`. `.claude/skills` is a git symlink to `../.agents/skills`, and Claude Code reads only `.claude/skills/`. Git for Windows checks a symlink out as a plain text file unless symlinks are on, and then no repo skill loads in Claude Code.
+
+**Diagnose.** From the repository root:
+
+```bash
+cat .claude/skills
+```
+
+It should fail with "Is a directory" or list the skills. If it prints `../.agents/skills`, the link was checked out as a file. `python scripts/development/check_skills_link.py` reports the same, and also runs in pre-commit and CI.
+
+**Fix.**
+
+1. Turn on Developer Mode (Settings, then System, then For developers), or run your terminal as administrator, so Windows allows symlinks.
+2. Allow symlinks in git, globally and for this repository:
+
+   ```bash
+   git config --global core.symlinks true
+   git config --local core.symlinks true
+   ```
+
+3. Check the link out again:
+
+   ```bash
+   git checkout -- .claude/skills
+   ```
+
+For a new clone, set `core.symlinks` globally before you clone. WSL needs none of this when the repository lives on the Linux file system. Layout and reasons: [Skills and agents layout](../agents/skills-and-agents.md).
 
 ## Testing Framework
 

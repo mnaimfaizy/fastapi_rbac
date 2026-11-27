@@ -8,8 +8,8 @@ Adapted from the Agent-kit [pr-pipeline Pattern guide](https://github.com/mnaimf
 
 | Part | File | Job |
 | --- | --- | --- |
-| Skill | [`.claude/skills/create-pull-request/SKILL.md`](../../.claude/skills/create-pull-request/SKILL.md) | Checks the branch, calls the drafter, writes the body file, runs the runner, repairs a failure. Load it whenever you open or update a pull request. |
-| Drafter | [`.claude/agents/pr-drafter.md`](../../.claude/agents/pr-drafter.md), [`.cursor/agents/pr-drafter.md`](../../.cursor/agents/pr-drafter.md) | Read-only. Drafts the title, labels, merge base and body from the branch's commits, diff and linked issues. |
+| Skill | [`.agents/skills/create-pull-request/SKILL.md`](../../.agents/skills/create-pull-request/SKILL.md) | Checks the branch, calls the drafter, writes the body file, runs the runner, repairs a failure. Load it whenever you open or update a pull request. |
+| Drafter | [`.github/agents/pr-drafter.agent.md`](../../.github/agents/pr-drafter.agent.md) (canonical); [`.claude/agents/pr-drafter.md`](../../.claude/agents/pr-drafter.md) and [`.cursor/agents/pr-drafter.md`](../../.cursor/agents/pr-drafter.md) are generated from it with `scripts/development/sync_agents.py` | Read-only. Drafts the title, labels, merge base and body from the branch's commits, diff and linked issues. |
 | Runner | [`scripts/development/pr-runner.sh`](../../scripts/development/pr-runner.sh) | The only place an agent pushes a branch and creates or edits a pull request. Re-checks the draft first and ends a failure with a trailer. |
 | Label allowlist | [`pr-labels.txt`](pr-labels.txt) | The only labels the drafter may choose and the runner accepts. |
 
@@ -76,7 +76,7 @@ hint: <the command to run next>
 
 Field names and the reason set are an interface that agents parse: add reasons, do not rename them. The shape matches the commit runner's trailer.
 
-The reasons, with what each means, are listed once, in the comment above `fail()` in [`scripts/development/pr-runner.sh`](../../scripts/development/pr-runner.sh). Each failure's `hint` line says what to do next; the [`create-pull-request`](../../.claude/skills/create-pull-request/SKILL.md) skill adds the agent-side rules (send the draft back, never force-push).
+The reasons, with what each means, are listed once, in the comment above `fail()` in [`scripts/development/pr-runner.sh`](../../scripts/development/pr-runner.sh). Each failure's `hint` line says what to do next; the [`create-pull-request`](../../.agents/skills/create-pull-request/SKILL.md) skill adds the agent-side rules (send the draft back, never force-push).
 
 ## What was adapted, and what was left out
 

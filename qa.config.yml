@@ -1,7 +1,7 @@
 # qa.config.yml: settings for Agent-kit's qa-plan and manual-qa skills (#318).
 #
 # Consumer-owned (not Kit-owned): upgrades never touch it. Keys and rules:
-# .claude/skills/qa-plan/ADAPTER.md and .claude/skills/manual-qa/ADAPTER.md.
+# .agents/skills/qa-plan/ADAPTER.md and .agents/skills/manual-qa/ADAPTER.md.
 # The skills read a YAML subset: no tabs, anchors or multi-line values.
 # Never put a password, token or hosted address in this file.
 #

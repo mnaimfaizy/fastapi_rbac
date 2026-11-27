@@ -2,17 +2,20 @@
 
 Engineering skills are installed at user level (`~/.agents/skills`) rather than vendored into this repository. Update them with `npx skills update -g`.
 
+Project skills live in `.agents/skills/`, which Cursor and Copilot read natively. `.claude/skills` is a tracked relative symlink to `../.agents/skills`, because Claude Code reads only `.claude/skills/`. Never replace it with a copy; `python scripts/development/check_skills_link.py` fails when it is not that link. On Windows, set `core.symlinks` first (see [`docs/development/DEVELOPER_SETUP.md`](docs/development/DEVELOPER_SETUP.md#windows-repo-skills-not-loading)). Sub-agents have one canonical file each, `.github/agents/<name>.agent.md`; `.claude/agents/` and `.cursor/agents/` are generated from them with `python scripts/development/sync_agents.py --apply` (`--check` in CI). Edit the canonical file, never the generated ones. Layout and the research behind it: [`docs/agents/skills-and-agents.md`](docs/agents/skills-and-agents.md).
+
 Project-owned agent assets that do live here:
 
-- `.claude/skills/release`: Release PR workflow (see Release below)
-- `.claude/agents/release-notes.md`: release-notes sub-agent
-- `.claude/skills/commit-change`, `.claude/agents/commit-drafter.md` and `.cursor/agents/commit-drafter.md`: the commit pipeline (see Commit pipeline below)
-- `.claude/skills/create-pull-request`, `.claude/agents/pr-drafter.md` and `.cursor/agents/pr-drafter.md`: the pull request pipeline (see Pull request pipeline below)
+- `.agents/skills/release`: Release PR workflow (see Release below)
+- `.github/agents/release-notes.agent.md`: release-notes sub-agent (canonical; the Claude and Cursor copies are generated)
+- `.agents/skills/commit-change`, `.github/agents/commit-drafter.agent.md`: the commit pipeline (see Commit pipeline below)
+- `.agents/skills/create-pull-request`, `.github/agents/pr-drafter.agent.md`: the pull request pipeline (see Pull request pipeline below)
+- `.agents/skills/{resolve-issue,architect,manager,implementor,troubleshooting}`: the former Copilot instructions and prompts (`architect`, `manager`, `implementor` and `troubleshooting` run only when invoked by name)
 - `docs/agents/`: repo-side configuration the installed skills read
 
 Kit-owned files are copied from one pinned [Agent-kit](docs/agents/agent-kit.md) tag. They are an exception to "no vendoring". Never edit them by hand; re-copy them from a new tag instead:
 
-- `.claude/skills/{code-review,security-audit,security-finding-triage,security-response,explainer,instruction-drift-audit,qa-plan,manual-qa,plain-prose,orchestrate,address-pr-review}` (in this repo, the kit's `code-review` replaces the user-level one)
+- `.agents/skills/{code-review,security-audit,security-finding-triage,security-response,explainer,instruction-drift-audit,qa-plan,manual-qa,plain-prose,orchestrate,address-pr-review}` (in this repo, the kit's `code-review` replaces the user-level one)
 - `.github/{agent-runtime,agent-pipeline,security-audit,agent-review-response}`
 
 ## Agent skills
@@ -39,11 +42,11 @@ Commit messages must follow [`docs/agents/commit-messages.md`](docs/agents/commi
 
 ### Commit pipeline (mandatory)
 
-Agents commit only through the `commit-change` skill (`.claude/skills/commit-change`), which drafts the message from the staged diff with the read-only `commit-drafter` sub-agent and runs `bash scripts/development/commit-runner.sh --message-file <path>`. Never `git commit` directly, never `--no-verify`, never `git add .`. A hook failure ends with a trailer naming the reason; the skill says what to do for each, including `explainer-drift`. Details: [`docs/agents/commit-pipeline.md`](docs/agents/commit-pipeline.md).
+Agents commit only through the `commit-change` skill (`.agents/skills/commit-change`), which drafts the message from the staged diff with the read-only `commit-drafter` sub-agent and runs `bash scripts/development/commit-runner.sh --message-file <path>`. Never `git commit` directly, never `--no-verify`, never `git add .`. A hook failure ends with a trailer naming the reason; the skill says what to do for each, including `explainer-drift`. Details: [`docs/agents/commit-pipeline.md`](docs/agents/commit-pipeline.md).
 
 ### Pull request pipeline (mandatory)
 
-Agents open and update pull requests only through the `create-pull-request` skill (`.claude/skills/create-pull-request`), which drafts the title and body from the branch with the read-only `pr-drafter` sub-agent and runs `bash scripts/development/pr-runner.sh --title <text> --body-file <path> --merge-base <sha>`. Never `git push`, `gh pr create` or `gh pr edit` directly, and never force-push. The runner refuses a merge base that does not match the branch, a body without a readable Merge risk block, and any label not on `docs/agents/pr-labels.txt`; no reviewer is requested unless the user names one. Details: [`docs/agents/pr-pipeline.md`](docs/agents/pr-pipeline.md).
+Agents open and update pull requests only through the `create-pull-request` skill (`.agents/skills/create-pull-request`), which drafts the title and body from the branch with the read-only `pr-drafter` sub-agent and runs `bash scripts/development/pr-runner.sh --title <text> --body-file <path> --merge-base <sha>`. Never `git push`, `gh pr create` or `gh pr edit` directly, and never force-push. The runner refuses a merge base that does not match the branch, a body without a readable Merge risk block, and any label not on `docs/agents/pr-labels.txt`; no reviewer is requested unless the user names one. Details: [`docs/agents/pr-pipeline.md`](docs/agents/pr-pipeline.md).
 
 ### Branch names (mandatory)
 
@@ -51,7 +54,7 @@ Branch names must follow [`docs/agents/branch-names.md`](docs/agents/branch-name
 
 ### Release
 
-User-invoked [`release`](.claude/skills/release/SKILL.md) skill: propose version → release-notes sub-agent → Release PR → return PR URL. Notes agent SSOT: [`docs/agents/release-notes-agent.md`](docs/agents/release-notes-agent.md).
+User-invoked [`release`](.agents/skills/release/SKILL.md) skill: propose version → release-notes sub-agent → Release PR → return PR URL. Notes agent SSOT: [`docs/agents/release-notes-agent.md`](docs/agents/release-notes-agent.md).
 
 ### Agent-kit
 
@@ -60,7 +63,7 @@ The CI security audit, the plan → implement → review pipeline and the review
 ## Notes
 
 - Engineering skills come from the user-level install; do not re-vendor them into this repository. The only exception is the Agent-kit kit-owned files listed above.
-- `.claude/skills/release` is project-owned and is maintained here.
+- `.agents/skills/release` is project-owned and is maintained here.
 - Prefer project conventions from `.github/copilot-instructions.md` when there is a conflict.
 
 ## Project conventions
@@ -72,5 +75,5 @@ When working in this repository, follow conventions in:
 - `docs/agents/commit-pipeline.md` (how agents commit)
 - `docs/agents/pr-pipeline.md` (how agents open pull requests)
 - `docs/agents/branch-names.md` (branch name SSOT)
-- `.github/instructions/pre-commit.instructions.md`
-- `.github/instructions/resolve-issue.instructions.md`
+- `.agents/skills/commit-change/SKILL.md` (the commit workflow; it replaced the old pre-commit instructions)
+- `.agents/skills/resolve-issue/SKILL.md` (resolving an issue)
