@@ -6,6 +6,10 @@ import { renderWithProviders, mockUsers, mockRoles } from './test-utils';
 import UsersList from '../features/users/UsersList';
 import { fetchUsers } from '../store/slices/userSlice';
 import userService from '../services/user.service';
+import {
+  signInLabel,
+  signInTitle,
+} from '../features/dashboard/DashboardOverview';
 import type { User } from '../models/user';
 
 vi.mock('../services/user.service');
@@ -31,6 +35,11 @@ function makeUser(overrides: Partial<User> & { id: string }): User {
   };
 }
 
+// The API sends last_login_at as tz-aware UTC, so an ISO string ending in Z.
+const ADA_SIGNED_IN_AT = new Date(
+  Date.now() - 2 * 60 * 60 * 1000 - 5 * 60 * 1000
+).toISOString();
+
 const listUsers: User[] = [
   makeUser({
     id: 'u-ada',
@@ -42,6 +51,7 @@ const listUsers: User[] = [
     number_of_failed_attempts: 2,
     created_at: '2026-03-04T10:00:00Z',
     last_changed_password_date: '2026-05-06T10:00:00Z',
+    last_login_at: ADA_SIGNED_IN_AT,
   }),
   makeUser({
     id: 'u-marcus',
@@ -49,6 +59,8 @@ const listUsers: User[] = [
     last_name: 'Webb',
     email: 'marcus@example.com',
     roles: [managerRole],
+    // Never signed in.
+    last_login_at: null,
     is_locked: true,
     // Open lock, as the dashboard counts it: the window has not passed.
     locked_until: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
@@ -175,6 +187,30 @@ describe('UsersList (Web v1)', () => {
       expect(within(ada).getByText('ada@example.com')).toBeInTheDocument();
       expect(within(ada).getByText('admin')).toBeInTheDocument();
       expect(within(ada).queryByText('+1 555 0100')).not.toBeInTheDocument();
+    });
+
+    it("shows each user's last sign-in, and a dash only for a user who never signed in", async () => {
+      await renderList();
+
+      const signInCell = (name: string) => {
+        const headers = within(table())
+          .getAllByRole('columnheader')
+          .map((header) => header.textContent);
+        const index = headers.indexOf('Last sign-in');
+        return within(rowFor(name)).getAllByRole('cell')[index];
+      };
+
+      const ada = signInCell('Ada Lovelace');
+      expect(ada).toHaveTextContent(signInLabel(ADA_SIGNED_IN_AT));
+      expect(ada).toHaveTextContent('about 2 hours ago');
+      expect(ada).not.toHaveTextContent('—');
+      const when = within(ada).getByText(signInLabel(ADA_SIGNED_IN_AT));
+      expect(when).toHaveAttribute('datetime', ADA_SIGNED_IN_AT);
+      expect(when).toHaveAttribute('title', signInTitle(ADA_SIGNED_IN_AT));
+
+      expect(signInCell('Marcus Webb')).toHaveTextContent(/^—$/);
+      // A user the API sent no value for reads the same as never signed in.
+      expect(signInCell('Hannah Lindqvist')).toHaveTextContent(/^—$/);
     });
 
     it('reveals phone, failed attempts, created and password changed from the column picker', async () => {

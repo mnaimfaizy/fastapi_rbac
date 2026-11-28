@@ -5,6 +5,10 @@ import type { User } from '@/models/user';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { formatDate } from '@/lib/utils';
 import {
+  signInLabel,
+  signInTitle,
+} from '@/features/dashboard/DashboardOverview';
+import {
   formatDay,
   fullName,
   initials,
@@ -137,8 +141,15 @@ export function buildUserColumns(
       id: 'last_sign_in',
       header: 'Last sign-in',
       meta: { className: 'w-[150px] text-foreground-secondary' },
-      // The users API returns no sign-in time yet, so every row shows a dash.
-      cell: () => '—',
+      cell: ({ row }) => {
+        const signedInAt = row.original.last_login_at;
+        if (!signedInAt) return '—';
+        return (
+          <time dateTime={signedInAt} title={signInTitle(signedInAt)}>
+            {signInLabel(signedInAt)}
+          </time>
+        );
+      },
     },
     {
       id: 'phone',

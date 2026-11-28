@@ -102,6 +102,17 @@ class IUserRead(UserBase):
     }
 
 
+class IUserReadWithSignIn(IUserRead):
+    """``IUserRead`` plus the user's last sign-in time (#454).
+
+    Only the users list and user read responses use it. ``None`` means the user
+    has never signed in. Other responses stay on ``IUserRead`` so they do not
+    send a ``null`` that would read the same way.
+    """
+
+    last_login_at: datetime | None = None
+
+
 @optional()
 class IUserOutput(BaseModel):
     model_config = ConfigDict({})
