@@ -24,13 +24,13 @@ from app.schemas.response_schema import (
     IPostResponseBase,
     create_response,
 )
-from app.schemas.user_schema import IUserCreate, IUserRead, IUserRoleAssign, IUserUpdate
+from app.schemas.user_schema import IUserCreate, IUserRead, IUserReadWithSignIn, IUserRoleAssign, IUserUpdate
 from app.utils import password_policy, role_grants
 from app.utils.account_disable import disable_user, end_sessions_and_emailed_links, record_user_deleted
 from app.utils.account_email_dispatch import issue_verification
 from app.utils.exceptions.user_exceptions import UserSelfDeleteException
 from app.utils.password_policy import InitialPasswordReason, PasswordChangeReason
-from app.utils.user_utils import serialize_user
+from app.utils.user_utils import last_sign_ins, serialize_user
 
 logger = logging.getLogger(__name__)
 
@@ -69,8 +69,12 @@ async def read_users_list(
     # .data.items, never .items. The declared Page[ModelType] on
     # get_multi_paginated describes the CRUD layer, not what arrives here.
     # Convert to a response format that includes roles
+    # One grouped query for the page's users, so no N+1 (#454).
+    sign_ins = await last_sign_ins(db_session, [user.id for user in users.data.items])
     response_data = {
-        "items": [serialize_user(user) for user in users.data.items],
+        "items": [
+            {**serialize_user(user), "last_login_at": sign_ins.get(user.id)} for user in users.data.items
+        ],
         "total": users.data.total,
         "page": users.data.page,
         "size": users.data.size,
@@ -124,16 +128,20 @@ async def get_my_data(
 @router.get("/{user_id}")
 async def get_user_by_id(
     user: User = Depends(user_deps.is_valid_user),
+    db_session: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user(required_permissions=["user.read"])),
-) -> IGetResponseBase[IUserRead]:
+) -> IGetResponseBase[IUserReadWithSignIn]:
     """
     Gets a user by his/her id
+
+    ``last_login_at`` is the newest sign-in time, null if the user never signed in.
 
     Required roles:
     - admin
     - manager
     """
-    return create_response(data=serialize_user(user))
+    sign_ins = await last_sign_ins(db_session, [user.id])
+    return create_response(data={**serialize_user(user), "last_login_at": sign_ins.get(user.id)})
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)

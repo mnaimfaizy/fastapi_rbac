@@ -18,6 +18,11 @@ export interface User {
    * Present once the API reports password expiry (#425). Display only.
    */
   password_expires_at?: string | null;
+  /**
+   * Newest sign-in time (UTC). Sent by the users list and user read, null when
+   * the user has never signed in. Absent from other user responses (#454).
+   */
+  last_login_at?: string | null;
   contact_phone: string | null;
   number_of_failed_attempts: number | null;
   verification_code: string | null;
