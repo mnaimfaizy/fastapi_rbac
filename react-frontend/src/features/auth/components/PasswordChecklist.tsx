@@ -42,7 +42,7 @@ export function PasswordChecklist({ value }: { value: string }) {
           <li
             key={rule.id}
             className={cn(
-              'flex items-center gap-2 text-[13px]',
+              'flex items-center gap-2 text-[13px] leading-4 last:col-span-2',
               met
                 ? 'text-status-success-foreground'
                 : 'text-foreground-secondary'

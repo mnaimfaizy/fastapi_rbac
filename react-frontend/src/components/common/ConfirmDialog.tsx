@@ -92,7 +92,7 @@ export function ConfirmDialog({
 
   return (
     <AlertDialog open={open} onOpenChange={handleOpenChange}>
-      <AlertDialogContent>
+      <AlertDialogContent className="rounded-xl sm:max-w-[480px]">
         {icon ? (
           <div className="flex gap-4">
             <span
